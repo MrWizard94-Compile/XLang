@@ -1,0 +1,10 @@
+* text=auto eol=lf
+*.rs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.md text eol=lf
+
+# Governing and archival artifacts are preserved byte-for-byte.
+SOUL.md -text -whitespace
+Aether.md -text -whitespace
+legacy/** -text -whitespace

@@ -1,0 +1,11 @@
+[package]
+name = "xlang-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "The audited XLang bootstrap lexer, parser, and type checker."
+
+[lints]
+workspace = true

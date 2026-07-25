@@ -1,0 +1,21 @@
+[package]
+name = "xlang-studio"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Local-first desktop workbench for the XLang bootstrap compiler."
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = [] }
+url = "2.5"
+xlang-core = { path = "../../../crates/xlang-core" }
+
+[lints]
+workspace = true

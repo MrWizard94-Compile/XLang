@@ -1,0 +1,6 @@
+{
+  "name": "Vortex Language Playground",
+  "description": "Interactive compiler and AST visualizer for the Vortex systems language architecture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

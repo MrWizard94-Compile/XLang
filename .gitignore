@@ -1,0 +1,16 @@
+# Rust build output
+/target/
+/apps/xlang-studio/src-tauri/target/
+/apps/xlang-studio/src-tauri/gen/
+
+# Frontend build output and local dependencies
+/apps/xlang-studio/node_modules/
+/apps/xlang-studio/dist/
+
+# Local configuration and diagnostics
+.env
+.env.local
+*.log
+
+# Preserved legacy binary, excluded from source history
+/legacy/xlang-v1-prototype/xlang
