@@ -1,0 +1,12 @@
+world unicode
+
+weave main [] -> Whole:
+  bind source <- "Aé🙂Z"
+  bind section <- cut borrow source 1 3
+  bind count <- measure borrow source
+  bind code <- glyph borrow source 2
+  bind mutable result <- -1
+  choose same count 4:
+    revise result <- code
+  speak borrow section
+  yield result

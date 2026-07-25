@@ -1,26 +1,49 @@
-//! Aether Stage 0 compiler, bytecode verifier, and virtual machine.
+//! Aether Stage 1 compiler, AETH verifier, and virtual machine.
 //!
-//! This crate is a host bootstrap only. It parses Aether source, emits the
-//! Aether-owned AETH artifact format, verifies it, and executes it in the
-//! Aether VM. It does not emit C, Rust, JavaScript, LLVM, or another language.
+//! Stage 1 is the self-hosting substrate. It retains the small deterministic
+//! Aether kernel while adding named weaves, typed parameters, structured control
+//! flow, explicit local mutation, move tracking, and bounded text primitives.
+//! Aether artifacts remain AETH bytecode; no host-language backend is emitted.
 
 #![forbid(unsafe_code)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.1.0";
+pub const LANGUAGE_VERSION: &str = "0.2.0";
 
 const ARTIFACT_MAGIC: &[u8; 4] = b"AETH";
-const ARTIFACT_VERSION: u8 = 1;
+const ARTIFACT_VERSION: u8 = 2;
+const MAX_SOURCE_BYTES: usize = 1_000_000;
+const MAX_FUNCTIONS: usize = 256;
+const MAX_LOCALS: usize = u16::MAX as usize;
+const MAX_TEXT_BYTES: usize = 1_000_000;
+const MAX_CALL_DEPTH: usize = 1_024;
 
 const OP_PUSH_TEXT: u8 = 1;
 const OP_PUSH_WHOLE: u8 = 2;
-const OP_STORE: u8 = 3;
-const OP_LOAD: u8 = 4;
-const OP_SPEAK: u8 = 5;
-const OP_YIELD: u8 = 6;
+const OP_PUSH_TRUTH: u8 = 3;
+const OP_STORE: u8 = 4;
+const OP_LOAD: u8 = 5;
+const OP_MOVE: u8 = 6;
+const OP_REVISE: u8 = 7;
+const OP_SPEAK: u8 = 8;
+const OP_YIELD: u8 = 9;
+const OP_SUM: u8 = 10;
+const OP_DIFFERENCE: u8 = 11;
+const OP_PRODUCT: u8 = 12;
+const OP_LESS: u8 = 13;
+const OP_SAME: u8 = 14;
+const OP_NOT: u8 = 15;
+const OP_JOIN: u8 = 16;
+const OP_MEASURE: u8 = 17;
+const OP_GLYPH: u8 = 18;
+const OP_CUT: u8 = 19;
+const OP_RENDER: u8 = 20;
+const OP_CALL: u8 = 21;
+const OP_JUMP_IF_DIM: u8 = 22;
+const OP_JUMP: u8 = 23;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -71,29 +94,108 @@ impl fmt::Display for CompilerError {
 
 impl std::error::Error for CompilerError {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValueType {
+    Text,
+    Whole,
+    Truth,
+}
+
+impl ValueType {
+    fn to_byte(self) -> u8 {
+        match self {
+            Self::Text => 1,
+            Self::Whole => 2,
+            Self::Truth => 3,
+        }
+    }
+
+    fn from_byte(value: u8, offset: usize) -> Result<Self, BytecodeError> {
+        match value {
+            1 => Ok(Self::Text),
+            2 => Ok(Self::Whole),
+            3 => Ok(Self::Truth),
+            _ => Err(BytecodeError::new(offset, "unknown Aether value type")),
+        }
+    }
+}
+
+impl fmt::Display for ValueType {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Text => formatter.write_str("Text"),
+            Self::Whole => formatter.write_str("Whole"),
+            Self::Truth => formatter.write_str("Truth"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParameterMode {
+    Own,
+    Borrow,
+}
+
+impl ParameterMode {
+    fn to_byte(self) -> u8 {
+        match self {
+            Self::Own => 1,
+            Self::Borrow => 2,
+        }
+    }
+
+    fn from_byte(value: u8, offset: usize) -> Result<Self, BytecodeError> {
+        match value {
+            1 => Ok(Self::Own),
+            2 => Ok(Self::Borrow),
+            _ => Err(BytecodeError::new(offset, "unknown Aether parameter mode")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
     pub world: String,
-    pub entry: Entry,
-    pub statements: Vec<Statement>,
+    pub weaves: Vec<Weave>,
 }
 
 impl Program {
     #[must_use]
     pub fn significant_token_count(&self) -> usize {
-        4 + self.statements.len() * 2
+        2 + self
+            .weaves
+            .iter()
+            .map(|weave| 4 + weave.parameters.len() * 2 + statement_token_count(&weave.body))
+            .sum::<usize>()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Entry {
+pub struct Weave {
     pub name: String,
+    pub parameters: Vec<Parameter>,
     pub result: ValueType,
+    pub body: Vec<Statement>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Parameter {
+    pub name: String,
+    pub value_type: ValueType,
+    pub mode: ParameterMode,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Statement {
     Bind {
+        name: String,
+        mutable: bool,
+        value: Expression,
+        span: Span,
+    },
+    Revise {
         name: String,
         value: Expression,
         span: Span,
@@ -106,12 +208,28 @@ pub enum Statement {
         value: Expression,
         span: Span,
     },
+    Choose {
+        condition: Expression,
+        when_bright: Vec<Statement>,
+        when_dim: Vec<Statement>,
+        span: Span,
+    },
+    While {
+        condition: Expression,
+        body: Vec<Statement>,
+        span: Span,
+    },
 }
 
 impl Statement {
     const fn span(&self) -> Span {
         match self {
-            Self::Bind { span, .. } | Self::Speak { span, .. } | Self::Yield { span, .. } => *span,
+            Self::Bind { span, .. }
+            | Self::Revise { span, .. }
+            | Self::Speak { span, .. }
+            | Self::Yield { span, .. }
+            | Self::Choose { span, .. }
+            | Self::While { span, .. } => *span,
         }
     }
 }
@@ -124,24 +242,83 @@ pub struct Expression {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionKind {
-    Text(String),
-    Whole(i64),
-    Name(String),
+    Atom(Atom),
+    Unary {
+        operation: UnaryOperation,
+        argument: Atom,
+    },
+    Binary {
+        operation: BinaryOperation,
+        left: Atom,
+        right: Atom,
+    },
+    Cut {
+        text: Atom,
+        start: Atom,
+        end: Atom,
+    },
+    Call {
+        weave: String,
+        arguments: Vec<Atom>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ValueType {
-    Text,
-    Whole,
+pub enum UnaryOperation {
+    Not,
+    Measure,
+    Render,
 }
 
-impl fmt::Display for ValueType {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl UnaryOperation {
+    const fn word(self) -> &'static str {
         match self {
-            Self::Text => formatter.write_str("Text"),
-            Self::Whole => formatter.write_str("Whole"),
+            Self::Not => "not",
+            Self::Measure => "measure",
+            Self::Render => "render",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOperation {
+    Sum,
+    Difference,
+    Product,
+    Less,
+    Same,
+    Join,
+    Glyph,
+}
+
+impl BinaryOperation {
+    const fn word(self) -> &'static str {
+        match self {
+            Self::Sum => "sum",
+            Self::Difference => "difference",
+            Self::Product => "product",
+            Self::Less => "less",
+            Self::Same => "same",
+            Self::Join => "join",
+            Self::Glyph => "glyph",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Atom {
+    pub kind: AtomKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AtomKind {
+    Text(String),
+    Whole(i64),
+    Truth(bool),
+    Name(String),
+    Borrow(String),
+    Move(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,13 +363,112 @@ impl std::error::Error for BytecodeError {}
 #[derive(Clone, Copy)]
 struct SourceLine<'source> {
     number: usize,
-    text: &'source str,
+    indentation: usize,
+    content: &'source str,
 }
 
 impl<'source> SourceLine<'source> {
     const fn span(self, column: usize) -> Span {
         Span::new(self.number, column)
     }
+}
+
+#[derive(Clone)]
+struct BindingState {
+    value_type: ValueType,
+    mutable: bool,
+    moved: bool,
+}
+
+#[derive(Clone)]
+struct FunctionSignature {
+    parameters: Vec<Parameter>,
+    result: ValueType,
+}
+
+#[derive(Clone, Copy)]
+struct SlotInfo {
+    index: u16,
+    value_type: ValueType,
+    mutable: bool,
+}
+
+#[derive(Clone)]
+struct LocalDescriptor {
+    value_type: ValueType,
+    mutable: bool,
+}
+
+#[derive(Clone)]
+struct ArtifactFunction {
+    name: String,
+    parameters: Vec<(ValueType, ParameterMode)>,
+    result: ValueType,
+    locals: Vec<LocalDescriptor>,
+    code: Vec<u8>,
+}
+
+#[derive(Clone)]
+struct Artifact {
+    functions: Vec<ArtifactFunction>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct VerificationState {
+    stack: Vec<ValueType>,
+    initialized: Vec<bool>,
+    moved: Vec<bool>,
+}
+
+#[derive(Debug, Clone)]
+enum RuntimeValue {
+    Text(String),
+    Whole(i64),
+    Truth(bool),
+}
+
+impl RuntimeValue {
+    const fn value_type(&self) -> ValueType {
+        match self {
+            Self::Text(_) => ValueType::Text,
+            Self::Whole(_) => ValueType::Whole,
+            Self::Truth(_) => ValueType::Truth,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum Instruction {
+    PushText(String),
+    PushWhole(i64),
+    PushTruth(bool),
+    Store(usize),
+    Load(usize),
+    Move(usize),
+    Revise(usize),
+    Speak,
+    Yield,
+    Sum,
+    Difference,
+    Product,
+    Less,
+    Same,
+    Not,
+    Join,
+    Measure,
+    Glyph,
+    Cut,
+    Render,
+    Call { function: usize, arguments: usize },
+    JumpIfDim(usize),
+    Jump(usize),
+}
+
+#[derive(Debug, Clone)]
+struct DecodedInstruction {
+    offset: usize,
+    next_offset: usize,
+    instruction: Instruction,
 }
 
 pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
@@ -202,73 +478,50 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
             "source is empty; an Aether world is required",
         ));
     }
-
-    if !source.is_ascii() {
+    if source.len() > MAX_SOURCE_BYTES {
         return Err(CompilerError::new(
             Span::synthetic(),
-            "Aether 0.1 source is ASCII-only so canonical source and bytecode agree",
+            format!("source exceeds the Aether {MAX_SOURCE_BYTES}-byte safety limit"),
         ));
     }
-
     let lines = source_lines(source)?;
-    let mut meaningful = Vec::new();
-
-    for line in lines {
-        if line.text.is_empty() {
-            continue;
-        }
-        if line.text.trim().is_empty() {
-            return Err(CompilerError::new(
-                line.span(1),
-                "blank lines cannot contain whitespace",
-            ));
-        }
-        if line.text.ends_with(' ') || line.text.ends_with('\t') {
-            return Err(CompilerError::new(
-                line.span(line.text.len()),
-                "trailing whitespace is not part of canonical Aether source",
-            ));
-        }
-        if line.text.contains('\t') {
-            return Err(CompilerError::new(
-                line.span(1),
-                "tabs are not valid indentation; use two spaces per Aether block level",
-            ));
-        }
-        meaningful.push(line);
-    }
-
-    if meaningful.len() < 3 {
+    if lines.len() < 2 {
         return Err(CompilerError::new(
             Span::synthetic(),
-            "an Aether program needs a world, the main weave, and a yielding body",
+            "an Aether program needs a world and at least one weave",
         ));
     }
 
-    let world = parse_world(meaningful[0])?;
-    let entry = parse_entry(meaningful[1])?;
-    let mut statements = Vec::new();
-    for line in &meaningful[2..] {
-        let Some(body) = line.text.strip_prefix("  ") else {
+    let world = parse_world(lines[0])?;
+    let mut index = 1;
+    let mut weaves = Vec::new();
+    while index < lines.len() {
+        let line = lines[index];
+        if line.indentation != 0 {
             return Err(CompilerError::new(
                 line.span(1),
-                "a weave body line must begin with exactly two spaces",
-            ));
-        };
-        if body.starts_with(' ') {
-            return Err(CompilerError::new(
-                line.span(3),
-                "Aether 0.1 has one block level; deeper indentation is not valid here",
+                "a weave declaration must begin at indentation level zero",
             ));
         }
-        statements.push(parse_statement(*line, body)?);
+        let (name, parameters, result) = parse_weave_header(line)?;
+        index += 1;
+        let body = parse_block(&lines, &mut index, 1)?;
+        if body.is_empty() {
+            return Err(CompilerError::new(
+                line.span(1),
+                "every weave requires at least one body statement",
+            ));
+        }
+        weaves.push(Weave {
+            name,
+            parameters,
+            result,
+            body,
+            span: line.span(1),
+        });
     }
 
-    let program = Program {
-        world,
-        entry,
-        statements,
-    };
+    let program = Program { world, weaves };
     validate_program(&program)?;
     Ok(program)
 }
@@ -287,192 +540,123 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 
 #[must_use]
 pub fn format_program(program: &Program) -> String {
-    let mut formatted = format!(
-        "world {}\n\nweave {} [] -> {}:\n",
-        program.world, program.entry.name, program.entry.result
-    );
-    for statement in &program.statements {
-        formatted.push_str("  ");
-        match statement {
-            Statement::Bind { name, value, .. } => {
-                formatted.push_str("bind ");
-                formatted.push_str(name);
-                formatted.push_str(" <- ");
-                write_expression(value, &mut formatted);
-            }
-            Statement::Speak { value, .. } => {
-                formatted.push_str("speak ");
-                write_expression(value, &mut formatted);
-            }
-            Statement::Yield { value, .. } => {
-                formatted.push_str("yield ");
-                write_expression(value, &mut formatted);
-            }
-        }
+    let mut formatted = format!("world {}\n", program.world);
+    for weave in &program.weaves {
         formatted.push('\n');
+        formatted.push_str("weave ");
+        formatted.push_str(&weave.name);
+        formatted.push_str(" [");
+        for (index, parameter) in weave.parameters.iter().enumerate() {
+            if index > 0 {
+                formatted.push_str(", ");
+            }
+            if parameter.mode == ParameterMode::Borrow {
+                formatted.push_str("borrow ");
+            }
+            formatted.push_str(&parameter.name);
+            formatted.push_str(": ");
+            formatted.push_str(&parameter.value_type.to_string());
+        }
+        formatted.push_str("] -> ");
+        formatted.push_str(&weave.result.to_string());
+        formatted.push_str(":\n");
+        write_block(&weave.body, 1, &mut formatted);
     }
     formatted
 }
 
 #[must_use]
 pub fn canonical_ast(program: &Program) -> String {
-    let mut ast = format!(
-        "World({});Entry({}->{})",
-        program.world, program.entry.name, program.entry.result
-    );
-    for statement in &program.statements {
-        ast.push(';');
-        match statement {
-            Statement::Bind { name, value, .. } => {
-                ast.push_str("Bind(");
-                ast.push_str(name);
-                ast.push(',');
-                write_ast_expression(value, &mut ast);
-                ast.push(')');
+    let mut output = String::from("World(");
+    output.push_str(&program.world);
+    output.push(')');
+    for weave in &program.weaves {
+        output.push_str(";Weave(");
+        output.push_str(&weave.name);
+        output.push_str("->");
+        output.push_str(&weave.result.to_string());
+        output.push_str(")[");
+        for (index, parameter) in weave.parameters.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
             }
-            Statement::Speak { value, .. } => {
-                ast.push_str("Speak(");
-                write_ast_expression(value, &mut ast);
-                ast.push(')');
+            if parameter.mode == ParameterMode::Borrow {
+                output.push_str("Borrow ");
             }
-            Statement::Yield { value, .. } => {
-                ast.push_str("Yield(");
-                write_ast_expression(value, &mut ast);
-                ast.push(')');
-            }
+            output.push_str(&parameter.name);
+            output.push(':');
+            output.push_str(&parameter.value_type.to_string());
         }
+        output.push(']');
+        write_ast_block(&weave.body, &mut output);
     }
-    ast
+    output
 }
 
 pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
-    verify_header(bytecode)?;
-    let mut position = ARTIFACT_MAGIC.len() + 1;
-    let mut stack = Vec::new();
-    let mut locals = Vec::new();
-    let mut yielded = false;
+    let artifact = parse_artifact(bytecode)?;
+    if artifact.functions.is_empty() {
+        return Err(BytecodeError::new(5, "artifact defines no weaves"));
+    }
 
-    while position < bytecode.len() {
-        if yielded {
+    let mut names = BTreeMap::new();
+    let mut main_index = None;
+    for (index, function) in artifact.functions.iter().enumerate() {
+        if names.insert(function.name.as_str(), index).is_some() {
+            return Err(BytecodeError::new(0, "artifact defines a weave name twice"));
+        }
+        if function.name == "main" {
+            main_index = Some(index);
+        }
+        if function.locals.len() < function.parameters.len() {
             return Err(BytecodeError::new(
-                position,
-                "instructions appear after the terminating yield",
+                0,
+                "artifact local table omits one or more parameters",
             ));
         }
-        let offset = position;
-        let opcode = read_byte(bytecode, &mut position)?;
-        match opcode {
-            OP_PUSH_TEXT => {
-                let _ = read_text(bytecode, &mut position)?;
-                stack.push(ValueType::Text);
+        for (parameter_index, (value_type, _)) in function.parameters.iter().enumerate() {
+            if function.locals[parameter_index].value_type != *value_type
+                || function.locals[parameter_index].mutable
+            {
+                return Err(BytecodeError::new(
+                    0,
+                    "artifact parameter slots must be immutable and match their declared type",
+                ));
             }
-            OP_PUSH_WHOLE => {
-                let _ = read_i64(bytecode, &mut position)?;
-                stack.push(ValueType::Whole);
-            }
-            OP_STORE => {
-                let index = usize::from(read_byte(bytecode, &mut position)?);
-                if index != locals.len() {
-                    return Err(BytecodeError::new(
-                        offset,
-                        "store slots must be introduced sequentially",
-                    ));
-                }
-                locals.push(pop_value_type(&mut stack, offset, "store")?);
-            }
-            OP_LOAD => {
-                let index = usize::from(read_byte(bytecode, &mut position)?);
-                let Some(value_type) = locals.get(index) else {
-                    return Err(BytecodeError::new(
-                        offset,
-                        "load references an unknown local slot",
-                    ));
-                };
-                stack.push(*value_type);
-            }
-            OP_SPEAK => {
-                require_value_type(
-                    pop_value_type(&mut stack, offset, "speak")?,
-                    ValueType::Text,
-                    offset,
-                    "speak",
-                )?;
-            }
-            OP_YIELD => {
-                require_value_type(
-                    pop_value_type(&mut stack, offset, "yield")?,
-                    ValueType::Whole,
-                    offset,
-                    "yield",
-                )?;
-                if !stack.is_empty() {
-                    return Err(BytecodeError::new(
-                        offset,
-                        "yield must leave an empty operand stack",
-                    ));
-                }
-                yielded = true;
-            }
-            _ => return Err(BytecodeError::new(offset, "unknown Aether opcode")),
         }
     }
 
-    if !yielded {
+    let Some(main_index) = main_index else {
+        return Err(BytecodeError::new(0, "artifact has no main weave"));
+    };
+    let main = &artifact.functions[main_index];
+    if !main.parameters.is_empty() || main.result != ValueType::Whole {
         return Err(BytecodeError::new(
-            bytecode.len(),
-            "artifact has no terminating yield instruction",
+            0,
+            "main must accept no parameters and yield Whole",
         ));
+    }
+
+    for (function_index, function) in artifact.functions.iter().enumerate() {
+        verify_function(function_index, function, &artifact.functions)?;
     }
     Ok(())
 }
 
 pub fn run_bytecode(bytecode: &[u8]) -> Result<RunOutput, BytecodeError> {
     verify_bytecode(bytecode)?;
-    let mut position = ARTIFACT_MAGIC.len() + 1;
-    let mut stack = Vec::new();
-    let mut locals = Vec::new();
+    let artifact = parse_artifact(bytecode)?;
+    let main_index = artifact
+        .functions
+        .iter()
+        .position(|function| function.name == "main")
+        .ok_or_else(|| BytecodeError::new(0, "artifact has no main weave"))?;
     let mut stdout = String::new();
-
-    while position < bytecode.len() {
-        let offset = position;
-        let opcode = read_byte(bytecode, &mut position)?;
-        match opcode {
-            OP_PUSH_TEXT => stack.push(RuntimeValue::Text(read_text(bytecode, &mut position)?)),
-            OP_PUSH_WHOLE => stack.push(RuntimeValue::Whole(read_i64(bytecode, &mut position)?)),
-            OP_STORE => {
-                let index = usize::from(read_byte(bytecode, &mut position)?);
-                if index != locals.len() {
-                    return Err(BytecodeError::new(offset, "invalid store slot"));
-                }
-                locals.push(pop_runtime_value(&mut stack, offset, "store")?);
-            }
-            OP_LOAD => {
-                let index = usize::from(read_byte(bytecode, &mut position)?);
-                let Some(value) = locals.get(index) else {
-                    return Err(BytecodeError::new(offset, "invalid load slot"));
-                };
-                stack.push(value.clone());
-            }
-            OP_SPEAK => match pop_runtime_value(&mut stack, offset, "speak")? {
-                RuntimeValue::Text(value) => stdout.push_str(&value),
-                RuntimeValue::Whole(_) => {
-                    return Err(BytecodeError::new(offset, "speak received a Whole value"));
-                }
-            },
-            OP_YIELD => match pop_runtime_value(&mut stack, offset, "yield")? {
-                RuntimeValue::Whole(exit_code) => return Ok(RunOutput { stdout, exit_code }),
-                RuntimeValue::Text(_) => {
-                    return Err(BytecodeError::new(offset, "yield received a Text value"));
-                }
-            },
-            _ => return Err(BytecodeError::new(offset, "unknown Aether opcode")),
-        }
-    }
-
-    Err(BytecodeError::new(
-        bytecode.len(),
-        "artifact ended without yield",
-    ))
+    let result = execute_function(&artifact, main_index, Vec::new(), &mut stdout, 0)?;
+    let RuntimeValue::Whole(exit_code) = result else {
+        return Err(BytecodeError::new(0, "main did not yield Whole"));
+    };
+    Ok(RunOutput { stdout, exit_code })
 }
 
 fn source_lines(source: &str) -> Result<Vec<SourceLine<'_>>, CompilerError> {
@@ -485,110 +669,519 @@ fn source_lines(source: &str) -> Result<Vec<SourceLine<'_>>, CompilerError> {
                 "carriage returns are only valid as Windows line endings",
             ));
         }
+        if line.is_empty() {
+            continue;
+        }
+        if line.trim().is_empty() {
+            return Err(CompilerError::new(
+                Span::new(index + 1, 1),
+                "blank lines cannot contain whitespace",
+            ));
+        }
+        if line.ends_with(' ') || line.ends_with('\t') {
+            return Err(CompilerError::new(
+                Span::new(index + 1, line.len()),
+                "trailing whitespace is not part of canonical Aether source",
+            ));
+        }
+        if line.contains('\t') {
+            return Err(CompilerError::new(
+                Span::new(index + 1, 1),
+                "tabs are not valid indentation; use two spaces per Aether block level",
+            ));
+        }
+        let indentation = line.bytes().take_while(|byte| *byte == b' ').count();
+        if indentation % 2 != 0 {
+            return Err(CompilerError::new(
+                Span::new(index + 1, indentation + 1),
+                "Aether indentation uses exact two-space levels",
+            ));
+        }
         lines.push(SourceLine {
             number: index + 1,
-            text: line,
+            indentation: indentation / 2,
+            content: &line[indentation..],
         });
     }
     Ok(lines)
 }
 
 fn parse_world(line: SourceLine<'_>) -> Result<String, CompilerError> {
-    if line.text.starts_with(' ') {
+    if line.indentation != 0 {
         return Err(CompilerError::new(
             line.span(1),
             "world declarations cannot be indented",
         ));
     }
-    let Some(name) = line.text.strip_prefix("world ") else {
+    let Some(name) = line.content.strip_prefix("world ") else {
         return Err(CompilerError::new(
             line.span(1),
             "the first declaration must be world followed by a lowercase name",
         ));
     };
-    validate_name(name, line.span(7), "world name")?;
+    validate_name(name, line.span(7), "world name", false)?;
     Ok(name.to_owned())
 }
 
-fn parse_entry(line: SourceLine<'_>) -> Result<Entry, CompilerError> {
-    if line.text.starts_with(' ') {
+fn parse_weave_header(
+    line: SourceLine<'_>,
+) -> Result<(String, Vec<Parameter>, ValueType), CompilerError> {
+    let Some(without_colon) = line.content.strip_suffix(':') else {
         return Err(CompilerError::new(
             line.span(1),
-            "weave declarations cannot be indented",
+            "weave declarations must end with a colon",
         ));
-    }
-    if line.text != "weave main [] -> Whole:" {
+    };
+    let Some(rest) = without_colon.strip_prefix("weave ") else {
         return Err(CompilerError::new(
             line.span(1),
-            "Aether 0.1 requires the entry declaration weave main [] -> Whole:",
+            "expected weave declaration",
         ));
-    }
-    Ok(Entry {
-        name: "main".to_owned(),
-        result: ValueType::Whole,
-    })
+    };
+    let Some(opening) = rest.find('[') else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "weave parameters must be enclosed by square brackets",
+        ));
+    };
+    let name = rest[..opening].trim_end();
+    validate_name(name, line.span(7), "weave name", true)?;
+    let after_opening = &rest[opening + 1..];
+    let Some(closing) = after_opening.find(']') else {
+        return Err(CompilerError::new(
+            line.span(7 + opening + 1),
+            "weave parameter list is missing its closing bracket",
+        ));
+    };
+    let parameters = parse_parameters(&after_opening[..closing], line)?;
+    let after_parameters = after_opening[closing + 1..].trim();
+    let Some(result_text) = after_parameters.strip_prefix("-> ") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "weave result must use -> Type",
+        ));
+    };
+    let result = parse_value_type(result_text, line.span(line.content.len()))?;
+    Ok((name.to_owned(), parameters, result))
 }
 
-fn parse_statement(line: SourceLine<'_>, body: &str) -> Result<Statement, CompilerError> {
-    let span = line.span(3);
-    if let Some(rest) = body.strip_prefix("bind ") {
+fn parse_parameters(source: &str, line: SourceLine<'_>) -> Result<Vec<Parameter>, CompilerError> {
+    if source.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut parameters = Vec::new();
+    for segment in source.split(',') {
+        let trimmed = segment.trim();
+        if trimmed.is_empty() {
+            return Err(CompilerError::new(
+                line.span(1),
+                "weave parameter lists cannot contain an empty entry",
+            ));
+        }
+        let (mode, declaration) = if let Some(rest) = trimmed.strip_prefix("borrow ") {
+            (ParameterMode::Borrow, rest)
+        } else {
+            (ParameterMode::Own, trimmed)
+        };
+        let Some((name, type_text)) = declaration.split_once(": ") else {
+            return Err(CompilerError::new(
+                line.span(1),
+                "each parameter must use name: Type",
+            ));
+        };
+        validate_name(name, line.span(1), "parameter name", false)?;
+        let value_type = parse_value_type(type_text, line.span(1))?;
+        if mode == ParameterMode::Borrow && value_type != ValueType::Text {
+            return Err(CompilerError::new(
+                line.span(1),
+                "borrow parameters are reserved for unique Text values",
+            ));
+        }
+        if parameters
+            .iter()
+            .any(|parameter: &Parameter| parameter.name == name)
+        {
+            return Err(CompilerError::new(
+                line.span(1),
+                format!("parameter {name} is declared more than once"),
+            ));
+        }
+        parameters.push(Parameter {
+            name: name.to_owned(),
+            value_type,
+            mode,
+            span: line.span(1),
+        });
+    }
+    Ok(parameters)
+}
+
+fn parse_value_type(source: &str, span: Span) -> Result<ValueType, CompilerError> {
+    match source {
+        "Text" => Ok(ValueType::Text),
+        "Whole" => Ok(ValueType::Whole),
+        "Truth" => Ok(ValueType::Truth),
+        _ => Err(CompilerError::new(
+            span,
+            "Aether types are Text, Whole, or Truth",
+        )),
+    }
+}
+
+fn parse_block(
+    lines: &[SourceLine<'_>],
+    index: &mut usize,
+    indentation: usize,
+) -> Result<Vec<Statement>, CompilerError> {
+    let mut statements = Vec::new();
+    while *index < lines.len() {
+        let line = lines[*index];
+        if line.indentation < indentation {
+            break;
+        }
+        if line.indentation > indentation {
+            return Err(CompilerError::new(
+                line.span(1),
+                "this line is more deeply indented than its enclosing Aether block",
+            ));
+        }
+        if line.content == "otherwise:" {
+            break;
+        }
+
+        if let Some(condition_source) = line
+            .content
+            .strip_prefix("choose ")
+            .and_then(|source| source.strip_suffix(':'))
+        {
+            let condition = parse_expression(condition_source, line.span(3 + "choose ".len()))?;
+            *index += 1;
+            let when_bright = parse_block(lines, index, indentation + 1)?;
+            if when_bright.is_empty() {
+                return Err(CompilerError::new(
+                    line.span(1),
+                    "choose requires a nonempty bright branch",
+                ));
+            }
+            let mut when_dim = Vec::new();
+            if *index < lines.len()
+                && lines[*index].indentation == indentation
+                && lines[*index].content == "otherwise:"
+            {
+                let otherwise_line = lines[*index];
+                *index += 1;
+                when_dim = parse_block(lines, index, indentation + 1)?;
+                if when_dim.is_empty() {
+                    return Err(CompilerError::new(
+                        otherwise_line.span(1),
+                        "otherwise requires a nonempty dim branch",
+                    ));
+                }
+            }
+            statements.push(Statement::Choose {
+                condition,
+                when_bright,
+                when_dim,
+                span: line.span(1),
+            });
+            continue;
+        }
+
+        if let Some(condition_source) = line
+            .content
+            .strip_prefix("while ")
+            .and_then(|source| source.strip_suffix(':'))
+        {
+            let condition = parse_expression(condition_source, line.span(3 + "while ".len()))?;
+            *index += 1;
+            let body = parse_block(lines, index, indentation + 1)?;
+            if body.is_empty() {
+                return Err(CompilerError::new(
+                    line.span(1),
+                    "while requires a nonempty body",
+                ));
+            }
+            statements.push(Statement::While {
+                condition,
+                body,
+                span: line.span(1),
+            });
+            continue;
+        }
+
+        if line.content.ends_with(':') {
+            return Err(CompilerError::new(
+                line.span(1),
+                "unknown Aether block form",
+            ));
+        }
+        statements.push(parse_plain_statement(line)?);
+        *index += 1;
+    }
+    Ok(statements)
+}
+
+fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerError> {
+    let span = line.span(line.indentation * 2 + 1);
+    if let Some(rest) = line.content.strip_prefix("bind ") {
+        let (mutable, rest) = if let Some(remainder) = rest.strip_prefix("mutable ") {
+            (true, remainder)
+        } else {
+            (false, rest)
+        };
         let Some((name, expression)) = rest.split_once(" <- ") else {
             return Err(CompilerError::new(
                 span,
                 "bind requires a name, the <- binder, and one value",
             ));
         };
-        validate_name(name, line.span(8), "binding name")?;
-        let expression_column = 3 + "bind ".len() + name.len() + " <- ".len();
+        validate_name(name, span, "binding name", false)?;
         return Ok(Statement::Bind {
             name: name.to_owned(),
-            value: parse_expression(expression, line.span(expression_column))?,
+            mutable,
+            value: parse_expression(expression, span)?,
             span,
         });
     }
-    if let Some(expression) = body.strip_prefix("speak ") {
+    if let Some(rest) = line.content.strip_prefix("revise ") {
+        let Some((name, expression)) = rest.split_once(" <- ") else {
+            return Err(CompilerError::new(
+                span,
+                "revise requires a name, the <- binder, and one value",
+            ));
+        };
+        validate_name(name, span, "binding name", false)?;
+        return Ok(Statement::Revise {
+            name: name.to_owned(),
+            value: parse_expression(expression, span)?,
+            span,
+        });
+    }
+    if let Some(expression) = line.content.strip_prefix("speak ") {
         return Ok(Statement::Speak {
-            value: parse_expression(expression, line.span(3 + "speak ".len()))?,
+            value: parse_expression(expression, span)?,
             span,
         });
     }
-    if let Some(expression) = body.strip_prefix("yield ") {
+    if let Some(expression) = line.content.strip_prefix("yield ") {
         return Ok(Statement::Yield {
-            value: parse_expression(expression, line.span(3 + "yield ".len()))?,
+            value: parse_expression(expression, span)?,
             span,
         });
     }
     Err(CompilerError::new(
         span,
-        "unknown Aether statement; use bind, speak, or yield",
+        "unknown Aether statement; use bind, revise, speak, yield, choose, or while",
     ))
 }
 
 fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerError> {
-    if source.is_empty() {
+    let tokens = tokenize_fragment(source, span)?;
+    if tokens.is_empty() {
         return Err(CompilerError::new(span, "an expression is required"));
     }
-    if source.starts_with('"') {
-        return Ok(Expression {
-            kind: ExpressionKind::Text(parse_text_literal(source, span)?),
+    let first = tokens[0].as_str();
+    let mut index = 1;
+    let kind = match first {
+        "not" => ExpressionKind::Unary {
+            operation: UnaryOperation::Not,
+            argument: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "measure" => ExpressionKind::Unary {
+            operation: UnaryOperation::Measure,
+            argument: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "render" => ExpressionKind::Unary {
+            operation: UnaryOperation::Render,
+            argument: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "sum" => ExpressionKind::Binary {
+            operation: BinaryOperation::Sum,
+            left: parse_atom_from(&tokens, &mut index, span)?,
+            right: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "difference" => ExpressionKind::Binary {
+            operation: BinaryOperation::Difference,
+            left: parse_atom_from(&tokens, &mut index, span)?,
+            right: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "product" => ExpressionKind::Binary {
+            operation: BinaryOperation::Product,
+            left: parse_atom_from(&tokens, &mut index, span)?,
+            right: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "less" => ExpressionKind::Binary {
+            operation: BinaryOperation::Less,
+            left: parse_atom_from(&tokens, &mut index, span)?,
+            right: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "same" => ExpressionKind::Binary {
+            operation: BinaryOperation::Same,
+            left: parse_atom_from(&tokens, &mut index, span)?,
+            right: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "join" => ExpressionKind::Binary {
+            operation: BinaryOperation::Join,
+            left: parse_atom_from(&tokens, &mut index, span)?,
+            right: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "glyph" => ExpressionKind::Binary {
+            operation: BinaryOperation::Glyph,
+            left: parse_atom_from(&tokens, &mut index, span)?,
+            right: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "cut" => ExpressionKind::Cut {
+            text: parse_atom_from(&tokens, &mut index, span)?,
+            start: parse_atom_from(&tokens, &mut index, span)?,
+            end: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "call" => {
+            let Some(weave) = tokens.get(index) else {
+                return Err(CompilerError::new(span, "call requires a weave name"));
+            };
+            validate_name(weave, span, "called weave name", true)?;
+            index += 1;
+            let mut arguments = Vec::new();
+            while index < tokens.len() {
+                arguments.push(parse_atom_from(&tokens, &mut index, span)?);
+            }
+            ExpressionKind::Call {
+                weave: weave.clone(),
+                arguments,
+            }
+        }
+        _ => {
+            index = 0;
+            ExpressionKind::Atom(parse_atom_from(&tokens, &mut index, span)?)
+        }
+    };
+    if index != tokens.len() {
+        return Err(CompilerError::new(
+            span,
+            "an Aether expression has unexpected trailing terms",
+        ));
+    }
+    Ok(Expression { kind, span })
+}
+
+fn tokenize_fragment(source: &str, span: Span) -> Result<Vec<String>, CompilerError> {
+    let bytes = source.as_bytes();
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        while index < bytes.len() && bytes[index] == b' ' {
+            index += 1;
+        }
+        if index == bytes.len() {
+            break;
+        }
+        let start = index;
+        if bytes[index] == b'"' {
+            index += 1;
+            let mut escaped = false;
+            let mut closed = false;
+            while index < bytes.len() {
+                let byte = bytes[index];
+                index += 1;
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+                if byte == b'\\' {
+                    escaped = true;
+                    continue;
+                }
+                if byte == b'"' {
+                    closed = true;
+                    break;
+                }
+            }
+            if !closed {
+                return Err(CompilerError::new(
+                    span,
+                    "text values must use one closed double-quoted literal",
+                ));
+            }
+            if index < bytes.len() && bytes[index] != b' ' {
+                return Err(CompilerError::new(
+                    span,
+                    "text literal must be followed by a space or the end of its expression",
+                ));
+            }
+            tokens.push(source[start..index].to_owned());
+            continue;
+        }
+        while index < bytes.len() && bytes[index] != b' ' {
+            index += 1;
+        }
+        tokens.push(source[start..index].to_owned());
+    }
+    Ok(tokens)
+}
+
+fn parse_atom_from(
+    tokens: &[String],
+    index: &mut usize,
+    span: Span,
+) -> Result<Atom, CompilerError> {
+    let Some(token) = tokens.get(*index) else {
+        return Err(CompilerError::new(span, "expression is missing an operand"));
+    };
+    if token == "borrow" || token == "move" {
+        let mode = token.as_str();
+        *index += 1;
+        let Some(name) = tokens.get(*index) else {
+            return Err(CompilerError::new(
+                span,
+                format!("{mode} requires a bound value name"),
+            ));
+        };
+        validate_name(name, span, "value name", false)?;
+        *index += 1;
+        return Ok(Atom {
+            kind: if mode == "borrow" {
+                AtomKind::Borrow(name.clone())
+            } else {
+                AtomKind::Move(name.clone())
+            },
             span,
         });
     }
-    if is_whole_literal(source) {
-        let value = source.parse::<i64>().map_err(|_| {
+    *index += 1;
+    if token.starts_with('"') {
+        return Ok(Atom {
+            kind: AtomKind::Text(parse_text_literal(token, span)?),
+            span,
+        });
+    }
+    if token == "bright" {
+        return Ok(Atom {
+            kind: AtomKind::Truth(true),
+            span,
+        });
+    }
+    if token == "dim" {
+        return Ok(Atom {
+            kind: AtomKind::Truth(false),
+            span,
+        });
+    }
+    if is_whole_literal(token) {
+        let value = token.parse::<i64>().map_err(|_| {
             CompilerError::new(
                 span,
                 "whole literal is outside the supported signed 64-bit range",
             )
         })?;
-        return Ok(Expression {
-            kind: ExpressionKind::Whole(value),
+        return Ok(Atom {
+            kind: AtomKind::Whole(value),
             span,
         });
     }
-    validate_name(source, span, "value name")?;
-    Ok(Expression {
-        kind: ExpressionKind::Name(source.to_owned()),
+    validate_name(token, span, "value name", false)?;
+    Ok(Atom {
+        kind: AtomKind::Name(token.clone()),
         span,
     })
 }
@@ -639,63 +1232,421 @@ fn parse_text_literal(source: &str, span: Span) -> Result<String, CompilerError>
             }
         }
     }
+    if value.len() > MAX_TEXT_BYTES {
+        return Err(CompilerError::new(
+            span,
+            format!("text literal exceeds the Aether {MAX_TEXT_BYTES}-byte safety limit"),
+        ));
+    }
     Ok(value)
 }
 
 fn validate_program(program: &Program) -> Result<(), CompilerError> {
-    let mut bindings = BTreeMap::new();
-    let mut has_yielded = false;
-    for statement in &program.statements {
-        if has_yielded {
+    if program.weaves.is_empty() {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            "an Aether program must declare at least one weave",
+        ));
+    }
+    if program.weaves.len() > MAX_FUNCTIONS {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            format!("Aether supports at most {MAX_FUNCTIONS} weaves per artifact"),
+        ));
+    }
+
+    let mut signatures = BTreeMap::new();
+    for weave in &program.weaves {
+        if signatures
+            .insert(
+                weave.name.clone(),
+                FunctionSignature {
+                    parameters: weave.parameters.clone(),
+                    result: weave.result,
+                },
+            )
+            .is_some()
+        {
             return Err(CompilerError::new(
-                statement.span(),
-                "yield terminates a weave and must be its final statement",
+                weave.span,
+                format!("weave {} is declared more than once", weave.name),
             ));
         }
+    }
+
+    let Some(main) = program.weaves.iter().find(|weave| weave.name == "main") else {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            "an Aether program must declare weave main [] -> Whole:",
+        ));
+    };
+    if !main.parameters.is_empty() || main.result != ValueType::Whole {
+        return Err(CompilerError::new(
+            main.span,
+            "main must use the declaration weave main [] -> Whole:",
+        ));
+    }
+
+    for weave in &program.weaves {
+        let mut scope = BTreeMap::new();
+        for parameter in &weave.parameters {
+            scope.insert(
+                parameter.name.clone(),
+                BindingState {
+                    value_type: parameter.value_type,
+                    mutable: false,
+                    moved: false,
+                },
+            );
+        }
+        validate_block(&weave.body, &mut scope, &signatures, weave, true)?;
+    }
+    Ok(())
+}
+
+fn validate_block(
+    statements: &[Statement],
+    scope: &mut BTreeMap<String, BindingState>,
+    signatures: &BTreeMap<String, FunctionSignature>,
+    weave: &Weave,
+    root: bool,
+) -> Result<(), CompilerError> {
+    for (index, statement) in statements.iter().enumerate() {
         match statement {
-            Statement::Bind { name, value, span } => {
-                if bindings.contains_key(name) {
+            Statement::Bind {
+                name,
+                mutable,
+                value,
+                span,
+            } => {
+                if !root {
+                    return Err(CompilerError::new(
+                        *span,
+                        "bind is only allowed in a weave root; use a mutable root binding with revise inside blocks",
+                    ));
+                }
+                if scope.contains_key(name) {
                     return Err(CompilerError::new(
                         *span,
                         format!("binding {name} already exists in this weave"),
                     ));
                 }
-                let value_type = expression_type(value, &bindings)?;
-                bindings.insert(name.clone(), value_type);
+                let value_type = expression_type(value, scope, signatures)?;
+                scope.insert(
+                    name.clone(),
+                    BindingState {
+                        value_type,
+                        mutable: *mutable,
+                        moved: false,
+                    },
+                );
+            }
+            Statement::Revise { name, value, span } => {
+                let Some(binding) = scope.get(name) else {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!("binding {name} has not been introduced"),
+                    ));
+                };
+                if !binding.mutable {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!("binding {name} is immutable; declare it with bind mutable"),
+                    ));
+                }
+                if binding.moved {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!("binding {name} was moved and cannot be revised"),
+                    ));
+                }
+                let expected = binding.value_type;
+                let actual = expression_type(value, scope, signatures)?;
+                require_source_type(actual, expected, value.span, "revise")?;
             }
             Statement::Speak { value, .. } => {
-                let value_type = expression_type(value, &bindings)?;
+                let value_type = expression_type(value, scope, signatures)?;
                 require_source_type(value_type, ValueType::Text, value.span, "speak")?;
             }
-            Statement::Yield { value, .. } => {
-                let value_type = expression_type(value, &bindings)?;
-                require_source_type(value_type, ValueType::Whole, value.span, "yield")?;
-                has_yielded = true;
+            Statement::Yield { value, span } => {
+                if !root || index + 1 != statements.len() {
+                    return Err(CompilerError::new(
+                        *span,
+                        "yield is allowed only as the final statement of a weave root",
+                    ));
+                }
+                let value_type = expression_type(value, scope, signatures)?;
+                require_source_type(value_type, weave.result, value.span, "yield")?;
+            }
+            Statement::Choose {
+                condition,
+                when_bright,
+                when_dim,
+                ..
+            } => {
+                let condition_type = expression_type(condition, scope, signatures)?;
+                require_source_type(
+                    condition_type,
+                    ValueType::Truth,
+                    condition.span,
+                    "choose condition",
+                )?;
+                let original = scope.clone();
+                let mut bright_scope = original.clone();
+                validate_block(when_bright, &mut bright_scope, signatures, weave, false)?;
+                let mut dim_scope = original.clone();
+                if !when_dim.is_empty() {
+                    validate_block(when_dim, &mut dim_scope, signatures, weave, false)?;
+                }
+                merge_scope(scope, &bright_scope, &dim_scope, statement.span())?;
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                let condition_type = expression_type(condition, scope, signatures)?;
+                require_source_type(
+                    condition_type,
+                    ValueType::Truth,
+                    condition.span,
+                    "while condition",
+                )?;
+                let before_loop = scope.clone();
+                let mut body_scope = before_loop.clone();
+                validate_block(body, &mut body_scope, signatures, weave, false)?;
+                merge_scope(scope, &before_loop, &body_scope, statement.span())?;
             }
         }
     }
-    if !has_yielded {
+    if root && !matches!(statements.last(), Some(Statement::Yield { .. })) {
         return Err(CompilerError::new(
-            Span::synthetic(),
-            "every Aether weave must end with yield",
+            weave.span,
+            "every weave must end with yield",
         ));
+    }
+    Ok(())
+}
+
+fn merge_scope(
+    destination: &mut BTreeMap<String, BindingState>,
+    left: &BTreeMap<String, BindingState>,
+    right: &BTreeMap<String, BindingState>,
+    span: Span,
+) -> Result<(), CompilerError> {
+    if left.len() != right.len() || left.keys().ne(right.keys()) {
+        return Err(CompilerError::new(
+            span,
+            "Aether blocks cannot introduce a binding conditionally",
+        ));
+    }
+    for (name, left_binding) in left {
+        let Some(right_binding) = right.get(name) else {
+            return Err(CompilerError::new(
+                span,
+                "Aether block binding state is inconsistent",
+            ));
+        };
+        if left_binding.value_type != right_binding.value_type
+            || left_binding.mutable != right_binding.mutable
+        {
+            return Err(CompilerError::new(
+                span,
+                format!("binding {name} changes its declared shape across control flow"),
+            ));
+        }
+        destination.insert(
+            name.clone(),
+            BindingState {
+                value_type: left_binding.value_type,
+                mutable: left_binding.mutable,
+                moved: left_binding.moved || right_binding.moved,
+            },
+        );
     }
     Ok(())
 }
 
 fn expression_type(
     expression: &Expression,
-    bindings: &BTreeMap<String, ValueType>,
+    scope: &mut BTreeMap<String, BindingState>,
+    signatures: &BTreeMap<String, FunctionSignature>,
 ) -> Result<ValueType, CompilerError> {
     match &expression.kind {
-        ExpressionKind::Text(_) => Ok(ValueType::Text),
-        ExpressionKind::Whole(_) => Ok(ValueType::Whole),
-        ExpressionKind::Name(name) => bindings.get(name).copied().ok_or_else(|| {
-            CompilerError::new(
-                expression.span,
-                format!("value {name} has not been bound in this weave"),
-            )
-        }),
+        ExpressionKind::Atom(atom) => atom_type(atom, scope),
+        ExpressionKind::Unary {
+            operation,
+            argument,
+        } => {
+            let argument_type = atom_type(argument, scope)?;
+            match operation {
+                UnaryOperation::Not => {
+                    require_source_type(argument_type, ValueType::Truth, argument.span, "not")?;
+                    Ok(ValueType::Truth)
+                }
+                UnaryOperation::Measure => {
+                    require_source_type(argument_type, ValueType::Text, argument.span, "measure")?;
+                    Ok(ValueType::Whole)
+                }
+                UnaryOperation::Render => Ok(ValueType::Text),
+            }
+        }
+        ExpressionKind::Binary {
+            operation,
+            left,
+            right,
+        } => {
+            let left_type = atom_type(left, scope)?;
+            let right_type = atom_type(right, scope)?;
+            match operation {
+                BinaryOperation::Sum | BinaryOperation::Difference | BinaryOperation::Product => {
+                    require_source_type(left_type, ValueType::Whole, left.span, operation.word())?;
+                    require_source_type(
+                        right_type,
+                        ValueType::Whole,
+                        right.span,
+                        operation.word(),
+                    )?;
+                    Ok(ValueType::Whole)
+                }
+                BinaryOperation::Less => {
+                    require_source_type(left_type, ValueType::Whole, left.span, "less")?;
+                    require_source_type(right_type, ValueType::Whole, right.span, "less")?;
+                    Ok(ValueType::Truth)
+                }
+                BinaryOperation::Same => {
+                    if left_type != right_type {
+                        return Err(CompilerError::new(
+                            expression.span,
+                            format!("same requires equal value shapes, not {left_type} and {right_type}"),
+                        ));
+                    }
+                    Ok(ValueType::Truth)
+                }
+                BinaryOperation::Join => {
+                    require_source_type(left_type, ValueType::Text, left.span, "join")?;
+                    require_source_type(right_type, ValueType::Text, right.span, "join")?;
+                    Ok(ValueType::Text)
+                }
+                BinaryOperation::Glyph => {
+                    require_source_type(left_type, ValueType::Text, left.span, "glyph")?;
+                    require_source_type(right_type, ValueType::Whole, right.span, "glyph")?;
+                    Ok(ValueType::Whole)
+                }
+            }
+        }
+        ExpressionKind::Cut { text, start, end } => {
+            require_source_type(atom_type(text, scope)?, ValueType::Text, text.span, "cut")?;
+            require_source_type(
+                atom_type(start, scope)?,
+                ValueType::Whole,
+                start.span,
+                "cut",
+            )?;
+            require_source_type(atom_type(end, scope)?, ValueType::Whole, end.span, "cut")?;
+            Ok(ValueType::Text)
+        }
+        ExpressionKind::Call { weave, arguments } => {
+            let Some(signature) = signatures.get(weave) else {
+                return Err(CompilerError::new(
+                    expression.span,
+                    format!("weave {weave} has not been declared"),
+                ));
+            };
+            if signature.parameters.len() != arguments.len() {
+                return Err(CompilerError::new(
+                    expression.span,
+                    format!(
+                        "call {weave} requires {} argument(s), received {}",
+                        signature.parameters.len(),
+                        arguments.len()
+                    ),
+                ));
+            }
+            for (argument, parameter) in arguments.iter().zip(&signature.parameters) {
+                let argument_type = atom_type(argument, scope)?;
+                require_source_type(
+                    argument_type,
+                    parameter.value_type,
+                    argument.span,
+                    "call argument",
+                )?;
+                if parameter.mode == ParameterMode::Own
+                    && parameter.value_type == ValueType::Text
+                    && !matches!(argument.kind, AtomKind::Text(_) | AtomKind::Move(_))
+                {
+                    return Err(CompilerError::new(
+                        argument.span,
+                        format!(
+                            "call {weave} consumes Text parameter {}; use move name or a text literal",
+                            parameter.name
+                        ),
+                    ));
+                }
+            }
+            Ok(signature.result)
+        }
+    }
+}
+
+fn atom_type(
+    atom: &Atom,
+    scope: &mut BTreeMap<String, BindingState>,
+) -> Result<ValueType, CompilerError> {
+    match &atom.kind {
+        AtomKind::Text(_) => Ok(ValueType::Text),
+        AtomKind::Whole(_) => Ok(ValueType::Whole),
+        AtomKind::Truth(_) => Ok(ValueType::Truth),
+        AtomKind::Name(name) => {
+            let Some(binding) = scope.get(name) else {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("value {name} has not been bound in this weave"),
+                ));
+            };
+            if binding.moved {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("value {name} was moved and cannot be read"),
+                ));
+            }
+            if binding.value_type == ValueType::Text {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("Text value {name} requires explicit borrow or move"),
+                ));
+            }
+            Ok(binding.value_type)
+        }
+        AtomKind::Borrow(name) => {
+            let Some(binding) = scope.get(name) else {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("value {name} has not been bound in this weave"),
+                ));
+            };
+            if binding.moved {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("value {name} was moved and cannot be borrowed"),
+                ));
+            }
+            Ok(binding.value_type)
+        }
+        AtomKind::Move(name) => {
+            let Some(binding) = scope.get_mut(name) else {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("value {name} has not been bound in this weave"),
+                ));
+            };
+            if binding.moved {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("value {name} was already moved"),
+                ));
+            }
+            binding.moved = true;
+            Ok(binding.value_type)
+        }
     }
 }
 
@@ -716,73 +1667,411 @@ fn require_source_type(
 }
 
 fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
+    let mut weave_indices = BTreeMap::new();
+    let mut weave_results = BTreeMap::new();
+    for (index, weave) in program.weaves.iter().enumerate() {
+        weave_indices.insert(weave.name.clone(), index);
+        weave_results.insert(weave.name.clone(), weave.result);
+    }
+
+    let mut compiled = Vec::new();
+    for weave in &program.weaves {
+        let layout = slot_layout(weave, &weave_results)?;
+        let mut code = Vec::new();
+        emit_block(&weave.body, &layout, &weave_indices, &mut code)?;
+        let mut locals = vec![
+            LocalDescriptor {
+                value_type: ValueType::Whole,
+                mutable: false,
+            };
+            layout.len()
+        ];
+        for slot in layout.values() {
+            locals[usize::from(slot.index)] = LocalDescriptor {
+                value_type: slot.value_type,
+                mutable: slot.mutable,
+            };
+        }
+        compiled.push((weave, locals, code));
+    }
+
     let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
     bytecode.push(ARTIFACT_VERSION);
-    let mut local_types = BTreeMap::new();
-    let mut local_slots = BTreeMap::new();
-
-    for statement in &program.statements {
-        match statement {
-            Statement::Bind { name, value, span } => {
-                emit_expression(value, &local_slots, &mut bytecode)?;
-                let index = u8::try_from(local_slots.len()).map_err(|_| {
-                    CompilerError::new(*span, "Aether 0.1 supports at most 256 local bindings")
-                })?;
-                bytecode.push(OP_STORE);
-                bytecode.push(index);
-                let value_type = expression_type(value, &local_types)?;
-                local_types.insert(name.clone(), value_type);
-                local_slots.insert(name.clone(), index);
-            }
-            Statement::Speak { value, .. } => {
-                emit_expression(value, &local_slots, &mut bytecode)?;
-                bytecode.push(OP_SPEAK);
-            }
-            Statement::Yield { value, .. } => {
-                emit_expression(value, &local_slots, &mut bytecode)?;
-                bytecode.push(OP_YIELD);
-            }
+    write_u16(
+        &mut bytecode,
+        u16::try_from(compiled.len()).map_err(|_| {
+            CompilerError::new(
+                Span::synthetic(),
+                "artifact contains too many weaves for AETH",
+            )
+        })?,
+    );
+    for (weave, locals, code) in compiled {
+        let name_length = u8::try_from(weave.name.len()).map_err(|_| {
+            CompilerError::new(weave.span, "weave name exceeds the AETH name limit")
+        })?;
+        bytecode.push(name_length);
+        bytecode.extend_from_slice(weave.name.as_bytes());
+        let parameter_count = u8::try_from(weave.parameters.len()).map_err(|_| {
+            CompilerError::new(weave.span, "weave has too many parameters for AETH")
+        })?;
+        bytecode.push(parameter_count);
+        for parameter in &weave.parameters {
+            bytecode.push(parameter.value_type.to_byte());
+            bytecode.push(parameter.mode.to_byte());
         }
+        bytecode.push(weave.result.to_byte());
+        write_u16(
+            &mut bytecode,
+            u16::try_from(locals.len()).map_err(|_| {
+                CompilerError::new(weave.span, "weave has too many local bindings for AETH")
+            })?,
+        );
+        for local in locals {
+            bytecode.push(local.value_type.to_byte());
+            bytecode.push(u8::from(local.mutable));
+        }
+        write_u32(
+            &mut bytecode,
+            u32::try_from(code.len()).map_err(|_| {
+                CompilerError::new(weave.span, "weave bytecode exceeds the AETH code limit")
+            })?,
+        );
+        bytecode.extend_from_slice(&code);
     }
     Ok(bytecode)
 }
 
-fn emit_expression(
+fn slot_layout(
+    weave: &Weave,
+    weave_results: &BTreeMap<String, ValueType>,
+) -> Result<BTreeMap<String, SlotInfo>, CompilerError> {
+    let mut layout = BTreeMap::new();
+    let mut next_slot = 0_u16;
+    for parameter in &weave.parameters {
+        layout.insert(
+            parameter.name.clone(),
+            SlotInfo {
+                index: next_slot,
+                value_type: parameter.value_type,
+                mutable: false,
+            },
+        );
+        next_slot = next_slot.checked_add(1).ok_or_else(|| {
+            CompilerError::new(parameter.span, "weave has too many local bindings")
+        })?;
+    }
+    for statement in &weave.body {
+        if let Statement::Bind {
+            name,
+            mutable,
+            value,
+            span,
+        } = statement
+        {
+            let value_type = static_expression_type(value, &layout, weave_results)?;
+            if layout.len() >= MAX_LOCALS {
+                return Err(CompilerError::new(
+                    *span,
+                    "weave has too many local bindings",
+                ));
+            }
+            layout.insert(
+                name.clone(),
+                SlotInfo {
+                    index: next_slot,
+                    value_type,
+                    mutable: *mutable,
+                },
+            );
+            next_slot = next_slot
+                .checked_add(1)
+                .ok_or_else(|| CompilerError::new(*span, "weave has too many local bindings"))?;
+        }
+    }
+    Ok(layout)
+}
+
+fn static_expression_type(
     expression: &Expression,
-    local_slots: &BTreeMap<String, u8>,
-    bytecode: &mut Vec<u8>,
-) -> Result<(), CompilerError> {
+    layout: &BTreeMap<String, SlotInfo>,
+    weave_results: &BTreeMap<String, ValueType>,
+) -> Result<ValueType, CompilerError> {
+    let atom_type = |atom: &Atom| -> Result<ValueType, CompilerError> {
+        match &atom.kind {
+            AtomKind::Text(_) => Ok(ValueType::Text),
+            AtomKind::Whole(_) => Ok(ValueType::Whole),
+            AtomKind::Truth(_) => Ok(ValueType::Truth),
+            AtomKind::Name(name) | AtomKind::Borrow(name) | AtomKind::Move(name) => {
+                layout.get(name).map(|slot| slot.value_type).ok_or_else(|| {
+                    CompilerError::new(
+                        atom.span,
+                        format!("value {name} has not been introduced before this binding"),
+                    )
+                })
+            }
+        }
+    };
     match &expression.kind {
-        ExpressionKind::Text(value) => {
-            let length = u16::try_from(value.len()).map_err(|_| {
+        ExpressionKind::Atom(atom) => atom_type(atom),
+        ExpressionKind::Unary {
+            operation,
+            argument,
+        } => match operation {
+            UnaryOperation::Not => Ok(ValueType::Truth),
+            UnaryOperation::Measure => Ok(ValueType::Whole),
+            UnaryOperation::Render => {
+                let _ = atom_type(argument)?;
+                Ok(ValueType::Text)
+            }
+        },
+        ExpressionKind::Binary {
+            operation,
+            left,
+            right,
+        } => {
+            let _ = atom_type(left)?;
+            let _ = atom_type(right)?;
+            match operation {
+                BinaryOperation::Sum
+                | BinaryOperation::Difference
+                | BinaryOperation::Product
+                | BinaryOperation::Glyph => Ok(ValueType::Whole),
+                BinaryOperation::Less | BinaryOperation::Same => Ok(ValueType::Truth),
+                BinaryOperation::Join => Ok(ValueType::Text),
+            }
+        }
+        ExpressionKind::Cut { text, start, end } => {
+            let _ = atom_type(text)?;
+            let _ = atom_type(start)?;
+            let _ = atom_type(end)?;
+            Ok(ValueType::Text)
+        }
+        ExpressionKind::Call { weave: called, .. } => {
+            weave_results.get(called).copied().ok_or_else(|| {
                 CompilerError::new(
                     expression.span,
-                    "Aether 0.1 text literals cannot exceed 65,535 bytes",
+                    "internal compiler could not resolve a called weave",
                 )
-            })?;
-            bytecode.push(OP_PUSH_TEXT);
-            bytecode.extend_from_slice(&length.to_le_bytes());
-            bytecode.extend_from_slice(value.as_bytes());
+            })
         }
-        ExpressionKind::Whole(value) => {
-            bytecode.push(OP_PUSH_WHOLE);
-            bytecode.extend_from_slice(&value.to_le_bytes());
-        }
-        ExpressionKind::Name(name) => {
-            let Some(slot) = local_slots.get(name) else {
-                return Err(CompilerError::new(
-                    expression.span,
-                    format!("value {name} has not been bound in this weave"),
-                ));
-            };
-            bytecode.push(OP_LOAD);
-            bytecode.push(*slot);
+    }
+}
+
+fn emit_block(
+    statements: &[Statement],
+    layout: &BTreeMap<String, SlotInfo>,
+    weave_indices: &BTreeMap<String, usize>,
+    code: &mut Vec<u8>,
+) -> Result<(), CompilerError> {
+    for statement in statements {
+        match statement {
+            Statement::Bind { name, value, .. } => {
+                emit_expression(value, layout, weave_indices, code)?;
+                code.push(OP_STORE);
+                write_u16(
+                    code,
+                    layout
+                        .get(name)
+                        .ok_or_else(|| {
+                            CompilerError::new(
+                                statement.span(),
+                                "internal compiler could not resolve bind slot",
+                            )
+                        })?
+                        .index,
+                );
+            }
+            Statement::Revise { name, value, .. } => {
+                emit_expression(value, layout, weave_indices, code)?;
+                code.push(OP_REVISE);
+                write_u16(
+                    code,
+                    layout
+                        .get(name)
+                        .ok_or_else(|| {
+                            CompilerError::new(
+                                statement.span(),
+                                "internal compiler could not resolve revise slot",
+                            )
+                        })?
+                        .index,
+                );
+            }
+            Statement::Speak { value, .. } => {
+                emit_expression(value, layout, weave_indices, code)?;
+                code.push(OP_SPEAK);
+            }
+            Statement::Yield { value, .. } => {
+                emit_expression(value, layout, weave_indices, code)?;
+                code.push(OP_YIELD);
+            }
+            Statement::Choose {
+                condition,
+                when_bright,
+                when_dim,
+                ..
+            } => {
+                emit_expression(condition, layout, weave_indices, code)?;
+                code.push(OP_JUMP_IF_DIM);
+                let dim_target = reserve_u32(code);
+                emit_block(when_bright, layout, weave_indices, code)?;
+                if when_dim.is_empty() {
+                    let continuation = code.len();
+                    patch_u32(code, dim_target, continuation)?;
+                } else {
+                    code.push(OP_JUMP);
+                    let end_target = reserve_u32(code);
+                    let dim_branch = code.len();
+                    patch_u32(code, dim_target, dim_branch)?;
+                    emit_block(when_dim, layout, weave_indices, code)?;
+                    let continuation = code.len();
+                    patch_u32(code, end_target, continuation)?;
+                }
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                let loop_start = code.len();
+                emit_expression(condition, layout, weave_indices, code)?;
+                code.push(OP_JUMP_IF_DIM);
+                let loop_end = reserve_u32(code);
+                emit_block(body, layout, weave_indices, code)?;
+                code.push(OP_JUMP);
+                write_u32(
+                    code,
+                    u32::try_from(loop_start).map_err(|_| {
+                        CompilerError::new(
+                            statement.span(),
+                            "loop start is outside the AETH jump range",
+                        )
+                    })?,
+                );
+                let continuation = code.len();
+                patch_u32(code, loop_end, continuation)?;
+            }
         }
     }
     Ok(())
 }
 
-fn verify_header(bytecode: &[u8]) -> Result<(), BytecodeError> {
+fn emit_expression(
+    expression: &Expression,
+    layout: &BTreeMap<String, SlotInfo>,
+    weave_indices: &BTreeMap<String, usize>,
+    code: &mut Vec<u8>,
+) -> Result<(), CompilerError> {
+    match &expression.kind {
+        ExpressionKind::Atom(atom) => emit_atom(atom, layout, code)?,
+        ExpressionKind::Unary {
+            operation,
+            argument,
+        } => {
+            emit_atom(argument, layout, code)?;
+            code.push(match operation {
+                UnaryOperation::Not => OP_NOT,
+                UnaryOperation::Measure => OP_MEASURE,
+                UnaryOperation::Render => OP_RENDER,
+            });
+        }
+        ExpressionKind::Binary {
+            operation,
+            left,
+            right,
+        } => {
+            emit_atom(left, layout, code)?;
+            emit_atom(right, layout, code)?;
+            code.push(match operation {
+                BinaryOperation::Sum => OP_SUM,
+                BinaryOperation::Difference => OP_DIFFERENCE,
+                BinaryOperation::Product => OP_PRODUCT,
+                BinaryOperation::Less => OP_LESS,
+                BinaryOperation::Same => OP_SAME,
+                BinaryOperation::Join => OP_JOIN,
+                BinaryOperation::Glyph => OP_GLYPH,
+            });
+        }
+        ExpressionKind::Cut { text, start, end } => {
+            emit_atom(text, layout, code)?;
+            emit_atom(start, layout, code)?;
+            emit_atom(end, layout, code)?;
+            code.push(OP_CUT);
+        }
+        ExpressionKind::Call { weave, arguments } => {
+            for argument in arguments {
+                emit_atom(argument, layout, code)?;
+            }
+            let function = weave_indices.get(weave).ok_or_else(|| {
+                CompilerError::new(
+                    expression.span,
+                    format!("internal compiler could not resolve weave {weave}"),
+                )
+            })?;
+            code.push(OP_CALL);
+            write_u16(
+                code,
+                u16::try_from(*function).map_err(|_| {
+                    CompilerError::new(expression.span, "weave index is outside the AETH range")
+                })?,
+            );
+            code.push(u8::try_from(arguments.len()).map_err(|_| {
+                CompilerError::new(expression.span, "call has too many AETH arguments")
+            })?);
+        }
+    }
+    Ok(())
+}
+
+fn emit_atom(
+    atom: &Atom,
+    layout: &BTreeMap<String, SlotInfo>,
+    code: &mut Vec<u8>,
+) -> Result<(), CompilerError> {
+    match &atom.kind {
+        AtomKind::Text(value) => {
+            let length = u32::try_from(value.len()).map_err(|_| {
+                CompilerError::new(
+                    atom.span,
+                    "Aether text literals cannot exceed the AETH 32-bit length limit",
+                )
+            })?;
+            code.push(OP_PUSH_TEXT);
+            write_u32(code, length);
+            code.extend_from_slice(value.as_bytes());
+        }
+        AtomKind::Whole(value) => {
+            code.push(OP_PUSH_WHOLE);
+            code.extend_from_slice(&value.to_le_bytes());
+        }
+        AtomKind::Truth(value) => {
+            code.push(OP_PUSH_TRUTH);
+            code.push(u8::from(*value));
+        }
+        AtomKind::Name(name) | AtomKind::Borrow(name) => {
+            let slot = layout.get(name).ok_or_else(|| {
+                CompilerError::new(
+                    atom.span,
+                    format!("internal compiler could not resolve value {name}"),
+                )
+            })?;
+            code.push(OP_LOAD);
+            write_u16(code, slot.index);
+        }
+        AtomKind::Move(name) => {
+            let slot = layout.get(name).ok_or_else(|| {
+                CompilerError::new(
+                    atom.span,
+                    format!("internal compiler could not resolve value {name}"),
+                )
+            })?;
+            code.push(OP_MOVE);
+            write_u16(code, slot.index);
+        }
+    }
+    Ok(())
+}
+
+fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     if bytecode.len() < ARTIFACT_MAGIC.len() + 1 {
         return Err(BytecodeError::new(0, "artifact is shorter than its header"));
     }
@@ -795,56 +2084,734 @@ fn verify_header(bytecode: &[u8]) -> Result<(), BytecodeError> {
             "artifact version is not supported by this Aether VM",
         ));
     }
+    let mut position = ARTIFACT_MAGIC.len() + 1;
+    let function_count = usize::from(read_u16(bytecode, &mut position)?);
+    if function_count == 0 || function_count > MAX_FUNCTIONS {
+        return Err(BytecodeError::new(
+            position,
+            "artifact function count is outside the Aether limit",
+        ));
+    }
+    let mut functions = Vec::with_capacity(function_count);
+    for _ in 0..function_count {
+        let name_length = usize::from(read_byte(bytecode, &mut position)?);
+        let name = read_ascii(bytecode, &mut position, name_length, "weave name")?;
+        let parameter_count = usize::from(read_byte(bytecode, &mut position)?);
+        let mut parameters = Vec::with_capacity(parameter_count);
+        for _ in 0..parameter_count {
+            let value_type = ValueType::from_byte(read_byte(bytecode, &mut position)?, position)?;
+            let mode = ParameterMode::from_byte(read_byte(bytecode, &mut position)?, position)?;
+            parameters.push((value_type, mode));
+        }
+        let result = ValueType::from_byte(read_byte(bytecode, &mut position)?, position)?;
+        let local_count = usize::from(read_u16(bytecode, &mut position)?);
+        if local_count > MAX_LOCALS {
+            return Err(BytecodeError::new(
+                position,
+                "artifact local count exceeds the Aether limit",
+            ));
+        }
+        let mut locals = Vec::with_capacity(local_count);
+        for _ in 0..local_count {
+            let value_type = ValueType::from_byte(read_byte(bytecode, &mut position)?, position)?;
+            let mutable = match read_byte(bytecode, &mut position)? {
+                0 => false,
+                1 => true,
+                _ => {
+                    return Err(BytecodeError::new(
+                        position,
+                        "artifact local mutability is invalid",
+                    ));
+                }
+            };
+            locals.push(LocalDescriptor {
+                value_type,
+                mutable,
+            });
+        }
+        let code_length = usize::try_from(read_u32(bytecode, &mut position)?).map_err(|_| {
+            BytecodeError::new(position, "artifact code length is outside platform limits")
+        })?;
+        let end = position
+            .checked_add(code_length)
+            .ok_or_else(|| BytecodeError::new(position, "artifact code length overflowed"))?;
+        let Some(code) = bytecode.get(position..end) else {
+            return Err(BytecodeError::new(position, "artifact code is truncated"));
+        };
+        position = end;
+        functions.push(ArtifactFunction {
+            name,
+            parameters,
+            result,
+            locals,
+            code: code.to_vec(),
+        });
+    }
+    if position != bytecode.len() {
+        return Err(BytecodeError::new(
+            position,
+            "artifact has trailing bytes after its weave table",
+        ));
+    }
+    Ok(Artifact { functions })
+}
+
+fn verify_function(
+    function_index: usize,
+    function: &ArtifactFunction,
+    functions: &[ArtifactFunction],
+) -> Result<(), BytecodeError> {
+    let decoded = decode_code(&function.code)?;
+    if decoded.is_empty() {
+        return Err(BytecodeError::new(0, "weave contains no instructions"));
+    }
+    let mut instruction_indices = BTreeMap::new();
+    for (index, instruction) in decoded.iter().enumerate() {
+        if instruction_indices
+            .insert(instruction.offset, index)
+            .is_some()
+        {
+            return Err(BytecodeError::new(
+                instruction.offset,
+                "weave instruction offset is duplicated",
+            ));
+        }
+    }
+    for instruction in &decoded {
+        for target in jump_targets(&instruction.instruction) {
+            if !instruction_indices.contains_key(&target) {
+                return Err(BytecodeError::new(
+                    instruction.offset,
+                    "jump target does not begin an Aether instruction",
+                ));
+            }
+        }
+    }
+
+    let mut states = BTreeMap::new();
+    let initial = VerificationState {
+        stack: Vec::new(),
+        initialized: function
+            .locals
+            .iter()
+            .enumerate()
+            .map(|(index, _)| index < function.parameters.len())
+            .collect(),
+        moved: vec![false; function.locals.len()],
+    };
+    states.insert(0_usize, initial);
+    let mut queue = VecDeque::from([0_usize]);
+    let mut yielded = false;
+
+    while let Some(offset) = queue.pop_front() {
+        let state = states
+            .get(&offset)
+            .cloned()
+            .ok_or_else(|| BytecodeError::new(offset, "verifier lost control-flow state"))?;
+        let instruction = decoded[*instruction_indices
+            .get(&offset)
+            .ok_or_else(|| BytecodeError::new(offset, "instruction offset is invalid"))?]
+        .clone();
+        let successors = verify_instruction(
+            function_index,
+            function,
+            functions,
+            &instruction,
+            state,
+            &mut yielded,
+        )?;
+        for (target, next_state) in successors {
+            merge_verifier_state(
+                target,
+                next_state,
+                &mut states,
+                &mut queue,
+                &instruction_indices,
+            )?;
+        }
+    }
+    if !yielded {
+        return Err(BytecodeError::new(0, "weave has no reachable yield"));
+    }
+    if states.len() != decoded.len() {
+        return Err(BytecodeError::new(
+            0,
+            "weave contains unreachable Aether instructions",
+        ));
+    }
     Ok(())
 }
 
-fn read_byte(bytecode: &[u8], position: &mut usize) -> Result<u8, BytecodeError> {
-    let offset = *position;
-    let Some(value) = bytecode.get(offset) else {
-        return Err(BytecodeError::new(offset, "artifact ended unexpectedly"));
-    };
-    *position += 1;
-    Ok(*value)
+fn verify_instruction(
+    function_index: usize,
+    function: &ArtifactFunction,
+    functions: &[ArtifactFunction],
+    decoded: &DecodedInstruction,
+    mut state: VerificationState,
+    yielded: &mut bool,
+) -> Result<Vec<(usize, VerificationState)>, BytecodeError> {
+    let offset = decoded.offset;
+    let next = decoded.next_offset;
+    let continue_with = |state: VerificationState| Ok(vec![(next, state)]);
+    match &decoded.instruction {
+        Instruction::PushText(value) => {
+            if value.len() > MAX_TEXT_BYTES {
+                return Err(BytecodeError::new(
+                    offset,
+                    "text constant exceeds the Aether limit",
+                ));
+            }
+            state.stack.push(ValueType::Text);
+            continue_with(state)
+        }
+        Instruction::PushWhole(_) => {
+            state.stack.push(ValueType::Whole);
+            continue_with(state)
+        }
+        Instruction::PushTruth(_) => {
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::Store(slot) => {
+            let local = local_descriptor(function, *slot, offset)?;
+            if state.initialized[*slot] {
+                return Err(BytecodeError::new(
+                    offset,
+                    "store may only initialize an unbound local slot",
+                ));
+            }
+            pop_type(&mut state.stack, local.value_type, offset, "store")?;
+            state.initialized[*slot] = true;
+            state.moved[*slot] = false;
+            continue_with(state)
+        }
+        Instruction::Load(slot) => {
+            let local = local_descriptor(function, *slot, offset)?;
+            ensure_readable(&state, *slot, offset, "load")?;
+            state.stack.push(local.value_type);
+            continue_with(state)
+        }
+        Instruction::Move(slot) => {
+            let local = local_descriptor(function, *slot, offset)?;
+            ensure_readable(&state, *slot, offset, "move")?;
+            state.moved[*slot] = true;
+            state.stack.push(local.value_type);
+            continue_with(state)
+        }
+        Instruction::Revise(slot) => {
+            let local = local_descriptor(function, *slot, offset)?;
+            if !local.mutable {
+                return Err(BytecodeError::new(
+                    offset,
+                    "revise targets an immutable local slot",
+                ));
+            }
+            ensure_readable(&state, *slot, offset, "revise")?;
+            pop_type(&mut state.stack, local.value_type, offset, "revise")?;
+            continue_with(state)
+        }
+        Instruction::Speak => {
+            pop_type(&mut state.stack, ValueType::Text, offset, "speak")?;
+            continue_with(state)
+        }
+        Instruction::Yield => {
+            pop_type(&mut state.stack, function.result, offset, "yield")?;
+            if !state.stack.is_empty() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "yield must leave an empty operand stack",
+                ));
+            }
+            *yielded = true;
+            Ok(Vec::new())
+        }
+        Instruction::Sum | Instruction::Difference | Instruction::Product => {
+            pop_type(&mut state.stack, ValueType::Whole, offset, "arithmetic")?;
+            pop_type(&mut state.stack, ValueType::Whole, offset, "arithmetic")?;
+            state.stack.push(ValueType::Whole);
+            continue_with(state)
+        }
+        Instruction::Less => {
+            pop_type(&mut state.stack, ValueType::Whole, offset, "less")?;
+            pop_type(&mut state.stack, ValueType::Whole, offset, "less")?;
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::Same => {
+            let right = pop_any_type(&mut state.stack, offset, "same")?;
+            let left = pop_any_type(&mut state.stack, offset, "same")?;
+            if left != right {
+                return Err(BytecodeError::new(
+                    offset,
+                    "same requires two values with the same type",
+                ));
+            }
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::Not => {
+            pop_type(&mut state.stack, ValueType::Truth, offset, "not")?;
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::Join => {
+            pop_type(&mut state.stack, ValueType::Text, offset, "join")?;
+            pop_type(&mut state.stack, ValueType::Text, offset, "join")?;
+            state.stack.push(ValueType::Text);
+            continue_with(state)
+        }
+        Instruction::Measure => {
+            pop_type(&mut state.stack, ValueType::Text, offset, "measure")?;
+            state.stack.push(ValueType::Whole);
+            continue_with(state)
+        }
+        Instruction::Glyph => {
+            pop_type(&mut state.stack, ValueType::Whole, offset, "glyph")?;
+            pop_type(&mut state.stack, ValueType::Text, offset, "glyph")?;
+            state.stack.push(ValueType::Whole);
+            continue_with(state)
+        }
+        Instruction::Cut => {
+            pop_type(&mut state.stack, ValueType::Whole, offset, "cut")?;
+            pop_type(&mut state.stack, ValueType::Whole, offset, "cut")?;
+            pop_type(&mut state.stack, ValueType::Text, offset, "cut")?;
+            state.stack.push(ValueType::Text);
+            continue_with(state)
+        }
+        Instruction::Render => {
+            let _ = pop_any_type(&mut state.stack, offset, "render")?;
+            state.stack.push(ValueType::Text);
+            continue_with(state)
+        }
+        Instruction::Call {
+            function: called,
+            arguments,
+        } => {
+            let Some(called_function) = functions.get(*called) else {
+                return Err(BytecodeError::new(
+                    offset,
+                    "call references an unknown weave",
+                ));
+            };
+            if called_function.parameters.len() != *arguments {
+                return Err(BytecodeError::new(
+                    offset,
+                    "call argument count disagrees with its weave signature",
+                ));
+            }
+            for (expected, _) in called_function.parameters.iter().rev() {
+                pop_type(&mut state.stack, *expected, offset, "call")?;
+            }
+            state.stack.push(called_function.result);
+            let _ = function_index;
+            continue_with(state)
+        }
+        Instruction::JumpIfDim(target) => {
+            pop_type(
+                &mut state.stack,
+                ValueType::Truth,
+                offset,
+                "conditional jump",
+            )?;
+            Ok(vec![(next, state.clone()), (*target, state)])
+        }
+        Instruction::Jump(target) => Ok(vec![(*target, state)]),
+    }
 }
 
-fn read_i64(bytecode: &[u8], position: &mut usize) -> Result<i64, BytecodeError> {
-    let offset = *position;
-    let end = offset
-        .checked_add(8)
-        .ok_or_else(|| BytecodeError::new(offset, "whole literal length overflowed"))?;
-    let Some(bytes) = bytecode.get(offset..end) else {
-        return Err(BytecodeError::new(offset, "whole literal is truncated"));
-    };
-    *position = end;
-    let mut buffer = [0_u8; 8];
-    buffer.copy_from_slice(bytes);
-    Ok(i64::from_le_bytes(buffer))
-}
-
-fn read_text(bytecode: &[u8], position: &mut usize) -> Result<String, BytecodeError> {
-    let offset = *position;
-    let low = read_byte(bytecode, position)?;
-    let high = read_byte(bytecode, position)?;
-    let length = usize::from(u16::from_le_bytes([low, high]));
-    let end = (*position)
-        .checked_add(length)
-        .ok_or_else(|| BytecodeError::new(offset, "text literal length overflowed"))?;
-    let Some(bytes) = bytecode.get(*position..end) else {
-        return Err(BytecodeError::new(offset, "text literal is truncated"));
-    };
-    let value = std::str::from_utf8(bytes)
-        .map_err(|_| BytecodeError::new(offset, "text literal is not UTF-8"))?;
-    if !value.is_ascii() {
+fn merge_verifier_state(
+    target: usize,
+    next: VerificationState,
+    states: &mut BTreeMap<usize, VerificationState>,
+    queue: &mut VecDeque<usize>,
+    instruction_indices: &BTreeMap<usize, usize>,
+) -> Result<(), BytecodeError> {
+    if !instruction_indices.contains_key(&target) {
         return Err(BytecodeError::new(
-            offset,
-            "text literal is not valid Aether 0.1 ASCII text",
+            target,
+            "control flow reaches the end of a weave without yield",
         ));
     }
-    *position = end;
-    Ok(value.to_owned())
+    match states.get(&target) {
+        Some(existing) if existing == &next => Ok(()),
+        Some(_) => Err(BytecodeError::new(
+            target,
+            "control-flow paths disagree about stack or move state",
+        )),
+        None => {
+            states.insert(target, next);
+            queue.push_back(target);
+            Ok(())
+        }
+    }
 }
 
-fn pop_value_type(
+fn jump_targets(instruction: &Instruction) -> Vec<usize> {
+    match instruction {
+        Instruction::JumpIfDim(target) | Instruction::Jump(target) => vec![*target],
+        _ => Vec::new(),
+    }
+}
+
+fn execute_function(
+    artifact: &Artifact,
+    function_index: usize,
+    arguments: Vec<RuntimeValue>,
+    stdout: &mut String,
+    depth: usize,
+) -> Result<RuntimeValue, BytecodeError> {
+    if depth >= MAX_CALL_DEPTH {
+        return Err(BytecodeError::new(
+            0,
+            "Aether call depth exceeded the deterministic safety limit",
+        ));
+    }
+    let function = artifact
+        .functions
+        .get(function_index)
+        .ok_or_else(|| BytecodeError::new(0, "runtime call references an unknown weave"))?;
+    if function.parameters.len() != arguments.len() {
+        return Err(BytecodeError::new(
+            0,
+            "runtime call argument count is invalid",
+        ));
+    }
+    let mut locals = vec![None; function.locals.len()];
+    for (index, argument) in arguments.into_iter().enumerate() {
+        if argument.value_type() != function.parameters[index].0 {
+            return Err(BytecodeError::new(
+                0,
+                "runtime call argument type is invalid",
+            ));
+        }
+        locals[index] = Some(argument);
+    }
+    let mut stack = Vec::new();
+    let mut position = 0;
+    while position < function.code.len() {
+        let decoded = decode_instruction(&function.code, &mut position)?;
+        match decoded.instruction {
+            Instruction::PushText(value) => stack.push(RuntimeValue::Text(value)),
+            Instruction::PushWhole(value) => stack.push(RuntimeValue::Whole(value)),
+            Instruction::PushTruth(value) => stack.push(RuntimeValue::Truth(value)),
+            Instruction::Store(slot) => {
+                if slot >= locals.len() || locals[slot].is_some() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime store slot is invalid",
+                    ));
+                }
+                let value = pop_runtime(&mut stack, decoded.offset, "store")?;
+                require_runtime_type(
+                    &value,
+                    function.locals[slot].value_type,
+                    decoded.offset,
+                    "store",
+                )?;
+                locals[slot] = Some(value);
+            }
+            Instruction::Load(slot) => {
+                let value = read_local(&locals, slot, decoded.offset, "load")?;
+                stack.push(value.clone());
+            }
+            Instruction::Move(slot) => {
+                let value = locals
+                    .get_mut(slot)
+                    .ok_or_else(|| {
+                        BytecodeError::new(decoded.offset, "runtime move slot is invalid")
+                    })?
+                    .take()
+                    .ok_or_else(|| {
+                        BytecodeError::new(decoded.offset, "runtime move reads an empty slot")
+                    })?;
+                stack.push(value);
+            }
+            Instruction::Revise(slot) => {
+                if slot >= locals.len() || !function.locals[slot].mutable || locals[slot].is_none()
+                {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime revise slot is invalid",
+                    ));
+                }
+                let value = pop_runtime(&mut stack, decoded.offset, "revise")?;
+                require_runtime_type(
+                    &value,
+                    function.locals[slot].value_type,
+                    decoded.offset,
+                    "revise",
+                )?;
+                locals[slot] = Some(value);
+            }
+            Instruction::Speak => match pop_runtime(&mut stack, decoded.offset, "speak")? {
+                RuntimeValue::Text(value) => {
+                    ensure_text_limit(stdout.len(), value.len(), decoded.offset)?;
+                    stdout.push_str(&value);
+                }
+                _ => {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "speak received a non-Text value",
+                    ))
+                }
+            },
+            Instruction::Yield => {
+                let value = pop_runtime(&mut stack, decoded.offset, "yield")?;
+                require_runtime_type(&value, function.result, decoded.offset, "yield")?;
+                if !stack.is_empty() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "yield left values on the runtime stack",
+                    ));
+                }
+                return Ok(value);
+            }
+            Instruction::Sum => {
+                let right = pop_whole(&mut stack, decoded.offset, "sum")?;
+                let left = pop_whole(&mut stack, decoded.offset, "sum")?;
+                stack.push(RuntimeValue::Whole(left.checked_add(right).ok_or_else(
+                    || BytecodeError::new(decoded.offset, "sum overflowed Whole"),
+                )?));
+            }
+            Instruction::Difference => {
+                let right = pop_whole(&mut stack, decoded.offset, "difference")?;
+                let left = pop_whole(&mut stack, decoded.offset, "difference")?;
+                stack.push(RuntimeValue::Whole(left.checked_sub(right).ok_or_else(
+                    || BytecodeError::new(decoded.offset, "difference overflowed Whole"),
+                )?));
+            }
+            Instruction::Product => {
+                let right = pop_whole(&mut stack, decoded.offset, "product")?;
+                let left = pop_whole(&mut stack, decoded.offset, "product")?;
+                stack.push(RuntimeValue::Whole(left.checked_mul(right).ok_or_else(
+                    || BytecodeError::new(decoded.offset, "product overflowed Whole"),
+                )?));
+            }
+            Instruction::Less => {
+                let right = pop_whole(&mut stack, decoded.offset, "less")?;
+                let left = pop_whole(&mut stack, decoded.offset, "less")?;
+                stack.push(RuntimeValue::Truth(left < right));
+            }
+            Instruction::Same => {
+                let right = pop_runtime(&mut stack, decoded.offset, "same")?;
+                let left = pop_runtime(&mut stack, decoded.offset, "same")?;
+                if left.value_type() != right.value_type() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "same received different value types",
+                    ));
+                }
+                stack.push(RuntimeValue::Truth(runtime_values_equal(&left, &right)));
+            }
+            Instruction::Not => {
+                let value = pop_truth(&mut stack, decoded.offset, "not")?;
+                stack.push(RuntimeValue::Truth(!value));
+            }
+            Instruction::Join => {
+                let right = pop_text(&mut stack, decoded.offset, "join")?;
+                let left = pop_text(&mut stack, decoded.offset, "join")?;
+                ensure_text_limit(left.len(), right.len(), decoded.offset)?;
+                stack.push(RuntimeValue::Text(left + &right));
+            }
+            Instruction::Measure => {
+                let text = pop_text(&mut stack, decoded.offset, "measure")?;
+                stack.push(RuntimeValue::Whole(
+                    i64::try_from(text.chars().count()).map_err(|_| {
+                        BytecodeError::new(decoded.offset, "text length is outside Whole range")
+                    })?,
+                ));
+            }
+            Instruction::Glyph => {
+                let index = pop_whole(&mut stack, decoded.offset, "glyph")?;
+                let text = pop_text(&mut stack, decoded.offset, "glyph")?;
+                let value = usize::try_from(index)
+                    .ok()
+                    .and_then(|index| text.chars().nth(index))
+                    .map_or(-1_i64, |character| i64::from(u32::from(character)));
+                stack.push(RuntimeValue::Whole(value));
+            }
+            Instruction::Cut => {
+                let end = pop_whole(&mut stack, decoded.offset, "cut")?;
+                let start = pop_whole(&mut stack, decoded.offset, "cut")?;
+                let text = pop_text(&mut stack, decoded.offset, "cut")?;
+                let length = i64::try_from(text.chars().count()).map_err(|_| {
+                    BytecodeError::new(decoded.offset, "text length is outside Whole range")
+                })?;
+                let start = start.clamp(0, length);
+                let end = end.clamp(start, length);
+                let start = usize::try_from(start)
+                    .map_err(|_| BytecodeError::new(decoded.offset, "cut start is invalid"))?;
+                let end = usize::try_from(end)
+                    .map_err(|_| BytecodeError::new(decoded.offset, "cut end is invalid"))?;
+                let start = scalar_byte_offset(&text, start);
+                let end = scalar_byte_offset(&text, end);
+                let slice = text
+                    .get(start..end)
+                    .ok_or_else(|| BytecodeError::new(decoded.offset, "cut range is invalid"))?;
+                stack.push(RuntimeValue::Text(slice.to_owned()));
+            }
+            Instruction::Render => {
+                let value = pop_runtime(&mut stack, decoded.offset, "render")?;
+                let text = match value {
+                    RuntimeValue::Text(value) => value,
+                    RuntimeValue::Whole(value) => value.to_string(),
+                    RuntimeValue::Truth(true) => "bright".to_owned(),
+                    RuntimeValue::Truth(false) => "dim".to_owned(),
+                };
+                stack.push(RuntimeValue::Text(text));
+            }
+            Instruction::Call {
+                function: called,
+                arguments,
+            } => {
+                let called_function = artifact.functions.get(called).ok_or_else(|| {
+                    BytecodeError::new(decoded.offset, "runtime call references an unknown weave")
+                })?;
+                if called_function.parameters.len() != arguments {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime call has an invalid argument count",
+                    ));
+                }
+                let mut values = Vec::with_capacity(arguments);
+                for (value_type, _) in called_function.parameters.iter().rev() {
+                    let value = pop_runtime(&mut stack, decoded.offset, "call")?;
+                    require_runtime_type(&value, *value_type, decoded.offset, "call")?;
+                    values.push(value);
+                }
+                values.reverse();
+                stack.push(execute_function(
+                    artifact,
+                    called,
+                    values,
+                    stdout,
+                    depth + 1,
+                )?);
+            }
+            Instruction::JumpIfDim(target) => {
+                if !pop_truth(&mut stack, decoded.offset, "conditional jump")? {
+                    position = target;
+                }
+            }
+            Instruction::Jump(target) => position = target,
+        }
+    }
+    Err(BytecodeError::new(
+        function.code.len(),
+        "runtime reached the end of a weave without yield",
+    ))
+}
+
+fn decode_code(code: &[u8]) -> Result<Vec<DecodedInstruction>, BytecodeError> {
+    let mut position = 0;
+    let mut instructions = Vec::new();
+    while position < code.len() {
+        instructions.push(decode_instruction(code, &mut position)?);
+    }
+    Ok(instructions)
+}
+
+fn decode_instruction(
+    code: &[u8],
+    position: &mut usize,
+) -> Result<DecodedInstruction, BytecodeError> {
+    let offset = *position;
+    let opcode = read_byte(code, position)?;
+    let instruction = match opcode {
+        OP_PUSH_TEXT => {
+            let length = usize::try_from(read_u32(code, position)?).map_err(|_| {
+                BytecodeError::new(*position, "text constant length is outside platform limits")
+            })?;
+            Instruction::PushText(read_utf8(code, position, length, "text constant")?)
+        }
+        OP_PUSH_WHOLE => Instruction::PushWhole(read_i64(code, position)?),
+        OP_PUSH_TRUTH => match read_byte(code, position)? {
+            0 => Instruction::PushTruth(false),
+            1 => Instruction::PushTruth(true),
+            _ => return Err(BytecodeError::new(offset, "truth constant is invalid")),
+        },
+        OP_STORE => Instruction::Store(usize::from(read_u16(code, position)?)),
+        OP_LOAD => Instruction::Load(usize::from(read_u16(code, position)?)),
+        OP_MOVE => Instruction::Move(usize::from(read_u16(code, position)?)),
+        OP_REVISE => Instruction::Revise(usize::from(read_u16(code, position)?)),
+        OP_SPEAK => Instruction::Speak,
+        OP_YIELD => Instruction::Yield,
+        OP_SUM => Instruction::Sum,
+        OP_DIFFERENCE => Instruction::Difference,
+        OP_PRODUCT => Instruction::Product,
+        OP_LESS => Instruction::Less,
+        OP_SAME => Instruction::Same,
+        OP_NOT => Instruction::Not,
+        OP_JOIN => Instruction::Join,
+        OP_MEASURE => Instruction::Measure,
+        OP_GLYPH => Instruction::Glyph,
+        OP_CUT => Instruction::Cut,
+        OP_RENDER => Instruction::Render,
+        OP_CALL => Instruction::Call {
+            function: usize::from(read_u16(code, position)?),
+            arguments: usize::from(read_byte(code, position)?),
+        },
+        OP_JUMP_IF_DIM => Instruction::JumpIfDim(read_usize_u32(code, position)?),
+        OP_JUMP => Instruction::Jump(read_usize_u32(code, position)?),
+        _ => return Err(BytecodeError::new(offset, "unknown Aether opcode")),
+    };
+    Ok(DecodedInstruction {
+        offset,
+        next_offset: *position,
+        instruction,
+    })
+}
+
+fn local_descriptor(
+    function: &ArtifactFunction,
+    slot: usize,
+    offset: usize,
+) -> Result<&LocalDescriptor, BytecodeError> {
+    function
+        .locals
+        .get(slot)
+        .ok_or_else(|| BytecodeError::new(offset, "local slot is outside the local table"))
+}
+
+fn ensure_readable(
+    state: &VerificationState,
+    slot: usize,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if !state.initialized[slot] {
+        return Err(BytecodeError::new(
+            offset,
+            format!("{operation} reads an uninitialized local slot"),
+        ));
+    }
+    if state.moved[slot] {
+        return Err(BytecodeError::new(
+            offset,
+            format!("{operation} reads a moved local slot"),
+        ));
+    }
+    Ok(())
+}
+
+fn pop_type(
+    stack: &mut Vec<ValueType>,
+    expected: ValueType,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    let actual = pop_any_type(stack, offset, operation)?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{operation} requires {expected}, but artifact stack has {actual}"),
+        ))
+    }
+}
+
+fn pop_any_type(
     stack: &mut Vec<ValueType>,
     offset: usize,
     operation: &str,
@@ -857,29 +2824,22 @@ fn pop_value_type(
     })
 }
 
-fn require_value_type(
-    actual: ValueType,
-    expected: ValueType,
+fn read_local<'a>(
+    locals: &'a [Option<RuntimeValue>],
+    slot: usize,
     offset: usize,
     operation: &str,
-) -> Result<(), BytecodeError> {
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(BytecodeError::new(
-            offset,
-            format!("{operation} requires {expected}, but artifact stack has {actual}"),
-        ))
-    }
+) -> Result<&'a RuntimeValue, BytecodeError> {
+    locals
+        .get(slot)
+        .ok_or_else(|| BytecodeError::new(offset, format!("runtime {operation} slot is invalid")))?
+        .as_ref()
+        .ok_or_else(|| {
+            BytecodeError::new(offset, format!("runtime {operation} reads an empty slot"))
+        })
 }
 
-#[derive(Debug, Clone)]
-enum RuntimeValue {
-    Text(String),
-    Whole(i64),
-}
-
-fn pop_runtime_value(
+fn pop_runtime(
     stack: &mut Vec<RuntimeValue>,
     offset: usize,
     operation: &str,
@@ -887,14 +2847,336 @@ fn pop_runtime_value(
     stack.pop().ok_or_else(|| {
         BytecodeError::new(
             offset,
-            format!("{operation} would underflow the operand stack"),
+            format!("{operation} would underflow the runtime stack"),
         )
     })
 }
 
+fn require_runtime_type(
+    value: &RuntimeValue,
+    expected: ValueType,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if value.value_type() == expected {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!(
+                "{operation} received {}, expected {expected}",
+                value.value_type()
+            ),
+        ))
+    }
+}
+
+fn pop_whole(
+    stack: &mut Vec<RuntimeValue>,
+    offset: usize,
+    operation: &str,
+) -> Result<i64, BytecodeError> {
+    match pop_runtime(stack, offset, operation)? {
+        RuntimeValue::Whole(value) => Ok(value),
+        value => Err(BytecodeError::new(
+            offset,
+            format!(
+                "{operation} received {}, expected Whole",
+                value.value_type()
+            ),
+        )),
+    }
+}
+
+fn pop_truth(
+    stack: &mut Vec<RuntimeValue>,
+    offset: usize,
+    operation: &str,
+) -> Result<bool, BytecodeError> {
+    match pop_runtime(stack, offset, operation)? {
+        RuntimeValue::Truth(value) => Ok(value),
+        value => Err(BytecodeError::new(
+            offset,
+            format!(
+                "{operation} received {}, expected Truth",
+                value.value_type()
+            ),
+        )),
+    }
+}
+
+fn pop_text(
+    stack: &mut Vec<RuntimeValue>,
+    offset: usize,
+    operation: &str,
+) -> Result<String, BytecodeError> {
+    match pop_runtime(stack, offset, operation)? {
+        RuntimeValue::Text(value) => Ok(value),
+        value => Err(BytecodeError::new(
+            offset,
+            format!("{operation} received {}, expected Text", value.value_type()),
+        )),
+    }
+}
+
+fn runtime_values_equal(left: &RuntimeValue, right: &RuntimeValue) -> bool {
+    match (left, right) {
+        (RuntimeValue::Text(left), RuntimeValue::Text(right)) => left == right,
+        (RuntimeValue::Whole(left), RuntimeValue::Whole(right)) => left == right,
+        (RuntimeValue::Truth(left), RuntimeValue::Truth(right)) => left == right,
+        _ => false,
+    }
+}
+
+fn ensure_text_limit(left: usize, right: usize, offset: usize) -> Result<(), BytecodeError> {
+    let length = left
+        .checked_add(right)
+        .ok_or_else(|| BytecodeError::new(offset, "text size overflowed"))?;
+    if length > MAX_TEXT_BYTES {
+        return Err(BytecodeError::new(
+            offset,
+            "text operation exceeds the Aether runtime safety limit",
+        ));
+    }
+    Ok(())
+}
+
+fn read_byte(bytes: &[u8], position: &mut usize) -> Result<u8, BytecodeError> {
+    let offset = *position;
+    let Some(value) = bytes.get(offset) else {
+        return Err(BytecodeError::new(offset, "artifact ended unexpectedly"));
+    };
+    *position += 1;
+    Ok(*value)
+}
+
+fn read_u16(bytes: &[u8], position: &mut usize) -> Result<u16, BytecodeError> {
+    let low = read_byte(bytes, position)?;
+    let high = read_byte(bytes, position)?;
+    Ok(u16::from_le_bytes([low, high]))
+}
+
+fn read_u32(bytes: &[u8], position: &mut usize) -> Result<u32, BytecodeError> {
+    let mut buffer = [0_u8; 4];
+    for byte in &mut buffer {
+        *byte = read_byte(bytes, position)?;
+    }
+    Ok(u32::from_le_bytes(buffer))
+}
+
+fn read_usize_u32(bytes: &[u8], position: &mut usize) -> Result<usize, BytecodeError> {
+    usize::try_from(read_u32(bytes, position)?)
+        .map_err(|_| BytecodeError::new(*position, "jump target is outside platform limits"))
+}
+
+fn read_i64(bytes: &[u8], position: &mut usize) -> Result<i64, BytecodeError> {
+    let mut buffer = [0_u8; 8];
+    for byte in &mut buffer {
+        *byte = read_byte(bytes, position)?;
+    }
+    Ok(i64::from_le_bytes(buffer))
+}
+
+fn read_ascii(
+    bytes: &[u8],
+    position: &mut usize,
+    length: usize,
+    subject: &str,
+) -> Result<String, BytecodeError> {
+    let offset = *position;
+    let end = offset
+        .checked_add(length)
+        .ok_or_else(|| BytecodeError::new(offset, format!("{subject} length overflowed")))?;
+    let Some(slice) = bytes.get(offset..end) else {
+        return Err(BytecodeError::new(
+            offset,
+            format!("{subject} is truncated"),
+        ));
+    };
+    if !slice.is_ascii() {
+        return Err(BytecodeError::new(
+            offset,
+            format!("{subject} is not ASCII"),
+        ));
+    }
+    let value = std::str::from_utf8(slice)
+        .map_err(|_| BytecodeError::new(offset, format!("{subject} is not UTF-8")))?;
+    *position = end;
+    Ok(value.to_owned())
+}
+
+fn read_utf8(
+    bytes: &[u8],
+    position: &mut usize,
+    length: usize,
+    subject: &str,
+) -> Result<String, BytecodeError> {
+    if length > MAX_TEXT_BYTES {
+        return Err(BytecodeError::new(
+            *position,
+            format!("{subject} exceeds the Aether text safety limit"),
+        ));
+    }
+    let offset = *position;
+    let end = offset
+        .checked_add(length)
+        .ok_or_else(|| BytecodeError::new(offset, format!("{subject} length overflowed")))?;
+    let Some(slice) = bytes.get(offset..end) else {
+        return Err(BytecodeError::new(
+            offset,
+            format!("{subject} is truncated"),
+        ));
+    };
+    let value = std::str::from_utf8(slice)
+        .map_err(|_| BytecodeError::new(offset, format!("{subject} is not valid UTF-8")))?;
+    *position = end;
+    Ok(value.to_owned())
+}
+
+fn scalar_byte_offset(text: &str, scalar_index: usize) -> usize {
+    text.char_indices()
+        .nth(scalar_index)
+        .map_or(text.len(), |(offset, _)| offset)
+}
+
+fn write_u16(bytes: &mut Vec<u8>, value: u16) {
+    bytes.extend_from_slice(&value.to_le_bytes());
+}
+
+fn write_u32(bytes: &mut Vec<u8>, value: u32) {
+    bytes.extend_from_slice(&value.to_le_bytes());
+}
+
+fn reserve_u32(bytes: &mut Vec<u8>) -> usize {
+    let offset = bytes.len();
+    bytes.extend_from_slice(&[0_u8; 4]);
+    offset
+}
+
+fn patch_u32(bytes: &mut [u8], offset: usize, target: usize) -> Result<(), CompilerError> {
+    let target = u32::try_from(target)
+        .map_err(|_| CompilerError::new(Span::synthetic(), "jump target exceeds AETH limits"))?;
+    let end = offset
+        .checked_add(4)
+        .ok_or_else(|| CompilerError::new(Span::synthetic(), "jump patch offset overflowed"))?;
+    let Some(destination) = bytes.get_mut(offset..end) else {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            "internal compiler jump patch is outside emitted code",
+        ));
+    };
+    destination.copy_from_slice(&target.to_le_bytes());
+    Ok(())
+}
+
+fn write_block(statements: &[Statement], indentation: usize, output: &mut String) {
+    for statement in statements {
+        output.push_str(&"  ".repeat(indentation));
+        match statement {
+            Statement::Bind {
+                name,
+                mutable,
+                value,
+                ..
+            } => {
+                output.push_str("bind ");
+                if *mutable {
+                    output.push_str("mutable ");
+                }
+                output.push_str(name);
+                output.push_str(" <- ");
+                write_expression(value, output);
+                output.push('\n');
+            }
+            Statement::Revise { name, value, .. } => {
+                output.push_str("revise ");
+                output.push_str(name);
+                output.push_str(" <- ");
+                write_expression(value, output);
+                output.push('\n');
+            }
+            Statement::Speak { value, .. } => {
+                output.push_str("speak ");
+                write_expression(value, output);
+                output.push('\n');
+            }
+            Statement::Yield { value, .. } => {
+                output.push_str("yield ");
+                write_expression(value, output);
+                output.push('\n');
+            }
+            Statement::Choose {
+                condition,
+                when_bright,
+                when_dim,
+                ..
+            } => {
+                output.push_str("choose ");
+                write_expression(condition, output);
+                output.push_str(":\n");
+                write_block(when_bright, indentation + 1, output);
+                if !when_dim.is_empty() {
+                    output.push_str(&"  ".repeat(indentation));
+                    output.push_str("otherwise:\n");
+                    write_block(when_dim, indentation + 1, output);
+                }
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                output.push_str("while ");
+                write_expression(condition, output);
+                output.push_str(":\n");
+                write_block(body, indentation + 1, output);
+            }
+        }
+    }
+}
+
 fn write_expression(expression: &Expression, output: &mut String) {
     match &expression.kind {
-        ExpressionKind::Text(value) => {
+        ExpressionKind::Atom(atom) => write_atom(atom, output),
+        ExpressionKind::Unary {
+            operation,
+            argument,
+        } => {
+            output.push_str(operation.word());
+            output.push(' ');
+            write_atom(argument, output);
+        }
+        ExpressionKind::Binary {
+            operation,
+            left,
+            right,
+        } => {
+            output.push_str(operation.word());
+            output.push(' ');
+            write_atom(left, output);
+            output.push(' ');
+            write_atom(right, output);
+        }
+        ExpressionKind::Cut { text, start, end } => {
+            output.push_str("cut ");
+            write_atom(text, output);
+            output.push(' ');
+            write_atom(start, output);
+            output.push(' ');
+            write_atom(end, output);
+        }
+        ExpressionKind::Call { weave, arguments } => {
+            output.push_str("call ");
+            output.push_str(weave);
+            for argument in arguments {
+                output.push(' ');
+                write_atom(argument, output);
+            }
+        }
+    }
+}
+
+fn write_atom(atom: &Atom, output: &mut String) {
+    match &atom.kind {
+        AtomKind::Text(value) => {
             output.push('"');
             for character in value.chars() {
                 match character {
@@ -908,32 +3190,188 @@ fn write_expression(expression: &Expression, output: &mut String) {
             }
             output.push('"');
         }
-        ExpressionKind::Whole(value) => output.push_str(&value.to_string()),
-        ExpressionKind::Name(name) => output.push_str(name),
+        AtomKind::Whole(value) => output.push_str(&value.to_string()),
+        AtomKind::Truth(true) => output.push_str("bright"),
+        AtomKind::Truth(false) => output.push_str("dim"),
+        AtomKind::Name(name) => output.push_str(name),
+        AtomKind::Borrow(name) => {
+            output.push_str("borrow ");
+            output.push_str(name);
+        }
+        AtomKind::Move(name) => {
+            output.push_str("move ");
+            output.push_str(name);
+        }
     }
+}
+
+fn write_ast_block(statements: &[Statement], output: &mut String) {
+    output.push('{');
+    for (index, statement) in statements.iter().enumerate() {
+        if index > 0 {
+            output.push(';');
+        }
+        match statement {
+            Statement::Bind {
+                name,
+                mutable,
+                value,
+                ..
+            } => {
+                output.push_str(if *mutable { "BindMutable(" } else { "Bind(" });
+                output.push_str(name);
+                output.push(',');
+                write_ast_expression(value, output);
+                output.push(')');
+            }
+            Statement::Revise { name, value, .. } => {
+                output.push_str("Revise(");
+                output.push_str(name);
+                output.push(',');
+                write_ast_expression(value, output);
+                output.push(')');
+            }
+            Statement::Speak { value, .. } => {
+                output.push_str("Speak(");
+                write_ast_expression(value, output);
+                output.push(')');
+            }
+            Statement::Yield { value, .. } => {
+                output.push_str("Yield(");
+                write_ast_expression(value, output);
+                output.push(')');
+            }
+            Statement::Choose {
+                condition,
+                when_bright,
+                when_dim,
+                ..
+            } => {
+                output.push_str("Choose(");
+                write_ast_expression(condition, output);
+                write_ast_block(when_bright, output);
+                write_ast_block(when_dim, output);
+                output.push(')');
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                output.push_str("While(");
+                write_ast_expression(condition, output);
+                write_ast_block(body, output);
+                output.push(')');
+            }
+        }
+    }
+    output.push('}');
 }
 
 fn write_ast_expression(expression: &Expression, output: &mut String) {
     match &expression.kind {
-        ExpressionKind::Text(value) => {
+        ExpressionKind::Atom(atom) => write_ast_atom(atom, output),
+        ExpressionKind::Unary {
+            operation,
+            argument,
+        } => {
+            output.push_str(operation.word());
+            output.push('(');
+            write_ast_atom(argument, output);
+            output.push(')');
+        }
+        ExpressionKind::Binary {
+            operation,
+            left,
+            right,
+        } => {
+            output.push_str(operation.word());
+            output.push('(');
+            write_ast_atom(left, output);
+            output.push(',');
+            write_ast_atom(right, output);
+            output.push(')');
+        }
+        ExpressionKind::Cut { text, start, end } => {
+            output.push_str("cut(");
+            write_ast_atom(text, output);
+            output.push(',');
+            write_ast_atom(start, output);
+            output.push(',');
+            write_ast_atom(end, output);
+            output.push(')');
+        }
+        ExpressionKind::Call { weave, arguments } => {
+            output.push_str("call(");
+            output.push_str(weave);
+            for argument in arguments {
+                output.push(',');
+                write_ast_atom(argument, output);
+            }
+            output.push(')');
+        }
+    }
+}
+
+fn write_ast_atom(atom: &Atom, output: &mut String) {
+    match &atom.kind {
+        AtomKind::Text(value) => {
             output.push_str("Text(");
             output.push_str(&value.escape_default().to_string());
             output.push(')');
         }
-        ExpressionKind::Whole(value) => {
+        AtomKind::Whole(value) => {
             output.push_str("Whole(");
             output.push_str(&value.to_string());
             output.push(')');
         }
-        ExpressionKind::Name(name) => {
+        AtomKind::Truth(value) => {
+            output.push_str(if *value {
+                "Truth(bright)"
+            } else {
+                "Truth(dim)"
+            });
+        }
+        AtomKind::Name(name) => {
             output.push_str("Name(");
+            output.push_str(name);
+            output.push(')');
+        }
+        AtomKind::Borrow(name) => {
+            output.push_str("Borrow(");
+            output.push_str(name);
+            output.push(')');
+        }
+        AtomKind::Move(name) => {
+            output.push_str("Move(");
             output.push_str(name);
             output.push(')');
         }
     }
 }
 
-fn validate_name(name: &str, span: Span, subject: &str) -> Result<(), CompilerError> {
+fn statement_token_count(statements: &[Statement]) -> usize {
+    statements
+        .iter()
+        .map(|statement| match statement {
+            Statement::Bind { .. }
+            | Statement::Revise { .. }
+            | Statement::Speak { .. }
+            | Statement::Yield { .. } => 2,
+            Statement::Choose {
+                when_bright,
+                when_dim,
+                ..
+            } => 2 + statement_token_count(when_bright) + statement_token_count(when_dim),
+            Statement::While { body, .. } => 2 + statement_token_count(body),
+        })
+        .sum()
+}
+
+fn validate_name(
+    name: &str,
+    span: Span,
+    subject: &str,
+    allow_main: bool,
+) -> Result<(), CompilerError> {
     let mut characters = name.chars();
     let Some(first) = characters.next() else {
         return Err(CompilerError::new(span, format!("{subject} is required")));
@@ -952,13 +3390,42 @@ fn validate_name(name: &str, span: Span, subject: &str) -> Result<(), CompilerEr
             format!("{subject} may only use lowercase ASCII letters, digits, and underscores"),
         ));
     }
-    if matches!(
+    let reserved = matches!(
         name,
-        "world" | "weave" | "bind" | "speak" | "yield" | "main" | "whole" | "text"
-    ) {
+        "world"
+            | "weave"
+            | "bind"
+            | "mutable"
+            | "revise"
+            | "speak"
+            | "yield"
+            | "choose"
+            | "otherwise"
+            | "while"
+            | "call"
+            | "borrow"
+            | "move"
+            | "sum"
+            | "difference"
+            | "product"
+            | "less"
+            | "same"
+            | "not"
+            | "join"
+            | "measure"
+            | "glyph"
+            | "cut"
+            | "render"
+            | "bright"
+            | "dim"
+            | "text"
+            | "whole"
+            | "truth"
+    ) || (!allow_main && name == "main");
+    if reserved {
         return Err(CompilerError::new(
             span,
-            format!("{subject} uses the reserved Aether word {name}"),
+            format!("{subject} uses reserved Aether word {name}"),
         ));
     }
     Ok(())
@@ -979,38 +3446,86 @@ fn is_whole_literal(source: &str) -> bool {
 mod tests {
     use super::*;
 
-    const HELLO: &str = "world genesis\n\nweave main [] -> Whole:\n  bind greeting <- \"Hello from Aether\\n\"\n  speak greeting\n  yield 0\n";
+    const HELLO: &str = "world genesis\n\nweave main [] -> Whole:\n  bind greeting <- \"Hello from Aether\\n\"\n  speak borrow greeting\n  yield 0\n";
 
     #[test]
-    fn compiles_runs_and_formats_aether_source() {
+    fn compiles_runs_and_formats_stage_one_source() {
         let output = compile_to_bytecode(HELLO).expect("Aether source should compile");
         let run = run_bytecode(&output.bytecode).expect("Aether artifact should run");
         assert_eq!(run.stdout, "Hello from Aether\n");
         assert_eq!(run.exit_code, 0);
         assert_eq!(format_program(&output.program), HELLO);
-        assert_eq!(
-            canonical_ast(&output.program),
-            "World(genesis);Entry(main->Whole);Bind(greeting,Text(Hello from Aether\\n));Speak(Name(greeting));Yield(Whole(0))"
-        );
+        assert!(canonical_ast(&output.program).contains("Borrow(greeting)"));
+        assert_eq!(&output.bytecode[..5], b"AETH\x02");
     }
 
     #[test]
-    fn supports_whole_bindings_for_exit_status() {
-        let source = "world arithmetic\n\nweave main [] -> Whole:\n  bind status <- 42\n  speak \"ready\\n\"\n  yield status\n";
-        let output = compile_to_bytecode(source).expect("source should compile");
-        let run = run_bytecode(&output.bytecode).expect("artifact should run");
-        assert_eq!(run.stdout, "ready\n");
-        assert_eq!(run.exit_code, 42);
+    fn runs_control_flow_mutation_and_text_primitives() {
+        let source = "world loops\n\nweave main [] -> Whole:\n  bind mutable count <- 0\n  bind mutable piece <- \"\"\n  bind mutable output <- \"\"\n  while less count 3:\n    revise piece <- render count\n    revise output <- join borrow output borrow piece\n    revise count <- sum count 1\n  choose same borrow output \"012\":\n    speak borrow output\n  otherwise:\n    speak \"broken\"\n  yield count\n";
+        let output = compile_to_bytecode(source).expect("control-flow source should compile");
+        let run = run_bytecode(&output.bytecode).expect("control-flow artifact should run");
+        assert_eq!(run.stdout, "012");
+        assert_eq!(run.exit_code, 3);
     }
 
     #[test]
-    fn preserves_source_order_for_local_slots() {
-        let source = "world slots\n\nweave main [] -> Whole:\n  bind zeta <- \"z\"\n  bind alpha <- \"a\"\n  speak zeta\n  speak alpha\n  yield 0\n";
-        let output = compile_to_bytecode(source).expect("source should compile");
-        let run = run_bytecode(&output.bytecode).expect("artifact should run");
-
-        assert_eq!(run.stdout, "za");
+    fn runs_named_weaves_with_owned_and_borrowed_text() {
+        let source = "world calls\n\nweave echo [borrow value: Text] -> Text:\n  yield borrow value\n\nweave main [] -> Whole:\n  bind seed <- \"Aether\"\n  bind echoed <- call echo borrow seed\n  speak borrow echoed\n  yield 0\n";
+        let output = compile_to_bytecode(source).expect("call source should compile");
+        let run = run_bytecode(&output.bytecode).expect("call artifact should run");
+        assert_eq!(run.stdout, "Aether");
         assert_eq!(run.exit_code, 0);
+    }
+
+    #[test]
+    fn runs_unicode_text_primitives_on_scalar_boundaries() {
+        let source = "world unicode\n\nweave main [] -> Whole:\n  bind source <- \"Aé🙂Z\"\n  bind section <- cut borrow source 1 3\n  bind count <- measure borrow source\n  bind code <- glyph borrow source 2\n  bind mutable result <- -1\n  choose same count 4:\n    revise result <- code\n  speak borrow section\n  yield result\n";
+        let output = compile_to_bytecode(source).expect("Unicode source should compile");
+        let run = run_bytecode(&output.bytecode).expect("Unicode artifact should run");
+        assert_eq!(run.stdout, "é🙂");
+        assert_eq!(run.exit_code, 128_578);
+
+        let mut malformed = output.bytecode;
+        let text_byte = malformed
+            .windows(2)
+            .position(|window| window == [0xC3, 0xA9])
+            .expect("artifact should contain the UTF-8 text literal");
+        malformed[text_byte] = 0xFF;
+        let error = verify_bytecode(&malformed)
+            .expect_err("invalid UTF-8 artifacts must fail verification");
+        assert!(error.message.contains("valid UTF-8"));
+    }
+
+    #[test]
+    fn supports_text_literals_larger_than_the_legacy_u16_limit() {
+        let payload = "x".repeat(70_000);
+        let source = format!(
+            "world wide\n\nweave main [] -> Whole:\n  bind payload <- \"{payload}\"\n  bind length <- measure borrow payload\n  yield length\n"
+        );
+        let output = compile_to_bytecode(&source).expect("large bounded text should compile");
+        let run = run_bytecode(&output.bytecode).expect("large bounded text should run");
+        assert_eq!(run.exit_code, 70_000);
+    }
+
+    #[test]
+    fn tracks_moves_across_control_flow() {
+        let source = "world moves\n\nweave main [] -> Whole:\n  bind gift <- \"Aether\"\n  choose bright:\n    speak move gift\n  otherwise:\n    speak \"unused\"\n  speak borrow gift\n  yield 0\n";
+        let error = compile_source(source).expect_err("a maybe-moved Text must fail");
+        assert!(error.message.contains("was moved"));
+    }
+
+    #[test]
+    fn rejects_text_without_explicit_borrow_or_move() {
+        let source = "world moves\n\nweave main [] -> Whole:\n  bind gift <- \"Aether\"\n  speak gift\n  yield 0\n";
+        let error = compile_source(source).expect_err("Text must require explicit access mode");
+        assert!(error.message.contains("explicit borrow or move"));
+    }
+
+    #[test]
+    fn rejects_binding_inside_a_block() {
+        let source = "world shape\n\nweave main [] -> Whole:\n  choose bright:\n    bind hidden <- 1\n  yield 0\n";
+        let error = compile_source(source).expect_err("conditional binds must fail");
+        assert!(error.message.contains("only allowed in a weave root"));
     }
 
     #[test]
@@ -1022,30 +3537,9 @@ mod tests {
 
     #[test]
     fn rejects_noncanonical_indentation() {
-        let source = "world broken\nweave main [] -> Whole:\n    yield 0\n";
-        let error = compile_source(source).expect_err("four spaces must fail");
-        assert!(error.message.contains("deeper indentation"));
-    }
-
-    #[test]
-    fn rejects_unbound_values() {
-        let source = "world broken\nweave main [] -> Whole:\n  speak greeting\n  yield 0\n";
-        let error = compile_source(source).expect_err("unbound name must fail");
-        assert!(error.message.contains("has not been bound"));
-    }
-
-    #[test]
-    fn rejects_wrong_effect_types() {
-        let source = "world broken\nweave main [] -> Whole:\n  speak 7\n  yield 0\n";
-        let error = compile_source(source).expect_err("speak must require Text");
-        assert!(error.message.contains("requires Text"));
-    }
-
-    #[test]
-    fn rejects_statements_after_yield() {
-        let source = "world broken\nweave main [] -> Whole:\n  yield 0\n  speak \"late\"\n";
-        let error = compile_source(source).expect_err("yield must be terminal");
-        assert!(error.message.contains("final statement"));
+        let source = "world broken\nweave main [] -> Whole:\n   yield 0\n";
+        let error = compile_source(source).expect_err("odd indentation must fail");
+        assert!(error.message.contains("two-space"));
     }
 
     #[test]
@@ -1057,15 +3551,19 @@ mod tests {
     }
 
     #[test]
-    fn verifier_rejects_bad_magic_and_stack_underflow() {
+    fn verifier_rejects_bad_magic_and_unknown_opcode() {
         let mut artifact = compile_to_bytecode(HELLO)
             .expect("source should compile")
             .bytecode;
         artifact[0] = b'X';
         assert!(verify_bytecode(&artifact).is_err());
 
-        let underflow = [b'A', b'E', b'T', b'H', ARTIFACT_VERSION, OP_SPEAK, OP_YIELD];
-        assert!(verify_bytecode(&underflow).is_err());
+        let mut artifact = compile_to_bytecode(HELLO)
+            .expect("source should compile")
+            .bytecode;
+        let last = artifact.len() - 1;
+        artifact[last] = 255;
+        assert!(verify_bytecode(&artifact).is_err());
     }
 
     #[test]

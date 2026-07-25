@@ -6,20 +6,23 @@ Date: 2026-07-25
 
 | Area | Result | Aether use |
 | --- | --- | --- |
-| legacy/xlang-v1-prototype | Experimental Rust implementations with known compile failures. | Preserve source spans, diagnostic discipline, and failure cases as reference; do not compile or emit its syntax. |
-| legacy/xlang-v2-snapshot | A former parser and type checker with a focused frontend test suite. | Preserve parser, semantic-check, and test-design lessons; do not promote its grammar or token stream. |
-| legacy/aether-genesis-ai-studio | Historical AI Studio material with stale cloud metadata and JavaScript evaluation behavior. | Preserve as historical material; do not evaluate generated JavaScript or use cloud AI. |
+| `legacy/xlang-v1-prototype` | Experimental Rust implementations with known compile failures. | Preserve source spans, diagnostic discipline, and failure cases as reference; do not compile or emit its syntax. |
+| `legacy/xlang-v2-snapshot` | A former parser and type checker with a focused frontend test suite. | Preserve parser, semantic-check, and test-design lessons; do not promote its grammar or token stream. |
+| `legacy/aether-genesis-ai-studio` | Historical AI Studio material with stale cloud metadata and JavaScript evaluation behavior. | Preserve as historical material; do not evaluate generated JavaScript or use cloud AI. |
 | Docker Ollama | Local loopback AI runtime. | Keep it optional and limited to user-requested source review. |
 
 ## Production Boundary
 
-The production compiler accepts only Aether 0.1 source. It produces a canonical
-AST and an AETH bytecode artifact, verifies that artifact, and runs it in the
-Aether VM. The command line and desktop app call the same compiler core.
+The production compiler accepts only Aether 0.2.0 source. It produces a
+canonical AST and deterministic AETH v2 bytecode artifact, verifies that
+artifact, and runs it in the Aether VM. The command line and desktop app call
+the same compiler core.
 
-Legacy C-shaped, Rust-shaped, and V2 source is intentionally rejected. The
-repository does not transpile Aether to C, Rust, JavaScript, LLVM, or another
-target language.
+Stage 1 extends the initial kernel with named weaves, typed calls, three value
+types, structured control flow, mutable root slots, explicit local Text access,
+and Unicode-safe bounded text primitives. Legacy C-shaped, Rust-shaped, and V2
+source remains intentionally rejected. The repository does not transpile Aether
+to C, Rust, JavaScript, LLVM, or another target language.
 
 ## Desktop and Data Boundary
 

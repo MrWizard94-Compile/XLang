@@ -11,7 +11,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  xlang check <source-file>\n  xlang compile <source-file> --output <artifact-file>\n  xlang run <artifact-file>\n  xlang version"
+        "Usage:\n  aether check <source-file>\n  aether compile <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version"
     );
 }
 

@@ -1,0 +1,11 @@
+world calls
+
+weave decorate [value: Text] -> Text:
+  bind decorated <- join "> " move value
+  yield move decorated
+
+weave main [] -> Whole:
+  bind message <- "Aether"
+  bind decorated <- call decorate move message
+  speak borrow decorated
+  yield 0

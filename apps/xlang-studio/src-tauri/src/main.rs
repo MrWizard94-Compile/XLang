@@ -278,7 +278,7 @@ async fn review_source(source: String, model: String) -> Result<ReviewResponse, 
 
     let endpoint = ollama_endpoint()?;
     let client = ollama_client()?;
-    let system = "You are a careful local reviewer for the Aether 0.1 kernel language. Analyze only the supplied source. Do not execute code and do not claim that it compiles unless a compiler diagnostic is supplied. Keep the review under 300 words. Check the exact world, weave, bind, speak, and yield grammar, types, canonical indentation, and language-boundary issues.";
+    let system = "You are a careful local reviewer for the Aether 0.2 Stage 1 language. Analyze only the supplied source. Do not execute code and do not claim that it compiles unless a compiler diagnostic is supplied. Keep the review under 300 words. Check the exact world declaration, named weave signatures, Text/Whole/Truth types, bind and revise rules, choose/otherwise and while blocks, terminal yield, shallow prefix expressions, explicit borrow or move for Text bindings, canonical two-space indentation, and language-boundary issues.";
     let request = ChatRequest {
         model: &model,
         stream: false,

@@ -1,0 +1,15 @@
+world loops
+
+weave main [] -> Whole:
+  bind mutable count <- 0
+  bind mutable piece <- ""
+  bind mutable output <- ""
+  while less count 3:
+    revise piece <- render count
+    revise output <- join borrow output borrow piece
+    revise count <- sum count 1
+  choose same borrow output "012":
+    speak borrow output
+  otherwise:
+    speak "unexpected"
+  yield count
