@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "XLang Studio",
+  "productName": "Aether Studio",
   "version": "0.1.0",
-  "identifier": "com.wizardproductions.xlang",
+  "identifier": "com.wizardproductions.aether",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:5174",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "XLang Studio",
+        "title": "Aether Studio",
         "width": 1280,
         "height": 860,
         "minWidth": 980,

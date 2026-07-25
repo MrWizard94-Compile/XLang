@@ -1,47 +1,49 @@
-# XLang
+# Aether in XLang
 
-XLang is a local-first language workbench. The production path is an audited Rust
-frontend exposed through a command-line checker and XLang Studio, a Tauri desktop
-application. Studio can ask a model served by Docker-hosted Ollama to review source,
-but the model is not part of compilation and cannot execute code.
+This repository now hosts Aether, a new local-first language and desktop
+workbench. Its executable kernel parses only Aether syntax, emits AETH bytecode,
+verifies every artifact, and runs that artifact in the Aether VM. It never
+transpiles to an existing language.
 
 ## Workspace
 
-- `crates/xlang-core`: lexer, parser, and monomorphic type checker.
-- `apps/xlang-cli`: `xlang check <file>` command-line validation.
-- `apps/xlang-studio`: React/Tauri desktop compiler workbench.
-- `legacy`: preserved V1, V2, and AI Studio source snapshots. They are historical
-  reference material, not part of the production build.
-- `SOUL.md`: governing engineering standard, preserved verbatim from WPAI.
+- crates/xlang-core contains the Aether parser, semantic checks, canonical
+  formatter, bytecode emitter, verifier, and VM.
+- apps/xlang-cli builds the aether command-line compiler.
+- apps/xlang-studio is Aether Studio, the local Tauri desktop workbench.
+- legacy preserves the V1, V2, and historical AI Studio source as reference
+  material only. It is not in the production build.
+- SOUL.md remains the governing engineering standard.
 
-## Run
+## Command Line
 
-Install the Studio frontend dependencies, then launch the desktop application:
+    Set-Location C:\WPAI\Software\XLang
+    cargo run -p aether-cli -- check (Resolve-Path .\examples\welcome.ae)
+    cargo run -p aether-cli -- compile (Resolve-Path .\examples\welcome.ae) --output .\target\welcome.aeth
+    cargo run -p aether-cli -- run .\target\welcome.aeth
 
-```powershell
-Set-Location C:\\WPAI\\Software\\XLang\\apps\\xlang-studio
-npm install
-npm run desktop:dev
-```
+The compiled file begins with AETH and is executed only by the Aether VM.
 
-Use the model selector after Docker Ollama is reachable on `127.0.0.1:11434`.
-The default is `qwen2.5:3b`, selected for responsive local review on the available
-GTX 1660 Ti 6 GB environment. Set `XLANG_OLLAMA_URL` and `XLANG_OLLAMA_MODEL` only
-when launching the desktop app if a different local configuration is required.
+## Desktop Studio
 
-For compiler-only validation:
+    Set-Location C:\WPAI\Software\XLang\apps\xlang-studio
+    npm install
+    npm run desktop:dev
 
-```powershell
-Set-Location C:\\WPAI\\Software\\XLang
-cargo run -p xlang-cli -- check (Resolve-Path .\\examples\\welcome.xl)
-```
+Studio builds the current Aether document, displays the verified AETH artifact
+and VM output, and keeps compilation separate from AI review.
+
+Docker-hosted Ollama is the only AI integration. It is loopback-only, optional,
+and local; qwen2.5:3b remains the default reviewer for the GTX 1660 Ti 6 GB
+environment. Set XLANG_OLLAMA_URL and XLANG_OLLAMA_MODEL before launching Studio
+only when a different local endpoint or installed model is required.
 
 ## Data Handling
 
-Compilation stays in-process inside the desktop app. Source text and the selected
-model are stored only in the Studio WebView's local storage under `xlang.source`
-and `xlang.model`; nothing is uploaded, synchronized, or persisted in a cloud
-service. Ollama review requests travel only to the validated loopback endpoint.
+Compilation is in-process. The Studio WebView keeps its editor buffer and model
+selection in local storage under aether.source and aether.model. No source,
+artifact, model selection, or financial data is uploaded, synchronized, or
+stored in a cloud service.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the runtime boundary and
-[AUDIT_REPORT.md](AUDIT_REPORT.md) for the starting-point assessment.
+See docs/ARCHITECTURE.md for the runtime boundary, docs/AETHER_0.1.md for the
+implemented grammar, and AUDIT_REPORT.md for the migration audit.

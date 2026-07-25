@@ -3,13 +3,13 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./styles.css";
 
-const root = document.getElementById("root");
+const rootElement = document.getElementById("root");
 
-if (!root) {
-  throw new Error("The XLang Studio root element is missing.");
+if (!rootElement) {
+  throw new Error("The Aether Studio root element is missing.");
 }
 
-createRoot(root).render(
+createRoot(rootElement).render(
   <StrictMode>
     <App />
   </StrictMode>

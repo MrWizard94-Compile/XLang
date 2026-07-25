@@ -1,29 +1,33 @@
-# XLang Production Manifest
+# Aether Production Manifest
 
 ## Contract
 
-The compiler accepts a source string, produces an AST when the bootstrap language
-is valid, and reports a precise lex, parse, or type error otherwise. The command
-line and desktop app call the same `xlang-core::compile_source` entry point.
+The compiler accepts Aether source, returns a canonical AST, emits an AETH
+artifact, verifies it, and runs that artifact in the Aether VM. The command line
+and desktop app use the same compiler core.
 
-## Current Language Boundary
+## Implemented Language Boundary
 
-The bootstrap supports monomorphic functions, typed and inferred `let` bindings,
-primitive `Int`, `Bool`, `Str`, and `Void` values, calls, expressions, `return`,
-`while`, and counted `for` loops. It intentionally does not yet implement
-conditionals, assignment after declaration, arrays, references, structs, enums,
-patterns, generics, or named-type resolution. These limits are compiler behavior,
-not claims of future support.
+Aether 0.1 supports one world declaration, the main weave, immutable bind
+statements, Text and Whole values, speak, and terminal yield. It rejects
+noncanonical indentation, trailing whitespace, shadowing, use-before-bind,
+implicit conversion, malformed text escapes, legacy declarations, and source
+outside its exact grammar.
+
+The planned MVS, arena, forge, choose, match, and move terms from Aether.md are
+not accepted as partial syntax. They remain design constraints until a complete,
+tested language stage introduces them.
 
 ## AI Boundary
 
-Ollama assistance is optional and local-only. It is restricted to a loopback HTTP
-endpoint and a conservative model-name character set. It can review source and
-reported compiler diagnostics, but it is never treated as a compiler, evaluator,
-or code execution authority.
+Ollama assistance is optional and local-only. It is restricted to a loopback
+HTTP endpoint and a conservative model-name character set. It can review source
+only after a user request. It is never a compiler, evaluator, or code execution
+authority.
 
 ## Quality Gate
 
-The repository baseline must pass Rust tests, Clippy with warnings denied,
-TypeScript linting, frontend tests, production frontend build, the Windows Tauri
-bundle build, and a live Docker Ollama status and chat check before release.
+The repository must pass Rust formatting, Aether core and desktop tests, Clippy
+with warnings denied, TypeScript linting, frontend tests, production frontend
+build, Windows Tauri bundle build, command-line artifact compile and run checks,
+and a live Docker Ollama status check before release.

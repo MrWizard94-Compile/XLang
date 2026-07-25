@@ -1,39 +1,43 @@
 # Architecture
 
-```mermaid
+~~~mermaid
 flowchart LR
-    Editor["XLang Studio editor"] -->|"Tauri command"| Core["xlang-core compiler"]
-    Core --> Result["AST or diagnostic"]
+    Editor["Aether Studio editor"] -->|"Tauri command"| Core["Aether compiler core"]
+    Core --> Artifact["Verified AETH artifact"]
+    Artifact --> VM["Aether VM"]
+    VM --> Result["stdout and exit code"]
     Editor -->|"optional review request"| Guard["loopback and model validation"]
     Guard --> Ollama["Docker Ollama :11434"]
     Ollama --> Review["review text"]
     Review --> Editor
-```
+~~~
 
 ## Compiler Boundary
 
-`xlang-core` is a dependency-free Rust crate. The CLI and Studio shell are thin
-adapters over it, so all compiler validation follows one code path. The compiler
-does not use an AI model, JavaScript evaluation, network access, or persistent
-state.
+The compiler core is a dependency-free Rust bootstrap crate. It parses Aether
+source, validates binding and effect types, serializes a deterministic AST, and
+emits AETH bytecode. The bytecode verifier runs before the VM. The compiler
+does not call a model, evaluate JavaScript, contact a network service, or persist
+source.
+
+## Artifact Boundary
+
+AETH is an Aether-owned binary format, not generated source for another
+language. The current instruction set represents Text and Whole values, immutable
+local slots, stdout output, and a Whole exit code. The verifier rejects malformed
+headers, invalid operands, unknown slots, invalid stack type flow, and any code
+after yield before execution.
 
 ## Desktop Boundary
 
-Studio is a Tauri 2 desktop app. Its React renderer holds the current document;
-the native command layer performs compilation and optional Ollama HTTP calls.
-The renderer cannot select a remote endpoint: `XLANG_OLLAMA_URL` is parsed in Rust
-and accepted only when it is loopback HTTP without credentials, query data, or a
-non-root path.
-
-## Data Storage
-
-Studio stores the editor buffer and selected model in WebView local storage. The
-keys are `xlang.source` and `xlang.model`. This supports reopening the app without
-introducing an account, server database, telemetry pipeline, or cloud sync.
+Studio is a Tauri 2 desktop app. The React renderer owns the active document.
+The native command layer compiles it, runs only the verified AETH output, and
+returns bounded artifact metadata and VM output. Source persistence uses
+aether.source and model persistence uses aether.model in local WebView storage.
 
 ## Local Model Selection
 
-The status command reads `/api/tags` from Docker Ollama and fills the selector with
-installed local models. `qwen2.5:3b` is the fallback and initial preference. A
-review request uses `/api/chat` with streaming disabled and a bounded source
-payload, returning plain reviewer text to the desktop UI.
+The compiler requires no AI. The optional reviewer queries Docker-hosted Ollama
+at a credential-free loopback HTTP base URL only. The status command reads
+/api/tags, fills the selector with installed models, and a review request uses
+/api/chat with streaming disabled and a bounded source payload.

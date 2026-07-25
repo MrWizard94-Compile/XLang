@@ -1,11 +1,11 @@
 [package]
-name = "xlang-core"
+name = "aether-core"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "The audited XLang bootstrap lexer, parser, and type checker."
+description = "Aether parser, bytecode compiler, verifier, and virtual machine."
 
 [lints]
 workspace = true

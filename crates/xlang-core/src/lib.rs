@@ -1,70 +1,57 @@
-//! XLang Bootstrap Frontend - SOUL-compliant
+//! Aether Stage 0 compiler, bytecode verifier, and virtual machine.
 //!
-//! Lexer + recursive-descent AST parser + monomorphic type checker
-//! with local inference for `let` bindings.
-//!
-//! Zero dependencies. Single file. Zero warnings under
-//! `rustc --edition 2021 -W warnings`.
-//!
-//! # Invariants (executable where possible)
-//! - Every token carries a precise Span.
-//! - Function signatures are collected before bodies (mutual recursion safe).
-//! - `let` without annotation is inferred; annotation must match exactly.
-//! - Variables cannot be Void. Parameters cannot be Void.
-//! - `for` loop variables are always Int; bounds must be Int.
-//! - Call targets must be bare function names.
-//! - Duplicate bindings in the same scope are rejected.
-//!
-//! # Deliberate limits of this bootstrap (honest)
-//! - No if/else.
-//! - No post-declaration assignment.
-//! - No arrays, references, structs, enums, pattern matching, generics.
-//! - No control-flow analysis for missing returns in non-Void functions.
-//! - Environments are cloned on block entry (acceptable for bootstrap size).
-//! - Named types are accepted but never defined or resolved further.
-//!
-//! These limits are intentional and documented so they can be closed
-//! in later complete, zero-warning slices under SOUL discipline.
+//! This crate is a host bootstrap only. It parses Aether source, emits the
+//! Aether-owned AETH artifact format, verifies it, and executes it in the
+//! Aether VM. It does not emit C, Rust, JavaScript, LLVM, or another language.
 
-use std::collections::HashMap;
-use std::error::Error;
+#![forbid(unsafe_code)]
+
+use std::collections::BTreeMap;
 use std::fmt;
 
-// ============================================================
-// Span + Diagnostics
-// ============================================================
+pub const LANGUAGE_NAME: &str = "Aether";
+pub const LANGUAGE_VERSION: &str = "0.1.0";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+const ARTIFACT_MAGIC: &[u8; 4] = b"AETH";
+const ARTIFACT_VERSION: u8 = 1;
+
+const OP_PUSH_TEXT: u8 = 1;
+const OP_PUSH_WHOLE: u8 = 2;
+const OP_STORE: u8 = 3;
+const OP_LOAD: u8 = 4;
+const OP_SPEAK: u8 = 5;
+const OP_YIELD: u8 = 6;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
-    pub index: usize,
     pub line: usize,
     pub column: usize,
 }
 
 impl Span {
-    fn new(index: usize, line: usize, column: usize) -> Self {
-        Self {
-            index,
-            line,
-            column,
-        }
+    const fn new(line: usize, column: usize) -> Self {
+        Self { line, column }
+    }
+
+    const fn synthetic() -> Self {
+        Self::new(1, 1)
     }
 }
 
 impl fmt::Display for Span {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "line {}, column {}", self.line, self.column)
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "line {}, column {}", self.line, self.column)
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct LexError {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompilerError {
     pub span: Span,
     pub message: String,
 }
 
-impl LexError {
-    fn new<S: Into<String>>(span: Span, message: S) -> Self {
+impl CompilerError {
+    fn new(span: Span, message: impl Into<String>) -> Self {
         Self {
             span,
             message: message.into(),
@@ -72,1840 +59,1019 @@ impl LexError {
     }
 }
 
-impl fmt::Display for LexError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "lex error at {}: {}", self.span, self.message)
+impl fmt::Display for CompilerError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "{} error at {}: {}",
+            LANGUAGE_NAME, self.span, self.message
+        )
     }
 }
 
-impl Error for LexError {}
+impl std::error::Error for CompilerError {}
 
-#[derive(Debug, Clone)]
-pub struct ParseError {
-    pub span: Span,
-    pub message: String,
-}
-
-impl ParseError {
-    fn new<S: Into<String>>(span: Span, message: S) -> Self {
-        Self {
-            span,
-            message: message.into(),
-        }
-    }
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "parse error at {}: {}", self.span, self.message)
-    }
-}
-
-impl Error for ParseError {}
-
-#[derive(Debug, Clone)]
-pub struct TypeError {
-    pub span: Span,
-    pub message: String,
-}
-
-impl TypeError {
-    fn new<S: Into<String>>(span: Span, message: S) -> Self {
-        Self {
-            span,
-            message: message.into(),
-        }
-    }
-}
-
-impl fmt::Display for TypeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "type error at {}: {}", self.span, self.message)
-    }
-}
-
-impl Error for TypeError {}
-
-#[derive(Debug)]
-pub enum FrontendError {
-    Lex(LexError),
-    Parse(ParseError),
-    Type(TypeError),
-}
-
-impl fmt::Display for FrontendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FrontendError::Lex(e) => write!(f, "{e}"),
-            FrontendError::Parse(e) => write!(f, "{e}"),
-            FrontendError::Type(e) => write!(f, "{e}"),
-        }
-    }
-}
-
-impl Error for FrontendError {}
-
-impl From<LexError> for FrontendError {
-    fn from(value: LexError) -> Self {
-        FrontendError::Lex(value)
-    }
-}
-
-impl From<ParseError> for FrontendError {
-    fn from(value: ParseError) -> Self {
-        FrontendError::Parse(value)
-    }
-}
-
-impl From<TypeError> for FrontendError {
-    fn from(value: TypeError) -> Self {
-        FrontendError::Type(value)
-    }
-}
-
-// ============================================================
-// Lexer
-// ============================================================
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SimpleKind {
-    Ident,
-    Int,
-    Str,
-    Let,
-    Fn,
-    Return,
-    While,
-    For,
-    In,
-    True,
-    False,
-    Plus,
-    Minus,
-    Star,
-    Slash,
-    Percent,
-    Eq,
-    EqEq,
-    Bang,
-    BangEq,
-    Lt,
-    LtEq,
-    Gt,
-    GtEq,
-    AndAnd,
-    OrOr,
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    Comma,
-    Colon,
-    Semicolon,
-    DotDot,
-    DotDotEq,
-    Arrow,
-    Eof,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum TokenKind {
-    Ident(String),
-    Int(i64),
-    Str(String),
-    Let,
-    Fn,
-    Return,
-    While,
-    For,
-    In,
-    True,
-    False,
-    Plus,
-    Minus,
-    Star,
-    Slash,
-    Percent,
-    Eq,
-    EqEq,
-    Bang,
-    BangEq,
-    Lt,
-    LtEq,
-    Gt,
-    GtEq,
-    AndAnd,
-    OrOr,
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    Comma,
-    Colon,
-    Semicolon,
-    DotDot,
-    DotDotEq,
-    Arrow,
-    Eof,
-}
-
-impl TokenKind {
-    fn simple_kind(&self) -> SimpleKind {
-        match self {
-            TokenKind::Ident(_) => SimpleKind::Ident,
-            TokenKind::Int(_) => SimpleKind::Int,
-            TokenKind::Str(_) => SimpleKind::Str,
-            TokenKind::Let => SimpleKind::Let,
-            TokenKind::Fn => SimpleKind::Fn,
-            TokenKind::Return => SimpleKind::Return,
-            TokenKind::While => SimpleKind::While,
-            TokenKind::For => SimpleKind::For,
-            TokenKind::In => SimpleKind::In,
-            TokenKind::True => SimpleKind::True,
-            TokenKind::False => SimpleKind::False,
-            TokenKind::Plus => SimpleKind::Plus,
-            TokenKind::Minus => SimpleKind::Minus,
-            TokenKind::Star => SimpleKind::Star,
-            TokenKind::Slash => SimpleKind::Slash,
-            TokenKind::Percent => SimpleKind::Percent,
-            TokenKind::Eq => SimpleKind::Eq,
-            TokenKind::EqEq => SimpleKind::EqEq,
-            TokenKind::Bang => SimpleKind::Bang,
-            TokenKind::BangEq => SimpleKind::BangEq,
-            TokenKind::Lt => SimpleKind::Lt,
-            TokenKind::LtEq => SimpleKind::LtEq,
-            TokenKind::Gt => SimpleKind::Gt,
-            TokenKind::GtEq => SimpleKind::GtEq,
-            TokenKind::AndAnd => SimpleKind::AndAnd,
-            TokenKind::OrOr => SimpleKind::OrOr,
-            TokenKind::LParen => SimpleKind::LParen,
-            TokenKind::RParen => SimpleKind::RParen,
-            TokenKind::LBrace => SimpleKind::LBrace,
-            TokenKind::RBrace => SimpleKind::RBrace,
-            TokenKind::Comma => SimpleKind::Comma,
-            TokenKind::Colon => SimpleKind::Colon,
-            TokenKind::Semicolon => SimpleKind::Semicolon,
-            TokenKind::DotDot => SimpleKind::DotDot,
-            TokenKind::DotDotEq => SimpleKind::DotDotEq,
-            TokenKind::Arrow => SimpleKind::Arrow,
-            TokenKind::Eof => SimpleKind::Eof,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Token {
-    pub kind: TokenKind,
-    pub span: Span,
-}
-
-pub struct Lexer {
-    chars: Vec<char>,
-    pos: usize,
-    line: usize,
-    column: usize,
-}
-
-impl Lexer {
-    pub fn new(source: &str) -> Self {
-        Self {
-            chars: source.chars().collect(),
-            pos: 0,
-            line: 1,
-            column: 1,
-        }
-    }
-
-    pub fn lex_all(mut self) -> Result<Vec<Token>, LexError> {
-        let mut tokens = Vec::new();
-        loop {
-            let token = self.next_token()?;
-            let eof = token.kind.simple_kind() == SimpleKind::Eof;
-            tokens.push(token);
-            if eof {
-                break;
-            }
-        }
-        Ok(tokens)
-    }
-
-    fn current_span(&self) -> Span {
-        Span::new(self.pos, self.line, self.column)
-    }
-
-    fn peek_char(&self) -> Option<char> {
-        self.chars.get(self.pos).copied()
-    }
-
-    fn peek_next_char(&self) -> Option<char> {
-        self.chars.get(self.pos + 1).copied()
-    }
-
-    fn next_char(&mut self) -> Option<char> {
-        let ch = self.chars.get(self.pos).copied()?;
-        self.pos += 1;
-        if ch == '\n' {
-            self.line += 1;
-            self.column = 1;
-        } else {
-            self.column += 1;
-        }
-        Some(ch)
-    }
-
-    fn skip_ws_and_comments(&mut self) -> Result<(), LexError> {
-        loop {
-            while matches!(self.peek_char(), Some(c) if c.is_whitespace()) {
-                self.next_char();
-            }
-            let Some('/') = self.peek_char() else {
-                break;
-            };
-            match self.peek_next_char() {
-                Some('/') => {
-                    self.next_char();
-                    self.next_char();
-                    while let Some(c) = self.peek_char() {
-                        if c == '\n' {
-                            break;
-                        }
-                        self.next_char();
-                    }
-                }
-                Some('*') => {
-                    let start = self.current_span();
-                    self.next_char();
-                    self.next_char();
-                    loop {
-                        match self.next_char() {
-                            Some('*') if self.peek_char() == Some('/') => {
-                                self.next_char();
-                                break;
-                            }
-                            Some(_) => {}
-                            None => {
-                                return Err(LexError::new(start, "unterminated block comment"));
-                            }
-                        }
-                    }
-                }
-                _ => break,
-            }
-        }
-        Ok(())
-    }
-
-    fn next_token(&mut self) -> Result<Token, LexError> {
-        self.skip_ws_and_comments()?;
-        let start = self.current_span();
-        let Some(ch) = self.peek_char() else {
-            return Ok(Token {
-                kind: TokenKind::Eof,
-                span: start,
-            });
-        };
-
-        let token = match ch {
-            '(' => {
-                self.next_char();
-                TokenKind::LParen
-            }
-            ')' => {
-                self.next_char();
-                TokenKind::RParen
-            }
-            '{' => {
-                self.next_char();
-                TokenKind::LBrace
-            }
-            '}' => {
-                self.next_char();
-                TokenKind::RBrace
-            }
-            ',' => {
-                self.next_char();
-                TokenKind::Comma
-            }
-            ':' => {
-                self.next_char();
-                TokenKind::Colon
-            }
-            ';' => {
-                self.next_char();
-                TokenKind::Semicolon
-            }
-            '+' => {
-                self.next_char();
-                TokenKind::Plus
-            }
-            '-' => {
-                self.next_char();
-                if self.peek_char() == Some('>') {
-                    self.next_char();
-                    TokenKind::Arrow
-                } else {
-                    TokenKind::Minus
-                }
-            }
-            '*' => {
-                self.next_char();
-                TokenKind::Star
-            }
-            '%' => {
-                self.next_char();
-                TokenKind::Percent
-            }
-            '=' => {
-                self.next_char();
-                if self.peek_char() == Some('=') {
-                    self.next_char();
-                    TokenKind::EqEq
-                } else {
-                    TokenKind::Eq
-                }
-            }
-            '!' => {
-                self.next_char();
-                if self.peek_char() == Some('=') {
-                    self.next_char();
-                    TokenKind::BangEq
-                } else {
-                    TokenKind::Bang
-                }
-            }
-            '<' => {
-                self.next_char();
-                if self.peek_char() == Some('=') {
-                    self.next_char();
-                    TokenKind::LtEq
-                } else {
-                    TokenKind::Lt
-                }
-            }
-            '>' => {
-                self.next_char();
-                if self.peek_char() == Some('=') {
-                    self.next_char();
-                    TokenKind::GtEq
-                } else {
-                    TokenKind::Gt
-                }
-            }
-            '&' => {
-                self.next_char();
-                if self.peek_char() == Some('&') {
-                    self.next_char();
-                    TokenKind::AndAnd
-                } else {
-                    return Err(LexError::new(start, "single `&` is not a valid token"));
-                }
-            }
-            '|' => {
-                self.next_char();
-                if self.peek_char() == Some('|') {
-                    self.next_char();
-                    TokenKind::OrOr
-                } else {
-                    return Err(LexError::new(start, "single `|` is not a valid token"));
-                }
-            }
-            '/' => {
-                self.next_char();
-                TokenKind::Slash
-            }
-            '.' => {
-                self.next_char();
-                if self.peek_char() == Some('.') {
-                    self.next_char();
-                    if self.peek_char() == Some('=') {
-                        self.next_char();
-                        TokenKind::DotDotEq
-                    } else {
-                        TokenKind::DotDot
-                    }
-                } else {
-                    return Err(LexError::new(start, "single `.` is not valid"));
-                }
-            }
-            '"' => {
-                return self.lex_string(start);
-            }
-            c if c.is_ascii_digit() => {
-                return self.lex_number(start);
-            }
-            c if is_ident_start(c) => {
-                return self.lex_ident_or_keyword(start);
-            }
-            _ => {
-                return Err(LexError::new(
-                    start,
-                    format!("unexpected character `{ch}`"),
-                ));
-            }
-        };
-
-        Ok(Token {
-            kind: token,
-            span: start,
-        })
-    }
-
-    fn lex_number(&mut self, start: Span) -> Result<Token, LexError> {
-        let mut raw = String::new();
-        while let Some(c) = self.peek_char() {
-            if c.is_ascii_digit() || c == '_' {
-                raw.push(c);
-                self.next_char();
-            } else {
-                break;
-            }
-        }
-        let cleaned: String = raw.chars().filter(|c| *c != '_').collect();
-        let value = cleaned
-            .parse::<i64>()
-            .map_err(|_| LexError::new(start, "invalid integer literal"))?;
-        Ok(Token {
-            kind: TokenKind::Int(value),
-            span: start,
-        })
-    }
-
-    fn lex_ident_or_keyword(&mut self, start: Span) -> Result<Token, LexError> {
-        let mut text = String::new();
-        while let Some(c) = self.peek_char() {
-            if is_ident_continue(c) {
-                text.push(c);
-                self.next_char();
-            } else {
-                break;
-            }
-        }
-        let kind = match text.as_str() {
-            "let" => TokenKind::Let,
-            "fn" => TokenKind::Fn,
-            "return" => TokenKind::Return,
-            "while" => TokenKind::While,
-            "for" => TokenKind::For,
-            "in" => TokenKind::In,
-            "true" => TokenKind::True,
-            "false" => TokenKind::False,
-            _ => TokenKind::Ident(text),
-        };
-        Ok(Token {
-            kind,
-            span: start,
-        })
-    }
-
-    fn lex_string(&mut self, start: Span) -> Result<Token, LexError> {
-        self.next_char(); // opening quote
-        let mut out = String::new();
-        while let Some(c) = self.next_char() {
-            match c {
-                '"' => {
-                    return Ok(Token {
-                        kind: TokenKind::Str(out),
-                        span: start,
-                    });
-                }
-                '\\' => {
-                    let Some(esc) = self.next_char() else {
-                        return Err(LexError::new(start, "unterminated string literal"));
-                    };
-                    let translated = match esc {
-                        'n' => '\n',
-                        't' => '\t',
-                        'r' => '\r',
-                        '"' => '"',
-                        '\\' => '\\',
-                        '0' => '\0',
-                        _ => {
-                            return Err(LexError::new(
-                                start,
-                                format!("unknown escape sequence `\\{esc}`"),
-                            ));
-                        }
-                    };
-                    out.push(translated);
-                }
-                '\n' => {
-                    return Err(LexError::new(start, "unterminated string literal"));
-                }
-                other => out.push(other),
-            }
-        }
-        Err(LexError::new(start, "unterminated string literal"))
-    }
-}
-
-fn is_ident_start(c: char) -> bool {
-    c.is_alphabetic() || c == '_'
-}
-
-fn is_ident_continue(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
-}
-
-// ============================================================
-// AST
-// ============================================================
-
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
-    pub items: Vec<Item>,
+    pub world: String,
+    pub entry: Entry,
+    pub statements: Vec<Statement>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Item {
-    Function(FunctionDecl),
-    Stmt(Stmt),
+impl Program {
+    #[must_use]
+    pub fn significant_token_count(&self) -> usize {
+        4 + self.statements.len() * 2
+    }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct FunctionDecl {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Entry {
     pub name: String,
-    pub params: Vec<Param>,
-    pub return_type: TypeName,
-    pub body: Vec<Stmt>,
-    pub span: Span,
+    pub result: ValueType,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Param {
-    pub name: String,
-    pub ty: TypeName,
-    pub span: Span,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Expr {
-    pub kind: ExprKind,
-    pub span: Span,
-}
-
-impl Expr {
-    fn new(kind: ExprKind, span: Span) -> Self {
-        Self { kind, span }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ExprKind {
-    Int(i64),
-    Bool(bool),
-    Str(String),
-    Var(String),
-    Unary {
-        op: UnaryOp,
-        expr: Box<Expr>,
-    },
-    Binary {
-        op: BinaryOp,
-        left: Box<Expr>,
-        right: Box<Expr>,
-    },
-    Call {
-        callee: Box<Expr>,
-        args: Vec<Expr>,
-    },
-    Group(Box<Expr>),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UnaryOp {
-    Neg,
-    Not,
-}
-
-impl fmt::Display for UnaryOp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UnaryOp::Neg => write!(f, "-"),
-            UnaryOp::Not => write!(f, "!"),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Eq,
-    Neq,
-    Lt,
-    Lte,
-    Gt,
-    Gte,
-    And,
-    Or,
-}
-
-impl fmt::Display for BinaryOp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BinaryOp::Add => write!(f, "+"),
-            BinaryOp::Sub => write!(f, "-"),
-            BinaryOp::Mul => write!(f, "*"),
-            BinaryOp::Div => write!(f, "/"),
-            BinaryOp::Mod => write!(f, "%"),
-            BinaryOp::Eq => write!(f, "=="),
-            BinaryOp::Neq => write!(f, "!="),
-            BinaryOp::Lt => write!(f, "<"),
-            BinaryOp::Lte => write!(f, "<="),
-            BinaryOp::Gt => write!(f, ">"),
-            BinaryOp::Gte => write!(f, ">="),
-            BinaryOp::And => write!(f, "&&"),
-            BinaryOp::Or => write!(f, "||"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Stmt {
-    pub kind: StmtKind,
-    pub span: Span,
-}
-
-impl Stmt {
-    fn new(kind: StmtKind, span: Span) -> Self {
-        Self { kind, span }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum StmtKind {
-    Let {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Statement {
+    Bind {
         name: String,
-        ty: Option<TypeName>,
-        value: Expr,
+        value: Expression,
+        span: Span,
     },
-    Return(Option<Expr>),
-    Expr(Expr),
-    Block(Vec<Stmt>),
-    While {
-        cond: Expr,
-        body: Vec<Stmt>,
+    Speak {
+        value: Expression,
+        span: Span,
     },
-    For {
-        var: String,
-        start: Expr,
-        end: Expr,
-        inclusive: bool,
-        body: Vec<Stmt>,
+    Yield {
+        value: Expression,
+        span: Span,
     },
 }
 
-/// Surface type names written by the programmer.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TypeName {
-    Int,
-    Bool,
-    Str,
-    Void,
-    Named(String),
-}
-
-impl fmt::Display for TypeName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Statement {
+    const fn span(&self) -> Span {
         match self {
-            TypeName::Int => write!(f, "Int"),
-            TypeName::Bool => write!(f, "Bool"),
-            TypeName::Str => write!(f, "String"),
-            TypeName::Void => write!(f, "Void"),
-            TypeName::Named(name) => write!(f, "{name}"),
+            Self::Bind { span, .. } | Self::Speak { span, .. } | Self::Yield { span, .. } => *span,
         }
     }
 }
 
-/// Resolved types used by the type checker.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Type {
-    Int,
-    Bool,
-    Str,
-    Void,
-    Named(String),
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Expression {
+    pub kind: ExpressionKind,
+    pub span: Span,
 }
 
-impl fmt::Display for Type {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExpressionKind {
+    Text(String),
+    Whole(i64),
+    Name(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValueType {
+    Text,
+    Whole,
+}
+
+impl fmt::Display for ValueType {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Type::Int => write!(f, "Int"),
-            Type::Bool => write!(f, "Bool"),
-            Type::Str => write!(f, "String"),
-            Type::Void => write!(f, "Void"),
-            Type::Named(name) => write!(f, "{name}"),
+            Self::Text => formatter.write_str("Text"),
+            Self::Whole => formatter.write_str("Whole"),
         }
     }
 }
 
-// ============================================================
-// Parser
-// ============================================================
-
-pub struct Parser {
-    tokens: Vec<Token>,
-    pos: usize,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompileOutput {
+    pub program: Program,
+    pub bytecode: Vec<u8>,
 }
 
-impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0 }
-    }
-
-    pub fn parse_program(&mut self) -> Result<Program, ParseError> {
-        let mut items = Vec::new();
-        while !self.check(SimpleKind::Eof) {
-            if self.check(SimpleKind::Fn) {
-                items.push(Item::Function(self.parse_function()?));
-            } else {
-                items.push(Item::Stmt(self.parse_stmt()?));
-            }
-        }
-        Ok(Program { items })
-    }
-
-    fn parse_function(&mut self) -> Result<FunctionDecl, ParseError> {
-        let fn_tok = self.expect(SimpleKind::Fn, "expected `fn`")?;
-        let (name, _) = self.expect_ident()?;
-        self.expect(SimpleKind::LParen, "expected `(` after function name")?;
-
-        let mut params = Vec::new();
-        if !self.check(SimpleKind::RParen) {
-            loop {
-                let (param_name, param_span) = self.expect_ident()?;
-                self.expect(SimpleKind::Colon, "expected `:` after parameter name")?;
-                let ty = self.parse_type_name()?;
-                params.push(Param {
-                    name: param_name,
-                    ty,
-                    span: param_span,
-                });
-                if self.consume_if(SimpleKind::Comma).is_some() {
-                    if self.check(SimpleKind::RParen) {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            }
-        }
-
-        self.expect(SimpleKind::RParen, "expected `)` after parameter list")?;
-        self.expect(SimpleKind::Arrow, "expected `->` after parameter list")?;
-        let return_type = self.parse_type_name()?;
-        let (body, _) = self.parse_block()?;
-
-        Ok(FunctionDecl {
-            name,
-            params,
-            return_type,
-            body,
-            span: fn_tok.span,
-        })
-    }
-
-    fn parse_stmt(&mut self) -> Result<Stmt, ParseError> {
-        if self.check(SimpleKind::Let) {
-            return self.parse_let_stmt();
-        }
-        if self.check(SimpleKind::Return) {
-            return self.parse_return_stmt();
-        }
-        if self.check(SimpleKind::While) {
-            return self.parse_while_stmt();
-        }
-        if self.check(SimpleKind::For) {
-            return self.parse_for_stmt();
-        }
-        if self.check(SimpleKind::LBrace) {
-            let (stmts, span) = self.parse_block()?;
-            return Ok(Stmt::new(StmtKind::Block(stmts), span));
-        }
-
-        let expr = self.parse_expr()?;
-        let span = expr.span;
-        self.expect(SimpleKind::Semicolon, "expected `;` after expression")?;
-        Ok(Stmt::new(StmtKind::Expr(expr), span))
-    }
-
-    fn parse_let_stmt(&mut self) -> Result<Stmt, ParseError> {
-        let let_tok = self.expect(SimpleKind::Let, "expected `let`")?;
-        let (name, _) = self.expect_ident()?;
-        let ty = if self.consume_if(SimpleKind::Colon).is_some() {
-            Some(self.parse_type_name()?)
-        } else {
-            None
-        };
-        self.expect(SimpleKind::Eq, "expected `=` in variable declaration")?;
-        let value = self.parse_expr()?;
-        self.expect(
-            SimpleKind::Semicolon,
-            "expected `;` after variable declaration",
-        )?;
-        Ok(Stmt::new(
-            StmtKind::Let { name, ty, value },
-            let_tok.span,
-        ))
-    }
-
-    fn parse_return_stmt(&mut self) -> Result<Stmt, ParseError> {
-        let ret_tok = self.expect(SimpleKind::Return, "expected `return`")?;
-        if self.check(SimpleKind::Semicolon) {
-            self.advance();
-            return Ok(Stmt::new(StmtKind::Return(None), ret_tok.span));
-        }
-        let expr = self.parse_expr()?;
-        self.expect(
-            SimpleKind::Semicolon,
-            "expected `;` after return expression",
-        )?;
-        Ok(Stmt::new(StmtKind::Return(Some(expr)), ret_tok.span))
-    }
-
-    fn parse_while_stmt(&mut self) -> Result<Stmt, ParseError> {
-        let tok = self.expect(SimpleKind::While, "expected `while`")?;
-        let cond = self.parse_expr()?;
-        let (body, _) = self.parse_block()?;
-        Ok(Stmt::new(StmtKind::While { cond, body }, tok.span))
-    }
-
-    fn parse_for_stmt(&mut self) -> Result<Stmt, ParseError> {
-        let tok = self.expect(SimpleKind::For, "expected `for`")?;
-        let (var, _) = self.expect_ident()?;
-        self.expect(SimpleKind::In, "expected `in` in for-loop")?;
-        let start = self.parse_expr()?;
-        let inclusive = if self.consume_if(SimpleKind::DotDotEq).is_some() {
-            true
-        } else {
-            self.expect(SimpleKind::DotDot, "expected `..` or `..=` in for-loop")?;
-            false
-        };
-        let end = self.parse_expr()?;
-        let (body, _) = self.parse_block()?;
-        Ok(Stmt::new(
-            StmtKind::For {
-                var,
-                start,
-                end,
-                inclusive,
-                body,
-            },
-            tok.span,
-        ))
-    }
-
-    fn parse_block(&mut self) -> Result<(Vec<Stmt>, Span), ParseError> {
-        let lbrace = self.expect(SimpleKind::LBrace, "expected `{`")?;
-        let start_span = lbrace.span;
-        let mut stmts = Vec::new();
-        while !self.check(SimpleKind::RBrace) {
-            if self.check(SimpleKind::Eof) {
-                return Err(ParseError::new(start_span, "unterminated block"));
-            }
-            stmts.push(self.parse_stmt()?);
-        }
-        self.expect(SimpleKind::RBrace, "expected `}` to close block")?;
-        Ok((stmts, start_span))
-    }
-
-    fn parse_type_name(&mut self) -> Result<TypeName, ParseError> {
-        let (name, _) = self.expect_ident()?;
-        let ty = match name.as_str() {
-            "Int" => TypeName::Int,
-            "Bool" => TypeName::Bool,
-            "Str" | "String" => TypeName::Str,
-            "Void" => TypeName::Void,
-            other => TypeName::Named(other.to_string()),
-        };
-        Ok(ty)
-    }
-
-    // ---------------- Expressions ----------------
-
-    fn parse_expr(&mut self) -> Result<Expr, ParseError> {
-        self.parse_or()
-    }
-
-    fn parse_or(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.parse_and()?;
-        while let Some(op) = self.consume_if(SimpleKind::OrOr) {
-            let rhs = self.parse_and()?;
-            expr = Expr::new(
-                ExprKind::Binary {
-                    op: BinaryOp::Or,
-                    left: Box::new(expr),
-                    right: Box::new(rhs),
-                },
-                op.span,
-            );
-        }
-        Ok(expr)
-    }
-
-    fn parse_and(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.parse_equality()?;
-        while let Some(op) = self.consume_if(SimpleKind::AndAnd) {
-            let rhs = self.parse_equality()?;
-            expr = Expr::new(
-                ExprKind::Binary {
-                    op: BinaryOp::And,
-                    left: Box::new(expr),
-                    right: Box::new(rhs),
-                },
-                op.span,
-            );
-        }
-        Ok(expr)
-    }
-
-    fn parse_equality(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.parse_comparison()?;
-        loop {
-            if let Some(op) = self.consume_if(SimpleKind::EqEq) {
-                let rhs = self.parse_comparison()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Eq,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else if let Some(op) = self.consume_if(SimpleKind::BangEq) {
-                let rhs = self.parse_comparison()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Neq,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else {
-                break;
-            }
-        }
-        Ok(expr)
-    }
-
-    fn parse_comparison(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.parse_term()?;
-        loop {
-            if let Some(op) = self.consume_if(SimpleKind::Lt) {
-                let rhs = self.parse_term()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Lt,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else if let Some(op) = self.consume_if(SimpleKind::LtEq) {
-                let rhs = self.parse_term()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Lte,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else if let Some(op) = self.consume_if(SimpleKind::Gt) {
-                let rhs = self.parse_term()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Gt,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else if let Some(op) = self.consume_if(SimpleKind::GtEq) {
-                let rhs = self.parse_term()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Gte,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else {
-                break;
-            }
-        }
-        Ok(expr)
-    }
-
-    fn parse_term(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.parse_factor()?;
-        loop {
-            if let Some(op) = self.consume_if(SimpleKind::Plus) {
-                let rhs = self.parse_factor()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Add,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else if let Some(op) = self.consume_if(SimpleKind::Minus) {
-                let rhs = self.parse_factor()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Sub,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else {
-                break;
-            }
-        }
-        Ok(expr)
-    }
-
-    fn parse_factor(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.parse_unary()?;
-        loop {
-            if let Some(op) = self.consume_if(SimpleKind::Star) {
-                let rhs = self.parse_unary()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Mul,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else if let Some(op) = self.consume_if(SimpleKind::Slash) {
-                let rhs = self.parse_unary()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Div,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else if let Some(op) = self.consume_if(SimpleKind::Percent) {
-                let rhs = self.parse_unary()?;
-                expr = Expr::new(
-                    ExprKind::Binary {
-                        op: BinaryOp::Mod,
-                        left: Box::new(expr),
-                        right: Box::new(rhs),
-                    },
-                    op.span,
-                );
-            } else {
-                break;
-            }
-        }
-        Ok(expr)
-    }
-
-    fn parse_unary(&mut self) -> Result<Expr, ParseError> {
-        if let Some(op) = self.consume_if(SimpleKind::Bang) {
-            let rhs = self.parse_unary()?;
-            return Ok(Expr::new(
-                ExprKind::Unary {
-                    op: UnaryOp::Not,
-                    expr: Box::new(rhs),
-                },
-                op.span,
-            ));
-        }
-        if let Some(op) = self.consume_if(SimpleKind::Minus) {
-            let rhs = self.parse_unary()?;
-            return Ok(Expr::new(
-                ExprKind::Unary {
-                    op: UnaryOp::Neg,
-                    expr: Box::new(rhs),
-                },
-                op.span,
-            ));
-        }
-        self.parse_call()
-    }
-
-    fn parse_call(&mut self) -> Result<Expr, ParseError> {
-        let mut expr = self.parse_primary()?;
-        loop {
-            if self.consume_if(SimpleKind::LParen).is_some() {
-                let mut args = Vec::new();
-                if !self.check(SimpleKind::RParen) {
-                    loop {
-                        args.push(self.parse_expr()?);
-                        if self.consume_if(SimpleKind::Comma).is_some() {
-                            if self.check(SimpleKind::RParen) {
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.expect(SimpleKind::RParen, "expected `)` after call arguments")?;
-                let span = expr.span;
-                expr = Expr::new(
-                    ExprKind::Call {
-                        callee: Box::new(expr),
-                        args,
-                    },
-                    span,
-                );
-            } else {
-                break;
-            }
-        }
-        Ok(expr)
-    }
-
-    fn parse_primary(&mut self) -> Result<Expr, ParseError> {
-        let tok = self.peek().clone();
-        match tok.kind {
-            TokenKind::Int(v) => {
-                self.advance();
-                Ok(Expr::new(ExprKind::Int(v), tok.span))
-            }
-            TokenKind::Str(s) => {
-                self.advance();
-                Ok(Expr::new(ExprKind::Str(s), tok.span))
-            }
-            TokenKind::True => {
-                self.advance();
-                Ok(Expr::new(ExprKind::Bool(true), tok.span))
-            }
-            TokenKind::False => {
-                self.advance();
-                Ok(Expr::new(ExprKind::Bool(false), tok.span))
-            }
-            TokenKind::Ident(name) => {
-                self.advance();
-                Ok(Expr::new(ExprKind::Var(name), tok.span))
-            }
-            TokenKind::LParen => {
-                let open = self.advance();
-                let inner = self.parse_expr()?;
-                self.expect(
-                    SimpleKind::RParen,
-                    "expected `)` after grouped expression",
-                )?;
-                Ok(Expr::new(ExprKind::Group(Box::new(inner)), open.span))
-            }
-            _ => Err(ParseError::new(
-                tok.span,
-                format!("unexpected token in expression: {:?}", tok.kind),
-            )),
-        }
-    }
-
-    // ---------------- helpers ----------------
-
-    fn peek(&self) -> &Token {
-        &self.tokens[self.pos]
-    }
-
-    fn check(&self, kind: SimpleKind) -> bool {
-        self.peek().kind.simple_kind() == kind
-    }
-
-    fn advance(&mut self) -> Token {
-        let tok = self.peek().clone();
-        if self.pos + 1 < self.tokens.len() {
-            self.pos += 1;
-        }
-        tok
-    }
-
-    fn consume_if(&mut self, kind: SimpleKind) -> Option<Token> {
-        if self.check(kind) {
-            Some(self.advance())
-        } else {
-            None
-        }
-    }
-
-    fn expect(&mut self, kind: SimpleKind, message: &str) -> Result<Token, ParseError> {
-        if self.check(kind) {
-            Ok(self.advance())
-        } else {
-            let got = self.peek().clone();
-            Err(ParseError::new(
-                got.span,
-                format!("{message}; found {:?}", got.kind),
-            ))
-        }
-    }
-
-    fn expect_ident(&mut self) -> Result<(String, Span), ParseError> {
-        let tok = self.peek().clone();
-        match tok.kind {
-            TokenKind::Ident(name) => {
-                self.advance();
-                Ok((name, tok.span))
-            }
-            _ => Err(ParseError::new(
-                tok.span,
-                format!("expected identifier, found {:?}", tok.kind),
-            )),
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunOutput {
+    pub stdout: String,
+    pub exit_code: i64,
 }
 
-// ============================================================
-// Type Checker
-// ============================================================
-
-#[derive(Clone, Debug)]
-struct FunctionSig {
-    params: Vec<Type>,
-    return_type: Type,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BytecodeError {
+    pub offset: usize,
+    pub message: String,
 }
 
-#[derive(Clone, Debug)]
-struct TypeEnv {
-    scopes: Vec<HashMap<String, Type>>,
-}
-
-impl TypeEnv {
-    fn new() -> Self {
+impl BytecodeError {
+    fn new(offset: usize, message: impl Into<String>) -> Self {
         Self {
-            scopes: vec![HashMap::new()],
+            offset,
+            message: message.into(),
         }
-    }
-
-    fn push_scope(&mut self) {
-        self.scopes.push(HashMap::new());
-    }
-
-    fn lookup(&self, name: &str) -> Option<Type> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(ty) = scope.get(name) {
-                return Some(ty.clone());
-            }
-        }
-        None
-    }
-
-    fn lookup_current(&self, name: &str) -> Option<&Type> {
-        self.scopes.last().and_then(|scope| scope.get(name))
-    }
-
-    fn insert(&mut self, name: String, ty: Type, span: Span) -> Result<(), TypeError> {
-        let current = self
-            .scopes
-            .last_mut()
-            .expect("type environment always has one scope");
-        if current.contains_key(&name) {
-            return Err(TypeError::new(
-                span,
-                format!("duplicate binding `{name}` in the same scope"),
-            ));
-        }
-        current.insert(name, ty);
-        Ok(())
     }
 }
 
-fn resolve_type_name(ty: &TypeName) -> Type {
-    match ty {
-        TypeName::Int => Type::Int,
-        TypeName::Bool => Type::Bool,
-        TypeName::Str => Type::Str,
-        TypeName::Void => Type::Void,
-        TypeName::Named(name) => Type::Named(name.clone()),
+impl fmt::Display for BytecodeError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "Aether artifact error at byte {}: {}",
+            self.offset, self.message
+        )
     }
 }
 
-pub fn check_program(program: &Program) -> Result<(), TypeError> {
-    let mut functions: HashMap<String, FunctionSig> = HashMap::new();
+impl std::error::Error for BytecodeError {}
 
-    // Pass 1: collect all function signatures (supports mutual recursion).
-    for item in &program.items {
-        if let Item::Function(func) = item {
-            if functions.contains_key(&func.name) {
-                return Err(TypeError::new(
-                    func.span,
-                    format!("duplicate function `{}`", func.name),
-                ));
-            }
-            let mut params = Vec::new();
-            for param in &func.params {
-                let ty = resolve_type_name(&param.ty);
-                if ty == Type::Void {
-                    return Err(TypeError::new(
-                        param.span,
-                        "function parameters cannot have type Void",
-                    ));
-                }
-                params.push(ty);
-            }
-            let return_type = resolve_type_name(&func.return_type);
-            functions.insert(
-                func.name.clone(),
-                FunctionSig {
-                    params,
-                    return_type,
-                },
-            );
-        }
-    }
-
-    // Pass 2: check top-level statements and function bodies.
-    let mut globals = TypeEnv::new();
-    for item in &program.items {
-        match item {
-            Item::Stmt(stmt) => {
-                check_stmt(&functions, &mut globals, stmt, None)?;
-            }
-            Item::Function(func) => {
-                check_function(&functions, &globals, func)?;
-            }
-        }
-    }
-    Ok(())
+#[derive(Clone, Copy)]
+struct SourceLine<'source> {
+    number: usize,
+    text: &'source str,
 }
 
-fn check_function(
-    functions: &HashMap<String, FunctionSig>,
-    globals: &TypeEnv,
-    func: &FunctionDecl,
-) -> Result<(), TypeError> {
-    if globals.lookup_current(&func.name).is_some() {
-        return Err(TypeError::new(
-            func.span,
-            format!(
-                "function `{}` conflicts with an existing global variable",
-                func.name
-            ),
+impl<'source> SourceLine<'source> {
+    const fn span(self, column: usize) -> Span {
+        Span::new(self.number, column)
+    }
+}
+
+pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
+    if source.is_empty() {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            "source is empty; an Aether world is required",
         ));
     }
 
-    let sig = functions.get(&func.name).expect("function sig must exist");
-    let mut env = globals.clone();
-    env.push_scope();
+    if !source.is_ascii() {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            "Aether 0.1 source is ASCII-only so canonical source and bytecode agree",
+        ));
+    }
 
-    for (param, ty) in func.params.iter().zip(sig.params.iter()) {
-        if functions.contains_key(&param.name) {
-            return Err(TypeError::new(
-                param.span,
-                format!(
-                    "`{}` is a function name and cannot be used as a parameter",
-                    param.name
-                ),
+    let lines = source_lines(source)?;
+    let mut meaningful = Vec::new();
+
+    for line in lines {
+        if line.text.is_empty() {
+            continue;
+        }
+        if line.text.trim().is_empty() {
+            return Err(CompilerError::new(
+                line.span(1),
+                "blank lines cannot contain whitespace",
             ));
         }
-        env.insert(param.name.clone(), ty.clone(), param.span)?;
+        if line.text.ends_with(' ') || line.text.ends_with('\t') {
+            return Err(CompilerError::new(
+                line.span(line.text.len()),
+                "trailing whitespace is not part of canonical Aether source",
+            ));
+        }
+        if line.text.contains('\t') {
+            return Err(CompilerError::new(
+                line.span(1),
+                "tabs are not valid indentation; use two spaces per Aether block level",
+            ));
+        }
+        meaningful.push(line);
     }
 
-    for stmt in &func.body {
-        check_stmt(functions, &mut env, stmt, Some(&sig.return_type))?;
+    if meaningful.len() < 3 {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            "an Aether program needs a world, the main weave, and a yielding body",
+        ));
     }
-    Ok(())
-}
 
-fn check_stmt(
-    functions: &HashMap<String, FunctionSig>,
-    env: &mut TypeEnv,
-    stmt: &Stmt,
-    current_return: Option<&Type>,
-) -> Result<(), TypeError> {
-    match &stmt.kind {
-        StmtKind::Let { name, ty, value } => {
-            if functions.contains_key(name) {
-                return Err(TypeError::new(
-                    stmt.span,
-                    format!("`{name}` is a function name and cannot be used as a variable"),
-                ));
-            }
-            let value_ty = check_expr(functions, env, value)?;
-            let final_ty = match ty {
-                Some(annot) => {
-                    let expected = resolve_type_name(annot);
-                    if expected != value_ty {
-                        return Err(TypeError::new(
-                            value.span,
-                            format!(
-                                "type mismatch in binding `{name}`: expected `{expected}`, found `{value_ty}`"
-                            ),
-                        ));
-                    }
-                    expected
-                }
-                None => {
-                    if value_ty == Type::Void {
-                        return Err(TypeError::new(
-                            value.span,
-                            "cannot infer type `Void` for a variable",
-                        ));
-                    }
-                    value_ty
-                }
-            };
-            if final_ty == Type::Void {
-                return Err(TypeError::new(stmt.span, "variables cannot have type Void"));
-            }
-            env.insert(name.clone(), final_ty, stmt.span)?;
+    let world = parse_world(meaningful[0])?;
+    let entry = parse_entry(meaningful[1])?;
+    let mut statements = Vec::new();
+    for line in &meaningful[2..] {
+        let Some(body) = line.text.strip_prefix("  ") else {
+            return Err(CompilerError::new(
+                line.span(1),
+                "a weave body line must begin with exactly two spaces",
+            ));
+        };
+        if body.starts_with(' ') {
+            return Err(CompilerError::new(
+                line.span(3),
+                "Aether 0.1 has one block level; deeper indentation is not valid here",
+            ));
         }
-        StmtKind::Return(expr) => {
-            let expected = current_return.ok_or_else(|| {
-                TypeError::new(stmt.span, "return statement outside of a function")
-            })?;
-            match expr {
-                Some(e) => {
-                    let got = check_expr(functions, env, e)?;
-                    if expected != &got {
-                        return Err(TypeError::new(
-                            e.span,
-                            format!("return type mismatch: expected `{expected}`, found `{got}`"),
-                        ));
-                    }
-                }
-                None => {
-                    if expected != &Type::Void {
-                        return Err(TypeError::new(
-                            stmt.span,
-                            format!(
-                                "missing return expression; function returns `{expected}`"
-                            ),
-                        ));
-                    }
-                }
-            }
-        }
-        StmtKind::Expr(expr) => {
-            let _ = check_expr(functions, env, expr)?;
-        }
-        StmtKind::Block(stmts) => {
-            let mut inner = env.clone();
-            inner.push_scope();
-            for s in stmts {
-                check_stmt(functions, &mut inner, s, current_return)?;
-            }
-        }
-        StmtKind::While { cond, body } => {
-            let cond_ty = check_expr(functions, env, cond)?;
-            if cond_ty != Type::Bool {
-                return Err(TypeError::new(
-                    cond.span,
-                    format!("while condition must be `Bool`, found `{cond_ty}`"),
-                ));
-            }
-            let mut inner = env.clone();
-            inner.push_scope();
-            for s in body {
-                check_stmt(functions, &mut inner, s, current_return)?;
-            }
-        }
-        StmtKind::For {
-            var,
-            start,
-            end,
-            inclusive: _,
-            body,
-        } => {
-            if functions.contains_key(var) {
-                return Err(TypeError::new(
-                    stmt.span,
-                    format!("`{var}` is a function name and cannot be used as a loop variable"),
-                ));
-            }
-            let start_ty = check_expr(functions, env, start)?;
-            let end_ty = check_expr(functions, env, end)?;
-            if start_ty != Type::Int || end_ty != Type::Int {
-                return Err(TypeError::new(
-                    stmt.span,
-                    format!(
-                        "for-loop bounds must be `Int`; found `{start_ty}` and `{end_ty}`"
-                    ),
-                ));
-            }
-            let mut inner = env.clone();
-            inner.push_scope();
-            inner.insert(var.clone(), Type::Int, stmt.span)?;
-            for s in body {
-                check_stmt(functions, &mut inner, s, current_return)?;
-            }
-        }
+        statements.push(parse_statement(*line, body)?);
     }
-    Ok(())
-}
 
-fn check_expr(
-    functions: &HashMap<String, FunctionSig>,
-    env: &TypeEnv,
-    expr: &Expr,
-) -> Result<Type, TypeError> {
-    match &expr.kind {
-        ExprKind::Int(_) => Ok(Type::Int),
-        ExprKind::Bool(_) => Ok(Type::Bool),
-        ExprKind::Str(_) => Ok(Type::Str),
-        ExprKind::Var(name) => {
-            if let Some(ty) = env.lookup(name) {
-                Ok(ty)
-            } else if functions.contains_key(name) {
-                Err(TypeError::new(
-                    expr.span,
-                    format!("`{name}` is a function; use `{name}()` to call it"),
-                ))
-            } else {
-                Err(TypeError::new(
-                    expr.span,
-                    format!("unknown identifier `{name}`"),
-                ))
-            }
-        }
-        ExprKind::Group(inner) => check_expr(functions, env, inner),
-        ExprKind::Unary { op, expr: inner } => {
-            let ty = check_expr(functions, env, inner)?;
-            match op {
-                UnaryOp::Neg => {
-                    if ty != Type::Int {
-                        return Err(TypeError::new(
-                            expr.span,
-                            format!("unary `-` expects `Int`, found `{ty}`"),
-                        ));
-                    }
-                    Ok(Type::Int)
-                }
-                UnaryOp::Not => {
-                    if ty != Type::Bool {
-                        return Err(TypeError::new(
-                            expr.span,
-                            format!("unary `!` expects `Bool`, found `{ty}`"),
-                        ));
-                    }
-                    Ok(Type::Bool)
-                }
-            }
-        }
-        ExprKind::Binary { op, left, right } => {
-            let lhs = check_expr(functions, env, left)?;
-            let rhs = check_expr(functions, env, right)?;
-            match op {
-                BinaryOp::Add
-                | BinaryOp::Sub
-                | BinaryOp::Mul
-                | BinaryOp::Div
-                | BinaryOp::Mod => {
-                    if lhs != Type::Int || rhs != Type::Int {
-                        return Err(TypeError::new(
-                            expr.span,
-                            format!(
-                                "operator `{op}` expects `Int` operands, found `{lhs}` and `{rhs}`"
-                            ),
-                        ));
-                    }
-                    Ok(Type::Int)
-                }
-                BinaryOp::Lt | BinaryOp::Lte | BinaryOp::Gt | BinaryOp::Gte => {
-                    if lhs != Type::Int || rhs != Type::Int {
-                        return Err(TypeError::new(
-                            expr.span,
-                            format!(
-                                "operator `{op}` expects `Int` operands, found `{lhs}` and `{rhs}`"
-                            ),
-                        ));
-                    }
-                    Ok(Type::Bool)
-                }
-                BinaryOp::And | BinaryOp::Or => {
-                    if lhs != Type::Bool || rhs != Type::Bool {
-                        return Err(TypeError::new(
-                            expr.span,
-                            format!(
-                                "operator `{op}` expects `Bool` operands, found `{lhs}` and `{rhs}`"
-                            ),
-                        ));
-                    }
-                    Ok(Type::Bool)
-                }
-                BinaryOp::Eq | BinaryOp::Neq => {
-                    if lhs == Type::Void || rhs == Type::Void {
-                        return Err(TypeError::new(
-                            expr.span,
-                            format!("cannot compare `Void` values with `{op}`"),
-                        ));
-                    }
-                    if lhs != rhs {
-                        return Err(TypeError::new(
-                            expr.span,
-                            format!(
-                                "operator `{op}` requires both sides to have the same type, found `{lhs}` and `{rhs}`"
-                            ),
-                        ));
-                    }
-                    Ok(Type::Bool)
-                }
-            }
-        }
-        ExprKind::Call { callee, args } => {
-            let name = match &callee.kind {
-                ExprKind::Var(name) => name,
-                _ => {
-                    return Err(TypeError::new(
-                        callee.span,
-                        "call target must be a named function",
-                    ));
-                }
-            };
-            let sig = functions.get(name).ok_or_else(|| {
-                TypeError::new(callee.span, format!("unknown function `{name}`"))
-            })?;
-            if args.len() != sig.params.len() {
-                return Err(TypeError::new(
-                    expr.span,
-                    format!(
-                        "function `{name}` expects {} arguments, found {}",
-                        sig.params.len(),
-                        args.len()
-                    ),
-                ));
-            }
-            for (arg, expected) in args.iter().zip(sig.params.iter()) {
-                let got = check_expr(functions, env, arg)?;
-                if &got != expected {
-                    return Err(TypeError::new(
-                        arg.span,
-                        format!(
-                            "argument type mismatch in call to `{name}`: expected `{expected}`, found `{got}`"
-                        ),
-                    ));
-                }
-            }
-            Ok(sig.return_type.clone())
-        }
-    }
-}
-
-// ============================================================
-// Convenience entry point
-// ============================================================
-
-pub fn compile_source(source: &str) -> Result<Program, FrontendError> {
-    let tokens = Lexer::new(source).lex_all()?;
-    let program = Parser::new(tokens).parse_program()?;
-    check_program(&program)?;
+    let program = Program {
+        world,
+        entry,
+        statements,
+    };
+    validate_program(&program)?;
     Ok(program)
 }
 
-// ============================================================
-// Tests
-// ============================================================
+pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError> {
+    let program = compile_source(source)?;
+    let bytecode = emit_bytecode(&program)?;
+    verify_bytecode(&bytecode).map_err(|error| {
+        CompilerError::new(
+            Span::synthetic(),
+            format!("compiler produced an invalid Aether artifact: {error}"),
+        )
+    })?;
+    Ok(CompileOutput { program, bytecode })
+}
+
+#[must_use]
+pub fn format_program(program: &Program) -> String {
+    let mut formatted = format!(
+        "world {}\n\nweave {} [] -> {}:\n",
+        program.world, program.entry.name, program.entry.result
+    );
+    for statement in &program.statements {
+        formatted.push_str("  ");
+        match statement {
+            Statement::Bind { name, value, .. } => {
+                formatted.push_str("bind ");
+                formatted.push_str(name);
+                formatted.push_str(" <- ");
+                write_expression(value, &mut formatted);
+            }
+            Statement::Speak { value, .. } => {
+                formatted.push_str("speak ");
+                write_expression(value, &mut formatted);
+            }
+            Statement::Yield { value, .. } => {
+                formatted.push_str("yield ");
+                write_expression(value, &mut formatted);
+            }
+        }
+        formatted.push('\n');
+    }
+    formatted
+}
+
+#[must_use]
+pub fn canonical_ast(program: &Program) -> String {
+    let mut ast = format!(
+        "World({});Entry({}->{})",
+        program.world, program.entry.name, program.entry.result
+    );
+    for statement in &program.statements {
+        ast.push(';');
+        match statement {
+            Statement::Bind { name, value, .. } => {
+                ast.push_str("Bind(");
+                ast.push_str(name);
+                ast.push(',');
+                write_ast_expression(value, &mut ast);
+                ast.push(')');
+            }
+            Statement::Speak { value, .. } => {
+                ast.push_str("Speak(");
+                write_ast_expression(value, &mut ast);
+                ast.push(')');
+            }
+            Statement::Yield { value, .. } => {
+                ast.push_str("Yield(");
+                write_ast_expression(value, &mut ast);
+                ast.push(')');
+            }
+        }
+    }
+    ast
+}
+
+pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
+    verify_header(bytecode)?;
+    let mut position = ARTIFACT_MAGIC.len() + 1;
+    let mut stack = Vec::new();
+    let mut locals = Vec::new();
+    let mut yielded = false;
+
+    while position < bytecode.len() {
+        if yielded {
+            return Err(BytecodeError::new(
+                position,
+                "instructions appear after the terminating yield",
+            ));
+        }
+        let offset = position;
+        let opcode = read_byte(bytecode, &mut position)?;
+        match opcode {
+            OP_PUSH_TEXT => {
+                let _ = read_text(bytecode, &mut position)?;
+                stack.push(ValueType::Text);
+            }
+            OP_PUSH_WHOLE => {
+                let _ = read_i64(bytecode, &mut position)?;
+                stack.push(ValueType::Whole);
+            }
+            OP_STORE => {
+                let index = usize::from(read_byte(bytecode, &mut position)?);
+                if index != locals.len() {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "store slots must be introduced sequentially",
+                    ));
+                }
+                locals.push(pop_value_type(&mut stack, offset, "store")?);
+            }
+            OP_LOAD => {
+                let index = usize::from(read_byte(bytecode, &mut position)?);
+                let Some(value_type) = locals.get(index) else {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "load references an unknown local slot",
+                    ));
+                };
+                stack.push(*value_type);
+            }
+            OP_SPEAK => {
+                require_value_type(
+                    pop_value_type(&mut stack, offset, "speak")?,
+                    ValueType::Text,
+                    offset,
+                    "speak",
+                )?;
+            }
+            OP_YIELD => {
+                require_value_type(
+                    pop_value_type(&mut stack, offset, "yield")?,
+                    ValueType::Whole,
+                    offset,
+                    "yield",
+                )?;
+                if !stack.is_empty() {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "yield must leave an empty operand stack",
+                    ));
+                }
+                yielded = true;
+            }
+            _ => return Err(BytecodeError::new(offset, "unknown Aether opcode")),
+        }
+    }
+
+    if !yielded {
+        return Err(BytecodeError::new(
+            bytecode.len(),
+            "artifact has no terminating yield instruction",
+        ));
+    }
+    Ok(())
+}
+
+pub fn run_bytecode(bytecode: &[u8]) -> Result<RunOutput, BytecodeError> {
+    verify_bytecode(bytecode)?;
+    let mut position = ARTIFACT_MAGIC.len() + 1;
+    let mut stack = Vec::new();
+    let mut locals = Vec::new();
+    let mut stdout = String::new();
+
+    while position < bytecode.len() {
+        let offset = position;
+        let opcode = read_byte(bytecode, &mut position)?;
+        match opcode {
+            OP_PUSH_TEXT => stack.push(RuntimeValue::Text(read_text(bytecode, &mut position)?)),
+            OP_PUSH_WHOLE => stack.push(RuntimeValue::Whole(read_i64(bytecode, &mut position)?)),
+            OP_STORE => {
+                let index = usize::from(read_byte(bytecode, &mut position)?);
+                if index != locals.len() {
+                    return Err(BytecodeError::new(offset, "invalid store slot"));
+                }
+                locals.push(pop_runtime_value(&mut stack, offset, "store")?);
+            }
+            OP_LOAD => {
+                let index = usize::from(read_byte(bytecode, &mut position)?);
+                let Some(value) = locals.get(index) else {
+                    return Err(BytecodeError::new(offset, "invalid load slot"));
+                };
+                stack.push(value.clone());
+            }
+            OP_SPEAK => match pop_runtime_value(&mut stack, offset, "speak")? {
+                RuntimeValue::Text(value) => stdout.push_str(&value),
+                RuntimeValue::Whole(_) => {
+                    return Err(BytecodeError::new(offset, "speak received a Whole value"));
+                }
+            },
+            OP_YIELD => match pop_runtime_value(&mut stack, offset, "yield")? {
+                RuntimeValue::Whole(exit_code) => return Ok(RunOutput { stdout, exit_code }),
+                RuntimeValue::Text(_) => {
+                    return Err(BytecodeError::new(offset, "yield received a Text value"));
+                }
+            },
+            _ => return Err(BytecodeError::new(offset, "unknown Aether opcode")),
+        }
+    }
+
+    Err(BytecodeError::new(
+        bytecode.len(),
+        "artifact ended without yield",
+    ))
+}
+
+fn source_lines(source: &str) -> Result<Vec<SourceLine<'_>>, CompilerError> {
+    let mut lines = Vec::new();
+    for (index, raw_line) in source.split('\n').enumerate() {
+        let line = raw_line.strip_suffix('\r').unwrap_or(raw_line);
+        if line.contains('\r') {
+            return Err(CompilerError::new(
+                Span::new(index + 1, 1),
+                "carriage returns are only valid as Windows line endings",
+            ));
+        }
+        lines.push(SourceLine {
+            number: index + 1,
+            text: line,
+        });
+    }
+    Ok(lines)
+}
+
+fn parse_world(line: SourceLine<'_>) -> Result<String, CompilerError> {
+    if line.text.starts_with(' ') {
+        return Err(CompilerError::new(
+            line.span(1),
+            "world declarations cannot be indented",
+        ));
+    }
+    let Some(name) = line.text.strip_prefix("world ") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "the first declaration must be world followed by a lowercase name",
+        ));
+    };
+    validate_name(name, line.span(7), "world name")?;
+    Ok(name.to_owned())
+}
+
+fn parse_entry(line: SourceLine<'_>) -> Result<Entry, CompilerError> {
+    if line.text.starts_with(' ') {
+        return Err(CompilerError::new(
+            line.span(1),
+            "weave declarations cannot be indented",
+        ));
+    }
+    if line.text != "weave main [] -> Whole:" {
+        return Err(CompilerError::new(
+            line.span(1),
+            "Aether 0.1 requires the entry declaration weave main [] -> Whole:",
+        ));
+    }
+    Ok(Entry {
+        name: "main".to_owned(),
+        result: ValueType::Whole,
+    })
+}
+
+fn parse_statement(line: SourceLine<'_>, body: &str) -> Result<Statement, CompilerError> {
+    let span = line.span(3);
+    if let Some(rest) = body.strip_prefix("bind ") {
+        let Some((name, expression)) = rest.split_once(" <- ") else {
+            return Err(CompilerError::new(
+                span,
+                "bind requires a name, the <- binder, and one value",
+            ));
+        };
+        validate_name(name, line.span(8), "binding name")?;
+        let expression_column = 3 + "bind ".len() + name.len() + " <- ".len();
+        return Ok(Statement::Bind {
+            name: name.to_owned(),
+            value: parse_expression(expression, line.span(expression_column))?,
+            span,
+        });
+    }
+    if let Some(expression) = body.strip_prefix("speak ") {
+        return Ok(Statement::Speak {
+            value: parse_expression(expression, line.span(3 + "speak ".len()))?,
+            span,
+        });
+    }
+    if let Some(expression) = body.strip_prefix("yield ") {
+        return Ok(Statement::Yield {
+            value: parse_expression(expression, line.span(3 + "yield ".len()))?,
+            span,
+        });
+    }
+    Err(CompilerError::new(
+        span,
+        "unknown Aether statement; use bind, speak, or yield",
+    ))
+}
+
+fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerError> {
+    if source.is_empty() {
+        return Err(CompilerError::new(span, "an expression is required"));
+    }
+    if source.starts_with('"') {
+        return Ok(Expression {
+            kind: ExpressionKind::Text(parse_text_literal(source, span)?),
+            span,
+        });
+    }
+    if is_whole_literal(source) {
+        let value = source.parse::<i64>().map_err(|_| {
+            CompilerError::new(
+                span,
+                "whole literal is outside the supported signed 64-bit range",
+            )
+        })?;
+        return Ok(Expression {
+            kind: ExpressionKind::Whole(value),
+            span,
+        });
+    }
+    validate_name(source, span, "value name")?;
+    Ok(Expression {
+        kind: ExpressionKind::Name(source.to_owned()),
+        span,
+    })
+}
+
+fn parse_text_literal(source: &str, span: Span) -> Result<String, CompilerError> {
+    if source.len() < 2 || !source.ends_with('"') {
+        return Err(CompilerError::new(
+            span,
+            "text values must use one closed double-quoted literal",
+        ));
+    }
+    let mut value = String::new();
+    let mut characters = source[1..source.len() - 1].chars();
+    while let Some(character) = characters.next() {
+        if character == '"' {
+            return Err(CompilerError::new(
+                span,
+                "double quotes inside text must use the quote escape",
+            ));
+        }
+        if character != '\\' {
+            if character.is_control() {
+                return Err(CompilerError::new(
+                    span,
+                    "control characters inside text must use an escape",
+                ));
+            }
+            value.push(character);
+            continue;
+        }
+        let Some(escaped) = characters.next() else {
+            return Err(CompilerError::new(
+                span,
+                "text ends with an incomplete escape",
+            ));
+        };
+        match escaped {
+            '\\' => value.push('\\'),
+            '"' => value.push('"'),
+            'n' => value.push('\n'),
+            'r' => value.push('\r'),
+            't' => value.push('\t'),
+            _ => {
+                return Err(CompilerError::new(
+                    span,
+                    "supported text escapes are \\\\, \\\", \\n, \\r, and \\t",
+                ));
+            }
+        }
+    }
+    Ok(value)
+}
+
+fn validate_program(program: &Program) -> Result<(), CompilerError> {
+    let mut bindings = BTreeMap::new();
+    let mut has_yielded = false;
+    for statement in &program.statements {
+        if has_yielded {
+            return Err(CompilerError::new(
+                statement.span(),
+                "yield terminates a weave and must be its final statement",
+            ));
+        }
+        match statement {
+            Statement::Bind { name, value, span } => {
+                if bindings.contains_key(name) {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!("binding {name} already exists in this weave"),
+                    ));
+                }
+                let value_type = expression_type(value, &bindings)?;
+                bindings.insert(name.clone(), value_type);
+            }
+            Statement::Speak { value, .. } => {
+                let value_type = expression_type(value, &bindings)?;
+                require_source_type(value_type, ValueType::Text, value.span, "speak")?;
+            }
+            Statement::Yield { value, .. } => {
+                let value_type = expression_type(value, &bindings)?;
+                require_source_type(value_type, ValueType::Whole, value.span, "yield")?;
+                has_yielded = true;
+            }
+        }
+    }
+    if !has_yielded {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            "every Aether weave must end with yield",
+        ));
+    }
+    Ok(())
+}
+
+fn expression_type(
+    expression: &Expression,
+    bindings: &BTreeMap<String, ValueType>,
+) -> Result<ValueType, CompilerError> {
+    match &expression.kind {
+        ExpressionKind::Text(_) => Ok(ValueType::Text),
+        ExpressionKind::Whole(_) => Ok(ValueType::Whole),
+        ExpressionKind::Name(name) => bindings.get(name).copied().ok_or_else(|| {
+            CompilerError::new(
+                expression.span,
+                format!("value {name} has not been bound in this weave"),
+            )
+        }),
+    }
+}
+
+fn require_source_type(
+    actual: ValueType,
+    expected: ValueType,
+    span: Span,
+    operation: &str,
+) -> Result<(), CompilerError> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(CompilerError::new(
+            span,
+            format!("{operation} requires {expected}, but this expression is {actual}"),
+        ))
+    }
+}
+
+fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
+    let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
+    bytecode.push(ARTIFACT_VERSION);
+    let mut local_types = BTreeMap::new();
+    let mut local_slots = BTreeMap::new();
+
+    for statement in &program.statements {
+        match statement {
+            Statement::Bind { name, value, span } => {
+                emit_expression(value, &local_slots, &mut bytecode)?;
+                let index = u8::try_from(local_slots.len()).map_err(|_| {
+                    CompilerError::new(*span, "Aether 0.1 supports at most 256 local bindings")
+                })?;
+                bytecode.push(OP_STORE);
+                bytecode.push(index);
+                let value_type = expression_type(value, &local_types)?;
+                local_types.insert(name.clone(), value_type);
+                local_slots.insert(name.clone(), index);
+            }
+            Statement::Speak { value, .. } => {
+                emit_expression(value, &local_slots, &mut bytecode)?;
+                bytecode.push(OP_SPEAK);
+            }
+            Statement::Yield { value, .. } => {
+                emit_expression(value, &local_slots, &mut bytecode)?;
+                bytecode.push(OP_YIELD);
+            }
+        }
+    }
+    Ok(bytecode)
+}
+
+fn emit_expression(
+    expression: &Expression,
+    local_slots: &BTreeMap<String, u8>,
+    bytecode: &mut Vec<u8>,
+) -> Result<(), CompilerError> {
+    match &expression.kind {
+        ExpressionKind::Text(value) => {
+            let length = u16::try_from(value.len()).map_err(|_| {
+                CompilerError::new(
+                    expression.span,
+                    "Aether 0.1 text literals cannot exceed 65,535 bytes",
+                )
+            })?;
+            bytecode.push(OP_PUSH_TEXT);
+            bytecode.extend_from_slice(&length.to_le_bytes());
+            bytecode.extend_from_slice(value.as_bytes());
+        }
+        ExpressionKind::Whole(value) => {
+            bytecode.push(OP_PUSH_WHOLE);
+            bytecode.extend_from_slice(&value.to_le_bytes());
+        }
+        ExpressionKind::Name(name) => {
+            let Some(slot) = local_slots.get(name) else {
+                return Err(CompilerError::new(
+                    expression.span,
+                    format!("value {name} has not been bound in this weave"),
+                ));
+            };
+            bytecode.push(OP_LOAD);
+            bytecode.push(*slot);
+        }
+    }
+    Ok(())
+}
+
+fn verify_header(bytecode: &[u8]) -> Result<(), BytecodeError> {
+    if bytecode.len() < ARTIFACT_MAGIC.len() + 1 {
+        return Err(BytecodeError::new(0, "artifact is shorter than its header"));
+    }
+    if bytecode[..ARTIFACT_MAGIC.len()] != ARTIFACT_MAGIC[..] {
+        return Err(BytecodeError::new(0, "artifact magic is not AETH"));
+    }
+    if bytecode[ARTIFACT_MAGIC.len()] != ARTIFACT_VERSION {
+        return Err(BytecodeError::new(
+            ARTIFACT_MAGIC.len(),
+            "artifact version is not supported by this Aether VM",
+        ));
+    }
+    Ok(())
+}
+
+fn read_byte(bytecode: &[u8], position: &mut usize) -> Result<u8, BytecodeError> {
+    let offset = *position;
+    let Some(value) = bytecode.get(offset) else {
+        return Err(BytecodeError::new(offset, "artifact ended unexpectedly"));
+    };
+    *position += 1;
+    Ok(*value)
+}
+
+fn read_i64(bytecode: &[u8], position: &mut usize) -> Result<i64, BytecodeError> {
+    let offset = *position;
+    let end = offset
+        .checked_add(8)
+        .ok_or_else(|| BytecodeError::new(offset, "whole literal length overflowed"))?;
+    let Some(bytes) = bytecode.get(offset..end) else {
+        return Err(BytecodeError::new(offset, "whole literal is truncated"));
+    };
+    *position = end;
+    let mut buffer = [0_u8; 8];
+    buffer.copy_from_slice(bytes);
+    Ok(i64::from_le_bytes(buffer))
+}
+
+fn read_text(bytecode: &[u8], position: &mut usize) -> Result<String, BytecodeError> {
+    let offset = *position;
+    let low = read_byte(bytecode, position)?;
+    let high = read_byte(bytecode, position)?;
+    let length = usize::from(u16::from_le_bytes([low, high]));
+    let end = (*position)
+        .checked_add(length)
+        .ok_or_else(|| BytecodeError::new(offset, "text literal length overflowed"))?;
+    let Some(bytes) = bytecode.get(*position..end) else {
+        return Err(BytecodeError::new(offset, "text literal is truncated"));
+    };
+    let value = std::str::from_utf8(bytes)
+        .map_err(|_| BytecodeError::new(offset, "text literal is not UTF-8"))?;
+    if !value.is_ascii() {
+        return Err(BytecodeError::new(
+            offset,
+            "text literal is not valid Aether 0.1 ASCII text",
+        ));
+    }
+    *position = end;
+    Ok(value.to_owned())
+}
+
+fn pop_value_type(
+    stack: &mut Vec<ValueType>,
+    offset: usize,
+    operation: &str,
+) -> Result<ValueType, BytecodeError> {
+    stack.pop().ok_or_else(|| {
+        BytecodeError::new(
+            offset,
+            format!("{operation} would underflow the operand stack"),
+        )
+    })
+}
+
+fn require_value_type(
+    actual: ValueType,
+    expected: ValueType,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{operation} requires {expected}, but artifact stack has {actual}"),
+        ))
+    }
+}
+
+#[derive(Debug, Clone)]
+enum RuntimeValue {
+    Text(String),
+    Whole(i64),
+}
+
+fn pop_runtime_value(
+    stack: &mut Vec<RuntimeValue>,
+    offset: usize,
+    operation: &str,
+) -> Result<RuntimeValue, BytecodeError> {
+    stack.pop().ok_or_else(|| {
+        BytecodeError::new(
+            offset,
+            format!("{operation} would underflow the operand stack"),
+        )
+    })
+}
+
+fn write_expression(expression: &Expression, output: &mut String) {
+    match &expression.kind {
+        ExpressionKind::Text(value) => {
+            output.push('"');
+            for character in value.chars() {
+                match character {
+                    '\\' => output.push_str("\\\\"),
+                    '"' => output.push_str("\\\""),
+                    '\n' => output.push_str("\\n"),
+                    '\r' => output.push_str("\\r"),
+                    '\t' => output.push_str("\\t"),
+                    _ => output.push(character),
+                }
+            }
+            output.push('"');
+        }
+        ExpressionKind::Whole(value) => output.push_str(&value.to_string()),
+        ExpressionKind::Name(name) => output.push_str(name),
+    }
+}
+
+fn write_ast_expression(expression: &Expression, output: &mut String) {
+    match &expression.kind {
+        ExpressionKind::Text(value) => {
+            output.push_str("Text(");
+            output.push_str(&value.escape_default().to_string());
+            output.push(')');
+        }
+        ExpressionKind::Whole(value) => {
+            output.push_str("Whole(");
+            output.push_str(&value.to_string());
+            output.push(')');
+        }
+        ExpressionKind::Name(name) => {
+            output.push_str("Name(");
+            output.push_str(name);
+            output.push(')');
+        }
+    }
+}
+
+fn validate_name(name: &str, span: Span, subject: &str) -> Result<(), CompilerError> {
+    let mut characters = name.chars();
+    let Some(first) = characters.next() else {
+        return Err(CompilerError::new(span, format!("{subject} is required")));
+    };
+    if !first.is_ascii_lowercase() {
+        return Err(CompilerError::new(
+            span,
+            format!("{subject} must begin with a lowercase ASCII letter"),
+        ));
+    }
+    if !characters.all(|character| {
+        character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
+    }) {
+        return Err(CompilerError::new(
+            span,
+            format!("{subject} may only use lowercase ASCII letters, digits, and underscores"),
+        ));
+    }
+    if matches!(
+        name,
+        "world" | "weave" | "bind" | "speak" | "yield" | "main" | "whole" | "text"
+    ) {
+        return Err(CompilerError::new(
+            span,
+            format!("{subject} uses the reserved Aether word {name}"),
+        ));
+    }
+    Ok(())
+}
+
+fn is_whole_literal(source: &str) -> bool {
+    let digits = source.strip_prefix('-').unwrap_or(source);
+    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return false;
+    }
+    if digits.len() > 1 && digits.starts_with('0') {
+        return false;
+    }
+    source != "-0"
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn assert_ok(source: &str) {
-        compile_source(source).expect("expected success");
-    }
-
-    fn assert_err(source: &str) {
-        assert!(compile_source(source).is_err(), "expected error");
-    }
+    const HELLO: &str = "world genesis\n\nweave main [] -> Whole:\n  bind greeting <- \"Hello from Aether\\n\"\n  speak greeting\n  yield 0\n";
 
     #[test]
-    fn empty_program() {
-        assert_ok("");
-    }
-
-    #[test]
-    fn simple_let_inference() {
-        assert_ok("let x = 42;");
-    }
-
-    #[test]
-    fn annotated_let() {
-        assert_ok("let x: Int = 10;");
-    }
-
-    #[test]
-    fn type_mismatch_rejected() {
-        assert_err("let x: Bool = 1;");
-    }
-
-    #[test]
-    fn function_and_call() {
-        assert_ok(
-            r#"
-            fn add(a: Int, b: Int) -> Int {
-                return a + b;
-            }
-            let t = add(1, 2);
-            "#,
+    fn compiles_runs_and_formats_aether_source() {
+        let output = compile_to_bytecode(HELLO).expect("Aether source should compile");
+        let run = run_bytecode(&output.bytecode).expect("Aether artifact should run");
+        assert_eq!(run.stdout, "Hello from Aether\n");
+        assert_eq!(run.exit_code, 0);
+        assert_eq!(format_program(&output.program), HELLO);
+        assert_eq!(
+            canonical_ast(&output.program),
+            "World(genesis);Entry(main->Whole);Bind(greeting,Text(Hello from Aether\\n));Speak(Name(greeting));Yield(Whole(0))"
         );
     }
 
     #[test]
-    fn wrong_arg_count() {
-        assert_err(
-            r#"
-            fn add(a: Int, b: Int) -> Int { return a + b; }
-            let t = add(1);
-            "#,
-        );
+    fn supports_whole_bindings_for_exit_status() {
+        let source = "world arithmetic\n\nweave main [] -> Whole:\n  bind status <- 42\n  speak \"ready\\n\"\n  yield status\n";
+        let output = compile_to_bytecode(source).expect("source should compile");
+        let run = run_bytecode(&output.bytecode).expect("artifact should run");
+        assert_eq!(run.stdout, "ready\n");
+        assert_eq!(run.exit_code, 42);
     }
 
     #[test]
-    fn while_requires_bool() {
-        assert_err("while 1 { }");
-        assert_ok("while true { }");
+    fn preserves_source_order_for_local_slots() {
+        let source = "world slots\n\nweave main [] -> Whole:\n  bind zeta <- \"z\"\n  bind alpha <- \"a\"\n  speak zeta\n  speak alpha\n  yield 0\n";
+        let output = compile_to_bytecode(source).expect("source should compile");
+        let run = run_bytecode(&output.bytecode).expect("artifact should run");
+
+        assert_eq!(run.stdout, "za");
+        assert_eq!(run.exit_code, 0);
     }
 
     #[test]
-    fn for_bounds_must_be_int() {
-        assert_err("for i in true .. 10 { }");
-        assert_ok("for i in 0 .. 10 { let x = i; }");
+    fn rejects_legacy_syntax() {
+        let error =
+            compile_source("fn main() -> Int { return 0; }").expect_err("legacy source must fail");
+        assert!(error.message.contains("world"));
     }
 
     #[test]
-    fn void_variable_rejected() {
-        assert_err(
-            r#"
-            fn nop() -> Void { return; }
-            let x = nop();
-            "#,
-        );
+    fn rejects_noncanonical_indentation() {
+        let source = "world broken\nweave main [] -> Whole:\n    yield 0\n";
+        let error = compile_source(source).expect_err("four spaces must fail");
+        assert!(error.message.contains("deeper indentation"));
     }
 
     #[test]
-    fn duplicate_binding() {
-        assert_err("let x = 1; let x = 2;");
+    fn rejects_unbound_values() {
+        let source = "world broken\nweave main [] -> Whole:\n  speak greeting\n  yield 0\n";
+        let error = compile_source(source).expect_err("unbound name must fail");
+        assert!(error.message.contains("has not been bound"));
     }
 
     #[test]
-    fn unknown_identifier() {
-        assert_err("let x = y;");
+    fn rejects_wrong_effect_types() {
+        let source = "world broken\nweave main [] -> Whole:\n  speak 7\n  yield 0\n";
+        let error = compile_source(source).expect_err("speak must require Text");
+        assert!(error.message.contains("requires Text"));
     }
 
     #[test]
-    fn full_demo() {
-        assert_ok(
-            r#"
-            fn add(a: Int, b: Int) -> Int {
-                let sum = a + b;
-                return sum;
-            }
-            fn noop() -> Void {
-                return;
-            }
-            let base = 10;
-            let total: Int = add(base, 32);
-            let inferred = total + 1;
-            for i in 0 .. 4 {
-                let value = add(i, base);
-            }
-            "#,
-        );
+    fn rejects_statements_after_yield() {
+        let source = "world broken\nweave main [] -> Whole:\n  yield 0\n  speak \"late\"\n";
+        let error = compile_source(source).expect_err("yield must be terminal");
+        assert!(error.message.contains("final statement"));
+    }
+
+    #[test]
+    fn bytecode_is_deterministic_and_verifiable() {
+        let first = compile_to_bytecode(HELLO).expect("first compilation should work");
+        let second = compile_to_bytecode(HELLO).expect("second compilation should work");
+        assert_eq!(first.bytecode, second.bytecode);
+        verify_bytecode(&first.bytecode).expect("compiler artifact must verify");
+    }
+
+    #[test]
+    fn verifier_rejects_bad_magic_and_stack_underflow() {
+        let mut artifact = compile_to_bytecode(HELLO)
+            .expect("source should compile")
+            .bytecode;
+        artifact[0] = b'X';
+        assert!(verify_bytecode(&artifact).is_err());
+
+        let underflow = [b'A', b'E', b'T', b'H', ARTIFACT_VERSION, OP_SPEAK, OP_YIELD];
+        assert!(verify_bytecode(&underflow).is_err());
+    }
+
+    #[test]
+    fn accepts_windows_line_endings_but_formats_canonically() {
+        let windows_source = HELLO.replace('\n', "\r\n");
+        let program = compile_source(&windows_source).expect("CRLF source should compile");
+        assert_eq!(format_program(&program), HELLO);
     }
 }

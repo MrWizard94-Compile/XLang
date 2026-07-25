@@ -1,15 +1,9 @@
-export const EXAMPLE_SOURCE = `fn add(a: Int, b: Int) -> Int {
-    let total = a + b;
-    return total;
-}
-
-fn noop() -> Void {
-    return;
-}
-
-let base = 10;
-let total: Int = add(base, 32);
-
-for i in 0 .. 4 {
-    let current = add(i, total);
-}`;
+export const EXAMPLE_SOURCE = [
+  "world genesis",
+  "",
+  "weave main [] -> Whole:",
+  "  bind greeting <- \"Hello from Aether\\n\"",
+  "  speak greeting",
+  "  yield 0",
+  ""
+].join("\n");

@@ -438,3 +438,45 @@ select:disabled {
     display: none;
   }
 }
+
+.artifact-output {
+  color: #9ed7c5;
+}
+
+.runtime-output {
+  color: #b5cee6;
+}
+
+.inspector {
+  grid-template-rows: minmax(94px, 0.75fr) minmax(175px, 1.5fr) minmax(94px, 0.7fr) minmax(125px, 0.9fr);
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-rows: minmax(0, 1fr) minmax(380px, 0.95fr);
+  }
+
+  .inspector {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .output-section {
+    border-bottom: 1px solid #26302d;
+  }
+
+  .output-section:nth-child(even) {
+    border-right: 0;
+  }
+
+  .output-section:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .inspector {
+    display: block;
+  }
+}

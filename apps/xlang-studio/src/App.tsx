@@ -38,6 +38,15 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function runtimeSummary(result: CompileResponse | null): string {
+  if (!result?.success) {
+    return "Build an Aether artifact to inspect VM output.";
+  }
+
+  const stdout = result.runtimeOutput || "(no stdout)";
+  return stdout + "\n\nExit code: " + String(result.exitCode);
+}
+
 function App() {
   const [source, setSource] = useState(loadSource);
   const [selectedModel, setSelectedModel] = useState(loadModel);
@@ -134,9 +143,9 @@ function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand" aria-label="XLang Studio">
+        <div className="brand" aria-label="Aether Studio">
           <Braces size={24} strokeWidth={2.2} />
-          <span>XLANG</span>
+          <span>AETHER</span>
           <strong>STUDIO</strong>
         </div>
         <div className="topbar-status" data-online={ollama.available && isDesktopRuntime}>
@@ -145,10 +154,10 @@ function App() {
         </div>
       </header>
 
-      <section className="commandbar" aria-label="Compiler commands">
+      <section className="commandbar" aria-label="Aether commands">
         <div className="document-name">
           <FileCode2 size={17} />
-          <span>workspace.xl</span>
+          <span>workspace.ae</span>
           <small>{sourceLines} lines</small>
         </div>
         <div className="commandbar-actions">
@@ -193,47 +202,47 @@ function App() {
             disabled={!isDesktopRuntime || compiling}
           >
             {compiling ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}
-            <span>Compile</span>
+            <span>Build</span>
           </button>
         </div>
       </section>
 
       <main className="workspace">
-        <aside className="navigator" aria-label="Workspace navigator">
+        <aside className="navigator" aria-label="Aether workspace navigator">
           <div className="panel-label">Workspace</div>
           <div className="file-entry" data-active="true">
             <FileCode2 size={17} />
-            <span>workspace.xl</span>
+            <span>workspace.ae</span>
           </div>
           <div className="navigator-footer">
             <Terminal size={16} />
-            <span>Bootstrap frontend</span>
+            <span>Verified AETH VM</span>
           </div>
         </aside>
 
-        <section className="editor-pane" aria-label="Source editor">
+        <section className="editor-pane" aria-label="Aether source editor">
           <div className="pane-heading">
             <span>Source</span>
             <button
               className="icon-button"
               type="button"
               onClick={restoreExample}
-              title="Restore saved source"
-              aria-label="Restore saved source"
+              title="Restore saved Aether source"
+              aria-label="Restore saved Aether source"
             >
               <RotateCcw size={16} />
             </button>
           </div>
           <textarea
             className="source-editor"
-            aria-label="XLang source"
+            aria-label="Aether source"
             spellCheck="false"
             value={source}
             onChange={(event) => setSource(event.target.value)}
           />
         </section>
 
-        <aside className="inspector" aria-label="Compiler output">
+        <aside className="inspector" aria-label="Aether compiler output">
           <section className="output-section">
             <div className="pane-heading">
               <span>Diagnostics</span>
@@ -246,25 +255,33 @@ function App() {
             <div className="output-content diagnostic-output">
               {operationError ?? compileResult?.diagnostic ?? (
                 compileResult?.success
-                  ? "Parsed and type-checked successfully."
-                  : "Run compilation to inspect the current source."
+                  ? "Verified Aether artifact built and run."
+                  : "Build the current Aether source."
               )}
             </div>
           </section>
 
-          <section className="output-section ast-section">
+          <section className="output-section artifact-section">
             <div className="pane-heading">
-              <span>AST</span>
+              <span>AETH Artifact</span>
               <Terminal size={17} />
             </div>
-            <pre className="output-content ast-output">
-              {compileResult?.ast ?? "No successful compilation yet."}
+            <pre className="output-content artifact-output">
+              {compileResult?.artifact ?? "No verified artifact yet."}
             </pre>
+          </section>
+
+          <section className="output-section">
+            <div className="pane-heading">
+              <span>VM Result</span>
+              <Play size={17} />
+            </div>
+            <pre className="output-content runtime-output">{runtimeSummary(compileResult)}</pre>
           </section>
 
           <section className="output-section review-section">
             <div className="pane-heading">
-              <span>Local review</span>
+              <span>Local Review</span>
               <Bot size={17} />
             </div>
             <div className="output-content review-output">
@@ -283,7 +300,7 @@ function App() {
 
       <footer className="statusbar">
         <span>{ollama.endpoint}</span>
-        <span>Compiler and review are separate local processes</span>
+        <span>Aether compilation and local review are separate processes</span>
       </footer>
     </div>
   );

@@ -1,21 +1,26 @@
 use std::env;
+use std::fmt::Write as _;
 use std::time::Duration;
 
+use aether_core::{canonical_ast, compile_to_bytecode, run_bytecode};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 use url::Url;
-use xlang_core::compile_source as compile;
 
 const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
 const DEFAULT_OLLAMA_MODEL: &str = "qwen2.5:3b";
+const MAX_COMPILE_SOURCE_BYTES: usize = 1_000_000;
 const MAX_REVIEW_SOURCE_BYTES: usize = 16_000;
+const MAX_ARTIFACT_PREVIEW_BYTES: usize = 256;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CompileResponse {
     success: bool,
-    ast: Option<String>,
+    artifact: Option<String>,
+    runtime_output: Option<String>,
+    exit_code: Option<i64>,
     diagnostic: Option<String>,
 }
 
@@ -93,13 +98,15 @@ fn validate_model(model: &str) -> Result<(), String> {
     }) {
         Ok(())
     } else {
-        Err("Model names may contain only letters, numbers, colon, dot, underscore, and hyphen.".to_owned())
+        Err(
+            "Model names may contain only letters, numbers, colon, dot, underscore, and hyphen."
+                .to_owned(),
+        )
     }
 }
 
 fn ollama_endpoint() -> Result<String, String> {
-    let configured = env::var("XLANG_OLLAMA_URL")
-        .unwrap_or_else(|_| DEFAULT_OLLAMA_URL.to_owned());
+    let configured = env::var("XLANG_OLLAMA_URL").unwrap_or_else(|_| DEFAULT_OLLAMA_URL.to_owned());
     let parsed = Url::parse(&configured)
         .map_err(|_| "XLANG_OLLAMA_URL must be a valid loopback HTTP URL.".to_owned())?;
 
@@ -112,7 +119,9 @@ fn ollama_endpoint() -> Result<String, String> {
         || !parsed.username().is_empty()
         || parsed.password().is_some()
     {
-        return Err("XLANG_OLLAMA_URL must be a credential-free loopback HTTP base URL.".to_owned());
+        return Err(
+            "XLANG_OLLAMA_URL must be a credential-free loopback HTTP base URL.".to_owned(),
+        );
     }
 
     Ok(configured.trim_end_matches('/').to_owned())
@@ -125,20 +134,68 @@ fn ollama_client() -> Result<Client, String> {
         .map_err(|_| "Could not create the local Ollama client.".to_owned())
 }
 
-#[tauri::command]
-fn compile_source(source: String) -> CompileResponse {
-    match compile(&source) {
-        Ok(program) => CompileResponse {
+fn failed_compile(diagnostic: String) -> CompileResponse {
+    CompileResponse {
+        success: false,
+        artifact: None,
+        runtime_output: None,
+        exit_code: None,
+        diagnostic: Some(diagnostic),
+    }
+}
+
+fn artifact_summary(bytecode: &[u8], ast: &str) -> String {
+    let preview_length = bytecode.len().min(MAX_ARTIFACT_PREVIEW_BYTES);
+    let mut summary = format!("AETH artifact\n{} byte(s)\n\n", bytecode.len());
+
+    for (row, chunk) in bytecode[..preview_length].chunks(16).enumerate() {
+        let offset = row * 16;
+        write!(&mut summary, "{offset:04X}:").expect("writing to a String cannot fail");
+        for byte in chunk {
+            write!(&mut summary, " {byte:02X}").expect("writing to a String cannot fail");
+        }
+        summary.push('\n');
+    }
+
+    if bytecode.len() > preview_length {
+        let remaining = bytecode.len() - preview_length;
+        writeln!(&mut summary, "... {remaining} byte(s) omitted")
+            .expect("writing to a String cannot fail");
+    }
+
+    summary.push_str("\nCanonical AST\n");
+    summary.push_str(ast);
+    summary
+}
+
+fn compile_response(source: &str) -> CompileResponse {
+    if source.len() > MAX_COMPILE_SOURCE_BYTES {
+        return failed_compile(format!(
+            "Source is too large for Aether Studio. Keep it within {MAX_COMPILE_SOURCE_BYTES} bytes."
+        ));
+    }
+
+    let output = match compile_to_bytecode(source) {
+        Ok(output) => output,
+        Err(error) => return failed_compile(error.to_string()),
+    };
+    let artifact = artifact_summary(&output.bytecode, &canonical_ast(&output.program));
+
+    match run_bytecode(&output.bytecode) {
+        Ok(runtime) => CompileResponse {
             success: true,
-            ast: Some(format!("{program:#?}")),
+            artifact: Some(artifact),
+            runtime_output: Some(runtime.stdout),
+            exit_code: Some(runtime.exit_code),
             diagnostic: None,
         },
-        Err(error) => CompileResponse {
-            success: false,
-            ast: None,
-            diagnostic: Some(error.to_string()),
-        },
+        Err(error) => failed_compile(format!("verified Aether artifact could not run: {error}")),
     }
+}
+
+#[tauri::command]
+fn compile_source(source: String) -> CompileResponse {
+    compile_response(&source)
 }
 
 #[tauri::command]
@@ -178,7 +235,9 @@ async fn ollama_status() -> OllamaStatus {
                 .map_err(|_| "Docker Ollama returned an invalid model inventory.".to_owned()),
             Err(_) => Err("Docker Ollama did not accept the status request.".to_owned()),
         },
-        Err(_) => Err("Docker Ollama is unavailable at the configured loopback endpoint.".to_owned()),
+        Err(_) => {
+            Err("Docker Ollama is unavailable at the configured loopback endpoint.".to_owned())
+        }
     };
 
     match tags {
@@ -211,12 +270,15 @@ async fn review_source(source: String, model: String) -> Result<ReviewResponse, 
         return Err("Enter source before requesting a review.".to_owned());
     }
     if source.len() > MAX_REVIEW_SOURCE_BYTES {
-        return Err("Source is too large for a local review request. Keep it within 16,000 bytes.".to_owned());
+        return Err(
+            "Source is too large for a local review request. Keep it within 16,000 bytes."
+                .to_owned(),
+        );
     }
 
     let endpoint = ollama_endpoint()?;
     let client = ollama_client()?;
-    let system = "You are a careful local reviewer for the XLang bootstrap language. Analyze only the supplied source. Do not claim that source compiles unless a compiler diagnostic is supplied, do not execute code, and keep the review under 300 words. Focus on likely syntax, type, and language-boundary issues.";
+    let system = "You are a careful local reviewer for the Aether 0.1 kernel language. Analyze only the supplied source. Do not execute code and do not claim that it compiles unless a compiler diagnostic is supplied. Keep the review under 300 words. Check the exact world, weave, bind, speak, and yield grammar, types, canonical indentation, and language-boundary issues.";
     let request = ChatRequest {
         model: &model,
         stream: false,
@@ -241,7 +303,9 @@ async fn review_source(source: String, model: String) -> Result<ReviewResponse, 
         .json(&request)
         .send()
         .await
-        .map_err(|_| "Docker Ollama is unavailable at the configured loopback endpoint.".to_owned())?
+        .map_err(|_| {
+            "Docker Ollama is unavailable at the configured loopback endpoint.".to_owned()
+        })?
         .error_for_status()
         .map_err(|_| "Docker Ollama rejected the review request.".to_owned())?;
     let response = response
@@ -259,7 +323,7 @@ fn main() {
     tauri::Builder::default()
         .setup(|application| {
             if let Some(window) = application.get_webview_window("main") {
-                window.set_title("XLang Studio")?;
+                window.set_title("Aether Studio")?;
             }
             Ok(())
         })
@@ -269,5 +333,38 @@ fn main() {
             review_source
         ])
         .run(tauri::generate_context!())
-        .expect("error while running XLang Studio");
+        .expect("error while running Aether Studio");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compile_response_contains_verified_artifact_and_runtime_result() {
+        let source =
+            "world studio\n\nweave main [] -> Whole:\n  speak \"Aether Studio\\n\"\n  yield 7\n";
+        let response = compile_response(source);
+
+        assert!(response.success);
+        assert!(response
+            .artifact
+            .as_deref()
+            .is_some_and(|artifact| artifact.contains("AETH artifact")));
+        assert_eq!(response.runtime_output.as_deref(), Some("Aether Studio\n"));
+        assert_eq!(response.exit_code, Some(7));
+        assert!(response.diagnostic.is_none());
+    }
+
+    #[test]
+    fn compile_response_surfaces_aether_diagnostics() {
+        let response = compile_response("let total = 42;");
+
+        assert!(!response.success);
+        assert!(response.artifact.is_none());
+        assert!(response
+            .diagnostic
+            .as_deref()
+            .is_some_and(|diagnostic| diagnostic.contains("world")));
+    }
 }

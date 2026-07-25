@@ -2,7 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface CompileResponse {
   success: boolean;
-  ast: string | null;
+  artifact: string | null;
+  runtimeOutput: string | null;
+  exitCode: number | null;
   diagnostic: string | null;
 }
 
@@ -24,7 +26,7 @@ export const isDesktopRuntime =
 
 function requireDesktopRuntime(): void {
   if (!isDesktopRuntime) {
-    throw new Error("Open XLang Studio through the desktop application to use compiler commands.");
+    throw new Error("Open Aether Studio through the desktop application to use compiler commands.");
   }
 }
 

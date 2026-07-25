@@ -1,8 +1,8 @@
 import { EXAMPLE_SOURCE } from "../lib/example";
 import { DEFAULT_MODEL } from "../lib/models";
 
-const SOURCE_KEY = "xlang.source";
-const MODEL_KEY = "xlang.model";
+const SOURCE_KEY = "aether.source";
+const MODEL_KEY = "aether.model";
 
 function readValue(key: string, fallback: string): string {
   try {
