@@ -13,28 +13,35 @@ Date: 2026-07-25
 
 ## Production Boundary
 
-The production compiler accepts only Aether 0.2.0 source. It produces a
-canonical AST and deterministic AETH v2 bytecode artifact, verifies that
+The production compiler accepts only Aether 0.3.0 source. It produces a
+canonical AST and deterministic AETH v3 bytecode artifact, verifies that
 artifact, and runs it in the Aether VM. The command line and desktop app call
 the same compiler core.
 
-Stage 1 extends the initial kernel with named weaves, typed calls, three value
-types, structured control flow, mutable root slots, explicit local Text access,
-and Unicode-safe bounded text primitives. Legacy C-shaped, Rust-shaped, and V2
-source remains intentionally rejected. The repository does not transpile Aether
-to C, Rust, JavaScript, LLVM, or another target language.
+Stage 2 extends the Stage 1 language with a bounded `Bytes` type, explicit byte
+ownership, binary literals and operations, deterministic checked division and
+remainder, and a typed compiler invocation boundary. Legacy C-shaped,
+Rust-shaped, V1, V2, and AETH v2 input remains intentionally rejected. The
+repository does not transpile Aether to C, Rust, JavaScript, LLVM, or another
+target language.
+
+`aether forge` verifies a compiler artifact, requires
+`compile [borrow source: Text] -> Bytes`, gives it the source text, verifies the
+returned artifact bytes, and writes only a verified result. This is a host ABI,
+not evidence of an Aether-written compiler or self-hosting.
 
 ## Desktop and Data Boundary
 
 Aether Studio runs compilation locally in its Tauri process. Ollama is a
 separate optional reviewer, reachable only through a validated loopback HTTP
-endpoint. It cannot alter bytecode, execute code, or become a compiler
-authority. Source and model choices remain in local WebView storage.
+endpoint. It cannot alter bytecode, execute code, become a compiler authority,
+or participate in forge invocation. Source and model choices remain in local
+WebView storage.
 
 ## Release Gate
 
-A release requires passing Aether core tests, Clippy with warnings denied,
-frontend linting, frontend tests, production frontend build, Windows Tauri
-bundle build, command-line compile and run checks, and a live Docker Ollama
-status check. A successful package must be inspected and launched before it is
-reported as delivered.
+A release requires passing Aether core, CLI, and desktop tests, Clippy with
+warnings denied, frontend linting, frontend tests, production frontend build,
+Windows Tauri bundle build, command-line compile and run checks, forge contract
+verification, and a live Docker Ollama status check. A successful package must
+be inspected and launched before it is reported as delivered.

@@ -5,13 +5,13 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use aether_core::{
-    canonical_ast, compile_source, compile_to_bytecode, run_bytecode, LANGUAGE_NAME,
-    LANGUAGE_VERSION,
+    canonical_ast, compile_source, compile_to_bytecode, forge_bytecode, run_bytecode,
+    verify_bytecode, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether compile <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version"
+        "Usage:\n  aether check <source-file>\n  aether compile <source-file> --output <artifact-file>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version"
     );
 }
 
@@ -38,6 +38,22 @@ fn check(source_path: &Path) -> Result<(), String> {
 fn compile(source_path: &Path, output_path: &Path) -> Result<(), String> {
     let source = read_source(source_path)?;
     let output = compile_to_bytecode(&source).map_err(|error| error.to_string())?;
+    write_artifact(output_path, output.bytecode)?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} compiled {} to {}",
+        source_path.display(),
+        output_path.display()
+    );
+    Ok(())
+}
+
+fn write_artifact(output_path: &Path, artifact: Vec<u8>) -> Result<(), String> {
+    verify_bytecode(&artifact).map_err(|error| {
+        format!(
+            "refusing to write an invalid Aether artifact to {}: {error}",
+            output_path.display()
+        )
+    })?;
     let parent = output_path
         .parent()
         .filter(|candidate| !candidate.as_os_str().is_empty())
@@ -48,11 +64,26 @@ fn compile(source_path: &Path, output_path: &Path) -> Result<(), String> {
             parent.display()
         ));
     }
-    fs::write(output_path, output.bytecode)
+    fs::write(output_path, artifact)
         .map_err(|error| format!("could not write {}: {error}", output_path.display()))?;
+    Ok(())
+}
+
+fn forge(compiler_path: &Path, source_path: &Path, output_path: &Path) -> Result<(), String> {
+    let compiler = read_artifact(compiler_path)?;
+    let source = read_source(source_path)?;
+    let output = forge_bytecode(&compiler, &source).map_err(|error| error.to_string())?;
+    if !output.stdout.is_empty() {
+        eprint!("{}", output.stdout);
+    }
+    let InvocationValue::Bytes(artifact) = output.value else {
+        return Err("the compiler weave must yield Bytes".to_owned());
+    };
+    write_artifact(output_path, artifact)?;
     println!(
-        "{LANGUAGE_NAME} {LANGUAGE_VERSION} compiled {} to {}",
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} forged {} with {} to {}",
         source_path.display(),
+        compiler_path.display(),
         output_path.display()
     );
     Ok(())
@@ -103,6 +134,22 @@ fn run() -> Result<(), String> {
             }
             compile(Path::new(&source), Path::new(&output))
         }
+        "forge" => {
+            let compiler = next_argument(&mut arguments, "compiler artifact")?;
+            let source = next_argument(&mut arguments, "source file")?;
+            let output_flag = next_argument(&mut arguments, "--output flag")?;
+            if output_flag != "--output" {
+                return Err("forge requires --output <artifact-file>".to_owned());
+            }
+            let output = next_argument(&mut arguments, "artifact output file")?;
+            if arguments.next().is_some() {
+                return Err(
+                    "forge accepts one compiler artifact, one source file, and one Aether artifact output file"
+                        .to_owned(),
+                );
+            }
+            forge(Path::new(&compiler), Path::new(&source), Path::new(&output))
+        }
         "run" => {
             let artifact = next_argument(&mut arguments, "artifact file")?;
             if arguments.next().is_some() {
@@ -129,5 +176,75 @@ fn main() -> ExitCode {
             eprintln!("{LANGUAGE_NAME} failed: {error}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_TEMPORARY_DIRECTORY: AtomicUsize = AtomicUsize::new(0);
+
+    struct TemporaryDirectory {
+        path: PathBuf,
+    }
+
+    impl TemporaryDirectory {
+        fn create() -> Self {
+            let sequence = NEXT_TEMPORARY_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+            let path = env::temp_dir().join(format!(
+                "aether-cli-forge-{}-{sequence}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&path).expect("temporary forge directory should be created");
+            Self { path }
+        }
+    }
+
+    impl Drop for TemporaryDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn forge_invokes_compile_and_writes_only_a_verified_artifact() {
+        let temporary = TemporaryDirectory::create();
+        let target = compile_to_bytecode(
+            "world target\n\nweave main [] -> Whole:\n  speak \"built by forge\"\n  yield 0\n",
+        )
+        .expect("target source should compile")
+        .bytecode;
+        let compiler_source = format!(
+            "world forge\n\nweave compile [borrow source: Text] -> Bytes:\n  bind target <- bytes \"{}\"\n  yield move target\n\nweave main [] -> Whole:\n  yield 0\n",
+            hex_encode(&target)
+        );
+        let compiler = compile_to_bytecode(&compiler_source)
+            .expect("compiler fixture should compile")
+            .bytecode;
+        let compiler_path = temporary.path.join("compiler.aeth");
+        let source_path = temporary.path.join("input.ae");
+        let output_path = temporary.path.join("output.aeth");
+        fs::write(&compiler_path, compiler).expect("compiler artifact should be written");
+        fs::write(&source_path, "world supplied\n").expect("source input should be written");
+
+        forge(&compiler_path, &source_path, &output_path)
+            .expect("forge should write the compiler result");
+
+        let generated = fs::read(&output_path).expect("forge artifact should be readable");
+        assert_eq!(generated, target);
+        verify_bytecode(&generated).expect("forge output must verify");
+    }
+
+    fn hex_encode(bytes: &[u8]) -> String {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let mut output = String::with_capacity(bytes.len() * 2);
+        for byte in bytes {
+            output.push(char::from(HEX[usize::from(byte >> 4)]));
+            output.push(char::from(HEX[usize::from(byte & 0x0F)]));
+        }
+        output
     }
 }

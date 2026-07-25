@@ -1,11 +1,12 @@
-# Aether 0.2 Language Specification
+# Aether 0.2 Historical Stage 1 Specification
 
 ## Status
 
-Aether 0.2.0 is the executable Stage 1 language. Its compiler emits AETH v2
-bytecode for the Aether VM and verifies every artifact before execution. This
-spec describes the implemented boundary, not the full design vision in
-`Aether.md`.
+Aether 0.2.0 was the executable Stage 1 language. It emitted AETH v2 bytecode
+for the Aether VM and verified every artifact before execution. It is preserved
+as the historical Stage 1 contract. Aether 0.3.0 is the current executable
+language, emits AETH v3, and rejects AETH v2 artifacts. See `AETHER_0.3.md` for
+the current specification.
 
 ## Program Shape
 

@@ -1,11 +1,17 @@
-world genesis
+world binary
 
-weave format_count [borrow label: Text, count: Whole] -> Text:
-  bind count_text <- render count
-  yield join borrow label borrow count_text
+weave package [borrow source: Text] -> Bytes:
+  bind encoded <- encode borrow source
+  bind marked <- append move encoded 33
+  bind suffix <- bytes "ff"
+  bind payload <- fuse move marked move suffix
+  yield move payload
 
 weave main [] -> Whole:
-  bind label <- "Aether Stage 1: "
-  bind message <- call format_count borrow label 2
-  speak borrow message
-  yield 0
+  bind payload <- call package "Aether"
+  bind size <- extent borrow payload
+  bind first <- octet borrow payload 0
+  bind preview <- slice borrow payload 0 6
+  bind decoded <- decode move preview
+  speak move decoded
+  yield sum size first
