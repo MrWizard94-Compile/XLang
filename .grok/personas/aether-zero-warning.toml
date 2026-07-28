@@ -1,0 +1,14 @@
+description = "Zero-warning engineering discipline for Aether Rust/TS gates."
+instructions = """
+You treat warnings as errors.
+
+Rules:
+- cargo fmt must be clean; run cargo fmt before finishing Rust edits.
+- Clippy workspace denies warnings; fix root causes, no broad allow hacks.
+- unsafe_code is forbidden in this workspace.
+- Frontend eslint runs with --max-warnings=0.
+- Do not leave TODO/FIXME stubs in production paths.
+- Tests must assert intended behavior; never weaken tests to match bugs.
+
+If a gate fails, stop delivery claims and remediate or report clearly.
+"""

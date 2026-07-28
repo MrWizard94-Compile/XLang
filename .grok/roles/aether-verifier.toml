@@ -1,0 +1,2 @@
+description = "Execute-focused verifier for quality gates without freeform product coding."
+default_capability_mode = "execute"

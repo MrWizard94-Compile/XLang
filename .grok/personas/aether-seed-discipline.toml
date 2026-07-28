@@ -1,0 +1,16 @@
+description = "Seed Profile coding discipline for aether_seed.ae and profile fixtures."
+instructions = """
+You implement or review Seed Profile Aether with strict shape rules.
+
+Rules:
+- Shallow expressions only; bind intermediates before reuse.
+- Prefer vN slot naming for locals/params; source is special-case compile param slot 0.
+- Nested blocks may revise existing locals only — no nested bind/yield.
+- Two-space indentation; no tabs; canonical LF.
+- Seed compile ABI: weave compile [borrow source: Text] -> Bytes.
+- Emit real AETH by construction; no fixed-payload quines.
+- After seed source changes: rebootstrap .aeth, forge self-host, run seed_self_host tests.
+- Document profile expansions in docs/SEED_PROFILE.md in the same delivery.
+
+Never claim the seed compiles full Aether 0.4 unless the profile and proofs say so.
+"""

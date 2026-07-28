@@ -51,9 +51,10 @@ Aether parses only Aether source, emits **AETH** bytecode, verifies every
 artifact, and runs it in the Aether VM. It never transpiles source to Rust, C,
 JavaScript, LLVM, or another language.
 
-**Stage status:** Stage 3 (Seed Profile compiler) is implemented. Self-hosting is
-claimed **only** for the Seed Profile with reproducible artifact comparison.
-Full Aether 0.4 remains Rust-bootstrap compiled.
+**Stage status:** Stage 4 (Seed Profile multi-weave + `call`) is implemented.
+Self-hosting is claimed **only** for the Seed Profile with reproducible
+artifact comparison, including multi-weave programs with `call`. Full Aether
+0.4 remains Rust-bootstrap compiled.
 
 ### Product docs (Level 4)
 
@@ -138,3 +139,20 @@ without a documented override.
 | `SOUL.md` | Superseded stub only — do not restore monolith law here |
 
 Product docs stay in this repository. Do not stuff Aether PRDs into the universal pack.
+
+### Specialized Grok subagents (project kit)
+
+Definitions live under [`.grok/`](.grok/) (see [`.grok/README.md`](.grok/README.md)).
+Spawn with `subagent_type` matching the agent `name`. Manage via `/config-agents`.
+
+| Agent | Role |
+|-------|------|
+| `aether-explorer` | Read-only domain map of core, seed, Studio, docs |
+| `aether-core-engineer` | Rust bootstrap compiler / VM / CLI |
+| `aether-seed-engineer` | Aether-written seed + self-host proof |
+| `aether-studio-engineer` | Tauri/React Studio workbench |
+| `aether-spec-writer` | Specs and honest stage/self-host claims |
+| `aether-gate-runner` | Run fmt/clippy/tests/seed forge gates |
+| `aether-reviewer` | Read-only review vs AGENTS + Aether invariants |
+
+Personas: `aether-honest-claims`, `aether-zero-warning`, `aether-seed-discipline`.
