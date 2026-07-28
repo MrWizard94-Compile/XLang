@@ -1,9 +1,20 @@
 use aether_core::{
-    compile_to_bytecode, forge_bytecode, verify_bytecode, InvocationOutput, InvocationValue,
+    compile_to_bytecode, forge_bytecode, run_bytecode, verify_bytecode, InvocationOutput,
+    InvocationValue,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
 const CHECKED_IN_SEED_ARTIFACT: &[u8] = include_bytes!("../../../seed/aether_seed.aeth");
+
+const MULTI_WEAVE_SOURCE: &str = concat!(
+    "world demo\n",
+    "weave double [v0: Whole] -> Whole:\n",
+    "  yield product v0 2\n",
+    "weave main [] -> Whole:\n",
+    "  bind mutable v0 <- call double 21\n",
+    "  speak render v0\n",
+    "  yield v0\n",
+);
 
 #[test]
 fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
@@ -32,8 +43,8 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
     );
 
     let variant = SEED_SOURCE.replacen(
-        "  bind mutable v50 <- 0\n",
-        "  bind mutable v50 <- 0\n  bind mutable v51 <- 0\n",
+        "  bind mutable v65 <- 0\n",
+        "  bind mutable v65 <- 0\n  bind mutable v66 <- 0\n",
         1,
     );
     assert_ne!(
@@ -53,6 +64,33 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
         variant_forged, bootstrap,
         "the compiler must not return a fixed artifact"
     );
+}
+
+#[test]
+fn seed_profile_compiler_forges_multi_weave_calls_byte_identically() {
+    let bootstrap = compile_to_bytecode(SEED_SOURCE)
+        .expect("the checked-in Aether seed source must bootstrap")
+        .bytecode;
+    let multi_bootstrap = compile_to_bytecode(MULTI_WEAVE_SOURCE)
+        .expect("the multi-weave Seed Profile fixture must bootstrap")
+        .bytecode;
+    let multi_forged = bytes(
+        forge_bytecode(&bootstrap, MULTI_WEAVE_SOURCE)
+            .expect("the seed compiler must forge multi-weave Seed Profile programs"),
+    );
+    verify_bytecode(&multi_forged).expect("the multi-weave Aether-produced artifact must verify");
+    assert_eq!(
+        multi_forged, multi_bootstrap,
+        "seed multi-weave forge must match bootstrap byte-for-byte"
+    );
+    assert_ne!(
+        multi_forged, bootstrap,
+        "the multi-weave fixture must not collapse to the seed artifact"
+    );
+
+    let run = run_bytecode(&multi_forged).expect("the multi-weave artifact must run");
+    assert_eq!(run.exit_code, 42);
+    assert_eq!(run.stdout, "42");
 }
 
 fn bytes(output: InvocationOutput) -> Vec<u8> {

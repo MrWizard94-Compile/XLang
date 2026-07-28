@@ -5,16 +5,16 @@ Aether 0.4.0 parses only Aether source, emits deterministic AETH v4 bytecode,
 verifies every artifact, and runs it in the Aether VM. It never translates
 source to Rust, C, JavaScript, LLVM, or another language.
 
-## Stage 3: Seed Compiler
+## Stage 4: Multi-Weave Seed Profile
 
-Stage 3 adds ordinary language primitives for bounded text search and binary
-construction: `seek`, `number`, `pack16`, `pack32`, `pack64`, `unpack16`,
-`unpack32`, `poke`, and `poke32`. They are VM operations available to every
-Aether program, not a compiler host callback.
+Stage 4 expands the Aether-written Seed Profile compiler so it compiles
+multi-weave programs with `call`, while still self-hosting. Stage 3 remains the
+foundation: bounded `seek` / `number` / pack / unpack / poke primitives used by
+the seed to build AETH v4 without a host parser callback.
 
 The checked-in [seed/aether_seed.ae](seed/aether_seed.ae) is an Aether-written
 compiler for the documented Seed Profile. Its verified artifact is
-[seed/aether_seed.aeth](seed/aether_seed.aeth). The regression test proves:
+[seed/aether_seed.aeth](seed/aether_seed.aeth). The regression tests prove:
 
 1. Rust bootstrap compilation of the seed source equals the checked-in artifact.
 2. `aether forge` invokes that artifact to compile the same source.
@@ -22,11 +22,13 @@ compiler for the documented Seed Profile. Its verified artifact is
    bootstrap artifact.
 4. The forged compiler creates a distinct, valid artifact for a source variant,
    so it is not returning a fixed stored artifact.
+5. The seed forges a multi-weave program with `call` byte-identically to
+   bootstrap; the artifact runs with the expected stdout and exit code.
 
-This is a precise self-hosting claim for the Seed Profile only. The complete
-Aether 0.4 language remains bootstrapped by the Rust core. See
-[docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) for the accepted subset and its
-limits.
+This is a precise self-hosting claim for the Seed Profile only (now including
+multi-weave + `call`). The complete Aether 0.4 language remains bootstrapped by
+the Rust core. See [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) for the accepted
+subset and its limits.
 
 ## Workspace
 

@@ -73,11 +73,14 @@ without granting an artifact host capabilities.
 
 ## Seed-Profile Self-Hosting Boundary
 
-Stage 3 adds ordinary language primitives (`seek`, `number`, packing, unpacking,
-and poke forms) that any Aether program may use. The Aether-written seed
-compiler in `seed/aether_seed.ae` uses those primitives to parse the Seed
-Profile and construct AETH v4 bytes. Self-hosting is claimed only for that
-profile: bootstrap compile, forge rebuild, and second-generation forge must all
+Stage 3 added ordinary language primitives (`seek`, `number`, packing, unpacking,
+and poke forms) that any Aether program may use. Stage 4 expands the
+Aether-written seed compiler in `seed/aether_seed.ae` so the Seed Profile
+includes multi-weave programs and `call`: it parses weave headers, accumulates
+a full AETH v4 function table, and resolves callees by declaration order. The
+seed still uses only ordinary VM primitives—no host parser callback.
+Self-hosting is claimed only for that profile: bootstrap compile, forge rebuild,
+and second-generation forge must all
 match byte-for-byte, and a distinct source variant must produce a different
 verified artifact.
 

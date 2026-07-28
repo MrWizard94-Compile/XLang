@@ -1,7 +1,8 @@
 # Forge Contract
 
-Status: implemented host ABI for Aether 0.4.0 Stage 3. Supports Seed-Profile
-self-hosting proofs; does not grant host capabilities to artifacts.
+Status: implemented host ABI for Aether 0.4.0 Stage 4. Supports Seed-Profile
+self-hosting proofs (including multi-weave + `call`); does not grant host
+capabilities to artifacts.
 
 ## Command
 
@@ -46,12 +47,14 @@ writing after verification.
 
 ## Seed-Profile Use
 
-Stage 3 uses this contract for the checked-in seed compiler:
+Stage 4 uses this contract for the checked-in seed compiler:
 
 1. Bootstrap-compile `seed/aether_seed.ae` with the Rust core.
 2. Forge that artifact against the same source.
 3. Require byte-identical output and successful verification.
 4. Forge a second generation and a distinct source variant (regression test).
+5. Forge a multi-weave Seed Profile program with `call` and require
+   byte-identical bootstrap match plus a successful run.
 
 Matching bytes under this ABI is the only accepted self-hosting evidence for the
 Seed Profile. See [SEED_PROFILE.md](SEED_PROFILE.md).

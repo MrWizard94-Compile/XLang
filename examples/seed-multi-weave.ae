@@ -1,0 +1,9 @@
+world demo
+
+weave double [v0: Whole] -> Whole:
+  yield product v0 2
+
+weave main [] -> Whole:
+  bind mutable v0 <- call double 21
+  speak render v0
+  yield v0

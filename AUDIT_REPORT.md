@@ -1,6 +1,6 @@
 # Aether Migration Audit
 
-Date: 2026-07-28 (Stage 3 update)
+Date: 2026-07-28 (Stage 4 update)
 
 ## Legacy Intake
 
@@ -18,12 +18,12 @@ canonical AST and deterministic AETH v4 bytecode artifact, verifies that
 artifact, and runs it in the Aether VM. The command line and desktop app call
 the same compiler core.
 
-Stage 3 extends Stage 2 with bounded text search and binary construction
-primitives (`seek`, `number`, `pack*`, `unpack*`, `poke*`), AETH v4, and an
-Aether-written Seed Profile compiler with reproducible self-compilation proof.
-Legacy C-shaped, Rust-shaped, V1, V2, and pre-v4 AETH input remains intentionally
-rejected. The repository does not transpile Aether to C, Rust, JavaScript, LLVM,
-or another target language.
+Stage 4 extends the Stage 3 Seed Profile compiler with multi-weave emission and
+`call`, while retaining the Stage 3 bounded text/binary primitives (`seek`,
+`number`, `pack*`, `unpack*`, `poke*`), AETH v4, and reproducible
+self-compilation proof. Legacy C-shaped, Rust-shaped, V1, V2, and pre-v4 AETH
+input remains intentionally rejected. The repository does not transpile Aether
+to C, Rust, JavaScript, LLVM, or another target language.
 
 `aether forge` verifies a compiler artifact, requires
 `compile [borrow source: Text] -> Bytes`, gives it the source text, verifies the
@@ -32,9 +32,10 @@ returned artifact bytes, and writes only a verified result.
 ## Seed-Profile Self-Hosting Boundary
 
 `seed/aether_seed.ae` is source in Aether. It parses the documented Seed Profile
-and emits AETH v4 through ordinary language operations. The regression test
-proves bootstrap, first forge, and second forge match the checked-in artifact,
-and that a distinct source variant produces a different verified artifact.
+(including multi-weave programs with `call`) and emits AETH v4 through ordinary
+language operations. The regression tests prove bootstrap, first forge, and
+second forge match the checked-in artifact; a distinct source variant produces a
+different verified artifact; and multi-weave + `call` forge matches bootstrap.
 
 This is self-hosting for the Seed Profile only. Full Aether 0.4 remains
 bootstrap-hosted. Scope: [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).

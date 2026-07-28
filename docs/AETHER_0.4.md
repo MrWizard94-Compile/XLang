@@ -1,6 +1,7 @@
 # Aether 0.4 Language Specification
 
-Status: executable Stage 3 Seed Compiler specification, 2026-07-25.
+Status: executable Aether 0.4 specification with Stage 4 Seed Profile
+self-hosting subset, 2026-07-28.
 
 Aether 0.4.0 emits AETH v4 bytecode for the Aether VM and verifies every
 artifact before it runs. It is a new language with an Aether-owned artifact

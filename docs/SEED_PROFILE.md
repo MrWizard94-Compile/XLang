@@ -1,6 +1,6 @@
 # Aether Seed Profile
 
-Status: normative Stage 3 self-hosting subset, 2026-07-28.
+Status: normative Stage 4 self-hosting subset, 2026-07-28.
 
 This document defines the **Seed Profile**: the only language subset for which
 this repository claims reproducible self-hosting. Full Aether 0.4 remains
@@ -16,6 +16,8 @@ self-hosting claim.
 3. Emits a complete AETH **v4** artifact through ordinary `Bytes` operations.
 4. Exposes the forge ABI `weave compile [borrow source: Text] -> Bytes`.
 5. Rebuilds its own source byte-for-byte under `aether forge`.
+6. Compiles multi-weave Seed Profile programs with `call`, matching bootstrap
+   output byte-for-byte.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
@@ -25,23 +27,28 @@ artifact `seed/aether_seed.aeth`.
 A Seed Profile program must contain:
 
 - One `world` line (name is accepted but not used by the seed emitter).
-- Exactly the forge-facing weave:
-
-      weave compile [borrow source: Text] -> Bytes:
-
+- One or more weaves declared at indentation level zero.
 - Exactly one runnable main:
 
       weave main [] -> Whole:
 
-The seed compiler always emits those two weaves in the artifact. The emitted
-`main` is a fixed `yield 0` body. The emitted `compile` body is derived from the
-`compile` weave in the source.
+The forge-facing compiler shape used by the seed itself remains:
 
-## Locals
+      weave compile [borrow source: Text] -> Bytes:
 
-- Root locals are fixed slots named `vN` where `N` is a decimal whole
-  (`v1`, `v2`, …). The name after the leading `v` is parsed with `number`.
-- The compile parameter `source` is slot `0`.
+Input programs are not required to declare `compile`. Weave indices in the
+emitted artifact follow declaration order (0-based). Every weave body is
+compiled from source, including `main`.
+
+## Locals and parameters
+
+- Parameters and locals use fixed slots named `vN` where `N` is a decimal whole
+  and equals the slot index (`v0` is the first parameter or local).
+- The compile parameter name `source` is also accepted as slot `0`.
+- Parameter lists may include multiple entries separated by commas. Optional
+  `borrow` ownership is accepted for `Text` / `Bytes` parameters; owned is the
+  default.
+- Result types are `Text`, `Whole`, `Truth`, or `Bytes`.
 - Nested blocks may `revise` existing locals but must not introduce bindings.
 - `bind` / `bind mutable` establish locals; `revise` replaces a live local.
 
@@ -74,18 +81,38 @@ Supported operations (by seed emitter opcode mapping):
 - Binary: `sum`, `difference`, `product`, `less`, `same`, `join`, `glyph`,
   `quotient`, `remainder`, `fuse`, `append`, `octet`, `unpack16`, `unpack32`
 - Ternary: `cut`, `slice`, `seek`, `poke`, `poke32`
+- Call: `call weave_name args...` emits `OP_CALL` (21), the callee's declaration
+  index as `u16`, and argument count as `u8`. Callees must be declared before
+  the call site (single-pass name table). Result type is the callee weave
+  result.
 - Atoms: decimal `Whole` literals (optional leading `-`), `bright` / `dim`,
   text literals, `bytes "hex..."`, and `borrow` / `move` of `source` or `vN`
+
+## Multi-weave emission
+
+The seed keeps a function-table accumulator. On each new weave declaration and
+at end of source it flushes the previous weave record:
+
+- name length and ASCII name
+- parameter count, then `(type, mode)` pairs
+- result type
+- local count, then `(type, mutable)` pairs (parameters occupy the leading slots)
+- code length and instruction bytes
+
+The final artifact is `AETH` + version `4` + function count + the accumulated
+function table. This replaces the Stage 3 fixed two-weave (`compile` + synthetic
+`main`) emitter.
 
 ## Explicit non-goals
 
 The Seed Profile compiler does **not** claim support for:
 
-- Arbitrary multi-weave libraries or user-defined call graphs (`call` is not
-  implemented in the seed emitter)
+- Forward `call` to weaves declared later in the file (bootstrap full Aether
+  allows any order; the seed is single-pass)
 - Nested expression trees
 - Nested binding introduction
 - Host I/O, networking, or model access
+- CRLF source normalization (Seed Profile sources should use LF line endings)
 - Full Aether diagnostic fidelity (invalid Seed Profile input may fail late or
   produce a rejectable artifact; the bootstrap compiler remains the complete
   diagnostic authority for full Aether 0.4)
@@ -103,7 +130,8 @@ Get-FileHash .\target\aether_seed.aeth, .\target\aether_seed.forged.aeth, .\seed
 
 All three SHA-256 digests must match. The regression test also forges a nearby
 source variant and requires a different verified artifact so the compiler cannot
-return a fixed stored payload.
+return a fixed stored payload. A second regression forges a multi-weave program
+with `call` and requires byte identity with bootstrap plus a successful run.
 
 ## Authority
 
