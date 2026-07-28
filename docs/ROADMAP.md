@@ -32,7 +32,7 @@ immutable nominal records. Its exact executable scope is
 | ID | Milestone | Dependency | Primary deliverable | Done only when | Status |
 | --- | --- | --- | --- | --- | --- |
 | M0 | Research, design foundation, and evidence register | None | Reference study, component matrix, north star, claims, ADR, and this roadmap. | Cross-links/claims are consistent, source-backed, and current-vs-future boundaries are explicit. | **This delivery** |
-| M1 | Value and resource semantic specification | M0 | A precise ownership, borrow, move, mutation, escape, dynamic-aggregate, and destruction design; typed semantic-IR proposal. | Rules have counterexamples, negative compile cases, verifier consequences, seed feasibility plan, and human approval of the chosen model. | **Next design decision** |
+| M1 | Value and resource semantic specification | M0 | A precise ownership, borrow, move, mutation, escape, dynamic-aggregate, and destruction design; typed semantic-IR proposal. | Rules have counterexamples, negative compile cases, verifier consequences, seed feasibility plan, and human approval of the chosen model. | **Decision package delivered — awaiting human approval** |
 | M2 | Explicit allocation and bounded dynamic aggregates | M1 | Allocator/arena capability API plus one representative dynamic collection. | No ambient allocation in the language API; deterministic OOM/cleanup behavior; ownership/escape tests; seed/bootstrap parity; docs/ADR synchronized. | Planned |
 | M3 | Versioned structural authoring contract | M1 | Machine-readable semantic AST schema, diagnostic code/span contract, and a small validated edit protocol. | Round-trip corpus, stale/malformed-edit rejection, canonical formatting, local-only storage behavior, and CLI/Studio contract tests. | Planned |
 | M4 | Typed errors and effects | M1 | Error/effect semantics with one bounded handled/forwarded/rejected capability. | The type/effect checker, diagnostics, ownership interactions, verifier representation, and seed proof agree; no hidden exception route. | Research-gated |
@@ -48,16 +48,25 @@ immutable nominal records. Its exact executable scope is
 
 This is the next design decision because every original pillar depends on it.
 The work is a specification and bounded proof plan, not a broad code rewrite.
-It must decide:
+The proposed package is [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md),
+[ADR-003](ADR-003-value-resource-semantics.md),
+[M1 validation matrix](M1-VALIDATION-MATRIX.md), and
+[value/resource research](research/04-value-resource-models.md). It recommends
+owned values, non-escaping `borrow`/`access` loans, explicit bounded arenas,
+closed allocation outcomes, and logical destruction without user code. The
+model is **Proposed**, not accepted or implemented.
 
-- whether the current `borrow`/`move` surface evolves into mutable value
-  semantics, and what constitutes copy, projection, revise, and destruction;
-- which values can be dynamic or recursively composed, and how their size and
-  escape behavior is represented;
-- how a future allocator capability travels through calls without an ambient
-  default;
-- which invariants must be enforced by the source validator, semantic IR, AETH
-  verifier, VM, seed compiler, and forge/host ABI.
+Human approval must affirm or alter the following proposed rules:
+
+- `Whole`/`Truth` copy; owners use explicit `borrow`/`move`; `access` is the
+  only non-escaping exclusive capability loan; and `revise` is failure-atomic;
+- M2 dynamic storage is one fixed-capacity, named arena and a Copy-element
+  `Buffer`, with no recursive values, dynamic record fields, manual free, or
+  host ABI crossing;
+- allocation has a closed `allocated`/`exhausted` outcome and no ambient
+  allocator, fallback, panic, or host exception path; and
+- source validator, typed semantic IR, new AETH version/verifier, VM, seed,
+  forge boundary, and proof corpus enforce the same ownership/region contract.
 
 **M1 stop-ship conditions:** reliance on untracked global lifetime inference,
 implicit allocation, an ambiguous destruction rule, host capability leakage, or
@@ -121,7 +130,9 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Before any semantic implementation, prepare M1 as a decision package: a
-complete resource/ownership proposal with examples, counterexamples, affected
-compiler layers, seed feasibility, security implications, tests, and an ADR.
-That package is the next item requiring a human design decision.
+Review and approve, reject, or refine the M1 model in
+[ADR-003](ADR-003-value-resource-semantics.md). No semantic implementation
+begins until that human decision is recorded. If accepted, M2 starts as one
+complete bounded increment: explicit arena resource plan, one copy-element
+buffer, source/IR/verifier/VM/seed proof, hostile-artifact tests, and
+documentation synchronization.

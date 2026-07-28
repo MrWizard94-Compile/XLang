@@ -24,7 +24,9 @@ flowchart LR
 This document describes the implemented Aether 0.5 architecture. The broader
 AI-first systems-language direction is documented separately in
 [NORTH_STAR.md](NORTH_STAR.md), [CORE_CLAIMS.md](CORE_CLAIMS.md), and
-[ROADMAP.md](ROADMAP.md). In particular, Aether 0.5 has no explicit allocator
+[ROADMAP.md](ROADMAP.md). The proposed (not implemented) M1 ownership/arena
+model is [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md).
+In particular, Aether 0.5 has no explicit allocator
 API, typed effects, structured concurrency, generic shape folding, SoA lowering,
 C-header ingestion, structural-edit protocol, or native backend. Aether source
 continues to emit AETH only; future designs may not bypass verifier, forge, or

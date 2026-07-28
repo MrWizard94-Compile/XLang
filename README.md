@@ -53,6 +53,9 @@ set in this order:
    decomposition, and evidence plan.
 4. [docs/ROADMAP.md](docs/ROADMAP.md) — approved dependency order for future
    language work.
+5. [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md)
+   — proposed owned-value, loan, arena, destruction, and allocation-outcome
+   model; it is awaiting human approval and is not Aether 0.5 behavior.
 
 These documents do not claim that proposed allocators, effects, concurrency,
 SoA lowering, C interop, structural edits, or a native backend exist in 0.5.

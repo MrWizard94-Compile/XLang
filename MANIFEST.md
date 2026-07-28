@@ -14,6 +14,9 @@ does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
 [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
+The proposed M1 resource model is
+[docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md)
+and remains pending human approval.
 Proposed explicit allocators, typed effects, structured concurrency, generic
 shape/layout work, C interop, and structural editing are not Aether 0.5 surface
 area unless this manifest and the versioned language specification say so.
