@@ -1,7 +1,7 @@
 # Aether 0.4 Language Specification
 
-Status: executable Aether 0.4 specification with Stage 4 Seed Profile
-self-hosting subset, 2026-07-28.
+Status: executable Aether 0.4 specification with Stage 5 canonical-surface
+Seed Profile emission parity, 2026-07-28.
 
 Aether 0.4.0 emits AETH v4 bytecode for the Aether VM and verifies every
 artifact before it runs. It is a new language with an Aether-owned artifact
@@ -80,9 +80,11 @@ functions without a reachable terminal `yield`.
 ## Bootstrap Status
 
 The Rust core remains the complete Aether 0.4 bootstrap compiler and VM.
-`seed/aether_seed.ae` is an Aether-written compiler for the narrower Seed
-Profile, with reproducible byte-for-byte self-compilation proof. The scope and
-limitations of that profile are normative in [SEED_PROFILE.md](SEED_PROFILE.md).
+`seed/aether_seed.ae` emits the complete documented canonical Aether 0.4 source
+surface byte-identically to Rust, with reproducible self-compilation proof. Rust
+remains the invalid-source diagnostic authority and seed rebuild path; full
+diagnostic parity is not claimed. The profile boundary is normative in
+[SEED_PROFILE.md](SEED_PROFILE.md).
 
 `AETHER_0.3.md` is retained as a historical Stage 2 specification and is
 superseded by this document.

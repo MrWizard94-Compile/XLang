@@ -1,7 +1,7 @@
 # Forge Contract
 
-Status: implemented host ABI for Aether 0.4.0 Stage 4. Supports Seed-Profile
-self-hosting proofs (including multi-weave + `call`); does not grant host
+Status: implemented host ABI for Aether 0.5.0 Stage 5. Supports complete
+canonical Aether 0.4 Seed Profile self-hosting proofs; does not grant host
 capabilities to artifacts.
 
 ## Command
@@ -47,21 +47,23 @@ writing after verification.
 
 ## Seed-Profile Use
 
-Stage 4 uses this contract for the checked-in seed compiler:
+Stage 5 uses this contract for the checked-in seed compiler:
 
 1. Bootstrap-compile `seed/aether_seed.ae` with the Rust core.
 2. Forge that artifact against the same source.
 3. Require byte-identical output and successful verification.
 4. Forge a second generation and a distinct source variant (regression test).
-5. Forge a multi-weave Seed Profile program with `call` and require
+5. Forge multi-weave Seed Profile programs with `call` and require
    byte-identical bootstrap match plus a successful run.
+6. Compare a complete canonical Aether 0.4 surface corpus against bootstrap,
+   including text escapes and a final source line without a terminator.
 
 Matching bytes under this ABI is the only accepted self-hosting evidence for the
 Seed Profile. See [SEED_PROFILE.md](SEED_PROFILE.md).
 
 ## Current Limitation
 
-Full-language self-hosting still requires an Aether compiler whose accepted
-surface equals Aether 0.4, with the same reproducible comparison standard. The
-Rust bootstrap compiler remains the complete implementation for the full
-language.
+Canonical Aether 0.4 source-emission parity is proven under this contract. This
+does not claim parity for invalid-source diagnostics: the Rust bootstrap remains
+the diagnostic authority. Any future language extension must meet the same
+reproducible comparison standard before it joins the seed product path.

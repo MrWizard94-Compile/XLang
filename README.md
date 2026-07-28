@@ -14,20 +14,23 @@ source to Rust, C, JavaScript, LLVM, or another language.
   forge ABI.
 - The Rust core remains the **bootstrap**: rebuild the seed (`compile --bootstrap`),
   produce the AST for `check`, and verify seed output against bootstrap in tests.
-- The seed self-hosts and, for every shipped example, produces bytecode
-  **byte-identical** to the Rust bootstrap.
+- The seed self-hosts, and the shipped examples plus a complete canonical-surface
+  regression corpus produce bytecode **byte-identical** to the Rust bootstrap.
 
-Seed Profile Stage 5 includes named locals/parameters (not only `vN`), multi-weave
-`call` (including forward callees), hex `bytes "..."` literals, UTF-8 text
-constants with correct byte lengths, and CRLF input. See
-[docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+Seed Profile Stage 5 emits the complete documented **canonical Aether 0.4 source
+surface**: named locals/parameters (not only `vN`), every statement and shallow
+expression family, `borrow`/`move`, multi-weave `call` (including forward
+callees), hex `bytes "..."` literals, UTF-8 text constants, the canonical
+`\\`, `\"`, `\n`, `\r`, and `\t` text escapes, and CRLF or LF input (including a
+valid final line without a terminal LF). See [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ### Still honest limits
 
-- Seed diagnostic fidelity is weaker than the Rust bootstrap (`aether check`).
-- Prefer a trailing LF on the last source line for the seed line scanner.
-- Expanding Seed Profile until it is the full language remains future work;
-  bootstrap rebuild of the seed is still required when the seed source changes.
+- Full invalid-source diagnostic parity is not claimed; the Rust bootstrap
+  remains the diagnostic authority (`aether check`).
+- Future language extensions require their own seed-emission parity proof before
+  they become part of the product compile surface.
+- Bootstrap rebuild of the seed is still required after changing the seed source.
 
 ## Workspace
 

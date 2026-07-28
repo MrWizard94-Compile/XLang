@@ -20,7 +20,8 @@ Bounded facilities include `encode`, `decode`, `extent`, `octet`, `slice`,
 
 Source is UTF-8. Names and keywords are lowercase ASCII. Canonical formatting
 uses LF, exact two-space indentation, no tabs, and no trailing whitespace. CRLF
-input is accepted by bootstrap formatters and by the seed line scanner.
+input is accepted by bootstrap formatters and by the seed line scanner; a valid
+final source line need not end in a terminal LF.
 
 AETH v4 only. Earlier versions are rejected.
 
@@ -37,10 +38,12 @@ The seed artifact is checked in at `seed/aether_seed.aeth` and embedded as
 
 ## Seed-Profile Self Hosting
 
-`seed/aether_seed.ae` parses the Seed Profile (named locals/params, multi-weave
-`call` including forward callees, hex bytes literals, UTF-8 text constants,
-CRLF). It emits AETH v4 through ordinary `Bytes` operations with no host parser
-callback.
+`seed/aether_seed.ae` parses the complete documented canonical Aether 0.4
+surface: all statement and shallow expression forms, named locals/params,
+`borrow`/`move`, multi-weave `call` including forward callees, hex bytes
+literals, UTF-8 text constants with the five defined escapes, and LF/CRLF input
+with or without a final line terminator. It emits AETH v4 through ordinary
+`Bytes` operations with no host parser callback.
 
 Proofs in `crates/xlang-core/tests/seed_self_host.rs`:
 
@@ -48,10 +51,13 @@ Proofs in `crates/xlang-core/tests/seed_self_host.rs`:
 2. Distinct source variant yields a different artifact
 3. Multi-weave, forward-call, and CRLF fixtures match bootstrap
 4. **All shipped `examples/*.ae` seed-compile byte-identically to bootstrap**
+5. A complete canonical-surface corpus covering every statement, expression,
+   ownership mode, literal mode, and accepted line termination matches bootstrap
 
-This is self-hosting of the Seed Profile **and** seed-hosted compilation of the
-shipped example corpus. It is **not** a claim that every future language feature
-or full diagnostic surface is seed-implemented without bootstrap assistance.
+This is full canonical Aether 0.4 source-emission parity, self-hosting of the
+seed, and seed-hosted compilation of the shipped example corpus. It is **not** a
+claim of full invalid-source diagnostic parity or of parity for future language
+features without the same proof.
 
 ## AI Boundary
 

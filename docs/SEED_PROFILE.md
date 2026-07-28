@@ -1,25 +1,33 @@
 # Aether Seed Profile
 
-Status: normative Stage 5 Seed Profile (named locals + product compile path), 2026-07-28.
+Status: normative Stage 5 Seed Profile (complete canonical 0.4 source surface + product compile path), 2026-07-28.
 
-This document defines the **Seed Profile**: the Aether subset implemented by
-`seed/aether_seed.ae`. Product `compile` uses this profile via the seed artifact.
-Rust bootstrap remains for seed rebuild, `check` AST, and dual-compare proofs.
-A Seed Profile claim is not a claim of full bootstrap diagnostic parity.
+This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
+It covers the complete documented canonical Aether 0.4 source surface. Product
+`compile` uses this profile via the seed artifact. Rust bootstrap remains for
+seed rebuild, `check` AST, and dual-compare proofs. A Seed Profile claim is not
+a claim of full bootstrap diagnostic parity for invalid input.
+
+Here, *canonical* means the Aether 0.4 grammar and formatting constraints in
+[AETHER_0.4.md](AETHER_0.4.md): shallow prefix expressions, exact indentation,
+and root-only bindings. The profile does not expand that language surface.
 
 ## Claim
 
 `seed/aether_seed.ae` is an Aether-written compiler that:
 
-1. Accepts Seed Profile source as `Text`.
+1. Accepts complete canonical Aether 0.4 source as `Text`.
 2. Parses statements and expressions itself (no host parser callback).
 3. Emits a complete AETH **v4** artifact through ordinary `Bytes` operations.
 4. Exposes the forge ABI `weave compile [borrow source: Text] -> Bytes`.
 5. Rebuilds its own source byte-for-byte under `aether forge`.
-6. Compiles multi-weave Seed Profile programs with `call` (including forward
-   calls to weaves declared later), matching bootstrap output byte-for-byte.
-7. Accepts CRLF or LF line endings in Seed Profile input (canonical emission is
-   independent of host newline style).
+6. Compiles every documented canonical statement, shallow expression, literal,
+   ownership mode, and multi-weave program (including forward calls to weaves
+   declared later), matching bootstrap output byte-for-byte.
+7. Accepts CRLF or LF line endings, including a valid final source line without
+   a line terminator; canonical emission is independent of host newline style.
+8. Decodes the Aether text escapes `\\`, `\"`, `\n`, `\r`, and `\t` before
+   recording UTF-8 byte lengths.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
@@ -55,8 +63,9 @@ compiled from source, including `main`.
 - Result types are `Text`, `Whole`, `Truth`, or `Bytes`.
 - Nested blocks may `revise` existing locals but must not introduce bindings.
 - `bind` / `bind mutable` establish locals; `revise` replaces a live local.
-- Hex `bytes "ff…"` literals decode to raw bytes; text literals record **byte**
-  length of UTF-8 content (not scalar count).
+- Hex `bytes "ff…"` literals decode to raw bytes. Text literals decode the five
+  defined escapes (`\\`, `\"`, `\n`, `\r`, `\t`) and record **byte** length of
+  UTF-8 content after decoding (not scalar count).
 
 ## Statements
 
@@ -92,7 +101,8 @@ Supported operations (by seed emitter opcode mapping):
   name and result type so forward calls are allowed. Result type is the callee
   weave result.
 - Atoms: decimal `Whole` literals (optional leading `-`), `bright` / `dim`,
-  text literals, `bytes "hex..."`, and `borrow` / `move` of `source` or `vN`
+  text literals, `bytes "hex..."`, ordinary names for copyable values, and
+  `borrow` / `move` of declared `Text` or `Bytes` locals and parameters
 
 ## Multi-weave emission
 
@@ -111,17 +121,16 @@ function table. This replaces the Stage 3 fixed two-weave (`compile` + synthetic
 
 ## Explicit non-goals
 
-The Seed Profile compiler does **not** claim support for:
+Seed parity does not change Aether 0.4 language rules. In particular, nested
+expression trees and nested binding introduction remain outside the language
+grammar rather than Seed Profile exclusions. The Seed Profile compiler does
+**not** claim support for:
 
-- Nested expression trees
-- Nested binding introduction
 - Host I/O, networking, or model access
 - Full Aether diagnostic fidelity (invalid Seed Profile input may fail late or
   produce a rejectable artifact; the bootstrap compiler remains the complete
-  diagnostic authority for full Aether 0.4)
-- Sources that omit a final line terminator on the last statement line (prefer a
-  trailing LF; bootstrap is more tolerant than the seed line scanner)
-- Self-hosting of the complete language surface
+  diagnostic authority for invalid Aether 0.4 input)
+- Future Aether language extensions until they meet the same byte-identity proof
 
 ## Reproducibility procedure
 
@@ -140,6 +149,8 @@ All three SHA-256 digests must match. The regression tests also forge:
 3. A forward-call program (callee after caller) and a CRLF multi-weave source.
 4. Every shipped `examples/*.ae` file seed-compiles byte-identically to bootstrap
    (`compile_with_seed`).
+5. A canonical-surface corpus covering every statement, expression, ownership
+   mode, literal mode, and final-line termination behavior.
 
 ## Authority
 

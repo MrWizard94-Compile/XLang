@@ -80,13 +80,16 @@ Stage 5 makes the Aether-written seed the **default product compiler**:
 - CLI `compile --bootstrap` and `check` still use the Rust bootstrap for seed
   rebuild and AST diagnostics.
 
-The Seed Profile includes named locals/params, multi-weave `call` (forward
-callees), hex `bytes` literals, UTF-8 text constants with byte lengths, and CRLF
-input. Self-host and shipped-example dual-compare proofs live in
-`seed_self_host.rs`. See [SEED_PROFILE.md](SEED_PROFILE.md).
+The Seed Profile emits the complete documented canonical Aether 0.4 source
+surface: all statement and shallow expression families, named locals/params,
+`borrow`/`move`, multi-weave `call` (including forward callees), hex `bytes`
+literals, UTF-8 text constants with all defined escapes, and LF/CRLF input with
+or without a final line terminator. Self-host, shipped-example, and
+canonical-surface dual-compare proofs live in `seed_self_host.rs`. See
+[SEED_PROFILE.md](SEED_PROFILE.md).
 
-Bootstrap is not gone: it rebuilds the seed and dual-checks proofs. Product
-bytecode for examples and ordinary programs is seed-produced.
+Bootstrap is not gone: it rebuilds the seed, supplies the full invalid-source
+diagnostic path, and dual-checks proofs. Product bytecode is seed-produced.
 
 ## Desktop Boundary
 
@@ -108,5 +111,6 @@ in compilation, forge invocation, or execution.
 ## Bootstrap Boundary
 
 The Rust core remains the Aether 0.5 bootstrap implementation and VM, required to
-rebuild the seed artifact. Product compilation is seed-hosted. Further Seed
-Profile expansion must keep self-host and example dual-compare proofs green.
+rebuild the seed artifact and diagnose invalid source. Product compilation is
+seed-hosted. Future language extensions must keep self-host, example, and
+canonical-surface dual-compare proofs green before entering the product path.

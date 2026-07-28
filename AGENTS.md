@@ -54,8 +54,9 @@ JavaScript, LLVM, or another language.
 **Stage status:** Stage 5 (seed-hosted product compile path) is implemented.
 Default CLI/Studio compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
-proof dual-compare. Seed Profile self-host + all shipped examples match
-bootstrap byte-for-byte. Full diagnostic parity is not claimed for the seed.
+proof dual-compare. Seed Profile self-host, all shipped examples, and the
+complete canonical-surface regression corpus match bootstrap byte-for-byte.
+Full diagnostic parity is not claimed for the seed.
 
 ### Product docs (Level 4)
 
@@ -89,7 +90,7 @@ bootstrap byte-for-byte. Full diagnostic parity is not claimed for the seed.
 1. **Seed-hosted product compile** — CLI/Studio default compile uses the Aether-written seed; bootstrap is not the product compiler path.
 2. **Verify before run / write** — VM and forge only accept verified AETH v4.
 3. **No host capability leak** — invoked artifacts have no file, process, network, or shell authority; forge host owns I/O after verification.
-4. **Honest self-host claims** — Seed Profile + shipped examples match bootstrap in tests; do not claim full diagnostic parity or unlimited language surface without proof.
+4. **Honest self-host claims** — Seed Profile, shipped examples, and the complete documented canonical 0.4 surface match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
 5. **Local-first data** — Studio source/model choices stay in local WebView storage; no cloud sync of source or artifacts.
 6. **Legacy is reference only** — `legacy/` is never a production build input.
 7. **Zero-warning gate** — workspace Clippy `all = "deny"`; `unsafe_code = "forbid"`.

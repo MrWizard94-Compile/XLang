@@ -55,7 +55,7 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
 
     let variant = SEED_SOURCE.replacen(
         "  bind mutable v65 <- 0\n",
-        "  bind mutable v65 <- 0\n  bind mutable v66 <- 0\n",
+        "  bind mutable v65 <- 0\n  bind mutable v69 <- 0\n",
         1,
     );
     assert_ne!(
@@ -181,6 +181,195 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
             "seed-hosted example should produce a Whole exit"
         );
     }
+}
+
+#[test]
+fn seed_profile_matches_bootstrap_across_the_complete_language_surface() {
+    let cases = [
+        (
+            "escaped UTF-8 text",
+            r#"world escaped
+
+weave main [] -> Whole:
+  bind source <- "line\nquote: \" slash: \\ tab:\t return:\r é🙂"
+  bind size <- measure borrow source
+  bind glyph_value <- glyph borrow source 1
+  bind section <- cut borrow source 0 4
+  bind found <- seek borrow source "quote" 0
+  bind score <- sum size glyph_value
+  speak borrow section
+  yield sum score found
+"#,
+        ),
+        (
+            "whole and Truth operations",
+            r#"world arithmetic
+
+weave main [] -> Whole:
+  bind parsed <- number "42"
+  bind added <- sum parsed 8
+  bind subtracted <- difference added 10
+  bind multiplied <- product subtracted 2
+  bind divided <- quotient multiplied 4
+  bind remainder_value <- remainder multiplied 7
+  bind ordering <- less divided multiplied
+  bind equality <- same remainder_value 1
+  bind inverted <- not dim
+  bind rendered <- render multiplied
+  bind mutable result <- 0
+  choose ordering:
+    speak borrow rendered
+  otherwise:
+    speak "unexpected"
+  choose equality:
+    revise result <- sum divided 1
+  otherwise:
+    choose inverted:
+      revise result <- remainder_value
+    otherwise:
+      revise result <- 0
+  yield result
+"#,
+        ),
+        (
+            "Bytes and fixed-width primitives",
+            r#"world binary
+
+weave package [borrow input: Text] -> Bytes:
+  bind encoded <- encode borrow input
+  bind suffix <- bytes "AaFf"
+  bind fused <- fuse move encoded move suffix
+  bind appended <- append move fused 1
+  bind packed16 <- pack16 4660
+  bind packed32 <- pack32 16909060
+  bind packed64 <- pack64 -1
+  bind unpacked16 <- unpack16 borrow packed16 0
+  bind unpacked32 <- unpack32 borrow packed32 0
+  bind patched <- poke borrow packed32 1 255
+  bind restored <- poke32 borrow patched 0 16909060
+  bind equality <- same borrow packed16 borrow packed16
+  bind first <- octet borrow appended 0
+  bind preview <- slice borrow appended 0 2
+  bind decoded <- decode move preview
+  bind mutable output <- bytes ""
+  speak move decoded
+  choose equality:
+    revise output <- borrow appended
+  otherwise:
+    revise output <- bytes ""
+  yield move output
+
+weave main [] -> Whole:
+  bind packet <- call package "é"
+  bind size <- extent borrow packet
+  yield size
+"#,
+        ),
+        (
+            "named parameters, owned values, and forward calls",
+            r#"world calls
+
+weave main [] -> Whole:
+  bind payload <- bytes "00ff"
+  bind label <- "Aether"
+  bind active <- call is_small 7
+  bind result <- call decorate move label active borrow payload 7
+  bind consumed <- call consume move payload
+  speak move result
+  yield consumed
+
+weave is_small [value: Whole] -> Truth:
+  yield less value 8
+
+weave decorate [label: Text, enabled: Truth, borrow payload: Bytes, count: Whole] -> Text:
+  bind size <- extent borrow payload
+  bind count_text <- render count
+  bind size_text <- render size
+  bind mutable output <- ""
+  choose enabled:
+    revise output <- join borrow label borrow count_text
+  otherwise:
+    revise output <- join borrow label borrow size_text
+  yield move output
+
+weave consume [payload: Bytes] -> Whole:
+  yield extent borrow payload
+"#,
+        ),
+        (
+            "nested control flow",
+            r#"world nested
+
+weave main [] -> Whole:
+  bind mutable outer <- 0
+  bind mutable inner <- 0
+  bind mutable total <- 0
+  while less outer 3:
+    revise inner <- 0
+    while less inner 2:
+      choose less inner 1:
+        revise total <- sum total outer
+      otherwise:
+        revise total <- sum total inner
+      revise inner <- sum inner 1
+    revise outer <- sum outer 1
+  yield total
+"#,
+        ),
+        (
+            "identifier forms and optional otherwise",
+            r#"world names_7
+
+weave main [] -> Whole:
+  bind source_value <- "Aether"
+  bind bytes_value <- bytes "00ff"
+  yield call helper_2 borrow source_value 7 bright borrow bytes_value
+
+weave helper_2 [borrow source_value: Text, whole_7: Whole, flag_2: Truth, borrow bytes_1: Bytes] -> Whole:
+  bind text_size <- measure borrow source_value
+  bind byte_size <- extent borrow bytes_1
+  bind mutable result_9 <- whole_7
+  choose flag_2:
+    revise result_9 <- sum text_size byte_size
+  choose not dim:
+    speak "optional otherwise"
+  yield result_9
+"#,
+        ),
+        (
+            "last statement without a trailing line feed",
+            "world final_line\n\nweave main [] -> Whole:\n  bind message <- \"final\"\n  speak borrow message\n  yield 5",
+        ),
+    ];
+
+    for (name, source) in cases {
+        assert_seed_matches_bootstrap(name, source);
+    }
+}
+
+fn assert_seed_matches_bootstrap(name: &str, source: &str) {
+    let bootstrap = compile_to_bytecode(source)
+        .unwrap_or_else(|error| panic!("{name} fixture must bootstrap: {error}"))
+        .bytecode;
+    let seeded = bytes(
+        forge_bytecode(SEED_COMPILER_ARTIFACT, source)
+            .unwrap_or_else(|error| panic!("{name} fixture must forge through the seed: {error}")),
+    );
+
+    verify_bytecode(&seeded)
+        .unwrap_or_else(|error| panic!("{name} seed artifact must verify: {error}"));
+    assert_eq!(
+        seeded, bootstrap,
+        "{name} seed artifact must match bootstrap byte-for-byte"
+    );
+    let seeded_run = run_bytecode(&seeded)
+        .unwrap_or_else(|error| panic!("{name} seed artifact must run: {error}"));
+    let bootstrap_run = run_bytecode(&bootstrap)
+        .unwrap_or_else(|error| panic!("{name} bootstrap artifact must run: {error}"));
+    assert_eq!(
+        seeded_run, bootstrap_run,
+        "{name} seed artifact must preserve bootstrap runtime behavior"
+    );
 }
 
 fn bytes(output: InvocationOutput) -> Vec<u8> {

@@ -66,14 +66,17 @@ weave compile [borrow source: Text] -> Bytes:
   bind mutable v63 <- 0
   bind mutable v64 <- 0
   bind mutable v65 <- 0
+  bind mutable v66 <- ""
   bind mutable v67 <- bytes ""
-  revise v5 <- measure borrow source
+  bind mutable v68 <- ""
+  revise v68 <- join borrow source "\n"
+  revise v5 <- measure borrow v68
   revise v6 <- 0
   revise v7 <- ""
   revise v51 <- bytes ""
   revise v55 <- bytes ""
   while less v6 v5:
-    revise v8 <- glyph borrow source v6
+    revise v8 <- glyph borrow v68 v6
     choose same v8 13:
       revise v30 <- 0
     otherwise:
@@ -126,7 +129,7 @@ weave compile [borrow source: Text] -> Bytes:
         revise v7 <- ""
       otherwise:
         revise v28 <- sum v6 1
-        revise v43 <- cut borrow source v6 v28
+        revise v43 <- cut borrow v68 v6 v28
         revise v7 <- join borrow v7 borrow v43
     revise v6 <- sum v6 1
   revise v6 <- 0
@@ -136,7 +139,7 @@ weave compile [borrow source: Text] -> Bytes:
   revise v59 <- dim
   revise v12 <- dim
   while less v6 v5:
-    revise v8 <- glyph borrow source v6
+    revise v8 <- glyph borrow v68 v6
     choose same v8 13:
       revise v30 <- 0
     otherwise:
@@ -649,13 +652,15 @@ weave compile [borrow source: Text] -> Bytes:
                     revise v31 <- glyph borrow v20 0
                     choose same v31 34:
                       revise v21 <- 1
-                      revise v31 <- glyph borrow v20 v21
-                      revise v40 <- same v31 34
+                      revise v40 <- dim
                       while same v40 dim:
-                        revise v21 <- sum v21 1
                         revise v31 <- glyph borrow v20 v21
-                        revise v40 <- same v31 34
-                      revise v21 <- sum v21 1
+                        choose same v31 92:
+                          revise v21 <- sum v21 1
+                        otherwise:
+                          choose same v31 34:
+                            revise v40 <- bright
+                        revise v21 <- sum v21 1
                     otherwise:
                       revise v21 <- seek borrow v20 " " 0
                       choose same v21 -1:
@@ -692,13 +697,15 @@ weave compile [borrow source: Text] -> Bytes:
                         revise v31 <- glyph borrow v20 0
                         choose same v31 34:
                           revise v21 <- 1
-                          revise v31 <- glyph borrow v20 v21
-                          revise v40 <- same v31 34
+                          revise v40 <- dim
                           while same v40 dim:
-                            revise v21 <- sum v21 1
                             revise v31 <- glyph borrow v20 v21
-                            revise v40 <- same v31 34
-                          revise v21 <- sum v21 1
+                            choose same v31 92:
+                              revise v21 <- sum v21 1
+                            otherwise:
+                              choose same v31 34:
+                                revise v40 <- bright
+                            revise v21 <- sum v21 1
                         otherwise:
                           revise v21 <- seek borrow v20 " " 0
                           choose same v21 -1:
@@ -759,6 +766,35 @@ weave compile [borrow source: Text] -> Bytes:
                         revise v29 <- measure borrow v22
                         revise v28 <- difference v29 1
                         revise v43 <- cut borrow v22 1 v28
+                        revise v66 <- ""
+                        revise v61 <- 0
+                        revise v29 <- measure borrow v43
+                        while less v61 v29:
+                          revise v28 <- glyph borrow v43 v61
+                          choose same v28 92:
+                            revise v61 <- sum v61 1
+                            revise v28 <- glyph borrow v43 v61
+                            choose same v28 92:
+                              revise v66 <- join borrow v66 "\\"
+                            otherwise:
+                              choose same v28 34:
+                                revise v66 <- join borrow v66 "\""
+                              otherwise:
+                                choose same v28 110:
+                                  revise v66 <- join borrow v66 "\n"
+                                otherwise:
+                                  choose same v28 114:
+                                    revise v66 <- join borrow v66 "\r"
+                                  otherwise:
+                                    choose same v28 116:
+                                      revise v66 <- join borrow v66 "\t"
+                            revise v61 <- sum v61 1
+                          otherwise:
+                            revise v65 <- sum v61 1
+                            revise v22 <- cut borrow v43 v61 v65
+                            revise v66 <- join borrow v66 borrow v22
+                            revise v61 <- v65
+                        revise v43 <- borrow v66
                         revise v48 <- 1
                         revise v1 <- append borrow v1 1
                         revise v47 <- encode borrow v43
@@ -906,7 +942,7 @@ weave compile [borrow source: Text] -> Bytes:
         revise v7 <- ""
       otherwise:
         revise v28 <- sum v6 1
-        revise v43 <- cut borrow source v6 v28
+        revise v43 <- cut borrow v68 v6 v28
         revise v7 <- join borrow v7 borrow v43
     revise v6 <- sum v6 1
   choose v59:
