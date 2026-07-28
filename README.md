@@ -1,11 +1,11 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and desktop workbench.
-Aether **0.5.0** parses only Aether source, emits deterministic AETH v4 bytecode,
+Aether **0.5.0** parses only Aether source, emits deterministic AETH v4 or v5 bytecode,
 verifies every artifact, and runs it in the Aether VM. It never translates
 source to Rust, C, JavaScript, LLVM, or another language.
 
-## Stage 5: Seed-hosted compile path
+## Stage 6: Immutable records on the seed-hosted compile path
 
 **Default compilation is no longer bootstrap-hosted for user programs.**
 
@@ -17,17 +17,23 @@ source to Rust, C, JavaScript, LLVM, or another language.
 - The seed self-hosts, and the shipped examples plus a complete canonical-surface
   regression corpus produce bytecode **byte-identical** to the Rust bootstrap.
 
-Seed Profile Stage 5 emits the complete documented **canonical Aether 0.4 source
+Seed Profile Stage 6 emits the complete documented **canonical Aether 0.5 source
 surface**: named locals/parameters (not only `vN`), every statement and shallow
 expression family, `borrow`/`move`, multi-weave `call` (including forward
 callees), hex `bytes "..."` literals, UTF-8 text constants, the canonical
 `\\`, `\"`, `\n`, `\r`, and `\t` text escapes, and CRLF or LF input (including a
-valid final line without a terminal LF). See [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+valid final line without a terminal LF). It also supports bounded immutable
+nominal records: `record`, `make`, and explicit `field borrow` projection.
+Programs without records remain AETH v4; record-bearing programs emit verified
+AETH v5. See [docs/AETHER_0.5.md](docs/AETHER_0.5.md) and
+[docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ### Still honest limits
 
 - Full invalid-source diagnostic parity is not claimed; the Rust bootstrap
   remains the diagnostic authority (`aether check`).
+- Records are intentionally non-recursive and immutable in 0.5. Host invocation
+  accepts and returns primitives only; use an Aether weave to project a field.
 - Future language extensions require their own seed-emission parity proof before
   they become part of the product compile surface.
 - Bootstrap rebuild of the seed is still required after changing the seed source.

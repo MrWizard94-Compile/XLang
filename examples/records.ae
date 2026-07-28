@@ -1,0 +1,21 @@
+world records
+
+record card [label: Text, score: Whole, payload: Bytes, active: Truth]
+
+weave duplicate [borrow value: card] -> card:
+  bind label <- field borrow value label
+  bind score <- field borrow value score
+  bind payload <- field borrow value payload
+  bind active <- field borrow value active
+  yield make card borrow label score borrow payload active
+
+weave inspect [value: card] -> Whole:
+  bind score <- field borrow value score
+  yield score
+
+weave main [] -> Whole:
+  bind value <- make card "Aether" 7 bytes "0102" bright
+  bind copied <- call duplicate borrow value
+  bind label <- field borrow copied label
+  speak borrow label
+  yield call inspect move copied

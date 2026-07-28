@@ -55,7 +55,7 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
 
     let variant = SEED_SOURCE.replacen(
         "  bind mutable v65 <- 0\n",
-        "  bind mutable v65 <- 0\n  bind mutable v69 <- 0\n",
+        "  bind mutable v65 <- 0\n  bind mutable v99 <- 0\n",
         1,
     );
     assert_ne!(
@@ -163,6 +163,7 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
         include_str!("../../../examples/unicode.ae"),
         include_str!("../../../examples/seed-multi-weave.ae"),
         include_str!("../../../examples/seed-forward-call.ae"),
+        include_str!("../../../examples/records.ae"),
     ];
     for source in examples {
         let bootstrap = compile_to_bytecode(source)
@@ -334,6 +335,32 @@ weave helper_2 [borrow source_value: Text, whole_7: Whole, flag_2: Truth, borrow
   choose not dim:
     speak "optional otherwise"
   yield result_9
+"#,
+        ),
+        (
+            "immutable nominal records",
+            r#"world records
+
+record card [label: Text, score: Whole, payload: Bytes, active: Truth]
+
+weave copy [borrow value: card] -> card:
+  bind label <- field borrow value label
+  bind score <- field borrow value score
+  bind payload <- field borrow value payload
+  bind active <- field borrow value active
+  yield make card borrow label score borrow payload active
+
+weave main [] -> Whole:
+  bind original <- make card "Aether" 7 bytes "0102" bright
+  bind copied <- call copy borrow original
+  bind equal <- same borrow original borrow copied
+  bind label <- field borrow copied label
+  bind score <- field borrow copied score
+  choose equal:
+    speak borrow label
+  otherwise:
+    speak "mismatch"
+  yield score
 "#,
         ),
         (

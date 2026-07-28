@@ -4,8 +4,8 @@
 flowchart LR
     Editor["Aether Studio editor"] -->|"Tauri command"| SeedPath["compile_with_seed"]
     CLI["aether compile"] --> SeedPath
-    SeedPath --> SeedArt["embedded seed AETH v4"]
-    SeedArt --> Artifact["Verified AETH v4 artifact"]
+    SeedPath --> SeedArt["embedded seed AETH v4 compiler"]
+    SeedArt --> Artifact["Verified AETH v4 or v5 artifact"]
     Artifact --> VM["Aether VM"]
     VM --> Result["stdout and exit value"]
     Check["aether check"] --> Bootstrap["Rust bootstrap AST"]
@@ -23,7 +23,7 @@ flowchart LR
 
 The Rust bootstrap core is a dependency-free crate. It parses UTF-8 Aether
 source, validates names, types, mutation, `Text` and `Bytes` move state, and
-structured control flow, serializes a deterministic AST, and emits AETH v4
+structured control flow, serializes a deterministic AST, and emits AETH v4 or v5
 bytecode. The bytecode verifier runs before the VM. The compiler does not call a
 model, evaluate JavaScript, contact a network service, or persist source.
 
@@ -38,8 +38,10 @@ state deterministic.
 
 `AETH` is an Aether-owned binary format, not generated source for another
 language. Version 4 stores named weave metadata, parameter ownership modes,
-result types, local descriptors, and bytecode. Its instruction set represents
-`Text`, `Whole`, `Truth`, and bounded `Bytes`; immutable and mutable locals;
+result types, local descriptors, and bytecode. Version 5 adds a bounded nominal
+record table before the same function table, record-aware type descriptors, and
+verified `MAKE_RECORD` / `FIELD` instructions. Its instruction set represents
+`Text`, `Whole`, `Truth`, bounded `Bytes`, immutable records, immutable and mutable locals;
 moves; calls; control-flow jumps; text and byte primitives including search and
 fixed-width packing/patching; stdout output; and a typed yield.
 
@@ -55,12 +57,14 @@ surface. Arithmetic detects `Whole` overflow. Text and bytes are capped at
 positions; `extent`, `octet`, `slice`, `unpack*`, and `poke*` use bounded raw
 byte positions.
 
-AETH versions prior to v4 are intentionally rejected by the Aether 0.5 VM.
+AETH v4 remains valid for record-free programs. v5 is required for records.
+Versions prior to v4 are intentionally rejected by the Aether 0.5 VM.
 
 ## Forge Boundary
 
 The generic `invoke_bytecode` API invokes verified named weaves with checked
-host values. The forge-specific API is narrower: it accepts only a verified
+primitive host values. Records intentionally stay inside Aether call graphs;
+host callers project a primitive field through a weave. The forge-specific API is narrower: it accepts only a verified
 artifact exposing `compile [borrow source: Text] -> Bytes`, passes source text
 as the sole value, receives the resulting bytes, and verifies those bytes before
 the CLI writes them. The host bridge does not parse, translate, or alter the
@@ -73,18 +77,20 @@ without granting an artifact host capabilities.
 
 ## Seed-Hosted Product Compile Boundary
 
-Stage 5 makes the Aether-written seed the **default product compiler**:
+Stage 6 keeps the Aether-written seed as the **default product compiler** and
+extends its proven surface with bounded immutable records:
 
 - `compile_with_seed` embeds `SEED_COMPILER_ARTIFACT` and forges user source.
 - CLI `aether compile` and Studio use that path.
 - CLI `compile --bootstrap` and `check` still use the Rust bootstrap for seed
   rebuild and AST diagnostics.
 
-The Seed Profile emits the complete documented canonical Aether 0.4 source
+The Seed Profile emits the complete documented canonical Aether 0.5 source
 surface: all statement and shallow expression families, named locals/params,
 `borrow`/`move`, multi-weave `call` (including forward callees), hex `bytes`
 literals, UTF-8 text constants with all defined escapes, and LF/CRLF input with
-or without a final line terminator. Self-host, shipped-example, and
+or without a final line terminator. It emits v4 for programs without records and
+v5 for programs declaring immutable primitive-field records. Self-host, shipped-example, and
 canonical-surface dual-compare proofs live in `seed_self_host.rs`. See
 [SEED_PROFILE.md](SEED_PROFILE.md).
 

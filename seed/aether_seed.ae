@@ -69,12 +69,30 @@ weave compile [borrow source: Text] -> Bytes:
   bind mutable v66 <- ""
   bind mutable v67 <- bytes ""
   bind mutable v68 <- ""
+  bind mutable v69 <- bytes ""
+  bind mutable v70 <- bytes ""
+  bind mutable v71 <- bytes ""
+  bind mutable v72 <- 0
+  bind mutable v73 <- bytes ""
+  bind mutable v74 <- 0
+  bind mutable v75 <- 0
+  bind mutable v76 <- bytes ""
+  bind mutable v77 <- 0
+  bind mutable v78 <- 0
+  bind mutable v79 <- bytes ""
+  bind mutable v80 <- 0
+  bind mutable v81 <- 0
   revise v68 <- join borrow source "\n"
   revise v5 <- measure borrow v68
   revise v6 <- 0
   revise v7 <- ""
   revise v51 <- bytes ""
   revise v55 <- bytes ""
+  revise v69 <- bytes ""
+  revise v70 <- bytes ""
+  revise v71 <- bytes ""
+  revise v72 <- 0
+  revise v73 <- bytes ""
   while less v6 v5:
     revise v8 <- glyph borrow v68 v6
     choose same v8 13:
@@ -110,6 +128,7 @@ weave compile [borrow source: Text] -> Bytes:
             revise v16 <- seek borrow v7 ":" v15
             revise v17 <- cut borrow v7 v15 v16
             revise v56 <- 2
+            revise v75 <- 0
             choose same borrow v17 "Text":
               revise v56 <- 1
             otherwise:
@@ -121,11 +140,108 @@ weave compile [borrow source: Text] -> Bytes:
                 otherwise:
                   choose same borrow v17 "Bytes":
                     revise v56 <- 4
+                  otherwise:
+                    revise v56 <- 5
+                    revise v60 <- 0
+                    revise v61 <- 0
+                    revise v62 <- dim
+                    revise v63 <- extent borrow v70
+                    while less v61 v63:
+                      choose v62:
+                        revise v61 <- v63
+                      otherwise:
+                        revise v64 <- octet borrow v70 v61
+                        revise v61 <- sum v61 1
+                        revise v28 <- sum v61 v64
+                        revise v47 <- slice borrow v70 v61 v28
+                        revise v43 <- decode borrow v47
+                        revise v61 <- v28
+                        revise v74 <- unpack16 borrow v70 v61
+                        revise v61 <- sum v61 2
+                        choose same borrow v43 borrow v17:
+                          revise v75 <- v74
+                          revise v62 <- bright
             revise v29 <- measure borrow v54
             revise v51 <- append borrow v51 v29
             revise v47 <- encode borrow v54
             revise v51 <- fuse borrow v51 borrow v47
             revise v55 <- append borrow v55 v56
+            revise v47 <- pack16 v75
+            revise v55 <- fuse borrow v55 borrow v47
+          choose same borrow v11 "record":
+            revise v15 <- sum v10 1
+            revise v16 <- seek borrow v7 "[" v15
+            revise v17 <- cut borrow v7 v15 v16
+            revise v29 <- measure borrow v17
+            revise v28 <- difference v29 1
+            revise v31 <- glyph borrow v17 v28
+            choose same v31 32:
+              revise v17 <- cut borrow v17 0 v28
+            revise v54 <- borrow v17
+            revise v15 <- sum v16 1
+            revise v16 <- seek borrow v7 "]" v15
+            revise v19 <- cut borrow v7 v15 v16
+            revise v79 <- bytes ""
+            revise v80 <- 0
+            revise v18 <- 0
+            revise v29 <- measure borrow v19
+            while less v18 v29:
+              revise v21 <- seek borrow v19 "," v18
+              choose same v21 -1:
+                revise v21 <- measure borrow v19
+              revise v22 <- cut borrow v19 v18 v21
+              revise v31 <- glyph borrow v22 0
+              choose same v31 32:
+                revise v63 <- measure borrow v22
+                revise v22 <- cut borrow v22 1 v63
+              revise v14 <- seek borrow v22 ": " 0
+              revise v17 <- cut borrow v22 0 v14
+              revise v15 <- sum v14 2
+              revise v63 <- measure borrow v22
+              revise v20 <- cut borrow v22 v15 v63
+              revise v48 <- 2
+              choose same borrow v20 "Text":
+                revise v48 <- 1
+              otherwise:
+                choose same borrow v20 "Whole":
+                  revise v48 <- 2
+                otherwise:
+                  choose same borrow v20 "Truth":
+                    revise v48 <- 3
+                  otherwise:
+                    choose same borrow v20 "Bytes":
+                      revise v48 <- 4
+              revise v29 <- measure borrow v17
+              revise v79 <- append borrow v79 v29
+              revise v47 <- encode borrow v17
+              revise v79 <- fuse borrow v79 borrow v47
+              revise v79 <- append borrow v79 v48
+              revise v49 <- pack16 v72
+              revise v71 <- fuse borrow v71 borrow v49
+              revise v71 <- append borrow v71 v29
+              revise v71 <- fuse borrow v71 borrow v47
+              revise v71 <- append borrow v71 v48
+              revise v71 <- append borrow v71 v80
+              revise v80 <- sum v80 1
+              revise v18 <- sum v21 1
+              revise v63 <- measure borrow v19
+              choose less v18 v63:
+                revise v31 <- glyph borrow v19 v18
+                choose same v31 32:
+                  revise v18 <- sum v18 1
+              revise v29 <- measure borrow v19
+            revise v29 <- measure borrow v54
+            revise v69 <- append borrow v69 v29
+            revise v47 <- encode borrow v54
+            revise v69 <- fuse borrow v69 borrow v47
+            revise v69 <- append borrow v69 v80
+            revise v69 <- fuse borrow v69 borrow v79
+            revise v70 <- append borrow v70 v29
+            revise v70 <- fuse borrow v70 borrow v47
+            revise v47 <- pack16 v72
+            revise v70 <- fuse borrow v70 borrow v47
+            revise v73 <- append borrow v73 v80
+            revise v72 <- sum v72 1
         revise v7 <- ""
       otherwise:
         revise v28 <- sum v6 1
@@ -189,6 +305,9 @@ weave compile [borrow source: Text] -> Bytes:
             revise v53 <- append borrow v53 v58
             revise v53 <- fuse borrow v53 borrow v57
             revise v53 <- append borrow v53 v56
+            choose same v56 5:
+              revise v47 <- pack16 v81
+              revise v53 <- fuse borrow v53 borrow v47
             revise v47 <- pack16 v4
             revise v53 <- fuse borrow v53 borrow v47
             revise v53 <- fuse borrow v53 borrow v2
@@ -214,6 +333,7 @@ weave compile [borrow source: Text] -> Bytes:
           revise v3 <- bytes ""
           revise v4 <- 0
           revise v67 <- bytes ""
+          revise v76 <- bytes ""
           revise v57 <- bytes ""
           revise v58 <- 0
           revise v18 <- 0
@@ -246,6 +366,7 @@ weave compile [borrow source: Text] -> Bytes:
             revise v63 <- measure borrow v22
             revise v20 <- cut borrow v22 v15 v63
             revise v48 <- 2
+            revise v74 <- 0
             choose same borrow v20 "Text":
               revise v48 <- 1
             otherwise:
@@ -257,10 +378,40 @@ weave compile [borrow source: Text] -> Bytes:
                 otherwise:
                   choose same borrow v20 "Bytes":
                     revise v48 <- 4
+                  otherwise:
+                    revise v48 <- 5
+                    revise v60 <- 0
+                    revise v61 <- 0
+                    revise v62 <- dim
+                    revise v63 <- extent borrow v70
+                    while less v61 v63:
+                      choose v62:
+                        revise v61 <- v63
+                      otherwise:
+                        revise v64 <- octet borrow v70 v61
+                        revise v61 <- sum v61 1
+                        revise v28 <- sum v61 v64
+                        revise v47 <- slice borrow v70 v61 v28
+                        revise v43 <- decode borrow v47
+                        revise v61 <- v28
+                        revise v75 <- unpack16 borrow v70 v61
+                        revise v61 <- sum v61 2
+                        choose same borrow v43 borrow v20:
+                          revise v74 <- v75
+                          revise v62 <- bright
             revise v57 <- append borrow v57 v48
+            choose same v48 5:
+              revise v47 <- pack16 v74
+              revise v57 <- fuse borrow v57 borrow v47
             revise v57 <- append borrow v57 v27
             revise v2 <- append borrow v2 v48
+            choose same v48 5:
+              revise v47 <- pack16 v74
+              revise v2 <- fuse borrow v2 borrow v47
             revise v2 <- append borrow v2 0
+            revise v76 <- append borrow v76 v48
+            revise v47 <- pack16 v74
+            revise v76 <- fuse borrow v76 borrow v47
             revise v29 <- measure borrow v17
             revise v67 <- append borrow v67 v29
             revise v47 <- encode borrow v17
@@ -282,6 +433,7 @@ weave compile [borrow source: Text] -> Bytes:
           revise v16 <- seek borrow v7 ":" v15
           revise v17 <- cut borrow v7 v15 v16
           revise v56 <- 2
+          revise v81 <- 0
           choose same borrow v17 "Text":
             revise v56 <- 1
           otherwise:
@@ -293,6 +445,27 @@ weave compile [borrow source: Text] -> Bytes:
               otherwise:
                 choose same borrow v17 "Bytes":
                   revise v56 <- 4
+                otherwise:
+                  revise v56 <- 5
+                  revise v60 <- 0
+                  revise v61 <- 0
+                  revise v62 <- dim
+                  revise v63 <- extent borrow v70
+                  while less v61 v63:
+                    choose v62:
+                      revise v61 <- v63
+                    otherwise:
+                      revise v64 <- octet borrow v70 v61
+                      revise v61 <- sum v61 1
+                      revise v28 <- sum v61 v64
+                      revise v47 <- slice borrow v70 v61 v28
+                      revise v43 <- decode borrow v47
+                      revise v61 <- v28
+                      revise v74 <- unpack16 borrow v70 v61
+                      revise v61 <- sum v61 2
+                      choose same borrow v43 borrow v17:
+                        revise v81 <- v74
+                        revise v62 <- bright
           revise v59 <- bright
           revise v12 <- bright
         otherwise:
@@ -459,6 +632,8 @@ weave compile [borrow source: Text] -> Bytes:
                 revise v24 <- 1
                 revise v25 <- -1
                 revise v26 <- 0
+                revise v74 <- 0
+                revise v77 <- 0
                 choose same borrow v22 "not":
                   revise v24 <- 1
                   revise v25 <- 15
@@ -604,10 +779,9 @@ weave compile [borrow source: Text] -> Bytes:
                                                                           revise v25 <- 41
                                                                           revise v26 <- 4
                                                                         otherwise:
-                                                                          choose same borrow v22 "call":
-                                                                            revise v24 <- 255
-                                                                            revise v25 <- 21
-                                                                            revise v26 <- 2
+                                                                          choose same borrow v22 "make":
+                                                                            revise v25 <- 43
+                                                                            revise v26 <- 5
                                                                             revise v21 <- seek borrow v20 " " 0
                                                                             choose same v21 -1:
                                                                               revise v21 <- measure borrow v20
@@ -615,34 +789,128 @@ weave compile [borrow source: Text] -> Bytes:
                                                                             revise v29 <- measure borrow v20
                                                                             revise v20 <- cut borrow v20 v21 v29
                                                                             revise v29 <- measure borrow v20
-                                                                            choose same v29 0:
-                                                                              revise v30 <- 0
-                                                                            otherwise:
+                                                                            choose less 0 v29:
                                                                               revise v31 <- glyph borrow v20 0
                                                                               choose same v31 32:
-                                                                                revise v29 <- measure borrow v20
                                                                                 revise v20 <- cut borrow v20 1 v29
                                                                             revise v60 <- 0
                                                                             revise v61 <- 0
                                                                             revise v62 <- dim
-                                                                            revise v63 <- extent borrow v51
+                                                                            revise v63 <- extent borrow v70
                                                                             while less v61 v63:
                                                                               choose v62:
                                                                                 revise v61 <- v63
                                                                               otherwise:
-                                                                                revise v64 <- octet borrow v51 v61
+                                                                                revise v64 <- octet borrow v70 v61
                                                                                 revise v61 <- sum v61 1
                                                                                 revise v28 <- sum v61 v64
-                                                                                revise v47 <- slice borrow v51 v61 v28
-                                                                                revise v22 <- decode borrow v47
+                                                                                revise v47 <- slice borrow v70 v61 v28
+                                                                                revise v66 <- decode borrow v47
                                                                                 revise v61 <- v28
-                                                                                choose same borrow v22 borrow v43:
+                                                                                revise v74 <- unpack16 borrow v70 v61
+                                                                                revise v61 <- sum v61 2
+                                                                                choose same borrow v66 borrow v43:
+                                                                                  revise v77 <- v74
                                                                                   revise v62 <- bright
-                                                                                  revise v26 <- octet borrow v55 v60
-                                                                                otherwise:
-                                                                                  revise v60 <- sum v60 1
+                                                                            revise v24 <- octet borrow v73 v77
                                                                           otherwise:
-                                                                            revise v20 <- borrow v19
+                                                                            choose same borrow v22 "field":
+                                                                              revise v25 <- 44
+                                                                              revise v21 <- seek borrow v20 " " 7
+                                                                              revise v22 <- cut borrow v20 7 v21
+                                                                              revise v29 <- measure borrow v20
+                                                                              revise v28 <- sum v21 1
+                                                                              revise v43 <- cut borrow v20 v28 v29
+                                                                              revise v30 <- -1
+                                                                              revise v61 <- 0
+                                                                              revise v63 <- extent borrow v67
+                                                                              while less v61 v63:
+                                                                                revise v64 <- octet borrow v67 v61
+                                                                                revise v61 <- sum v61 1
+                                                                                revise v28 <- sum v61 v64
+                                                                                revise v47 <- slice borrow v67 v61 v28
+                                                                                revise v66 <- decode borrow v47
+                                                                                revise v61 <- v28
+                                                                                revise v48 <- unpack16 borrow v67 v61
+                                                                                revise v61 <- sum v61 2
+                                                                                choose same borrow v66 borrow v22:
+                                                                                  revise v30 <- v48
+                                                                                  revise v61 <- v63
+                                                                              revise v44 <- product v30 3
+                                                                              revise v48 <- octet borrow v76 v44
+                                                                              revise v44 <- sum v44 1
+                                                                              revise v77 <- unpack16 borrow v76 v44
+                                                                              revise v60 <- 0
+                                                                              revise v61 <- 0
+                                                                              revise v62 <- dim
+                                                                              revise v63 <- extent borrow v71
+                                                                              while less v61 v63:
+                                                                                choose v62:
+                                                                                  revise v61 <- v63
+                                                                                otherwise:
+                                                                                  revise v75 <- unpack16 borrow v71 v61
+                                                                                  revise v61 <- sum v61 2
+                                                                                  revise v64 <- octet borrow v71 v61
+                                                                                  revise v61 <- sum v61 1
+                                                                                  revise v28 <- sum v61 v64
+                                                                                  revise v47 <- slice borrow v71 v61 v28
+                                                                                  revise v66 <- decode borrow v47
+                                                                                  revise v61 <- v28
+                                                                                  revise v48 <- octet borrow v71 v61
+                                                                                  revise v61 <- sum v61 1
+                                                                                  revise v78 <- octet borrow v71 v61
+                                                                                  revise v61 <- sum v61 1
+                                                                                  choose same v75 v77:
+                                                                                    choose same borrow v66 borrow v43:
+                                                                                      revise v62 <- bright
+                                                                              revise v26 <- v48
+                                                                              revise v74 <- 0
+                                                                              revise v20 <- join "borrow " borrow v22
+                                                                              revise v24 <- 1
+                                                                            otherwise:
+                                                                              choose same borrow v22 "call":
+                                                                                revise v24 <- 255
+                                                                                revise v25 <- 21
+                                                                                revise v26 <- 2
+                                                                                revise v21 <- seek borrow v20 " " 0
+                                                                                choose same v21 -1:
+                                                                                  revise v21 <- measure borrow v20
+                                                                                revise v43 <- cut borrow v20 0 v21
+                                                                                revise v29 <- measure borrow v20
+                                                                                revise v20 <- cut borrow v20 v21 v29
+                                                                                revise v29 <- measure borrow v20
+                                                                                choose same v29 0:
+                                                                                  revise v30 <- 0
+                                                                                otherwise:
+                                                                                  revise v31 <- glyph borrow v20 0
+                                                                                  choose same v31 32:
+                                                                                    revise v29 <- measure borrow v20
+                                                                                    revise v20 <- cut borrow v20 1 v29
+                                                                                revise v60 <- 0
+                                                                                revise v61 <- 0
+                                                                                revise v62 <- dim
+                                                                                revise v63 <- extent borrow v51
+                                                                                while less v61 v63:
+                                                                                  choose v62:
+                                                                                    revise v61 <- v63
+                                                                                  otherwise:
+                                                                                    revise v64 <- octet borrow v51 v61
+                                                                                    revise v61 <- sum v61 1
+                                                                                    revise v28 <- sum v61 v64
+                                                                                    revise v47 <- slice borrow v51 v61 v28
+                                                                                    revise v22 <- decode borrow v47
+                                                                                    revise v61 <- v28
+                                                                                    choose same borrow v22 borrow v43:
+                                                                                      revise v62 <- bright
+                                                                                      revise v44 <- product v60 3
+                                                                                      revise v26 <- octet borrow v55 v44
+                                                                                      revise v44 <- sum v44 1
+                                                                                      revise v74 <- unpack16 borrow v55 v44
+                                                                                      revise v77 <- v74
+                                                                                    otherwise:
+                                                                                      revise v60 <- sum v60 1
+                                                                              otherwise:
+                                                                                revise v20 <- borrow v19
                 revise v23 <- 0
                 while less v23 v24:
                   revise v29 <- measure borrow v20
@@ -840,8 +1108,10 @@ weave compile [borrow source: Text] -> Bytes:
                                     choose same borrow v43 borrow v22:
                                       revise v30 <- v48
                                       revise v61 <- v63
-                                revise v44 <- product v30 2
-                                revise v48 <- octet borrow v2 v44
+                                revise v44 <- product v30 3
+                                revise v48 <- octet borrow v76 v44
+                                revise v44 <- sum v44 1
+                                revise v74 <- unpack16 borrow v76 v44
                                 choose same v27 2:
                                   revise v1 <- append borrow v1 6
                                 otherwise:
@@ -875,8 +1145,10 @@ weave compile [borrow source: Text] -> Bytes:
                                     choose same borrow v43 borrow v22:
                                       revise v30 <- v48
                                       revise v61 <- v63
-                                revise v44 <- product v30 2
-                                revise v48 <- octet borrow v2 v44
+                                revise v44 <- product v30 3
+                                revise v48 <- octet borrow v76 v44
+                                revise v44 <- sum v44 1
+                                revise v74 <- unpack16 borrow v76 v44
                                 choose same v27 2:
                                   revise v1 <- append borrow v1 6
                                 otherwise:
@@ -887,16 +1159,38 @@ weave compile [borrow source: Text] -> Bytes:
                 choose same v25 -1:
                   revise v26 <- v48
                 otherwise:
-                  choose same v25 21:
-                    revise v1 <- append borrow v1 21
-                    revise v47 <- pack16 v60
+                  choose same v25 43:
+                    revise v1 <- append borrow v1 43
+                    revise v47 <- pack16 v77
                     revise v1 <- fuse borrow v1 borrow v47
-                    revise v1 <- append borrow v1 v23
+                    revise v26 <- 5
+                    revise v74 <- v77
                   otherwise:
-                    revise v1 <- append borrow v1 v25
+                    choose same v25 44:
+                      revise v1 <- append borrow v1 44
+                      revise v47 <- pack16 v77
+                      revise v1 <- fuse borrow v1 borrow v47
+                      revise v1 <- append borrow v1 v78
+                      revise v74 <- 0
+                    otherwise:
+                      choose same v25 21:
+                        revise v1 <- append borrow v1 21
+                        revise v47 <- pack16 v60
+                        revise v1 <- fuse borrow v1 borrow v47
+                        revise v1 <- append borrow v1 v23
+                        revise v74 <- v77
+                      otherwise:
+                        revise v1 <- append borrow v1 v25
+                        revise v74 <- 0
                 choose same v45 1:
                   revise v2 <- append borrow v2 v26
+                  choose same v26 5:
+                    revise v47 <- pack16 v74
+                    revise v2 <- fuse borrow v2 borrow v47
                   revise v2 <- append borrow v2 v32
+                  revise v76 <- append borrow v76 v26
+                  revise v47 <- pack16 v74
+                  revise v76 <- fuse borrow v76 borrow v47
                   revise v4 <- sum v4 1
                   revise v1 <- append borrow v1 4
                   revise v47 <- pack16 v50
@@ -978,6 +1272,9 @@ weave compile [borrow source: Text] -> Bytes:
     revise v53 <- append borrow v53 v58
     revise v53 <- fuse borrow v53 borrow v57
     revise v53 <- append borrow v53 v56
+    choose same v56 5:
+      revise v47 <- pack16 v81
+      revise v53 <- fuse borrow v53 borrow v47
     revise v47 <- pack16 v4
     revise v53 <- fuse borrow v53 borrow v47
     revise v53 <- fuse borrow v53 borrow v2
@@ -991,7 +1288,13 @@ weave compile [borrow source: Text] -> Bytes:
   revise v46 <- append borrow v46 69
   revise v46 <- append borrow v46 84
   revise v46 <- append borrow v46 72
-  revise v46 <- append borrow v46 4
+  choose less 0 v72:
+    revise v46 <- append borrow v46 5
+    revise v47 <- pack16 v72
+    revise v46 <- fuse borrow v46 borrow v47
+    revise v46 <- fuse borrow v46 borrow v69
+  otherwise:
+    revise v46 <- append borrow v46 4
   revise v47 <- pack16 v52
   revise v46 <- fuse borrow v46 borrow v47
   revise v46 <- fuse borrow v46 borrow v53

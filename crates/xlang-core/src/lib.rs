@@ -19,12 +19,16 @@ pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
 ));
 
 const ARTIFACT_MAGIC: &[u8; 4] = b"AETH";
-const ARTIFACT_VERSION: u8 = 4;
+const ARTIFACT_VERSION_V4: u8 = 4;
+const ARTIFACT_VERSION_V5: u8 = 5;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 const MAX_FUNCTIONS: usize = 256;
 const MAX_LOCALS: usize = u16::MAX as usize;
+const MAX_RECORDS: usize = 256;
+const MAX_RECORD_FIELDS: usize = 64;
 const MAX_TEXT_BYTES: usize = 1_000_000;
 const MAX_BYTES: usize = 1_000_000;
+const MAX_RECORD_BYTES: usize = 1_000_000;
 const MAX_CALL_DEPTH: usize = 1_024;
 
 const OP_PUSH_TEXT: u8 = 1;
@@ -69,6 +73,8 @@ const OP_UNPACK32: u8 = 39;
 const OP_POKE: u8 = 40;
 const OP_POKE32: u8 = 41;
 const OP_PACK64: u8 = 42;
+const OP_MAKE_RECORD: u8 = 43;
+const OP_FIELD: u8 = 44;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -125,19 +131,21 @@ pub enum ValueType {
     Whole,
     Truth,
     Bytes,
+    Record(u16),
 }
 
 impl ValueType {
-    fn to_byte(self) -> u8 {
+    fn to_tag(self) -> u8 {
         match self {
             Self::Text => 1,
             Self::Whole => 2,
             Self::Truth => 3,
             Self::Bytes => 4,
+            Self::Record(_) => 5,
         }
     }
 
-    fn from_byte(value: u8, offset: usize) -> Result<Self, BytecodeError> {
+    fn from_primitive_tag(value: u8, offset: usize) -> Result<Self, BytecodeError> {
         match value {
             1 => Ok(Self::Text),
             2 => Ok(Self::Whole),
@@ -155,12 +163,16 @@ impl fmt::Display for ValueType {
             Self::Whole => formatter.write_str("Whole"),
             Self::Truth => formatter.write_str("Truth"),
             Self::Bytes => formatter.write_str("Bytes"),
+            Self::Record(record) => write!(formatter, "Record#{record}"),
         }
     }
 }
 
 const fn is_unique_value(value_type: ValueType) -> bool {
-    matches!(value_type, ValueType::Text | ValueType::Bytes)
+    matches!(
+        value_type,
+        ValueType::Text | ValueType::Bytes | ValueType::Record(_)
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,6 +201,7 @@ impl ParameterMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
     pub world: String,
+    pub records: Vec<RecordDeclaration>,
     pub weaves: Vec<Weave>,
 }
 
@@ -196,11 +209,33 @@ impl Program {
     #[must_use]
     pub fn significant_token_count(&self) -> usize {
         2 + self
-            .weaves
+            .records
             .iter()
-            .map(|weave| 4 + weave.parameters.len() * 2 + statement_token_count(&weave.body))
+            .map(|record| 2 + record.fields.len() * 2)
             .sum::<usize>()
+            + self
+                .weaves
+                .iter()
+                .map(|weave| 4 + weave.parameters.len() * 2 + statement_token_count(&weave.body))
+                .sum::<usize>()
     }
+}
+
+/// An immutable nominal aggregate declaration. Its index in [`Program::records`]
+/// is the record identifier used by AETH v5 type references and opcodes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordDeclaration {
+    pub name: String,
+    pub fields: Vec<RecordField>,
+    pub span: Span,
+}
+
+/// One primitive-valued field in a [`RecordDeclaration`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordField {
+    pub name: String,
+    pub value_type: ValueType,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -304,6 +339,14 @@ pub enum ExpressionKind {
     Call {
         weave: String,
         arguments: Vec<Atom>,
+    },
+    MakeRecord {
+        record: String,
+        fields: Vec<Atom>,
+    },
+    Field {
+        record: Atom,
+        field: String,
     },
 }
 
@@ -526,7 +569,21 @@ struct ArtifactFunction {
 
 #[derive(Clone)]
 struct Artifact {
+    version: u8,
+    records: Vec<ArtifactRecord>,
     functions: Vec<ArtifactFunction>,
+}
+
+#[derive(Clone)]
+struct ArtifactRecord {
+    name: String,
+    fields: Vec<ArtifactRecordField>,
+}
+
+#[derive(Clone)]
+struct ArtifactRecordField {
+    name: String,
+    value_type: ValueType,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -542,6 +599,10 @@ enum RuntimeValue {
     Whole(i64),
     Truth(bool),
     Bytes(Vec<u8>),
+    Record {
+        record: u16,
+        fields: Vec<RuntimeValue>,
+    },
 }
 
 impl RuntimeValue {
@@ -551,6 +612,7 @@ impl RuntimeValue {
             Self::Whole(_) => ValueType::Whole,
             Self::Truth(_) => ValueType::Truth,
             Self::Bytes(_) => ValueType::Bytes,
+            Self::Record { record, .. } => ValueType::Record(*record),
         }
     }
 }
@@ -580,12 +642,16 @@ fn runtime_from_invocation(value: &InvocationValue) -> Result<RuntimeValue, Byte
     }
 }
 
-fn invocation_from_runtime(value: RuntimeValue) -> InvocationValue {
+fn invocation_from_runtime(value: RuntimeValue) -> Result<InvocationValue, BytecodeError> {
     match value {
-        RuntimeValue::Text(value) => InvocationValue::Text(value),
-        RuntimeValue::Whole(value) => InvocationValue::Whole(value),
-        RuntimeValue::Truth(value) => InvocationValue::Truth(value),
-        RuntimeValue::Bytes(value) => InvocationValue::Bytes(value),
+        RuntimeValue::Text(value) => Ok(InvocationValue::Text(value)),
+        RuntimeValue::Whole(value) => Ok(InvocationValue::Whole(value)),
+        RuntimeValue::Truth(value) => Ok(InvocationValue::Truth(value)),
+        RuntimeValue::Bytes(value) => Ok(InvocationValue::Bytes(value)),
+        RuntimeValue::Record { .. } => Err(BytecodeError::new(
+            0,
+            "host invocation cannot return a record; project a primitive field inside Aether",
+        )),
     }
 }
 
@@ -630,6 +696,8 @@ enum Instruction {
     Poke32,
     Pack64,
     Render,
+    MakeRecord(u16),
+    Field { record: u16, field: usize },
     Call { function: usize, arguments: usize },
     JumpIfDim(usize),
     Jump(usize),
@@ -665,6 +733,19 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
 
     let world = parse_world(lines[0])?;
     let mut index = 1;
+    let mut records = Vec::new();
+    while index < lines.len() && lines[index].content.starts_with("record ") {
+        let line = lines[index];
+        if line.indentation != 0 {
+            return Err(CompilerError::new(
+                line.span(1),
+                "a record declaration must begin at indentation level zero",
+            ));
+        }
+        records.push(parse_record_declaration(line)?);
+        index += 1;
+    }
+    let record_types = record_type_map(&records)?;
     let mut weaves = Vec::new();
     while index < lines.len() {
         let line = lines[index];
@@ -674,7 +755,13 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
                 "a weave declaration must begin at indentation level zero",
             ));
         }
-        let (name, parameters, result) = parse_weave_header(line)?;
+        if line.content.starts_with("record ") {
+            return Err(CompilerError::new(
+                line.span(1),
+                "record declarations must appear after world and before every weave",
+            ));
+        }
+        let (name, parameters, result) = parse_weave_header(line, &record_types)?;
         index += 1;
         let body = parse_block(&lines, &mut index, 1)?;
         if body.is_empty() {
@@ -692,7 +779,11 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
         });
     }
 
-    let program = Program { world, weaves };
+    let program = Program {
+        world,
+        records,
+        weaves,
+    };
     validate_program(&program)?;
     Ok(program)
 }
@@ -738,6 +829,21 @@ pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
 #[must_use]
 pub fn format_program(program: &Program) -> String {
     let mut formatted = format!("world {}\n", program.world);
+    for record in &program.records {
+        formatted.push('\n');
+        formatted.push_str("record ");
+        formatted.push_str(&record.name);
+        formatted.push_str(" [");
+        for (index, field) in record.fields.iter().enumerate() {
+            if index > 0 {
+                formatted.push_str(", ");
+            }
+            formatted.push_str(&field.name);
+            formatted.push_str(": ");
+            formatted.push_str(&format_value_type(field.value_type, &program.records));
+        }
+        formatted.push_str("]\n");
+    }
     for weave in &program.weaves {
         formatted.push('\n');
         formatted.push_str("weave ");
@@ -752,10 +858,10 @@ pub fn format_program(program: &Program) -> String {
             }
             formatted.push_str(&parameter.name);
             formatted.push_str(": ");
-            formatted.push_str(&parameter.value_type.to_string());
+            formatted.push_str(&format_value_type(parameter.value_type, &program.records));
         }
         formatted.push_str("] -> ");
-        formatted.push_str(&weave.result.to_string());
+        formatted.push_str(&format_value_type(weave.result, &program.records));
         formatted.push_str(":\n");
         write_block(&weave.body, 1, &mut formatted);
     }
@@ -767,11 +873,25 @@ pub fn canonical_ast(program: &Program) -> String {
     let mut output = String::from("World(");
     output.push_str(&program.world);
     output.push(')');
+    for record in &program.records {
+        output.push_str(";Record(");
+        output.push_str(&record.name);
+        output.push_str(")[");
+        for (index, field) in record.fields.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            output.push_str(&field.name);
+            output.push(':');
+            output.push_str(&format_value_type(field.value_type, &program.records));
+        }
+        output.push(']');
+    }
     for weave in &program.weaves {
         output.push_str(";Weave(");
         output.push_str(&weave.name);
         output.push_str("->");
-        output.push_str(&weave.result.to_string());
+        output.push_str(&format_value_type(weave.result, &program.records));
         output.push_str(")[");
         for (index, parameter) in weave.parameters.iter().enumerate() {
             if index > 0 {
@@ -782,12 +902,21 @@ pub fn canonical_ast(program: &Program) -> String {
             }
             output.push_str(&parameter.name);
             output.push(':');
-            output.push_str(&parameter.value_type.to_string());
+            output.push_str(&format_value_type(parameter.value_type, &program.records));
         }
         output.push(']');
         write_ast_block(&weave.body, &mut output);
     }
     output
+}
+
+fn format_value_type(value_type: ValueType, records: &[RecordDeclaration]) -> String {
+    match value_type {
+        ValueType::Record(record_id) => records
+            .get(usize::from(record_id))
+            .map_or_else(|| value_type.to_string(), |record| record.name.clone()),
+        _ => value_type.to_string(),
+    }
 }
 
 pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
@@ -835,7 +964,13 @@ pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
     }
 
     for (function_index, function) in artifact.functions.iter().enumerate() {
-        verify_function(function_index, function, &artifact.functions)?;
+        verify_function(
+            function_index,
+            function,
+            &artifact.functions,
+            &artifact.records,
+            artifact.version,
+        )?;
     }
     Ok(())
 }
@@ -929,6 +1064,15 @@ fn invoke_artifact(
     let mut runtime_arguments = Vec::with_capacity(arguments.len());
     for (index, (argument, (expected, _))) in arguments.iter().zip(&function.parameters).enumerate()
     {
+        if matches!(expected, ValueType::Record(_)) {
+            return Err(BytecodeError::new(
+                0,
+                format!(
+                    "weave {weave_name} argument {} is a record; host invocation accepts only primitive Aether values",
+                    index + 1
+                ),
+            ));
+        }
         if argument.value_type() != *expected {
             return Err(BytecodeError::new(
                 0,
@@ -945,7 +1089,7 @@ fn invoke_artifact(
     let value = execute_function(artifact, function_index, runtime_arguments, &mut stdout, 0)?;
     Ok(InvocationOutput {
         stdout,
-        value: invocation_from_runtime(value),
+        value: invocation_from_runtime(value)?,
     })
 }
 
@@ -1015,6 +1159,7 @@ fn parse_world(line: SourceLine<'_>) -> Result<String, CompilerError> {
 
 fn parse_weave_header(
     line: SourceLine<'_>,
+    record_types: &BTreeMap<String, u16>,
 ) -> Result<(String, Vec<Parameter>, ValueType), CompilerError> {
     let Some(without_colon) = line.content.strip_suffix(':') else {
         return Err(CompilerError::new(
@@ -1043,7 +1188,7 @@ fn parse_weave_header(
             "weave parameter list is missing its closing bracket",
         ));
     };
-    let parameters = parse_parameters(&after_opening[..closing], line)?;
+    let parameters = parse_parameters(&after_opening[..closing], line, record_types)?;
     let after_parameters = after_opening[closing + 1..].trim();
     let Some(result_text) = after_parameters.strip_prefix("-> ") else {
         return Err(CompilerError::new(
@@ -1051,11 +1196,15 @@ fn parse_weave_header(
             "weave result must use -> Type",
         ));
     };
-    let result = parse_value_type(result_text, line.span(line.content.len()))?;
+    let result = parse_value_type(result_text, line.span(line.content.len()), record_types)?;
     Ok((name.to_owned(), parameters, result))
 }
 
-fn parse_parameters(source: &str, line: SourceLine<'_>) -> Result<Vec<Parameter>, CompilerError> {
+fn parse_parameters(
+    source: &str,
+    line: SourceLine<'_>,
+    record_types: &BTreeMap<String, u16>,
+) -> Result<Vec<Parameter>, CompilerError> {
     if source.trim().is_empty() {
         return Ok(Vec::new());
     }
@@ -1081,11 +1230,11 @@ fn parse_parameters(source: &str, line: SourceLine<'_>) -> Result<Vec<Parameter>
             ));
         };
         validate_name(name, line.span(1), "parameter name", false)?;
-        let value_type = parse_value_type(type_text, line.span(1))?;
+        let value_type = parse_value_type(type_text, line.span(1), record_types)?;
         if mode == ParameterMode::Borrow && !is_unique_value(value_type) {
             return Err(CompilerError::new(
                 line.span(1),
-                "borrow parameters are reserved for unique Text or Bytes values",
+                "borrow parameters are reserved for unique Text, Bytes, or record values",
             ));
         }
         if parameters
@@ -1107,7 +1256,30 @@ fn parse_parameters(source: &str, line: SourceLine<'_>) -> Result<Vec<Parameter>
     Ok(parameters)
 }
 
-fn parse_value_type(source: &str, span: Span) -> Result<ValueType, CompilerError> {
+fn parse_value_type(
+    source: &str,
+    span: Span,
+    record_types: &BTreeMap<String, u16>,
+) -> Result<ValueType, CompilerError> {
+    match source {
+        "Text" => Ok(ValueType::Text),
+        "Whole" => Ok(ValueType::Whole),
+        "Truth" => Ok(ValueType::Truth),
+        "Bytes" => Ok(ValueType::Bytes),
+        _ => record_types
+            .get(source)
+            .copied()
+            .map(ValueType::Record)
+            .ok_or_else(|| {
+                CompilerError::new(
+                    span,
+                    "Aether types are Text, Whole, Truth, Bytes, or a declared record",
+                )
+            }),
+    }
+}
+
+fn parse_primitive_value_type(source: &str, span: Span) -> Result<ValueType, CompilerError> {
     match source {
         "Text" => Ok(ValueType::Text),
         "Whole" => Ok(ValueType::Whole),
@@ -1115,9 +1287,114 @@ fn parse_value_type(source: &str, span: Span) -> Result<ValueType, CompilerError
         "Bytes" => Ok(ValueType::Bytes),
         _ => Err(CompilerError::new(
             span,
-            "Aether types are Text, Whole, Truth, or Bytes",
+            "record fields may use only Text, Whole, Truth, or Bytes",
         )),
     }
+}
+
+fn parse_record_declaration(line: SourceLine<'_>) -> Result<RecordDeclaration, CompilerError> {
+    let Some(rest) = line.content.strip_prefix("record ") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "expected record declaration",
+        ));
+    };
+    let Some(opening) = rest.find('[') else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "record fields must be enclosed by square brackets",
+        ));
+    };
+    let name = rest[..opening].trim_end();
+    validate_name(name, line.span(8), "record name", false)?;
+    let after_opening = &rest[opening + 1..];
+    let Some(closing) = after_opening.find(']') else {
+        return Err(CompilerError::new(
+            line.span(8 + opening + 1),
+            "record field list is missing its closing bracket",
+        ));
+    };
+    if !after_opening[closing + 1..].is_empty() {
+        return Err(CompilerError::new(
+            line.span(8 + opening + closing + 2),
+            "record declarations cannot contain text after the closing bracket",
+        ));
+    }
+    let fields_source = &after_opening[..closing];
+    if fields_source.trim().is_empty() {
+        return Err(CompilerError::new(
+            line.span(1),
+            "records require at least one field",
+        ));
+    }
+
+    let mut fields = Vec::new();
+    for segment in fields_source.split(',') {
+        let trimmed = segment.trim();
+        if trimmed.is_empty() {
+            return Err(CompilerError::new(
+                line.span(1),
+                "record field lists cannot contain an empty entry",
+            ));
+        }
+        let Some((field_name, field_type)) = trimmed.split_once(": ") else {
+            return Err(CompilerError::new(
+                line.span(1),
+                "each record field must use name: Type",
+            ));
+        };
+        validate_name(field_name, line.span(1), "record field name", false)?;
+        if fields
+            .iter()
+            .any(|field: &RecordField| field.name == field_name)
+        {
+            return Err(CompilerError::new(
+                line.span(1),
+                format!("record field {field_name} is declared more than once"),
+            ));
+        }
+        if fields.len() >= MAX_RECORD_FIELDS {
+            return Err(CompilerError::new(
+                line.span(1),
+                format!("records support at most {MAX_RECORD_FIELDS} fields"),
+            ));
+        }
+        fields.push(RecordField {
+            name: field_name.to_owned(),
+            value_type: parse_primitive_value_type(field_type, line.span(1))?,
+            span: line.span(1),
+        });
+    }
+    Ok(RecordDeclaration {
+        name: name.to_owned(),
+        fields,
+        span: line.span(1),
+    })
+}
+
+fn record_type_map(records: &[RecordDeclaration]) -> Result<BTreeMap<String, u16>, CompilerError> {
+    if records.len() > MAX_RECORDS {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            format!("Aether supports at most {MAX_RECORDS} records per artifact"),
+        ));
+    }
+    let mut record_types = BTreeMap::new();
+    for (index, record) in records.iter().enumerate() {
+        let identifier = u16::try_from(index).map_err(|_| {
+            CompilerError::new(record.span, "record identifier is outside the AETH range")
+        })?;
+        if record_types
+            .insert(record.name.clone(), identifier)
+            .is_some()
+        {
+            return Err(CompilerError::new(
+                record.span,
+                format!("record {} is declared more than once", record.name),
+            ));
+        }
+    }
+    Ok(record_types)
 }
 
 fn parse_block(
@@ -1428,6 +1705,42 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
                 arguments,
             }
         }
+        "make" => {
+            let Some(record) = tokens.get(index) else {
+                return Err(CompilerError::new(span, "make requires a record name"));
+            };
+            validate_name(record, span, "record name", false)?;
+            index += 1;
+            let mut fields = Vec::new();
+            while index < tokens.len() {
+                fields.push(parse_atom_from(&tokens, &mut index, span)?);
+            }
+            ExpressionKind::MakeRecord {
+                record: record.clone(),
+                fields,
+            }
+        }
+        "field" => {
+            let record = parse_atom_from(&tokens, &mut index, span)?;
+            if !matches!(record.kind, AtomKind::Borrow(_)) {
+                return Err(CompilerError::new(
+                    record.span,
+                    "field requires borrow followed by a record binding name",
+                ));
+            }
+            let Some(field) = tokens.get(index) else {
+                return Err(CompilerError::new(
+                    span,
+                    "field requires a record field name",
+                ));
+            };
+            validate_name(field, span, "record field name", false)?;
+            index += 1;
+            ExpressionKind::Field {
+                record,
+                field: field.clone(),
+            }
+        }
         _ => {
             index = 0;
             ExpressionKind::Atom(parse_atom_from(&tokens, &mut index, span)?)
@@ -1676,6 +1989,7 @@ fn hex_nibble(byte: u8) -> Option<u8> {
 }
 
 fn validate_program(program: &Program) -> Result<(), CompilerError> {
+    validate_record_declarations(&program.records)?;
     if program.weaves.is_empty() {
         return Err(CompilerError::new(
             Span::synthetic(),
@@ -1722,8 +2036,10 @@ fn validate_program(program: &Program) -> Result<(), CompilerError> {
     }
 
     for weave in &program.weaves {
+        validate_value_type(weave.result, &program.records, weave.span)?;
         let mut scope = BTreeMap::new();
         for parameter in &weave.parameters {
+            validate_value_type(parameter.value_type, &program.records, parameter.span)?;
             scope.insert(
                 parameter.name.clone(),
                 BindingState {
@@ -1733,7 +2049,14 @@ fn validate_program(program: &Program) -> Result<(), CompilerError> {
                 },
             );
         }
-        validate_block(&weave.body, &mut scope, &signatures, weave, true)?;
+        validate_block(
+            &weave.body,
+            &mut scope,
+            &signatures,
+            &program.records,
+            weave,
+            true,
+        )?;
     }
     Ok(())
 }
@@ -1742,6 +2065,7 @@ fn validate_block(
     statements: &[Statement],
     scope: &mut BTreeMap<String, BindingState>,
     signatures: &BTreeMap<String, FunctionSignature>,
+    records: &[RecordDeclaration],
     weave: &Weave,
     root: bool,
 ) -> Result<(), CompilerError> {
@@ -1765,7 +2089,7 @@ fn validate_block(
                         format!("binding {name} already exists in this weave"),
                     ));
                 }
-                let value_type = expression_type(value, scope, signatures)?;
+                let value_type = expression_type(value, scope, signatures, records)?;
                 scope.insert(
                     name.clone(),
                     BindingState {
@@ -1795,11 +2119,11 @@ fn validate_block(
                     ));
                 }
                 let expected = binding.value_type;
-                let actual = expression_type(value, scope, signatures)?;
+                let actual = expression_type(value, scope, signatures, records)?;
                 require_source_type(actual, expected, value.span, "revise")?;
             }
             Statement::Speak { value, .. } => {
-                let value_type = expression_type(value, scope, signatures)?;
+                let value_type = expression_type(value, scope, signatures, records)?;
                 require_source_type(value_type, ValueType::Text, value.span, "speak")?;
             }
             Statement::Yield { value, span } => {
@@ -1809,7 +2133,7 @@ fn validate_block(
                         "yield is allowed only as the final statement of a weave root",
                     ));
                 }
-                let value_type = expression_type(value, scope, signatures)?;
+                let value_type = expression_type(value, scope, signatures, records)?;
                 require_source_type(value_type, weave.result, value.span, "yield")?;
             }
             Statement::Choose {
@@ -1818,7 +2142,7 @@ fn validate_block(
                 when_dim,
                 ..
             } => {
-                let condition_type = expression_type(condition, scope, signatures)?;
+                let condition_type = expression_type(condition, scope, signatures, records)?;
                 require_source_type(
                     condition_type,
                     ValueType::Truth,
@@ -1827,17 +2151,24 @@ fn validate_block(
                 )?;
                 let original = scope.clone();
                 let mut bright_scope = original.clone();
-                validate_block(when_bright, &mut bright_scope, signatures, weave, false)?;
+                validate_block(
+                    when_bright,
+                    &mut bright_scope,
+                    signatures,
+                    records,
+                    weave,
+                    false,
+                )?;
                 let mut dim_scope = original.clone();
                 if !when_dim.is_empty() {
-                    validate_block(when_dim, &mut dim_scope, signatures, weave, false)?;
+                    validate_block(when_dim, &mut dim_scope, signatures, records, weave, false)?;
                 }
                 merge_scope(scope, &bright_scope, &dim_scope, statement.span())?;
             }
             Statement::While {
                 condition, body, ..
             } => {
-                let condition_type = expression_type(condition, scope, signatures)?;
+                let condition_type = expression_type(condition, scope, signatures, records)?;
                 require_source_type(
                     condition_type,
                     ValueType::Truth,
@@ -1846,7 +2177,7 @@ fn validate_block(
                 )?;
                 let before_loop = scope.clone();
                 let mut body_scope = before_loop.clone();
-                validate_block(body, &mut body_scope, signatures, weave, false)?;
+                validate_block(body, &mut body_scope, signatures, records, weave, false)?;
                 merge_scope(scope, &before_loop, &body_scope, statement.span())?;
             }
         }
@@ -1903,6 +2234,7 @@ fn expression_type(
     expression: &Expression,
     scope: &mut BTreeMap<String, BindingState>,
     signatures: &BTreeMap<String, FunctionSignature>,
+    records: &[RecordDeclaration],
 ) -> Result<ValueType, CompilerError> {
     match &expression.kind {
         ExpressionKind::Atom(atom) => atom_type(atom, scope),
@@ -1921,10 +2253,10 @@ fn expression_type(
                     Ok(ValueType::Whole)
                 }
                 UnaryOperation::Render => {
-                    if argument_type == ValueType::Bytes {
+                    if matches!(argument_type, ValueType::Bytes | ValueType::Record(_)) {
                         return Err(CompilerError::new(
                             argument.span,
-                            "render does not accept Bytes; inspect bytes with extent, octet, or decode",
+                            "render does not accept Bytes or records; project a record field first",
                         ));
                     }
                     Ok(ValueType::Text)
@@ -2150,7 +2482,132 @@ fn expression_type(
             }
             Ok(signature.result)
         }
+        ExpressionKind::MakeRecord { record, fields } => {
+            let (record_id, declaration) = record_by_name(records, record, expression.span)?;
+            if fields.len() != declaration.fields.len() {
+                return Err(CompilerError::new(
+                    expression.span,
+                    format!(
+                        "make {record} requires {} field value(s), received {}",
+                        declaration.fields.len(),
+                        fields.len()
+                    ),
+                ));
+            }
+            for (value, field) in fields.iter().zip(&declaration.fields) {
+                let actual = atom_type(value, scope)?;
+                require_source_type(actual, field.value_type, value.span, "record field")?;
+            }
+            Ok(ValueType::Record(record_id))
+        }
+        ExpressionKind::Field { record, field } => {
+            if !matches!(record.kind, AtomKind::Borrow(_)) {
+                return Err(CompilerError::new(
+                    record.span,
+                    "field requires borrow followed by a record binding name",
+                ));
+            }
+            let record_type = atom_type(record, scope)?;
+            let ValueType::Record(record_id) = record_type else {
+                return Err(CompilerError::new(
+                    record.span,
+                    "field requires a declared record value",
+                ));
+            };
+            let declaration = record_by_id(records, record_id, record.span)?;
+            let Some(declaration_field) = declaration
+                .fields
+                .iter()
+                .find(|candidate| candidate.name == *field)
+            else {
+                return Err(CompilerError::new(
+                    expression.span,
+                    format!("record {} has no field named {field}", declaration.name),
+                ));
+            };
+            Ok(declaration_field.value_type)
+        }
     }
+}
+
+fn validate_record_declarations(records: &[RecordDeclaration]) -> Result<(), CompilerError> {
+    let _ = record_type_map(records)?;
+    for record in records {
+        validate_name(&record.name, record.span, "record name", false)?;
+        if record.fields.is_empty() {
+            return Err(CompilerError::new(
+                record.span,
+                "records require at least one field",
+            ));
+        }
+        if record.fields.len() > MAX_RECORD_FIELDS {
+            return Err(CompilerError::new(
+                record.span,
+                format!("records support at most {MAX_RECORD_FIELDS} fields"),
+            ));
+        }
+        let mut fields = BTreeMap::new();
+        for field in &record.fields {
+            validate_name(&field.name, field.span, "record field name", false)?;
+            if fields.insert(field.name.as_str(), ()).is_some() {
+                return Err(CompilerError::new(
+                    field.span,
+                    format!("record field {} is declared more than once", field.name),
+                ));
+            }
+            if matches!(field.value_type, ValueType::Record(_)) {
+                return Err(CompilerError::new(
+                    field.span,
+                    "record fields may use only Text, Whole, Truth, or Bytes",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_value_type(
+    value_type: ValueType,
+    records: &[RecordDeclaration],
+    span: Span,
+) -> Result<(), CompilerError> {
+    if let ValueType::Record(record_id) = value_type {
+        let _ = record_by_id(records, record_id, span)?;
+    }
+    Ok(())
+}
+
+fn record_by_name<'a>(
+    records: &'a [RecordDeclaration],
+    name: &str,
+    span: Span,
+) -> Result<(u16, &'a RecordDeclaration), CompilerError> {
+    let Some((index, declaration)) = records
+        .iter()
+        .enumerate()
+        .find(|(_, declaration)| declaration.name == name)
+    else {
+        return Err(CompilerError::new(
+            span,
+            format!("record {name} has not been declared"),
+        ));
+    };
+    let record_id = u16::try_from(index)
+        .map_err(|_| CompilerError::new(span, "record identifier is outside the AETH range"))?;
+    Ok((record_id, declaration))
+}
+
+fn record_by_id(
+    records: &[RecordDeclaration],
+    record_id: u16,
+    span: Span,
+) -> Result<&RecordDeclaration, CompilerError> {
+    records.get(usize::from(record_id)).ok_or_else(|| {
+        CompilerError::new(
+            span,
+            "record type identifier is outside the declared record table",
+        )
+    })
 }
 
 fn atom_type(
@@ -2246,9 +2703,15 @@ fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
 
     let mut compiled = Vec::new();
     for weave in &program.weaves {
-        let layout = slot_layout(weave, &weave_results)?;
+        let layout = slot_layout(weave, &weave_results, &program.records)?;
         let mut code = Vec::new();
-        emit_block(&weave.body, &layout, &weave_indices, &mut code)?;
+        emit_block(
+            &weave.body,
+            &layout,
+            &weave_indices,
+            &program.records,
+            &mut code,
+        )?;
         let mut locals = vec![
             LocalDescriptor {
                 value_type: ValueType::Whole,
@@ -2266,7 +2729,41 @@ fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
     }
 
     let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
-    bytecode.push(ARTIFACT_VERSION);
+    let version = if program.records.is_empty() {
+        ARTIFACT_VERSION_V4
+    } else {
+        ARTIFACT_VERSION_V5
+    };
+    bytecode.push(version);
+    if version == ARTIFACT_VERSION_V5 {
+        write_u16(
+            &mut bytecode,
+            u16::try_from(program.records.len()).map_err(|_| {
+                CompilerError::new(
+                    Span::synthetic(),
+                    "artifact contains too many records for AETH",
+                )
+            })?,
+        );
+        for record in &program.records {
+            let name_length = u8::try_from(record.name.len()).map_err(|_| {
+                CompilerError::new(record.span, "record name exceeds the AETH name limit")
+            })?;
+            bytecode.push(name_length);
+            bytecode.extend_from_slice(record.name.as_bytes());
+            bytecode.push(u8::try_from(record.fields.len()).map_err(|_| {
+                CompilerError::new(record.span, "record has too many fields for AETH")
+            })?);
+            for field in &record.fields {
+                let field_name_length = u8::try_from(field.name.len()).map_err(|_| {
+                    CompilerError::new(field.span, "record field name exceeds the AETH name limit")
+                })?;
+                bytecode.push(field_name_length);
+                bytecode.extend_from_slice(field.name.as_bytes());
+                write_primitive_value_type(&mut bytecode, field.value_type, field.span)?;
+            }
+        }
+    }
     write_u16(
         &mut bytecode,
         u16::try_from(compiled.len()).map_err(|_| {
@@ -2287,10 +2784,10 @@ fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
         })?;
         bytecode.push(parameter_count);
         for parameter in &weave.parameters {
-            bytecode.push(parameter.value_type.to_byte());
+            write_value_type(&mut bytecode, parameter.value_type);
             bytecode.push(parameter.mode.to_byte());
         }
-        bytecode.push(weave.result.to_byte());
+        write_value_type(&mut bytecode, weave.result);
         write_u16(
             &mut bytecode,
             u16::try_from(locals.len()).map_err(|_| {
@@ -2298,7 +2795,7 @@ fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
             })?,
         );
         for local in locals {
-            bytecode.push(local.value_type.to_byte());
+            write_value_type(&mut bytecode, local.value_type);
             bytecode.push(u8::from(local.mutable));
         }
         write_u32(
@@ -2315,6 +2812,7 @@ fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
 fn slot_layout(
     weave: &Weave,
     weave_results: &BTreeMap<String, ValueType>,
+    records: &[RecordDeclaration],
 ) -> Result<BTreeMap<String, SlotInfo>, CompilerError> {
     let mut layout = BTreeMap::new();
     let mut next_slot = 0_u16;
@@ -2339,7 +2837,7 @@ fn slot_layout(
             span,
         } = statement
         {
-            let value_type = static_expression_type(value, &layout, weave_results)?;
+            let value_type = static_expression_type(value, &layout, weave_results, records)?;
             if layout.len() >= MAX_LOCALS {
                 return Err(CompilerError::new(
                     *span,
@@ -2366,25 +2864,10 @@ fn static_expression_type(
     expression: &Expression,
     layout: &BTreeMap<String, SlotInfo>,
     weave_results: &BTreeMap<String, ValueType>,
+    records: &[RecordDeclaration],
 ) -> Result<ValueType, CompilerError> {
-    let atom_type = |atom: &Atom| -> Result<ValueType, CompilerError> {
-        match &atom.kind {
-            AtomKind::Text(_) => Ok(ValueType::Text),
-            AtomKind::Bytes(_) => Ok(ValueType::Bytes),
-            AtomKind::Whole(_) => Ok(ValueType::Whole),
-            AtomKind::Truth(_) => Ok(ValueType::Truth),
-            AtomKind::Name(name) | AtomKind::Borrow(name) | AtomKind::Move(name) => {
-                layout.get(name).map(|slot| slot.value_type).ok_or_else(|| {
-                    CompilerError::new(
-                        atom.span,
-                        format!("value {name} has not been introduced before this binding"),
-                    )
-                })
-            }
-        }
-    };
     match &expression.kind {
-        ExpressionKind::Atom(atom) => atom_type(atom),
+        ExpressionKind::Atom(atom) => static_atom_type(atom, layout),
         ExpressionKind::Unary {
             operation,
             argument,
@@ -2392,7 +2875,7 @@ fn static_expression_type(
             UnaryOperation::Not => Ok(ValueType::Truth),
             UnaryOperation::Measure => Ok(ValueType::Whole),
             UnaryOperation::Render => {
-                let _ = atom_type(argument)?;
+                let _ = static_atom_type(argument, layout)?;
                 Ok(ValueType::Text)
             }
             UnaryOperation::Extent => Ok(ValueType::Whole),
@@ -2408,8 +2891,8 @@ fn static_expression_type(
             left,
             right,
         } => {
-            let _ = atom_type(left)?;
-            let _ = atom_type(right)?;
+            let _ = static_atom_type(left, layout)?;
+            let _ = static_atom_type(right, layout)?;
             match operation {
                 BinaryOperation::Sum
                 | BinaryOperation::Difference
@@ -2426,15 +2909,15 @@ fn static_expression_type(
             }
         }
         ExpressionKind::Cut { text, start, end } => {
-            let _ = atom_type(text)?;
-            let _ = atom_type(start)?;
-            let _ = atom_type(end)?;
+            let _ = static_atom_type(text, layout)?;
+            let _ = static_atom_type(start, layout)?;
+            let _ = static_atom_type(end, layout)?;
             Ok(ValueType::Text)
         }
         ExpressionKind::Slice { bytes, start, end } => {
-            let _ = atom_type(bytes)?;
-            let _ = atom_type(start)?;
-            let _ = atom_type(end)?;
+            let _ = static_atom_type(bytes, layout)?;
+            let _ = static_atom_type(start, layout)?;
+            let _ = static_atom_type(end, layout)?;
             Ok(ValueType::Bytes)
         }
         ExpressionKind::Ternary {
@@ -2443,9 +2926,9 @@ fn static_expression_type(
             second,
             third,
         } => {
-            let _ = atom_type(first)?;
-            let _ = atom_type(second)?;
-            let _ = atom_type(third)?;
+            let _ = static_atom_type(first, layout)?;
+            let _ = static_atom_type(second, layout)?;
+            let _ = static_atom_type(third, layout)?;
             match operation {
                 TernaryOperation::Seek => Ok(ValueType::Whole),
                 TernaryOperation::Poke | TernaryOperation::Poke32 => Ok(ValueType::Bytes),
@@ -2459,6 +2942,53 @@ fn static_expression_type(
                 )
             })
         }
+        ExpressionKind::MakeRecord { record, fields } => {
+            for field in fields {
+                let _ = static_atom_type(field, layout)?;
+            }
+            let (record_id, _) = record_by_name(records, record, expression.span)?;
+            Ok(ValueType::Record(record_id))
+        }
+        ExpressionKind::Field { record, field } => {
+            let ValueType::Record(record_id) = static_atom_type(record, layout)? else {
+                return Err(CompilerError::new(
+                    record.span,
+                    "internal compiler expected a record field projection",
+                ));
+            };
+            let declaration = record_by_id(records, record_id, record.span)?;
+            declaration
+                .fields
+                .iter()
+                .find(|candidate| candidate.name == *field)
+                .map(|candidate| candidate.value_type)
+                .ok_or_else(|| {
+                    CompilerError::new(
+                        expression.span,
+                        "internal compiler could not resolve a record field",
+                    )
+                })
+        }
+    }
+}
+
+fn static_atom_type(
+    atom: &Atom,
+    layout: &BTreeMap<String, SlotInfo>,
+) -> Result<ValueType, CompilerError> {
+    match &atom.kind {
+        AtomKind::Text(_) => Ok(ValueType::Text),
+        AtomKind::Bytes(_) => Ok(ValueType::Bytes),
+        AtomKind::Whole(_) => Ok(ValueType::Whole),
+        AtomKind::Truth(_) => Ok(ValueType::Truth),
+        AtomKind::Name(name) | AtomKind::Borrow(name) | AtomKind::Move(name) => {
+            layout.get(name).map(|slot| slot.value_type).ok_or_else(|| {
+                CompilerError::new(
+                    atom.span,
+                    format!("value {name} has not been introduced before this binding"),
+                )
+            })
+        }
     }
 }
 
@@ -2466,12 +2996,13 @@ fn emit_block(
     statements: &[Statement],
     layout: &BTreeMap<String, SlotInfo>,
     weave_indices: &BTreeMap<String, usize>,
+    records: &[RecordDeclaration],
     code: &mut Vec<u8>,
 ) -> Result<(), CompilerError> {
     for statement in statements {
         match statement {
             Statement::Bind { name, value, .. } => {
-                emit_expression(value, layout, weave_indices, code)?;
+                emit_expression(value, layout, weave_indices, records, code)?;
                 code.push(OP_STORE);
                 write_u16(
                     code,
@@ -2487,7 +3018,7 @@ fn emit_block(
                 );
             }
             Statement::Revise { name, value, .. } => {
-                emit_expression(value, layout, weave_indices, code)?;
+                emit_expression(value, layout, weave_indices, records, code)?;
                 code.push(OP_REVISE);
                 write_u16(
                     code,
@@ -2503,11 +3034,11 @@ fn emit_block(
                 );
             }
             Statement::Speak { value, .. } => {
-                emit_expression(value, layout, weave_indices, code)?;
+                emit_expression(value, layout, weave_indices, records, code)?;
                 code.push(OP_SPEAK);
             }
             Statement::Yield { value, .. } => {
-                emit_expression(value, layout, weave_indices, code)?;
+                emit_expression(value, layout, weave_indices, records, code)?;
                 code.push(OP_YIELD);
             }
             Statement::Choose {
@@ -2516,10 +3047,10 @@ fn emit_block(
                 when_dim,
                 ..
             } => {
-                emit_expression(condition, layout, weave_indices, code)?;
+                emit_expression(condition, layout, weave_indices, records, code)?;
                 code.push(OP_JUMP_IF_DIM);
                 let dim_target = reserve_u32(code);
-                emit_block(when_bright, layout, weave_indices, code)?;
+                emit_block(when_bright, layout, weave_indices, records, code)?;
                 if when_dim.is_empty() {
                     let continuation = code.len();
                     patch_u32(code, dim_target, continuation)?;
@@ -2528,7 +3059,7 @@ fn emit_block(
                     let end_target = reserve_u32(code);
                     let dim_branch = code.len();
                     patch_u32(code, dim_target, dim_branch)?;
-                    emit_block(when_dim, layout, weave_indices, code)?;
+                    emit_block(when_dim, layout, weave_indices, records, code)?;
                     let continuation = code.len();
                     patch_u32(code, end_target, continuation)?;
                 }
@@ -2537,10 +3068,10 @@ fn emit_block(
                 condition, body, ..
             } => {
                 let loop_start = code.len();
-                emit_expression(condition, layout, weave_indices, code)?;
+                emit_expression(condition, layout, weave_indices, records, code)?;
                 code.push(OP_JUMP_IF_DIM);
                 let loop_end = reserve_u32(code);
-                emit_block(body, layout, weave_indices, code)?;
+                emit_block(body, layout, weave_indices, records, code)?;
                 code.push(OP_JUMP);
                 write_u32(
                     code,
@@ -2563,6 +3094,7 @@ fn emit_expression(
     expression: &Expression,
     layout: &BTreeMap<String, SlotInfo>,
     weave_indices: &BTreeMap<String, usize>,
+    records: &[RecordDeclaration],
     code: &mut Vec<u8>,
 ) -> Result<(), CompilerError> {
     match &expression.kind {
@@ -2657,6 +3189,42 @@ fn emit_expression(
                 CompilerError::new(expression.span, "call has too many AETH arguments")
             })?);
         }
+        ExpressionKind::MakeRecord { record, fields } => {
+            for field in fields {
+                emit_atom(field, layout, code)?;
+            }
+            let (record_id, _) = record_by_name(records, record, expression.span)?;
+            code.push(OP_MAKE_RECORD);
+            write_u16(code, record_id);
+        }
+        ExpressionKind::Field { record, field } => {
+            emit_atom(record, layout, code)?;
+            let ValueType::Record(record_id) = static_atom_type(record, layout)? else {
+                return Err(CompilerError::new(
+                    record.span,
+                    "internal compiler expected a record field projection",
+                ));
+            };
+            let declaration = record_by_id(records, record_id, record.span)?;
+            let field_index = declaration
+                .fields
+                .iter()
+                .position(|candidate| candidate.name == *field)
+                .ok_or_else(|| {
+                    CompilerError::new(
+                        expression.span,
+                        "internal compiler could not resolve a record field",
+                    )
+                })?;
+            code.push(OP_FIELD);
+            write_u16(code, record_id);
+            code.push(u8::try_from(field_index).map_err(|_| {
+                CompilerError::new(
+                    expression.span,
+                    "record field index is outside the AETH range",
+                )
+            })?);
+        }
     }
     Ok(())
 }
@@ -2734,13 +3302,75 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     if bytecode[..ARTIFACT_MAGIC.len()] != ARTIFACT_MAGIC[..] {
         return Err(BytecodeError::new(0, "artifact magic is not AETH"));
     }
-    if bytecode[ARTIFACT_MAGIC.len()] != ARTIFACT_VERSION {
+    let version = bytecode[ARTIFACT_MAGIC.len()];
+    if !matches!(version, ARTIFACT_VERSION_V4 | ARTIFACT_VERSION_V5) {
         return Err(BytecodeError::new(
             ARTIFACT_MAGIC.len(),
             "artifact version is not supported by this Aether VM",
         ));
     }
     let mut position = ARTIFACT_MAGIC.len() + 1;
+    let mut records = Vec::new();
+    if version == ARTIFACT_VERSION_V5 {
+        let record_count = usize::from(read_u16(bytecode, &mut position)?);
+        if record_count == 0 || record_count > MAX_RECORDS {
+            return Err(BytecodeError::new(
+                position,
+                "AETH v5 record count is outside the Aether limit",
+            ));
+        }
+        records.reserve(record_count);
+        for _ in 0..record_count {
+            let name_offset = position;
+            let name_length = usize::from(read_byte(bytecode, &mut position)?);
+            let name = read_ascii(bytecode, &mut position, name_length, "record name")?;
+            validate_artifact_name(&name, name_offset, "record name", false)?;
+            if records
+                .iter()
+                .any(|record: &ArtifactRecord| record.name == name)
+            {
+                return Err(BytecodeError::new(
+                    name_offset,
+                    "artifact defines a record name twice",
+                ));
+            }
+            let field_count = usize::from(read_byte(bytecode, &mut position)?);
+            if field_count == 0 || field_count > MAX_RECORD_FIELDS {
+                return Err(BytecodeError::new(
+                    position,
+                    "artifact record field count is outside the Aether limit",
+                ));
+            }
+            let mut fields = Vec::with_capacity(field_count);
+            for _ in 0..field_count {
+                let field_offset = position;
+                let field_name_length = usize::from(read_byte(bytecode, &mut position)?);
+                let field_name = read_ascii(
+                    bytecode,
+                    &mut position,
+                    field_name_length,
+                    "record field name",
+                )?;
+                validate_artifact_name(&field_name, field_offset, "record field name", false)?;
+                if fields
+                    .iter()
+                    .any(|field: &ArtifactRecordField| field.name == field_name)
+                {
+                    return Err(BytecodeError::new(
+                        field_offset,
+                        "artifact record defines a field name twice",
+                    ));
+                }
+                let value_type =
+                    ValueType::from_primitive_tag(read_byte(bytecode, &mut position)?, position)?;
+                fields.push(ArtifactRecordField {
+                    name: field_name,
+                    value_type,
+                });
+            }
+            records.push(ArtifactRecord { name, fields });
+        }
+    }
     let function_count = usize::from(read_u16(bytecode, &mut position)?);
     if function_count == 0 || function_count > MAX_FUNCTIONS {
         return Err(BytecodeError::new(
@@ -2755,11 +3385,11 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         let parameter_count = usize::from(read_byte(bytecode, &mut position)?);
         let mut parameters = Vec::with_capacity(parameter_count);
         for _ in 0..parameter_count {
-            let value_type = ValueType::from_byte(read_byte(bytecode, &mut position)?, position)?;
+            let value_type = read_value_type(bytecode, &mut position, version, records.len())?;
             let mode = ParameterMode::from_byte(read_byte(bytecode, &mut position)?, position)?;
             parameters.push((value_type, mode));
         }
-        let result = ValueType::from_byte(read_byte(bytecode, &mut position)?, position)?;
+        let result = read_value_type(bytecode, &mut position, version, records.len())?;
         let local_count = usize::from(read_u16(bytecode, &mut position)?);
         if local_count > MAX_LOCALS {
             return Err(BytecodeError::new(
@@ -2769,7 +3399,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         }
         let mut locals = Vec::with_capacity(local_count);
         for _ in 0..local_count {
-            let value_type = ValueType::from_byte(read_byte(bytecode, &mut position)?, position)?;
+            let value_type = read_value_type(bytecode, &mut position, version, records.len())?;
             let mutable = match read_byte(bytecode, &mut position)? {
                 0 => false,
                 1 => true,
@@ -2809,15 +3439,21 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             "artifact has trailing bytes after its weave table",
         ));
     }
-    Ok(Artifact { functions })
+    Ok(Artifact {
+        version,
+        records,
+        functions,
+    })
 }
 
 fn verify_function(
     function_index: usize,
     function: &ArtifactFunction,
     functions: &[ArtifactFunction],
+    records: &[ArtifactRecord],
+    version: u8,
 ) -> Result<(), BytecodeError> {
-    let decoded = decode_code(&function.code)?;
+    let decoded = decode_code(&function.code, version)?;
     if decoded.is_empty() {
         return Err(BytecodeError::new(0, "weave contains no instructions"));
     }
@@ -2872,6 +3508,7 @@ fn verify_function(
             function_index,
             function,
             functions,
+            records,
             &instruction,
             state,
             &mut yielded,
@@ -2902,6 +3539,7 @@ fn verify_instruction(
     function_index: usize,
     function: &ArtifactFunction,
     functions: &[ArtifactFunction],
+    records: &[ArtifactRecord],
     decoded: &DecodedInstruction,
     mut state: VerificationState,
     yielded: &mut bool,
@@ -3120,13 +3758,38 @@ fn verify_instruction(
         }
         Instruction::Render => {
             let value_type = pop_any_type(&mut state.stack, offset, "render")?;
-            if value_type == ValueType::Bytes {
+            if matches!(value_type, ValueType::Bytes | ValueType::Record(_)) {
                 return Err(BytecodeError::new(
                     offset,
-                    "render does not accept Bytes; inspect bytes with extent, octet, or decode",
+                    "render does not accept Bytes or records; project a record field first",
                 ));
             }
             state.stack.push(ValueType::Text);
+            continue_with(state)
+        }
+        Instruction::MakeRecord(record_id) => {
+            let record = artifact_record(records, *record_id, offset)?;
+            for field in record.fields.iter().rev() {
+                pop_type(&mut state.stack, field.value_type, offset, "make record")?;
+            }
+            state.stack.push(ValueType::Record(*record_id));
+            continue_with(state)
+        }
+        Instruction::Field {
+            record: record_id,
+            field,
+        } => {
+            let record = artifact_record(records, *record_id, offset)?;
+            let field = record.fields.get(*field).ok_or_else(|| {
+                BytecodeError::new(offset, "field references an unknown record field")
+            })?;
+            pop_type(
+                &mut state.stack,
+                ValueType::Record(*record_id),
+                offset,
+                "field",
+            )?;
+            state.stack.push(field.value_type);
             continue_with(state)
         }
         Instruction::Call {
@@ -3235,7 +3898,7 @@ fn execute_function(
     let mut stack = Vec::new();
     let mut position = 0;
     while position < function.code.len() {
-        let decoded = decode_instruction(&function.code, &mut position)?;
+        let decoded = decode_instruction(&function.code, &mut position, artifact.version)?;
         match decoded.instruction {
             Instruction::PushText(value) => stack.push(RuntimeValue::Text(value)),
             Instruction::PushBytes(value) => stack.push(RuntimeValue::Bytes(value)),
@@ -3582,17 +4245,68 @@ fn execute_function(
             }
             Instruction::Render => {
                 let value = pop_runtime(&mut stack, decoded.offset, "render")?;
-                let text = match value {
-                    RuntimeValue::Text(value) => value,
-                    RuntimeValue::Whole(value) => value.to_string(),
-                    RuntimeValue::Truth(true) => "bright".to_owned(),
-                    RuntimeValue::Truth(false) => "dim".to_owned(),
-                    RuntimeValue::Bytes(_) => return Err(BytecodeError::new(
-                        decoded.offset,
-                        "render does not accept Bytes; inspect bytes with extent, octet, or decode",
-                    )),
-                };
+                let text =
+                    match value {
+                        RuntimeValue::Text(value) => value,
+                        RuntimeValue::Whole(value) => value.to_string(),
+                        RuntimeValue::Truth(true) => "bright".to_owned(),
+                        RuntimeValue::Truth(false) => "dim".to_owned(),
+                        RuntimeValue::Bytes(_) => return Err(BytecodeError::new(
+                            decoded.offset,
+                            "render does not accept Bytes or records; project a record field first",
+                        )),
+                        RuntimeValue::Record { .. } => return Err(BytecodeError::new(
+                            decoded.offset,
+                            "render does not accept Bytes or records; project a record field first",
+                        )),
+                    };
                 stack.push(RuntimeValue::Text(text));
+            }
+            Instruction::MakeRecord(record_id) => {
+                let record = artifact_record(&artifact.records, record_id, decoded.offset)?;
+                let mut fields = Vec::with_capacity(record.fields.len());
+                for field in record.fields.iter().rev() {
+                    let value = pop_runtime(&mut stack, decoded.offset, "make record")?;
+                    require_runtime_type(&value, field.value_type, decoded.offset, "make record")?;
+                    fields.push(value);
+                }
+                fields.reverse();
+                ensure_record_size(&fields, decoded.offset)?;
+                stack.push(RuntimeValue::Record {
+                    record: record_id,
+                    fields,
+                });
+            }
+            Instruction::Field {
+                record: record_id,
+                field,
+            } => {
+                let record = artifact_record(&artifact.records, record_id, decoded.offset)?;
+                let definition = record.fields.get(field).ok_or_else(|| {
+                    BytecodeError::new(decoded.offset, "field references an unknown record field")
+                })?;
+                let value = pop_runtime(&mut stack, decoded.offset, "field")?;
+                let RuntimeValue::Record {
+                    record: actual_record,
+                    fields,
+                } = value
+                else {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "field received a non-record value",
+                    ));
+                };
+                if actual_record != record_id || fields.len() != record.fields.len() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "field received a record that disagrees with its declared schema",
+                    ));
+                }
+                let value = fields.get(field).cloned().ok_or_else(|| {
+                    BytecodeError::new(decoded.offset, "field references an unknown record field")
+                })?;
+                require_runtime_type(&value, definition.value_type, decoded.offset, "field")?;
+                stack.push(value);
             }
             Instruction::Call {
                 function: called,
@@ -3636,11 +4350,11 @@ fn execute_function(
     ))
 }
 
-fn decode_code(code: &[u8]) -> Result<Vec<DecodedInstruction>, BytecodeError> {
+fn decode_code(code: &[u8], version: u8) -> Result<Vec<DecodedInstruction>, BytecodeError> {
     let mut position = 0;
     let mut instructions = Vec::new();
     while position < code.len() {
-        instructions.push(decode_instruction(code, &mut position)?);
+        instructions.push(decode_instruction(code, &mut position, version)?);
     }
     Ok(instructions)
 }
@@ -3648,6 +4362,7 @@ fn decode_code(code: &[u8]) -> Result<Vec<DecodedInstruction>, BytecodeError> {
 fn decode_instruction(
     code: &[u8],
     position: &mut usize,
+    version: u8,
 ) -> Result<DecodedInstruction, BytecodeError> {
     let offset = *position;
     let opcode = read_byte(code, position)?;
@@ -3708,6 +4423,27 @@ fn decode_instruction(
         OP_POKE => Instruction::Poke,
         OP_POKE32 => Instruction::Poke32,
         OP_PACK64 => Instruction::Pack64,
+        OP_MAKE_RECORD => {
+            if version != ARTIFACT_VERSION_V5 {
+                return Err(BytecodeError::new(
+                    offset,
+                    "record construction is valid only in AETH v5 artifacts",
+                ));
+            }
+            Instruction::MakeRecord(read_u16(code, position)?)
+        }
+        OP_FIELD => {
+            if version != ARTIFACT_VERSION_V5 {
+                return Err(BytecodeError::new(
+                    offset,
+                    "record field projection is valid only in AETH v5 artifacts",
+                ));
+            }
+            Instruction::Field {
+                record: read_u16(code, position)?,
+                field: usize::from(read_byte(code, position)?),
+            }
+        }
         OP_CALL => Instruction::Call {
             function: usize::from(read_u16(code, position)?),
             arguments: usize::from(read_byte(code, position)?),
@@ -3732,6 +4468,19 @@ fn local_descriptor(
         .locals
         .get(slot)
         .ok_or_else(|| BytecodeError::new(offset, "local slot is outside the local table"))
+}
+
+fn artifact_record(
+    records: &[ArtifactRecord],
+    record_id: u16,
+    offset: usize,
+) -> Result<&ArtifactRecord, BytecodeError> {
+    records.get(usize::from(record_id)).ok_or_else(|| {
+        BytecodeError::new(
+            offset,
+            "record identifier is outside the artifact record table",
+        )
+    })
 }
 
 fn ensure_readable(
@@ -3903,7 +4652,71 @@ fn runtime_values_equal(left: &RuntimeValue, right: &RuntimeValue) -> bool {
         (RuntimeValue::Whole(left), RuntimeValue::Whole(right)) => left == right,
         (RuntimeValue::Truth(left), RuntimeValue::Truth(right)) => left == right,
         (RuntimeValue::Bytes(left), RuntimeValue::Bytes(right)) => left == right,
+        (
+            RuntimeValue::Record {
+                record: left_record,
+                fields: left_fields,
+            },
+            RuntimeValue::Record {
+                record: right_record,
+                fields: right_fields,
+            },
+        ) => {
+            left_record == right_record
+                && left_fields.len() == right_fields.len()
+                && left_fields
+                    .iter()
+                    .zip(right_fields)
+                    .all(|(left, right)| runtime_values_equal(left, right))
+        }
         _ => false,
+    }
+}
+
+fn ensure_record_size(fields: &[RuntimeValue], offset: usize) -> Result<(), BytecodeError> {
+    let mut size = 0_usize;
+    for field in fields {
+        size = size
+            .checked_add(runtime_value_size(field, offset)?)
+            .ok_or_else(|| {
+                BytecodeError::new(offset, "record size overflowed the runtime safety limit")
+            })?;
+        if size > MAX_RECORD_BYTES {
+            return Err(BytecodeError::new(
+                offset,
+                "record construction exceeds the Aether runtime safety limit",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn runtime_value_size(value: &RuntimeValue, offset: usize) -> Result<usize, BytecodeError> {
+    match value {
+        RuntimeValue::Text(value) => Ok(value.len()),
+        RuntimeValue::Whole(_) => Ok(std::mem::size_of::<i64>()),
+        RuntimeValue::Truth(_) => Ok(1),
+        RuntimeValue::Bytes(value) => Ok(value.len()),
+        RuntimeValue::Record { fields, .. } => {
+            let mut size = 0_usize;
+            for field in fields {
+                size = size
+                    .checked_add(runtime_value_size(field, offset)?)
+                    .ok_or_else(|| {
+                        BytecodeError::new(
+                            offset,
+                            "record size overflowed the runtime safety limit",
+                        )
+                    })?;
+                if size > MAX_RECORD_BYTES {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "record exceeds the Aether runtime safety limit",
+                    ));
+                }
+            }
+            Ok(size)
+        }
     }
 }
 
@@ -3946,6 +4759,33 @@ fn read_u16(bytes: &[u8], position: &mut usize) -> Result<u16, BytecodeError> {
     let low = read_byte(bytes, position)?;
     let high = read_byte(bytes, position)?;
     Ok(u16::from_le_bytes([low, high]))
+}
+
+fn read_value_type(
+    bytes: &[u8],
+    position: &mut usize,
+    version: u8,
+    record_count: usize,
+) -> Result<ValueType, BytecodeError> {
+    let offset = *position;
+    let tag = read_byte(bytes, position)?;
+    if tag != ValueType::Record(0).to_tag() {
+        return ValueType::from_primitive_tag(tag, offset);
+    }
+    if version != ARTIFACT_VERSION_V5 {
+        return Err(BytecodeError::new(
+            offset,
+            "record types are valid only in AETH v5 artifacts",
+        ));
+    }
+    let record_id = read_u16(bytes, position)?;
+    if usize::from(record_id) >= record_count {
+        return Err(BytecodeError::new(
+            offset,
+            "record type identifier is outside the artifact record table",
+        ));
+    }
+    Ok(ValueType::Record(record_id))
 }
 
 fn read_u32(bytes: &[u8], position: &mut usize) -> Result<u32, BytecodeError> {
@@ -4080,6 +4920,28 @@ fn checked_bytes_index(
 
 fn write_u16(bytes: &mut Vec<u8>, value: u16) {
     bytes.extend_from_slice(&value.to_le_bytes());
+}
+
+fn write_value_type(bytes: &mut Vec<u8>, value_type: ValueType) {
+    bytes.push(value_type.to_tag());
+    if let ValueType::Record(record_id) = value_type {
+        write_u16(bytes, record_id);
+    }
+}
+
+fn write_primitive_value_type(
+    bytes: &mut Vec<u8>,
+    value_type: ValueType,
+    span: Span,
+) -> Result<(), CompilerError> {
+    if matches!(value_type, ValueType::Record(_)) {
+        return Err(CompilerError::new(
+            span,
+            "record fields may use only Text, Whole, Truth, or Bytes",
+        ));
+    }
+    bytes.push(value_type.to_tag());
+    Ok(())
 }
 
 fn write_u32(bytes: &mut Vec<u8>, value: u32) {
@@ -4231,6 +5093,20 @@ fn write_expression(expression: &Expression, output: &mut String) {
                 output.push(' ');
                 write_atom(argument, output);
             }
+        }
+        ExpressionKind::MakeRecord { record, fields } => {
+            output.push_str("make ");
+            output.push_str(record);
+            for field in fields {
+                output.push(' ');
+                write_atom(field, output);
+            }
+        }
+        ExpressionKind::Field { record, field } => {
+            output.push_str("field ");
+            write_atom(record, output);
+            output.push(' ');
+            output.push_str(field);
         }
     }
 }
@@ -4406,6 +5282,22 @@ fn write_ast_expression(expression: &Expression, output: &mut String) {
             }
             output.push(')');
         }
+        ExpressionKind::MakeRecord { record, fields } => {
+            output.push_str("make(");
+            output.push_str(record);
+            for field in fields {
+                output.push(',');
+                write_ast_atom(field, output);
+            }
+            output.push(')');
+        }
+        ExpressionKind::Field { record, field } => {
+            output.push_str("field(");
+            write_ast_atom(record, output);
+            output.push(',');
+            output.push_str(field);
+            output.push(')');
+        }
     }
 }
 
@@ -4497,6 +5389,7 @@ fn validate_name(
         name,
         "world"
             | "weave"
+            | "record"
             | "bind"
             | "mutable"
             | "revise"
@@ -4506,6 +5399,8 @@ fn validate_name(
             | "otherwise"
             | "while"
             | "call"
+            | "make"
+            | "field"
             | "borrow"
             | "move"
             | "sum"
@@ -4548,6 +5443,92 @@ fn validate_name(
         return Err(CompilerError::new(
             span,
             format!("{subject} uses reserved Aether word {name}"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_artifact_name(
+    name: &str,
+    offset: usize,
+    subject: &str,
+    allow_main: bool,
+) -> Result<(), BytecodeError> {
+    let mut characters = name.chars();
+    let Some(first) = characters.next() else {
+        return Err(BytecodeError::new(
+            offset,
+            format!("artifact {subject} is required"),
+        ));
+    };
+    if !first.is_ascii_lowercase()
+        || !characters.all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
+        })
+    {
+        return Err(BytecodeError::new(
+            offset,
+            format!("artifact {subject} is not a canonical Aether name"),
+        ));
+    }
+    let reserved = matches!(
+        name,
+        "world"
+            | "weave"
+            | "record"
+            | "bind"
+            | "mutable"
+            | "revise"
+            | "speak"
+            | "yield"
+            | "choose"
+            | "otherwise"
+            | "while"
+            | "call"
+            | "make"
+            | "field"
+            | "borrow"
+            | "move"
+            | "sum"
+            | "difference"
+            | "product"
+            | "less"
+            | "same"
+            | "not"
+            | "join"
+            | "measure"
+            | "glyph"
+            | "cut"
+            | "slice"
+            | "render"
+            | "extent"
+            | "encode"
+            | "decode"
+            | "seek"
+            | "number"
+            | "pack16"
+            | "pack32"
+            | "pack64"
+            | "unpack16"
+            | "unpack32"
+            | "poke"
+            | "poke32"
+            | "quotient"
+            | "remainder"
+            | "fuse"
+            | "append"
+            | "octet"
+            | "bright"
+            | "dim"
+            | "text"
+            | "whole"
+            | "truth"
+            | "bytes"
+    ) || (!allow_main && name == "main");
+    if reserved {
+        return Err(BytecodeError::new(
+            offset,
+            format!("artifact {subject} uses a reserved Aether word"),
         ));
     }
     Ok(())
@@ -4774,6 +5755,7 @@ mod tests {
         let first = compile_to_bytecode(HELLO).expect("first compilation should work");
         let second = compile_to_bytecode(HELLO).expect("second compilation should work");
         assert_eq!(first.bytecode, second.bytecode);
+        assert_eq!(&first.bytecode[..5], b"AETH\x04");
         verify_bytecode(&first.bytecode).expect("compiler artifact must verify");
     }
 
@@ -4791,6 +5773,18 @@ mod tests {
         let last = artifact.len() - 1;
         artifact[last] = 255;
         assert!(verify_bytecode(&artifact).is_err());
+
+        let mut artifact = compile_to_bytecode(HELLO)
+            .expect("source should compile")
+            .bytecode;
+        let yield_offset = artifact
+            .iter()
+            .rposition(|byte| *byte == OP_YIELD)
+            .expect("fixture should contain a terminal yield opcode");
+        artifact[yield_offset] = OP_MAKE_RECORD;
+        let error = verify_bytecode(&artifact)
+            .expect_err("v4 artifacts must reject v5-only record instructions");
+        assert!(error.message.contains("valid only in AETH v5"));
     }
 
     #[test]
@@ -4798,6 +5792,51 @@ mod tests {
         let windows_source = HELLO.replace('\n', "\r\n");
         let program = compile_source(&windows_source).expect("CRLF source should compile");
         assert_eq!(format_program(&program), HELLO);
+    }
+
+    #[test]
+    fn compiles_runs_and_formats_immutable_records_in_aeth_v5() {
+        let source = "world records\n\nrecord card [label: Text, score: Whole, payload: Bytes, active: Truth]\n\nweave inspect [borrow value: card] -> Whole:\n  bind score <- field borrow value score\n  yield score\n\nweave main [] -> Whole:\n  bind card_value <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind label <- field borrow card_value label\n  speak borrow label\n  bind score <- call inspect borrow card_value\n  bind duplicate <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind equal <- same borrow card_value borrow duplicate\n  bind mutable result <- score\n  choose equal:\n    revise result <- sum result 1\n  yield result\n";
+        let output = compile_to_bytecode(source).expect("record source should compile");
+        let run = run_bytecode(&output.bytecode).expect("record artifact should run");
+        assert_eq!(run.stdout, "Aether");
+        assert_eq!(run.exit_code, 8);
+        assert_eq!(&output.bytecode[..5], b"AETH\x05");
+        assert_eq!(format_program(&output.program), source);
+        assert!(canonical_ast(&output.program).contains("Record(card)[label:Text"));
+
+        let host_error = invoke_bytecode(&output.bytecode, "inspect", &[InvocationValue::Whole(7)])
+            .expect_err("hosts must not synthesize Aether record arguments");
+        assert!(host_error
+            .message
+            .contains("host invocation accepts only primitive"));
+    }
+
+    #[test]
+    fn rejects_invalid_record_source_and_malformed_v5_field_projection() {
+        let nested = "world invalid\n\nrecord inner [value: Whole]\nrecord outer [item: inner]\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error =
+            compile_source(nested).expect_err("record fields are deliberately primitive-only");
+        assert!(error.message.contains("record fields may use only"));
+
+        let implicit_projection = "world invalid\n\nrecord card [score: Whole]\n\nweave main [] -> Whole:\n  bind value <- make card 7\n  bind score <- field value score\n  yield score\n";
+        let error = compile_source(implicit_projection)
+            .expect_err("record fields require an explicit borrow projection");
+        assert!(error.message.contains("field requires borrow"));
+
+        let source = "world invalid\n\nrecord card [score: Whole]\n\nweave main [] -> Whole:\n  bind value <- make card 7\n  bind score <- field borrow value score\n  yield score\n";
+        let mut artifact = compile_to_bytecode(source)
+            .expect("record fixture should compile")
+            .bytecode;
+        let field_opcode = artifact
+            .iter()
+            .position(|byte| *byte == OP_FIELD)
+            .expect("fixture should contain OP_FIELD");
+        artifact[field_opcode + 1] = u8::MAX;
+        artifact[field_opcode + 2] = u8::MAX;
+        let error = verify_bytecode(&artifact)
+            .expect_err("a projection must reference a declared record identifier");
+        assert!(error.message.contains("record identifier"));
     }
 
     fn hex_encode(bytes: &[u8]) -> String {

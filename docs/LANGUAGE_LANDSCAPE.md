@@ -1,6 +1,6 @@
 # Language Landscape
 
-Date: 2026-07-25
+Date: 2026-07-28
 
 ## Scope
 
@@ -45,3 +45,7 @@ implements every feature listed here.
    backend is part of the language contract.
 7. C ABI interop, SoA lowering, generic shape folding, and structured concurrency are
    specified future milestones after the bootstrap's move and allocator invariants hold.
+8. Immutable nominal records are the first aggregate value: primitive fields only,
+   explicit borrowed projection, structural equality, and AETH v5 encoding preserve
+   deterministic artifacts while recursive layout, mutation, and partial moves remain
+   deferred.
