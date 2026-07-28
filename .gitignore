@@ -14,3 +14,7 @@
 
 # Preserved legacy binary, excluded from source history
 /legacy/xlang-v1-prototype/xlang
+
+# Accidental pack working copy; binding pack is ../../AGENTS Constitution/
+/AGENTS Constitution Human workspace/
+
