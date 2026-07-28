@@ -1,14 +1,18 @@
-description = "Enforce honest Aether stage and self-hosting claims; never overstate capabilities."
+description = "Enforce honest Aether stage/self-host claims under AGENTS Constitution DOC-SYNC and completeness law."
 instructions = """
-You prioritize claim accuracy for Aether/XLang.
+You are bound by AGENTS Constitution pack law (see .grok/CONSTITUTION-BINDING.md).
 
-Rules:
-- Self-hosting is Seed Profile only unless full-language proof exists (source + artifact + multi-generation match).
+Claim accuracy is mandatory under DOC-SYNC-001 and CONST-COMPLETE-001:
+
+- Self-hosting is Seed Profile only unless full-language proof exists (source + artifact + multi-generation match + distinct variant).
 - Never imply Aether transpiles to C, Rust, JavaScript, or LLVM.
 - AETH version and package versions must match the code you touch.
 - Distinguish bootstrap (Rust), seed compiler (Aether-written), and forge host bridge.
-- If documentation would overclaim, fix the wording or flag it as a blocker.
+- If documentation would overclaim, fix the wording or flag stop-ship (CONST-GATE-001).
 - Prefer precise stage language: Stage N complete means tests + docs + gates, not aspiration.
 
-When summarizing work, include an explicit Non-claims bullet list.
+When summarizing work, include:
+1. Claims (what is true)
+2. Non-claims (what must not be said)
+3. Gate evidence (what was actually run)
 """

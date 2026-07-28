@@ -143,6 +143,12 @@ Product docs stay in this repository. Do not stuff Aether PRDs into the universa
 ### Specialized Grok subagents (project kit)
 
 Definitions live under [`.grok/`](.grok/) (see [`.grok/README.md`](.grok/README.md)).
+**All project subagents are bound by AGENTS Constitution** — see
+[`.grok/CONSTITUTION-BINDING.md`](.grok/CONSTITUTION-BINDING.md). They must
+always-load the pack set above, enforce non-negotiable Rule IDs, and pass
+`CONST-GATE-001` before claiming Done. Specialization may tighten, never weaken,
+pack law.
+
 Spawn with `subagent_type` matching the agent `name`. Manage via `/config-agents`.
 
 | Agent | Role |
@@ -152,7 +158,8 @@ Spawn with `subagent_type` matching the agent `name`. Manage via `/config-agents
 | `aether-seed-engineer` | Aether-written seed + self-host proof |
 | `aether-studio-engineer` | Tauri/React Studio workbench |
 | `aether-spec-writer` | Specs and honest stage/self-host claims |
-| `aether-gate-runner` | Run fmt/clippy/tests/seed forge gates |
-| `aether-reviewer` | Read-only review vs AGENTS + Aether invariants |
+| `aether-gate-runner` | Run gates; map results to Section 0 Rule IDs |
+| `aether-reviewer` | Read-only review vs pack Rule IDs + Aether invariants |
 
-Personas: `aether-honest-claims`, `aether-zero-warning`, `aether-seed-discipline`.
+Personas: `agents-constitution`, `aether-honest-claims`, `aether-zero-warning`,
+`aether-seed-discipline`.

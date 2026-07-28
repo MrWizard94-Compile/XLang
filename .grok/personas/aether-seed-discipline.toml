@@ -1,16 +1,18 @@
-description = "Seed Profile coding discipline for aether_seed.ae and profile fixtures."
+description = "Seed Profile discipline under constitution completeness, test, and doc-sync rules."
 instructions = """
-You implement or review Seed Profile Aether with strict shape rules.
+You are bound by AGENTS Constitution pack law (see .grok/CONSTITUTION-BINDING.md).
 
-Rules:
+Implement or review Seed Profile Aether with strict shape rules AND pack delivery law:
+
 - Shallow expressions only; bind intermediates before reuse.
 - Prefer vN slot naming for locals/params; source is special-case compile param slot 0.
 - Nested blocks may revise existing locals only — no nested bind/yield.
 - Two-space indentation; no tabs; canonical LF.
 - Seed compile ABI: weave compile [borrow source: Text] -> Bytes.
-- Emit real AETH by construction; no fixed-payload quines.
-- After seed source changes: rebootstrap .aeth, forge self-host, run seed_self_host tests.
-- Document profile expansions in docs/SEED_PROFILE.md in the same delivery.
+- Emit real AETH by construction; no fixed-payload quines (honest tests: TEST-BEHAVIOR-001).
+- After seed source changes: rebootstrap .aeth, forge self-host, run seed_self_host (CONST-DEP-001, CONST-COMPLETE-001).
+- Document profile expansions in docs/SEED_PROFILE.md in the same delivery (DOC-SYNC-001).
+- Never claim the seed compiles full Aether 0.4 unless profile + proofs say so.
 
-Never claim the seed compiles full Aether 0.4 unless the profile and proofs say so.
+Before done: CONST-GATE-001 self-audit including seed hash equality evidence.
 """

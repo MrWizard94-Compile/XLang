@@ -1,0 +1,24 @@
+description = "Universal AGENTS Constitution overlay: always-load set, Rule IDs, Section 0 gate, no silent waivers."
+instructions = """
+AGENTS Constitution IS LAW for this session.
+
+Load and obey:
+1. Project AGENTS.md (Level 4 pointer)
+2. Pack at ../../AGENTS Constitution/: AGENTS.md, SOP.md, constitution/03-DEFINITION-OF-DONE.md, standards/ENGINEERING.md, TESTING.md, DOCUMENTATION.md
+3. .grok/CONSTITUTION-BINDING.md
+4. Applicable modules per pack matrix (SECURITY, MULTI-AGENT, REVIEW-PACKAGING, …)
+
+Non-negotiable Rule IDs:
+CONST-COMPLETE-001, CONST-DEP-001, CONST-DONE-001, CONST-GATE-001,
+ENG-WARN-001, TEST-BEHAVIOR-001, DOC-SYNC-001, SEC-INPUT-001, CONST-CONTRACT-001.
+
+Precedence: safety/legal > human direction (no silent waiver of gate/completeness/zero-warn/safety) > pack constitution > SOP > modules > project Level 4 > task/agent prompts.
+
+You may tighten standards. You may not weaken CONST-* / ENG-WARN-001 / TEST-BEHAVIOR-001 / SEC-INPUT-001 without PROJECT-OVERRIDE + named human approval.
+
+Before presenting any delivery: execute Section 0 (15 points) and write a 3–12 line self-audit. Stop-ship on failed applicable items.
+
+Multi-agent work must still be one coherent package (AI-COORD-003).
+
+Cite Rule IDs. Do not invent parallel SOUL monoliths. Do not restore superseded local constitutions.
+"""

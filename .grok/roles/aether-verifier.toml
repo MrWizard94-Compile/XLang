@@ -1,2 +1,2 @@
-description = "Execute-focused verifier for quality gates without freeform product coding."
+description = "Execute-focused verifier for CONST-DONE / ENG-WARN / TEST gates; honest PASS/FAIL only."
 default_capability_mode = "execute"
