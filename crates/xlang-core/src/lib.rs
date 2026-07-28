@@ -1,8 +1,8 @@
-//! Aether Stage 3 compiler, AETH verifier, and virtual machine.
+//! Aether bootstrap compiler, AETH verifier, VM, and seed-hosted compile path.
 //!
-//! Stage 3 adds bounded text search and binary packing/patching primitives.
-//! They are ordinary Aether operations, not compiler-specific host callbacks,
-//! so an Aether program can construct and validate a deterministic artifact.
+//! The Rust core remains the diagnostic bootstrap and the only way to rebuild
+//! the checked-in seed compiler artifact. Default program compilation uses that
+//! Aether-written seed artifact through the forge ABI (`compile_with_seed`).
 
 #![forbid(unsafe_code)]
 
@@ -10,7 +10,13 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.4.0";
+pub const LANGUAGE_VERSION: &str = "0.5.0";
+
+/// Checked-in Aether-written seed compiler artifact (AETH v4).
+pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../seed/aether_seed.aeth"
+));
 
 const ARTIFACT_MAGIC: &[u8; 4] = b"AETH";
 const ARTIFACT_VERSION: u8 = 4;
@@ -698,6 +704,32 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
         CompilerError::new(
             Span::synthetic(),
             format!("compiler produced an invalid Aether artifact: {error}"),
+        )
+    })?;
+    Ok(CompileOutput { program, bytecode })
+}
+
+/// Compile source with the Aether-written seed compiler (default product path).
+///
+/// Uses [`SEED_COMPILER_ARTIFACT`] through the forge ABI. The returned
+/// `program` AST still comes from the Rust bootstrap for tooling/diagnostics;
+/// the `bytecode` is seed-produced and must match bootstrap for Seed Profile
+/// programs covered by self-host tests.
+pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
+    let program = compile_source(source)?;
+    let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
+        CompilerError::new(Span::synthetic(), format!("seed compiler failed: {error}"))
+    })?;
+    let InvocationValue::Bytes(bytecode) = forged.value else {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            "seed compiler must yield Bytes",
+        ));
+    };
+    verify_bytecode(&bytecode).map_err(|error| {
+        CompilerError::new(
+            Span::synthetic(),
+            format!("seed compiler produced an invalid Aether artifact: {error}"),
         )
     })?;
     Ok(CompileOutput { program, bytecode })

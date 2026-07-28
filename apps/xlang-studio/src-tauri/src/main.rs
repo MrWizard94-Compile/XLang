@@ -2,7 +2,7 @@ use std::env;
 use std::fmt::Write as _;
 use std::time::Duration;
 
-use aether_core::{canonical_ast, compile_to_bytecode, run_bytecode};
+use aether_core::{canonical_ast, compile_with_seed, run_bytecode};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
@@ -175,7 +175,7 @@ fn compile_response(source: &str) -> CompileResponse {
         ));
     }
 
-    let output = match compile_to_bytecode(source) {
+    let output = match compile_with_seed(source) {
         Ok(output) => output,
         Err(error) => return failed_compile(error.to_string()),
     };

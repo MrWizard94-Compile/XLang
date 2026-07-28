@@ -1,11 +1,11 @@
 # Aether Seed Profile
 
-Status: normative Stage 4 self-hosting subset (forward-call + CRLF), 2026-07-28.
+Status: normative Stage 5 Seed Profile (named locals + product compile path), 2026-07-28.
 
-This document defines the **Seed Profile**: the only language subset for which
-this repository claims reproducible self-hosting. Full Aether 0.4 remains
-bootstrapped by the Rust core. A Seed Profile claim is not a full-language
-self-hosting claim.
+This document defines the **Seed Profile**: the Aether subset implemented by
+`seed/aether_seed.ae`. Product `compile` uses this profile via the seed artifact.
+Rust bootstrap remains for seed rebuild, `check` AST, and dual-compare proofs.
+A Seed Profile claim is not a claim of full bootstrap diagnostic parity.
 
 ## Claim
 
@@ -44,15 +44,19 @@ compiled from source, including `main`.
 
 ## Locals and parameters
 
-- Parameters and locals use fixed slots named `vN` where `N` is a decimal whole
-  and equals the slot index (`v0` is the first parameter or local).
-- The compile parameter name `source` is also accepted as slot `0`.
+- Parameters and locals may use ordinary lowercase names. The seed assigns slots
+  in declaration order and resolves names through a per-weave name map.
+- The compile parameter name `source` remains slot `0` when present.
+- `vN` names still work when bound/declared that way (the seed source itself uses
+  them heavily).
 - Parameter lists may include multiple entries separated by commas. Optional
   `borrow` ownership is accepted for `Text` / `Bytes` parameters; owned is the
   default.
 - Result types are `Text`, `Whole`, `Truth`, or `Bytes`.
 - Nested blocks may `revise` existing locals but must not introduce bindings.
 - `bind` / `bind mutable` establish locals; `revise` replaces a live local.
+- Hex `bytes "ff…"` literals decode to raw bytes; text literals record **byte**
+  length of UTF-8 content (not scalar count).
 
 ## Statements
 
@@ -134,6 +138,8 @@ All three SHA-256 digests must match. The regression tests also forge:
 1. A nearby source variant (different verified artifact — not a fixed payload).
 2. A multi-weave program with `call` (byte identity with bootstrap + run).
 3. A forward-call program (callee after caller) and a CRLF multi-weave source.
+4. Every shipped `examples/*.ae` file seed-compiles byte-identically to bootstrap
+   (`compile_with_seed`).
 
 ## Authority
 

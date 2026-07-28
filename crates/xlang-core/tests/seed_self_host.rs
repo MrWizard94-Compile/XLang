@@ -1,6 +1,6 @@
 use aether_core::{
-    compile_to_bytecode, forge_bytecode, run_bytecode, verify_bytecode, InvocationOutput,
-    InvocationValue,
+    compile_to_bytecode, compile_with_seed, forge_bytecode, run_bytecode, verify_bytecode,
+    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -143,6 +143,44 @@ fn seed_profile_compiler_forges_forward_calls_and_crlf_sources() {
     let crlf_run = run_bytecode(&crlf_forged).expect("the CRLF-forged artifact must run");
     assert_eq!(crlf_run.exit_code, 42);
     assert_eq!(crlf_run.stdout, "42");
+}
+
+#[test]
+fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
+    assert_eq!(
+        SEED_COMPILER_ARTIFACT,
+        compile_to_bytecode(SEED_SOURCE)
+            .expect("seed source must bootstrap")
+            .bytecode
+            .as_slice(),
+        "embedded seed artifact must match bootstrap of seed source"
+    );
+
+    let examples = [
+        include_str!("../../../examples/welcome.ae"),
+        include_str!("../../../examples/control-flow.ae"),
+        include_str!("../../../examples/weaves.ae"),
+        include_str!("../../../examples/unicode.ae"),
+        include_str!("../../../examples/seed-multi-weave.ae"),
+        include_str!("../../../examples/seed-forward-call.ae"),
+    ];
+    for source in examples {
+        let bootstrap = compile_to_bytecode(source)
+            .expect("example must bootstrap")
+            .bytecode;
+        let seeded = compile_with_seed(source)
+            .expect("example must compile through the seed path")
+            .bytecode;
+        assert_eq!(
+            seeded, bootstrap,
+            "seed-hosted compile must match bootstrap for shipped examples"
+        );
+        let run = run_bytecode(&seeded).expect("seed-hosted artifact must run");
+        assert!(
+            run.exit_code >= 0,
+            "seed-hosted example should produce a Whole exit"
+        );
+    }
 }
 
 fn bytes(output: InvocationOutput) -> Vec<u8> {

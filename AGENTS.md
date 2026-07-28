@@ -51,10 +51,11 @@ Aether parses only Aether source, emits **AETH** bytecode, verifies every
 artifact, and runs it in the Aether VM. It never transpiles source to Rust, C,
 JavaScript, LLVM, or another language.
 
-**Stage status:** Stage 4 (Seed Profile multi-weave + `call`) is implemented.
-Self-hosting is claimed **only** for the Seed Profile with reproducible
-artifact comparison, including multi-weave programs with `call`. Full Aether
-0.4 remains Rust-bootstrap compiled.
+**Stage status:** Stage 5 (seed-hosted product compile path) is implemented.
+Default CLI/Studio compilation uses the Aether-written seed compiler. Rust
+bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
+proof dual-compare. Seed Profile self-host + all shipped examples match
+bootstrap byte-for-byte. Full diagnostic parity is not claimed for the seed.
 
 ### Product docs (Level 4)
 
@@ -63,7 +64,7 @@ artifact comparison, including multi-weave programs with `call`. Full Aether
 | Overview | [README.md](README.md) |
 | Contract / release gate | [MANIFEST.md](MANIFEST.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Language (0.4) | [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
+| Language (0.4 surface / 0.5 product) | [docs/AETHER_0.4.md](docs/AETHER_0.4.md), [README.md](README.md) |
 | Seed Profile | [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) |
 | Forge ABI | [docs/FORGE_CONTRACT.md](docs/FORGE_CONTRACT.md) |
 | Migration audit | [AUDIT_REPORT.md](AUDIT_REPORT.md) |
@@ -74,19 +75,21 @@ artifact comparison, including multi-weave programs with `call`. Full Aether
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.4.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.4.0) |
-| Desktop | Tauri 2 + React/TypeScript at `apps/xlang-studio` (0.4.0) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.5.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.5.0) |
+| Desktop | Tauri 2 + React/TypeScript at `apps/xlang-studio` (0.5.0) |
 | Artifact format | AETH **v4** only (earlier versions intentionally rejected) |
+| Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
+| Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |
 | Seed compiler | `seed/aether_seed.ae` + checked-in `seed/aether_seed.aeth` |
 | Optional AI | Docker Ollama, loopback HTTP only; never compiler authority |
 
 ### Invariants (may tighten pack; never weaken CONST-\*)
 
-1. **Single bootstrap core** — CLI and Studio call the same Rust bootstrap core for full Aether 0.4.
+1. **Seed-hosted product compile** — CLI/Studio default compile uses the Aether-written seed; bootstrap is not the product compiler path.
 2. **Verify before run / write** — VM and forge only accept verified AETH v4.
 3. **No host capability leak** — invoked artifacts have no file, process, network, or shell authority; forge host owns I/O after verification.
-4. **Honest self-host claims** — only Seed Profile may be called self-hosted, and only with byte-identical multi-generation proof plus a distinct-variant check.
+4. **Honest self-host claims** — Seed Profile + shipped examples match bootstrap in tests; do not claim full diagnostic parity or unlimited language surface without proof.
 5. **Local-first data** — Studio source/model choices stay in local WebView storage; no cloud sync of source or artifacts.
 6. **Legacy is reference only** — `legacy/` is never a production build input.
 7. **Zero-warning gate** — workspace Clippy `all = "deny"`; `unsafe_code = "forbid"`.

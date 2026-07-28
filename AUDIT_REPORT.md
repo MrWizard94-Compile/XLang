@@ -56,3 +56,8 @@ tests, production frontend build, Windows Tauri bundle build, command-line
 compile/forge/run checks, and a live Docker Ollama status check when claiming AI
 integration. A successful package must be inspected and launched before it is
 reported as delivered.
+
+
+## Stage 5 Seed-Hosted Compile
+
+Default CLI/Studio compilation uses the Aether-written seed artifact. Bootstrap remains for seed rebuild, check AST, and dual-compare proofs. All shipped examples match bootstrap byte-for-byte under seed compile.

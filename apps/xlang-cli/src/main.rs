@@ -5,13 +5,13 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use aether_core::{
-    canonical_ast, compile_source, compile_to_bytecode, forge_bytecode, run_bytecode,
-    verify_bytecode, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    canonical_ast, compile_source, compile_to_bytecode, compile_with_seed, forge_bytecode,
+    run_bytecode, verify_bytecode, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether compile <source-file> --output <artifact-file>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version"
+        "Usage:\n  aether check <source-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -35,12 +35,17 @@ fn check(source_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn compile(source_path: &Path, output_path: &Path) -> Result<(), String> {
+fn compile(source_path: &Path, output_path: &Path, use_bootstrap: bool) -> Result<(), String> {
     let source = read_source(source_path)?;
-    let output = compile_to_bytecode(&source).map_err(|error| error.to_string())?;
+    let output = if use_bootstrap {
+        compile_to_bytecode(&source).map_err(|error| error.to_string())?
+    } else {
+        compile_with_seed(&source).map_err(|error| error.to_string())?
+    };
     write_artifact(output_path, output.bytecode)?;
+    let engine = if use_bootstrap { "bootstrap" } else { "seed" };
     println!(
-        "{LANGUAGE_NAME} {LANGUAGE_VERSION} compiled {} to {}",
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} compiled {} to {} ({engine})",
         source_path.display(),
         output_path.display()
     );
@@ -126,13 +131,23 @@ fn run() -> Result<(), String> {
                 return Err("compile requires --output <artifact-file>".to_owned());
             }
             let output = next_argument(&mut arguments, "artifact output file")?;
-            if arguments.next().is_some() {
-                return Err(
-                    "compile accepts one source file and one Aether artifact output file"
-                        .to_owned(),
-                );
+            let mut use_bootstrap = false;
+            if let Some(extra) = arguments.next() {
+                if extra == "--bootstrap" {
+                    use_bootstrap = true;
+                    if arguments.next().is_some() {
+                        return Err(
+                            "compile accepts optional --bootstrap after --output <file>".to_owned()
+                        );
+                    }
+                } else {
+                    return Err(
+                        "compile accepts one source file, --output <file>, and optional --bootstrap"
+                            .to_owned(),
+                    );
+                }
             }
-            compile(Path::new(&source), Path::new(&output))
+            compile(Path::new(&source), Path::new(&output), use_bootstrap)
         }
         "forge" => {
             let compiler = next_argument(&mut arguments, "compiler artifact")?;

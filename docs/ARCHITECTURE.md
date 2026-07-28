@@ -2,15 +2,15 @@
 
 ~~~mermaid
 flowchart LR
-    Editor["Aether Studio editor"] -->|"Tauri command"| Core["Aether 0.4 bootstrap core"]
-    CLI["aether CLI"] --> Core
-    Core --> Source["Canonical AST"]
-    Core --> Artifact["Verified AETH v4 artifact"]
+    Editor["Aether Studio editor"] -->|"Tauri command"| SeedPath["compile_with_seed"]
+    CLI["aether compile"] --> SeedPath
+    SeedPath --> SeedArt["embedded seed AETH v4"]
+    SeedArt --> Artifact["Verified AETH v4 artifact"]
     Artifact --> VM["Aether VM"]
     VM --> Result["stdout and exit value"]
-    SeedSrc["seed/aether_seed.ae"] -->|"bootstrap compile"| SeedArt["seed compiler AETH v4"]
-    Forge["aether forge"] -->|"verify compiler artifact"| SeedArt
-    Forge -->|"source Text"| SeedArt
+    Check["aether check"] --> Bootstrap["Rust bootstrap AST"]
+    SeedSrc["seed/aether_seed.ae"] -->|"compile --bootstrap"| SeedArtFile["seed/aether_seed.aeth"]
+    Forge["aether forge"] -->|"verify + invoke"| SeedArt
     SeedArt --> Candidate["candidate AETH Bytes"]
     Candidate -->|"verify before write"| Forge
     Editor -->|"optional review request"| Guard["loopback and model validation"]
@@ -55,7 +55,7 @@ surface. Arithmetic detects `Whole` overflow. Text and bytes are capped at
 positions; `extent`, `octet`, `slice`, `unpack*`, and `poke*` use bounded raw
 byte positions.
 
-AETH versions prior to v4 are intentionally rejected by the Aether 0.4 VM.
+AETH versions prior to v4 are intentionally rejected by the Aether 0.5 VM.
 
 ## Forge Boundary
 
@@ -71,27 +71,30 @@ returning `Whole`, because all AETH artifacts remain independently verifiable
 and runnable. The fixed compile ABI makes self-hosting proofs inspectable
 without granting an artifact host capabilities.
 
-## Seed-Profile Self-Hosting Boundary
+## Seed-Hosted Product Compile Boundary
 
-Stage 3 added ordinary language primitives (`seek`, `number`, packing, unpacking,
-and poke forms) that any Aether program may use. Stage 4 expands the
-Aether-written seed compiler in `seed/aether_seed.ae` so the Seed Profile
-includes multi-weave programs and `call` (including forward callees via a first
-name/result pass), CRLF input, and a full AETH v4 function table. The seed still
-uses only ordinary VM primitives—no host parser callback. Self-hosting is claimed
-only for that profile: bootstrap compile, forge rebuild, and second-generation
-forge must all match byte-for-byte; multi-weave/forward/CRLF fixtures must match
-bootstrap; and a distinct source variant must produce a different verified
-artifact.
+Stage 5 makes the Aether-written seed the **default product compiler**:
 
-Full Aether 0.4 remains bootstrap-compiled. See [SEED_PROFILE.md](SEED_PROFILE.md).
+- `compile_with_seed` embeds `SEED_COMPILER_ARTIFACT` and forges user source.
+- CLI `aether compile` and Studio use that path.
+- CLI `compile --bootstrap` and `check` still use the Rust bootstrap for seed
+  rebuild and AST diagnostics.
+
+The Seed Profile includes named locals/params, multi-weave `call` (forward
+callees), hex `bytes` literals, UTF-8 text constants with byte lengths, and CRLF
+input. Self-host and shipped-example dual-compare proofs live in
+`seed_self_host.rs`. See [SEED_PROFILE.md](SEED_PROFILE.md).
+
+Bootstrap is not gone: it rebuilds the seed and dual-checks proofs. Product
+bytecode for examples and ordinary programs is seed-produced.
 
 ## Desktop Boundary
 
 Studio is a Tauri 2 desktop app. The React renderer owns the active document.
-The native command layer compiles it, runs only verified AETH output, and returns
-bounded artifact metadata plus VM output. Source persistence uses `aether.source`
-and model persistence uses `aether.model` in local WebView storage.
+The native command layer **seed-compiles** the document, runs only verified AETH
+output, and returns bounded artifact metadata plus VM output. Source persistence
+uses `aether.source` and model persistence uses `aether.model` in local WebView
+storage.
 
 ## Local Model Selection
 
@@ -104,7 +107,6 @@ in compilation, forge invocation, or execution.
 
 ## Bootstrap Boundary
 
-The Rust core remains the complete Aether 0.4 bootstrap implementation and VM.
-The seed compiler is evidence of Seed-Profile self-hosting only. Expanding that
-profile until it covers the full language is future work and must repeat the same
-reproducible artifact comparison standard.
+The Rust core remains the Aether 0.5 bootstrap implementation and VM, required to
+rebuild the seed artifact. Product compilation is seed-hosted. Further Seed
+Profile expansion must keep self-host and example dual-compare proofs green.
