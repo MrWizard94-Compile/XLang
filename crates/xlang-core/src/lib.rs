@@ -1,8 +1,8 @@
-//! Aether Stage 2 compiler, AETH verifier, and virtual machine.
+//! Aether Stage 3 compiler, AETH verifier, and virtual machine.
 //!
-//! Stage 2 adds bounded binary values and typed weave invocation so an Aether
-//! compiler can accept source as Text and return verified AETH bytes without a
-//! host compiler participating in its compilation logic.
+//! Stage 3 adds bounded text search and binary packing/patching primitives.
+//! They are ordinary Aether operations, not compiler-specific host callbacks,
+//! so an Aether program can construct and validate a deterministic artifact.
 
 #![forbid(unsafe_code)]
 
@@ -10,10 +10,10 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.3.0";
+pub const LANGUAGE_VERSION: &str = "0.4.0";
 
 const ARTIFACT_MAGIC: &[u8; 4] = b"AETH";
-const ARTIFACT_VERSION: u8 = 3;
+const ARTIFACT_VERSION: u8 = 4;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 const MAX_FUNCTIONS: usize = 256;
 const MAX_LOCALS: usize = u16::MAX as usize;
@@ -54,6 +54,15 @@ const OP_OCTET: u8 = 30;
 const OP_SLICE: u8 = 31;
 const OP_ENCODE: u8 = 32;
 const OP_DECODE: u8 = 33;
+const OP_SEEK: u8 = 34;
+const OP_NUMBER: u8 = 35;
+const OP_PACK16: u8 = 36;
+const OP_PACK32: u8 = 37;
+const OP_UNPACK16: u8 = 38;
+const OP_UNPACK32: u8 = 39;
+const OP_POKE: u8 = 40;
+const OP_POKE32: u8 = 41;
+const OP_PACK64: u8 = 42;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -280,6 +289,12 @@ pub enum ExpressionKind {
         start: Atom,
         end: Atom,
     },
+    Ternary {
+        operation: TernaryOperation,
+        first: Atom,
+        second: Atom,
+        third: Atom,
+    },
     Call {
         weave: String,
         arguments: Vec<Atom>,
@@ -294,6 +309,10 @@ pub enum UnaryOperation {
     Extent,
     Encode,
     Decode,
+    Number,
+    Pack16,
+    Pack32,
+    Pack64,
 }
 
 impl UnaryOperation {
@@ -305,6 +324,10 @@ impl UnaryOperation {
             Self::Extent => "extent",
             Self::Encode => "encode",
             Self::Decode => "decode",
+            Self::Number => "number",
+            Self::Pack16 => "pack16",
+            Self::Pack32 => "pack32",
+            Self::Pack64 => "pack64",
         }
     }
 }
@@ -323,6 +346,8 @@ pub enum BinaryOperation {
     Fuse,
     Append,
     Octet,
+    Unpack16,
+    Unpack32,
 }
 
 impl BinaryOperation {
@@ -340,6 +365,25 @@ impl BinaryOperation {
             Self::Fuse => "fuse",
             Self::Append => "append",
             Self::Octet => "octet",
+            Self::Unpack16 => "unpack16",
+            Self::Unpack32 => "unpack32",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TernaryOperation {
+    Seek,
+    Poke,
+    Poke32,
+}
+
+impl TernaryOperation {
+    const fn word(self) -> &'static str {
+        match self {
+            Self::Seek => "seek",
+            Self::Poke => "poke",
+            Self::Poke32 => "poke32",
         }
     }
 }
@@ -570,6 +614,15 @@ enum Instruction {
     Slice,
     Encode,
     Decode,
+    Seek,
+    Number,
+    Pack16,
+    Pack32,
+    Unpack16,
+    Unpack32,
+    Poke,
+    Poke32,
+    Pack64,
     Render,
     Call { function: usize, arguments: usize },
     JumpIfDim(usize),
@@ -1214,6 +1267,22 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
             operation: UnaryOperation::Decode,
             argument: parse_atom_from(&tokens, &mut index, span)?,
         },
+        "number" => ExpressionKind::Unary {
+            operation: UnaryOperation::Number,
+            argument: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "pack16" => ExpressionKind::Unary {
+            operation: UnaryOperation::Pack16,
+            argument: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "pack32" => ExpressionKind::Unary {
+            operation: UnaryOperation::Pack32,
+            argument: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "pack64" => ExpressionKind::Unary {
+            operation: UnaryOperation::Pack64,
+            argument: parse_atom_from(&tokens, &mut index, span)?,
+        },
         "sum" => ExpressionKind::Binary {
             operation: BinaryOperation::Sum,
             left: parse_atom_from(&tokens, &mut index, span)?,
@@ -1274,6 +1343,16 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
             left: parse_atom_from(&tokens, &mut index, span)?,
             right: parse_atom_from(&tokens, &mut index, span)?,
         },
+        "unpack16" => ExpressionKind::Binary {
+            operation: BinaryOperation::Unpack16,
+            left: parse_atom_from(&tokens, &mut index, span)?,
+            right: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "unpack32" => ExpressionKind::Binary {
+            operation: BinaryOperation::Unpack32,
+            left: parse_atom_from(&tokens, &mut index, span)?,
+            right: parse_atom_from(&tokens, &mut index, span)?,
+        },
         "cut" => ExpressionKind::Cut {
             text: parse_atom_from(&tokens, &mut index, span)?,
             start: parse_atom_from(&tokens, &mut index, span)?,
@@ -1283,6 +1362,24 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
             bytes: parse_atom_from(&tokens, &mut index, span)?,
             start: parse_atom_from(&tokens, &mut index, span)?,
             end: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "seek" => ExpressionKind::Ternary {
+            operation: TernaryOperation::Seek,
+            first: parse_atom_from(&tokens, &mut index, span)?,
+            second: parse_atom_from(&tokens, &mut index, span)?,
+            third: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "poke" => ExpressionKind::Ternary {
+            operation: TernaryOperation::Poke,
+            first: parse_atom_from(&tokens, &mut index, span)?,
+            second: parse_atom_from(&tokens, &mut index, span)?,
+            third: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "poke32" => ExpressionKind::Ternary {
+            operation: TernaryOperation::Poke32,
+            first: parse_atom_from(&tokens, &mut index, span)?,
+            second: parse_atom_from(&tokens, &mut index, span)?,
+            third: parse_atom_from(&tokens, &mut index, span)?,
         },
         "call" => {
             let Some(weave) = tokens.get(index) else {
@@ -1812,6 +1909,19 @@ fn expression_type(
                     require_source_type(argument_type, ValueType::Bytes, argument.span, "decode")?;
                     Ok(ValueType::Text)
                 }
+                UnaryOperation::Number => {
+                    require_source_type(argument_type, ValueType::Text, argument.span, "number")?;
+                    Ok(ValueType::Whole)
+                }
+                UnaryOperation::Pack16 | UnaryOperation::Pack32 | UnaryOperation::Pack64 => {
+                    require_source_type(
+                        argument_type,
+                        ValueType::Whole,
+                        argument.span,
+                        operation.word(),
+                    )?;
+                    Ok(ValueType::Bytes)
+                }
             }
         }
         ExpressionKind::Binary {
@@ -1875,6 +1985,16 @@ fn expression_type(
                     require_source_type(right_type, ValueType::Whole, right.span, "octet")?;
                     Ok(ValueType::Whole)
                 }
+                BinaryOperation::Unpack16 | BinaryOperation::Unpack32 => {
+                    require_source_type(left_type, ValueType::Bytes, left.span, operation.word())?;
+                    require_source_type(
+                        right_type,
+                        ValueType::Whole,
+                        right.span,
+                        operation.word(),
+                    )?;
+                    Ok(ValueType::Whole)
+                }
             }
         }
         ExpressionKind::Cut { text, start, end } => {
@@ -1904,6 +2024,55 @@ fn expression_type(
             require_source_type(atom_type(end, scope)?, ValueType::Whole, end.span, "slice")?;
             Ok(ValueType::Bytes)
         }
+        ExpressionKind::Ternary {
+            operation,
+            first,
+            second,
+            third,
+        } => match operation {
+            TernaryOperation::Seek => {
+                require_source_type(
+                    atom_type(first, scope)?,
+                    ValueType::Text,
+                    first.span,
+                    "seek",
+                )?;
+                require_source_type(
+                    atom_type(second, scope)?,
+                    ValueType::Text,
+                    second.span,
+                    "seek",
+                )?;
+                require_source_type(
+                    atom_type(third, scope)?,
+                    ValueType::Whole,
+                    third.span,
+                    "seek",
+                )?;
+                Ok(ValueType::Whole)
+            }
+            TernaryOperation::Poke | TernaryOperation::Poke32 => {
+                require_source_type(
+                    atom_type(first, scope)?,
+                    ValueType::Bytes,
+                    first.span,
+                    operation.word(),
+                )?;
+                require_source_type(
+                    atom_type(second, scope)?,
+                    ValueType::Whole,
+                    second.span,
+                    operation.word(),
+                )?;
+                require_source_type(
+                    atom_type(third, scope)?,
+                    ValueType::Whole,
+                    third.span,
+                    operation.word(),
+                )?;
+                Ok(ValueType::Bytes)
+            }
+        },
         ExpressionKind::Call { weave, arguments } => {
             let Some(signature) = signatures.get(weave) else {
                 return Err(CompilerError::new(
@@ -2197,6 +2366,10 @@ fn static_expression_type(
             UnaryOperation::Extent => Ok(ValueType::Whole),
             UnaryOperation::Encode => Ok(ValueType::Bytes),
             UnaryOperation::Decode => Ok(ValueType::Text),
+            UnaryOperation::Number => Ok(ValueType::Whole),
+            UnaryOperation::Pack16 | UnaryOperation::Pack32 | UnaryOperation::Pack64 => {
+                Ok(ValueType::Bytes)
+            }
         },
         ExpressionKind::Binary {
             operation,
@@ -2212,7 +2385,9 @@ fn static_expression_type(
                 | BinaryOperation::Glyph
                 | BinaryOperation::Quotient
                 | BinaryOperation::Remainder
-                | BinaryOperation::Octet => Ok(ValueType::Whole),
+                | BinaryOperation::Octet
+                | BinaryOperation::Unpack16
+                | BinaryOperation::Unpack32 => Ok(ValueType::Whole),
                 BinaryOperation::Less | BinaryOperation::Same => Ok(ValueType::Truth),
                 BinaryOperation::Join => Ok(ValueType::Text),
                 BinaryOperation::Fuse | BinaryOperation::Append => Ok(ValueType::Bytes),
@@ -2229,6 +2404,20 @@ fn static_expression_type(
             let _ = atom_type(start)?;
             let _ = atom_type(end)?;
             Ok(ValueType::Bytes)
+        }
+        ExpressionKind::Ternary {
+            operation,
+            first,
+            second,
+            third,
+        } => {
+            let _ = atom_type(first)?;
+            let _ = atom_type(second)?;
+            let _ = atom_type(third)?;
+            match operation {
+                TernaryOperation::Seek => Ok(ValueType::Whole),
+                TernaryOperation::Poke | TernaryOperation::Poke32 => Ok(ValueType::Bytes),
+            }
         }
         ExpressionKind::Call { weave: called, .. } => {
             weave_results.get(called).copied().ok_or_else(|| {
@@ -2358,6 +2547,10 @@ fn emit_expression(
                 UnaryOperation::Extent => OP_EXTENT,
                 UnaryOperation::Encode => OP_ENCODE,
                 UnaryOperation::Decode => OP_DECODE,
+                UnaryOperation::Number => OP_NUMBER,
+                UnaryOperation::Pack16 => OP_PACK16,
+                UnaryOperation::Pack32 => OP_PACK32,
+                UnaryOperation::Pack64 => OP_PACK64,
             });
         }
         ExpressionKind::Binary {
@@ -2380,6 +2573,8 @@ fn emit_expression(
                 BinaryOperation::Fuse => OP_FUSE,
                 BinaryOperation::Append => OP_APPEND,
                 BinaryOperation::Octet => OP_OCTET,
+                BinaryOperation::Unpack16 => OP_UNPACK16,
+                BinaryOperation::Unpack32 => OP_UNPACK32,
             });
         }
         ExpressionKind::Cut { text, start, end } => {
@@ -2393,6 +2588,21 @@ fn emit_expression(
             emit_atom(start, layout, code)?;
             emit_atom(end, layout, code)?;
             code.push(OP_SLICE);
+        }
+        ExpressionKind::Ternary {
+            operation,
+            first,
+            second,
+            third,
+        } => {
+            emit_atom(first, layout, code)?;
+            emit_atom(second, layout, code)?;
+            emit_atom(third, layout, code)?;
+            code.push(match operation {
+                TernaryOperation::Seek => OP_SEEK,
+                TernaryOperation::Poke => OP_POKE,
+                TernaryOperation::Poke32 => OP_POKE32,
+            });
         }
         ExpressionKind::Call { weave, arguments } => {
             for argument in arguments {
@@ -2836,6 +3046,13 @@ fn verify_instruction(
             state.stack.push(ValueType::Bytes);
             continue_with(state)
         }
+        Instruction::Seek => {
+            pop_type(&mut state.stack, ValueType::Whole, offset, "seek")?;
+            pop_type(&mut state.stack, ValueType::Text, offset, "seek")?;
+            pop_type(&mut state.stack, ValueType::Text, offset, "seek")?;
+            state.stack.push(ValueType::Whole);
+            continue_with(state)
+        }
         Instruction::Encode => {
             pop_type(&mut state.stack, ValueType::Text, offset, "encode")?;
             state.stack.push(ValueType::Bytes);
@@ -2844,6 +3061,29 @@ fn verify_instruction(
         Instruction::Decode => {
             pop_type(&mut state.stack, ValueType::Bytes, offset, "decode")?;
             state.stack.push(ValueType::Text);
+            continue_with(state)
+        }
+        Instruction::Number => {
+            pop_type(&mut state.stack, ValueType::Text, offset, "number")?;
+            state.stack.push(ValueType::Whole);
+            continue_with(state)
+        }
+        Instruction::Pack16 | Instruction::Pack32 | Instruction::Pack64 => {
+            pop_type(&mut state.stack, ValueType::Whole, offset, "pack")?;
+            state.stack.push(ValueType::Bytes);
+            continue_with(state)
+        }
+        Instruction::Unpack16 | Instruction::Unpack32 => {
+            pop_type(&mut state.stack, ValueType::Whole, offset, "unpack")?;
+            pop_type(&mut state.stack, ValueType::Bytes, offset, "unpack")?;
+            state.stack.push(ValueType::Whole);
+            continue_with(state)
+        }
+        Instruction::Poke | Instruction::Poke32 => {
+            pop_type(&mut state.stack, ValueType::Whole, offset, "poke")?;
+            pop_type(&mut state.stack, ValueType::Whole, offset, "poke")?;
+            pop_type(&mut state.stack, ValueType::Bytes, offset, "poke")?;
+            state.stack.push(ValueType::Bytes);
             continue_with(state)
         }
         Instruction::Render => {
@@ -3198,6 +3438,22 @@ fn execute_function(
                     .map_err(|_| BytecodeError::new(decoded.offset, "slice end is invalid"))?;
                 stack.push(RuntimeValue::Bytes(bytes[start..end].to_vec()));
             }
+            Instruction::Seek => {
+                let start = pop_whole(&mut stack, decoded.offset, "seek")?;
+                let needle = pop_text(&mut stack, decoded.offset, "seek")?;
+                let text = pop_text(&mut stack, decoded.offset, "seek")?;
+                let length = i64::try_from(text.chars().count()).map_err(|_| {
+                    BytecodeError::new(decoded.offset, "text length is outside Whole range")
+                })?;
+                let start = start.clamp(0, length);
+                let start = usize::try_from(start)
+                    .map_err(|_| BytecodeError::new(decoded.offset, "seek start is invalid"))?;
+                let start_byte = scalar_byte_offset(&text, start);
+                let found = text[start_byte..].find(&needle).map_or(-1_i64, |offset| {
+                    i64::try_from(text[..start_byte + offset].chars().count()).unwrap_or(-1)
+                });
+                stack.push(RuntimeValue::Whole(found));
+            }
             Instruction::Encode => {
                 let text = pop_text(&mut stack, decoded.offset, "encode")?;
                 ensure_bytes_limit(0, text.len(), decoded.offset)?;
@@ -3210,6 +3466,87 @@ fn execute_function(
                 })?;
                 ensure_text_limit(0, text.len(), decoded.offset)?;
                 stack.push(RuntimeValue::Text(text));
+            }
+            Instruction::Number => {
+                let text = pop_text(&mut stack, decoded.offset, "number")?;
+                if !is_whole_literal(&text) {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "number requires one canonical Whole text value",
+                    ));
+                }
+                let value = text.parse::<i64>().map_err(|_| {
+                    BytecodeError::new(decoded.offset, "number is outside the Whole range")
+                })?;
+                stack.push(RuntimeValue::Whole(value));
+            }
+            Instruction::Pack16 => {
+                let value = pop_whole(&mut stack, decoded.offset, "pack16")?;
+                let value = u16::try_from(value).map_err(|_| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "pack16 requires a Whole between 0 and 65535",
+                    )
+                })?;
+                stack.push(RuntimeValue::Bytes(value.to_le_bytes().to_vec()));
+            }
+            Instruction::Pack32 => {
+                let value = pop_whole(&mut stack, decoded.offset, "pack32")?;
+                let value = u32::try_from(value).map_err(|_| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "pack32 requires a Whole between 0 and 4294967295",
+                    )
+                })?;
+                stack.push(RuntimeValue::Bytes(value.to_le_bytes().to_vec()));
+            }
+            Instruction::Pack64 => {
+                let value = pop_whole(&mut stack, decoded.offset, "pack64")?;
+                stack.push(RuntimeValue::Bytes(value.to_le_bytes().to_vec()));
+            }
+            Instruction::Unpack16 => {
+                let start = pop_whole(&mut stack, decoded.offset, "unpack16")?;
+                let bytes = pop_bytes(&mut stack, decoded.offset, "unpack16")?;
+                let start = checked_bytes_index(start, 2, bytes.len(), decoded.offset, "unpack16")?;
+                let value = u16::from_le_bytes([bytes[start], bytes[start + 1]]);
+                stack.push(RuntimeValue::Whole(i64::from(value)));
+            }
+            Instruction::Unpack32 => {
+                let start = pop_whole(&mut stack, decoded.offset, "unpack32")?;
+                let bytes = pop_bytes(&mut stack, decoded.offset, "unpack32")?;
+                let start = checked_bytes_index(start, 4, bytes.len(), decoded.offset, "unpack32")?;
+                let value = u32::from_le_bytes([
+                    bytes[start],
+                    bytes[start + 1],
+                    bytes[start + 2],
+                    bytes[start + 3],
+                ]);
+                stack.push(RuntimeValue::Whole(i64::from(value)));
+            }
+            Instruction::Poke => {
+                let value = pop_whole(&mut stack, decoded.offset, "poke")?;
+                let index = pop_whole(&mut stack, decoded.offset, "poke")?;
+                let mut bytes = pop_bytes(&mut stack, decoded.offset, "poke")?;
+                let index = checked_bytes_index(index, 1, bytes.len(), decoded.offset, "poke")?;
+                let value = u8::try_from(value).map_err(|_| {
+                    BytecodeError::new(decoded.offset, "poke requires a Whole between 0 and 255")
+                })?;
+                bytes[index] = value;
+                stack.push(RuntimeValue::Bytes(bytes));
+            }
+            Instruction::Poke32 => {
+                let value = pop_whole(&mut stack, decoded.offset, "poke32")?;
+                let index = pop_whole(&mut stack, decoded.offset, "poke32")?;
+                let mut bytes = pop_bytes(&mut stack, decoded.offset, "poke32")?;
+                let index = checked_bytes_index(index, 4, bytes.len(), decoded.offset, "poke32")?;
+                let value = u32::try_from(value).map_err(|_| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "poke32 requires a Whole between 0 and 4294967295",
+                    )
+                })?;
+                bytes[index..index + 4].copy_from_slice(&value.to_le_bytes());
+                stack.push(RuntimeValue::Bytes(bytes));
             }
             Instruction::Render => {
                 let value = pop_runtime(&mut stack, decoded.offset, "render")?;
@@ -3330,6 +3667,15 @@ fn decode_instruction(
         OP_SLICE => Instruction::Slice,
         OP_ENCODE => Instruction::Encode,
         OP_DECODE => Instruction::Decode,
+        OP_SEEK => Instruction::Seek,
+        OP_NUMBER => Instruction::Number,
+        OP_PACK16 => Instruction::Pack16,
+        OP_PACK32 => Instruction::Pack32,
+        OP_UNPACK16 => Instruction::Unpack16,
+        OP_UNPACK32 => Instruction::Unpack32,
+        OP_POKE => Instruction::Poke,
+        OP_POKE32 => Instruction::Poke32,
+        OP_PACK64 => Instruction::Pack64,
         OP_CALL => Instruction::Call {
             function: usize::from(read_u16(code, position)?),
             arguments: usize::from(read_byte(code, position)?),
@@ -3679,6 +4025,27 @@ fn scalar_byte_offset(text: &str, scalar_index: usize) -> usize {
         .map_or(text.len(), |(offset, _)| offset)
 }
 
+fn checked_bytes_index(
+    index: i64,
+    width: usize,
+    length: usize,
+    offset: usize,
+    operation: &str,
+) -> Result<usize, BytecodeError> {
+    let index = usize::try_from(index)
+        .map_err(|_| BytecodeError::new(offset, format!("{operation} index is invalid")))?;
+    let end = index
+        .checked_add(width)
+        .ok_or_else(|| BytecodeError::new(offset, format!("{operation} index overflowed")))?;
+    if end > length {
+        return Err(BytecodeError::new(
+            offset,
+            format!("{operation} range is outside the Bytes value"),
+        ));
+    }
+    Ok(index)
+}
+
 fn write_u16(bytes: &mut Vec<u8>, value: u16) {
     bytes.extend_from_slice(&value.to_le_bytes());
 }
@@ -3810,6 +4177,20 @@ fn write_expression(expression: &Expression, output: &mut String) {
             write_atom(start, output);
             output.push(' ');
             write_atom(end, output);
+        }
+        ExpressionKind::Ternary {
+            operation,
+            first,
+            second,
+            third,
+        } => {
+            output.push_str(operation.word());
+            output.push(' ');
+            write_atom(first, output);
+            output.push(' ');
+            write_atom(second, output);
+            output.push(' ');
+            write_atom(third, output);
         }
         ExpressionKind::Call { weave, arguments } => {
             output.push_str("call ");
@@ -3969,6 +4350,21 @@ fn write_ast_expression(expression: &Expression, output: &mut String) {
             write_ast_atom(end, output);
             output.push(')');
         }
+        ExpressionKind::Ternary {
+            operation,
+            first,
+            second,
+            third,
+        } => {
+            output.push_str(operation.word());
+            output.push('(');
+            write_ast_atom(first, output);
+            output.push(',');
+            write_ast_atom(second, output);
+            output.push(',');
+            write_ast_atom(third, output);
+            output.push(')');
+        }
         ExpressionKind::Call { weave, arguments } => {
             output.push_str("call(");
             output.push_str(weave);
@@ -4095,6 +4491,15 @@ fn validate_name(
             | "extent"
             | "encode"
             | "decode"
+            | "seek"
+            | "number"
+            | "pack16"
+            | "pack32"
+            | "pack64"
+            | "unpack16"
+            | "unpack32"
+            | "poke"
+            | "poke32"
             | "quotient"
             | "remainder"
             | "fuse"
@@ -4141,7 +4546,39 @@ mod tests {
         assert_eq!(run.exit_code, 0);
         assert_eq!(format_program(&output.program), HELLO);
         assert!(canonical_ast(&output.program).contains("Borrow(greeting)"));
-        assert_eq!(&output.bytecode[..5], b"AETH\x03");
+        assert_eq!(&output.bytecode[..5], b"AETH\x04");
+    }
+
+    #[test]
+    fn runs_bounded_search_packing_and_binary_patching_primitives() {
+        let source = "world forge_tools\n\nweave main [] -> Whole:\n  bind sample <- \"aéabc\"\n  bind found <- seek borrow sample \"abc\" 0\n  bind parsed <- number \"42\"\n  bind packed16 <- pack16 4660\n  bind unpacked16 <- unpack16 borrow packed16 0\n  bind packed32 <- pack32 16909060\n  bind patched <- poke borrow packed32 1 255\n  bind patched_value <- unpack32 borrow patched 0\n  bind restored <- poke32 borrow patched 0 16909060\n  bind restored_value <- unpack32 borrow restored 0\n  bind score <- sum found parsed\n  bind score2 <- sum score unpacked16\n  bind score3 <- sum score2 patched_value\n  yield sum score3 restored_value\n";
+        let output = compile_to_bytecode(source).expect("v4 primitives should compile");
+        let run = run_bytecode(&output.bytecode).expect("v4 primitive artifact should run");
+        assert_eq!(run.exit_code, 33_887_336);
+    }
+
+    #[test]
+    fn rejects_invalid_v4_numeric_and_binary_ranges_at_runtime() {
+        let invalid_number = "world invalid\n\nweave main [] -> Whole:\n  bind value <- number \"01\"\n  yield value\n";
+        let artifact = compile_to_bytecode(invalid_number)
+            .expect("number operand shape is checked at runtime")
+            .bytecode;
+        let error = run_bytecode(&artifact).expect_err("noncanonical numeric text must fail");
+        assert!(error.message.contains("canonical Whole"));
+
+        let invalid_pack = "world invalid\n\nweave main [] -> Whole:\n  bind value <- pack16 65536\n  bind length <- extent borrow value\n  yield length\n";
+        let artifact = compile_to_bytecode(invalid_pack)
+            .expect("pack operand shape is checked at runtime")
+            .bytecode;
+        let error = run_bytecode(&artifact).expect_err("out-of-range pack16 must fail");
+        assert!(error.message.contains("between 0 and 65535"));
+
+        let invalid_poke = "world invalid\n\nweave main [] -> Whole:\n  bind value <- poke bytes \"00\" 1 0\n  bind length <- extent borrow value\n  yield length\n";
+        let artifact = compile_to_bytecode(invalid_poke)
+            .expect("poke operand shapes should compile")
+            .bytecode;
+        let error = run_bytecode(&artifact).expect_err("out-of-range poke must fail");
+        assert!(error.message.contains("outside the Bytes value"));
     }
 
     #[test]

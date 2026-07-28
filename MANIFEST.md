@@ -2,63 +2,67 @@
 
 ## Contract
 
-The compiler accepts Aether 0.3 source, returns a canonical AST, emits an AETH
-v3 artifact, verifies it, and runs that artifact in the Aether VM. The command
-line and desktop app use the same compiler core. Source is never translated to
-Rust, C, JavaScript, LLVM, or another language.
+The bootstrap compiler accepts Aether 0.4 source, returns a canonical AST,
+emits an AETH v4 artifact, verifies it, and runs it in the Aether VM. The CLI
+and desktop app use the same core. Source is never translated to an existing
+language.
 
 ## Implemented Language Boundary
 
-Aether 0.3.0 accepts one `world` declaration and one or more named `weave`
-declarations. `main` must be `weave main [] -> Whole:`. The type set is `Text`,
-`Whole`, `Truth`, and bounded `Bytes`.
+Aether 0.4.0 has `Text`, `Whole`, `Truth`, and bounded `Bytes`. `Text` and
+`Bytes` require explicit `borrow name` or `move name`; `Whole` and `Truth` copy
+by ordinary name use. Root bindings receive fixed slots and nested blocks may
+revise but cannot introduce bindings.
 
-`Text` and `Bytes` bindings require explicit `borrow name` or `move name`; a
-move makes the local unavailable on every subsequent reachable control-flow
-path. `Whole` and `Truth` are copied by ordinary name use. Nested blocks cannot
-introduce a binding, which keeps slots fixed and control-flow state verifiable.
+The bounded binary and text facilities are `encode`, `decode`, `extent`,
+`octet`, `slice`, `fuse`, `append`, `seek`, `number`, `pack16`, `pack32`,
+`pack64`, `unpack16`, `unpack32`, `poke`, and `poke32`. Range violations,
+invalid numeric text, invalid UTF-8, and invalid fixed-width byte access fail
+deterministically at runtime.
 
-`Bytes` values use lowercase or uppercase hexadecimal literals in the form
-`bytes "0011aaff"`, are capped at 1,000,000 decoded bytes, and are manipulated
-only through bounded byte operations. `decode` rejects invalid UTF-8 at runtime;
-`append` rejects a value outside `0..=255`; `slice` clamps byte offsets; and
-`octet` returns `-1` for an out-of-range index. `quotient` and `remainder`
-reject division by zero and signed overflow.
+Source is UTF-8. Names and keywords are lowercase ASCII. Canonical formatting
+uses LF, exact two-space indentation, no tabs, and no trailing whitespace.
+CRLF input is accepted and formats to LF.
 
-Source is UTF-8. Names and language keywords remain lowercase ASCII. Canonical
-formatting uses LF, exact two-space indentation, no tabs, and no trailing
-whitespace. CRLF input is accepted and formatted as LF.
-
-The AETH v3 verifier checks headers, function metadata, local initialization and
-mutability, stack types, move state, jump targets, control-flow convergence,
-call signatures, text and bytes constant limits, and terminal yields before
-execution. AETH v2 artifacts are intentionally rejected.
+The AETH v4 verifier checks headers, function metadata, local initialization
+and mutability, stack types, move state, jump targets, control-flow convergence,
+call signatures, text and byte limits, and terminal yields before execution.
+Versions prior to v4 are intentionally rejected.
 
 ## Forge Boundary
 
 `aether forge <compiler-artifact> <source-file> --output <artifact-file>` is a
 strict local bridge. It verifies the compiler artifact, requires the exact
-compiler ABI `compile [borrow source: Text] -> Bytes`, supplies the source as
-the only host argument, verifies the returned bytes as AETH, and only then writes
-the output file. The compiler weave may emit diagnostic text, but it has no host
-file, process, network, model, or artifact-writing authority.
+`compile [borrow source: Text] -> Bytes` ABI, supplies source as the only host
+argument, verifies the yielded bytes as AETH, and only then writes an artifact.
+The invoked compiler has no file, process, network, model, shell, or direct
+artifact-writing authority.
 
-Stage 2 is not a claim that an Aether compiler has been written in Aether or
-that Aether is self-hosting. The current Rust implementation remains the
-bootstrap compiler and VM. Self-hosting requires an Aether compiler source,
-verified compiler artifact, and reproducible recompilation evidence.
+## Seed-Profile Self Hosting
+
+`seed/aether_seed.ae` is source in Aether itself. It parses the documented
+Seed Profile, derives local descriptors and instruction bytes, patches its own
+structured-control-flow offsets using `poke32`, and constructs an AETH v4
+artifact through normal `Bytes` operations. It does not call a host parser,
+compiler, source generator, or fixed-artifact lookup.
+
+The checked-in `seed/aether_seed.aeth` is reproduced by both the Rust bootstrap
+compiler and the Aether seed compiler. `crates/xlang-core/tests/seed_self_host.rs`
+also makes the forged compiler compile a distinct valid source variant and
+asserts that its bytes differ. This supports a self-hosting claim only for the
+Seed Profile. Full Aether remains bootstrap-compiled until a complete Aether
+compiler has the same proof.
 
 ## AI Boundary
 
 Ollama assistance is optional and local-only. It is restricted to a loopback
-HTTP endpoint and a conservative model-name character set. It can review source
-only after a user request. It is never a compiler, evaluator, code execution
-authority, or artifact signer.
+HTTP endpoint and validated model names. It may review source after a user
+request, but is never a compiler, evaluator, execution authority, or artifact
+signer.
 
 ## Quality Gate
 
-The repository must pass Rust formatting, all core, CLI, and desktop tests,
-Clippy with warnings denied, TypeScript linting, frontend tests, production
-frontend build, Windows Tauri bundle build, command-line checks for Stage 2
-examples, forge contract verification, a live Docker Ollama status check, and
-package inspection plus launch before release.
+The release gate requires Rust formatting, workspace tests including the
+self-hosting proof, Clippy with warnings denied, frontend linting and tests,
+production frontend build, Windows Tauri bundle build, CLI compile/forge/run
+checks, Docker Ollama status verification, and package inspection plus launch.

@@ -1,39 +1,46 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and desktop workbench.
-Aether 0.3.0 parses only Aether source, emits AETH v3 bytecode, verifies every
-artifact, and runs it in the Aether VM. It never transpiles source to an
-existing language.
+Aether 0.4.0 parses only Aether source, emits deterministic AETH v4 bytecode,
+verifies every artifact, and runs it in the Aether VM. It never translates
+source to Rust, C, JavaScript, LLVM, or another language.
 
-## Stage 2: Forge Foundation
+## Stage 3: Seed Compiler
 
-Stage 2 adds bounded `Bytes` values to the Stage 1 language. `Bytes` use the
-same explicit `borrow name` or `move name` access discipline as `Text`, while
-`Whole` and `Truth` remain copied values. The language now supports hexadecimal
-`bytes` literals, `encode`, `decode`, `extent`, `octet`, `slice`, `fuse`, and
-`append`, plus checked `quotient` and `remainder` arithmetic.
+Stage 3 adds ordinary language primitives for bounded text search and binary
+construction: `seek`, `number`, `pack16`, `pack32`, `pack64`, `unpack16`,
+`unpack32`, `poke`, and `poke32`. They are VM operations available to every
+Aether program, not a compiler host callback.
 
-The core also provides two verified host boundaries:
+The checked-in [seed/aether_seed.ae](seed/aether_seed.ae) is an Aether-written
+compiler for the documented Seed Profile. Its verified artifact is
+[seed/aether_seed.aeth](seed/aether_seed.aeth). The regression test proves:
 
-- `invoke_bytecode` invokes a named weave with typed host values.
-- `aether forge` accepts only a verified compiler artifact with
-  `compile [borrow source: Text] -> Bytes`, supplies the source text, verifies
-  the returned bytes as AETH, and then writes the output artifact.
+1. Rust bootstrap compilation of the seed source equals the checked-in artifact.
+2. `aether forge` invokes that artifact to compile the same source.
+3. The first and second Aether-produced generations are byte-identical to the
+   bootstrap artifact.
+4. The forged compiler creates a distinct, valid artifact for a source variant,
+   so it is not returning a fixed stored artifact.
 
-This is a forge foundation, not a self-hosted compiler. No Aether-written
-compiler source or self-reproducing compiler artifact is claimed in this
-release. The Rust implementation remains the bootstrap compiler and VM.
+This is a precise self-hosting claim for the Seed Profile only. The complete
+Aether 0.4 language remains bootstrapped by the Rust core. See
+[docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) for the accepted subset and its
+limits.
 
 ## Workspace
 
-- `crates/xlang-core` contains the parser, semantic checks, canonical formatter,
-  AETH emitter, verifier, VM, and typed invocation boundary.
-- `apps/xlang-cli` builds the `aether` command-line compiler and forge bridge.
+- `crates/xlang-core` contains the bootstrap parser, semantic checks, canonical
+  formatter, AETH emitter, verifier, VM, typed invocation boundary, and
+  self-hosting regression test.
+- `apps/xlang-cli` builds the `aether` compiler and forge bridge.
 - `apps/xlang-studio` is Aether Studio, the local Tauri desktop workbench.
-- `examples` contains verified Aether 0.3 source programs.
+- `seed` contains the Aether-written Seed Profile compiler and verified binary.
+- `examples` contains regular Aether programs.
 - `legacy` preserves V1, V2, and historical AI Studio material as reference
-  only. It is not in the production build.
-- `SOUL.md` remains the governing engineering standard.
+  only. It is not part of the production build.
+- `AGENTS.md` is the Level 4 project entry; binding quality law is the universal
+  **AGENTS Constitution** pack. `SOUL.md` is a superseded stub only.
 
 ## Command Line
 
@@ -42,13 +49,15 @@ release. The Rust implementation remains the bootstrap compiler and VM.
     cargo run -p aether-cli -- compile (Resolve-Path .\examples\welcome.ae) --output .\target\welcome.aeth
     cargo run -p aether-cli -- run .\target\welcome.aeth
 
-When an Aether compiler artifact has been built and verified, invoke its fixed
-ABI through the forge bridge:
+Forge a Seed Profile compiler artifact locally:
 
-    cargo run -p aether-cli -- forge .\target\compiler.aeth .\examples\welcome.ae --output .\target\forged.aeth
+    cargo run -p aether-cli -- compile .\seed\aether_seed.ae --output .\target\aether_seed.aeth
+    cargo run -p aether-cli -- forge .\target\aether_seed.aeth .\seed\aether_seed.ae --output .\target\aether_seed.forged.aeth
+    Get-FileHash .\target\aether_seed.aeth, .\target\aether_seed.forged.aeth
 
-The compiled file begins with `AETH` and format version `3`. AETH v2 artifacts
-are intentionally rejected by the Aether 0.3 VM.
+The two SHA-256 values must match. The checked-in AETH v4 artifact begins with
+`AETH` followed by version byte `4`; earlier AETH versions are intentionally
+rejected.
 
 ## Desktop Studio
 
@@ -57,22 +66,19 @@ are intentionally rejected by the Aether 0.3 VM.
     npm run desktop:dev
 
 Studio builds the current Aether document, displays the verified AETH artifact
-and VM output, and keeps compilation separate from AI review. Its starting
-document is valid Aether 0.3 source and demonstrates `Bytes` operations.
-
-Docker-hosted Ollama is the only AI integration. It is loopback-only, optional,
-and local. `qwen2.5:3b` remains the default reviewer for the GTX 1660 Ti 6 GB
-environment. Set `XLANG_OLLAMA_URL` and `XLANG_OLLAMA_MODEL` before launching
-Studio only when a different local endpoint or installed model is required.
+and VM output, and keeps compilation separate from AI review. Docker-hosted
+Ollama is the only AI integration. It is loopback-only, optional, and local;
+`qwen2.5:3b` remains the default reviewer for the GTX 1660 Ti 6 GB environment.
 
 ## Data Handling
 
-Compilation and forge invocation run locally. The Studio WebView keeps its
-editor buffer and model selection in local storage under `aether.source` and
-`aether.model`. No source, artifact, model selection, or financial data is
-uploaded, synchronized, or stored in a cloud service.
+Compilation, forge invocation, and the Seed Profile proof run locally. Studio
+keeps its editor buffer and model selection in local WebView storage under
+`aether.source` and `aether.model`. No source, artifact, model selection, or
+financial data is uploaded, synchronized, or stored in a cloud service.
 
-See `docs/ARCHITECTURE.md` for runtime boundaries,
-`docs/AETHER_0.3.md` for the executable grammar,
-`docs/FORGE_CONTRACT.md` for the compiler ABI, and `AUDIT_REPORT.md` for the
-migration audit.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+[docs/AETHER_0.4.md](docs/AETHER_0.4.md),
+[docs/SEED_PROFILE.md](docs/SEED_PROFILE.md),
+[docs/FORGE_CONTRACT.md](docs/FORGE_CONTRACT.md), and
+[AUDIT_REPORT.md](AUDIT_REPORT.md) for implementation and verification details.

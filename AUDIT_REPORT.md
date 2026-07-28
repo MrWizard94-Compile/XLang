@@ -1,6 +1,6 @@
 # Aether Migration Audit
 
-Date: 2026-07-25
+Date: 2026-07-28 (Stage 3 update)
 
 ## Legacy Intake
 
@@ -13,22 +13,31 @@ Date: 2026-07-25
 
 ## Production Boundary
 
-The production compiler accepts only Aether 0.3.0 source. It produces a
-canonical AST and deterministic AETH v3 bytecode artifact, verifies that
+The production bootstrap compiler accepts Aether 0.4.0 source. It produces a
+canonical AST and deterministic AETH v4 bytecode artifact, verifies that
 artifact, and runs it in the Aether VM. The command line and desktop app call
 the same compiler core.
 
-Stage 2 extends the Stage 1 language with a bounded `Bytes` type, explicit byte
-ownership, binary literals and operations, deterministic checked division and
-remainder, and a typed compiler invocation boundary. Legacy C-shaped,
-Rust-shaped, V1, V2, and AETH v2 input remains intentionally rejected. The
-repository does not transpile Aether to C, Rust, JavaScript, LLVM, or another
-target language.
+Stage 3 extends Stage 2 with bounded text search and binary construction
+primitives (`seek`, `number`, `pack*`, `unpack*`, `poke*`), AETH v4, and an
+Aether-written Seed Profile compiler with reproducible self-compilation proof.
+Legacy C-shaped, Rust-shaped, V1, V2, and pre-v4 AETH input remains intentionally
+rejected. The repository does not transpile Aether to C, Rust, JavaScript, LLVM,
+or another target language.
 
 `aether forge` verifies a compiler artifact, requires
 `compile [borrow source: Text] -> Bytes`, gives it the source text, verifies the
-returned artifact bytes, and writes only a verified result. This is a host ABI,
-not evidence of an Aether-written compiler or self-hosting.
+returned artifact bytes, and writes only a verified result.
+
+## Seed-Profile Self-Hosting Boundary
+
+`seed/aether_seed.ae` is source in Aether. It parses the documented Seed Profile
+and emits AETH v4 through ordinary language operations. The regression test
+proves bootstrap, first forge, and second forge match the checked-in artifact,
+and that a distinct source variant produces a different verified artifact.
+
+This is self-hosting for the Seed Profile only. Full Aether 0.4 remains
+bootstrap-hosted. Scope: [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ## Desktop and Data Boundary
 
@@ -40,8 +49,9 @@ WebView storage.
 
 ## Release Gate
 
-A release requires passing Aether core, CLI, and desktop tests, Clippy with
-warnings denied, frontend linting, frontend tests, production frontend build,
-Windows Tauri bundle build, command-line compile and run checks, forge contract
-verification, and a live Docker Ollama status check. A successful package must
-be inspected and launched before it is reported as delivered.
+A release requires passing Aether core, CLI, and desktop tests (including the
+seed self-host proof), Clippy with warnings denied, frontend linting, frontend
+tests, production frontend build, Windows Tauri bundle build, command-line
+compile/forge/run checks, and a live Docker Ollama status check when claiming AI
+integration. A successful package must be inspected and launched before it is
+reported as delivered.

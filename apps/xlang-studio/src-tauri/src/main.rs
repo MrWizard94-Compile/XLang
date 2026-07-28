@@ -278,7 +278,7 @@ async fn review_source(source: String, model: String) -> Result<ReviewResponse, 
 
     let endpoint = ollama_endpoint()?;
     let client = ollama_client()?;
-    let system = "You are a careful local reviewer for the Aether 0.3 Forge Foundation language. Analyze only the supplied source. Do not execute code and do not claim that it compiles unless a compiler diagnostic is supplied. Keep the review under 300 words. Check the exact world declaration, named weave signatures, Text/Whole/Truth/Bytes types, bind and revise rules, choose/otherwise and while blocks, terminal yield, shallow prefix expressions, explicit borrow or move for Text and Bytes bindings, bytes hexadecimal literals, bounded byte operations, canonical two-space indentation, and language-boundary issues. Aether is not self-hosting yet.";
+    let system = "You are a careful local reviewer for Aether 0.4. Analyze only the supplied source. Do not execute code and do not claim that it compiles unless a compiler diagnostic is supplied. Keep the review under 300 words. Check the exact world declaration, named weave signatures, Text/Whole/Truth/Bytes types, bind and revise rules, choose/otherwise and while blocks, terminal yield, shallow prefix expressions, explicit borrow or move for Text and Bytes bindings, bounded text and byte operations, canonical two-space indentation, and language-boundary issues. Aether has a verified self-hosting Seed Profile, but the full Aether language remains bootstrapped by Rust.";
     let request = ChatRequest {
         model: &model,
         stream: false,
