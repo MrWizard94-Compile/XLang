@@ -22,6 +22,8 @@ compiler for the documented Seed Profile. Its verified artifact is
    bootstrap artifact.
 4. The forged compiler creates a distinct, valid artifact for a source variant,
    so it is not returning a fixed stored artifact.
+5. Multi-weave programs with `call` (including forward callees) and CRLF sources
+   forge byte-identically to bootstrap and run correctly.
 5. The seed forges a multi-weave program with `call` byte-identically to
    bootstrap; the artifact runs with the expected stdout and exit code.
 

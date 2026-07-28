@@ -1,6 +1,6 @@
 # Aether Seed Profile
 
-Status: normative Stage 4 self-hosting subset, 2026-07-28.
+Status: normative Stage 4 self-hosting subset (forward-call + CRLF), 2026-07-28.
 
 This document defines the **Seed Profile**: the only language subset for which
 this repository claims reproducible self-hosting. Full Aether 0.4 remains
@@ -16,8 +16,10 @@ self-hosting claim.
 3. Emits a complete AETH **v4** artifact through ordinary `Bytes` operations.
 4. Exposes the forge ABI `weave compile [borrow source: Text] -> Bytes`.
 5. Rebuilds its own source byte-for-byte under `aether forge`.
-6. Compiles multi-weave Seed Profile programs with `call`, matching bootstrap
-   output byte-for-byte.
+6. Compiles multi-weave Seed Profile programs with `call` (including forward
+   calls to weaves declared later), matching bootstrap output byte-for-byte.
+7. Accepts CRLF or LF line endings in Seed Profile input (canonical emission is
+   independent of host newline style).
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
@@ -82,9 +84,9 @@ Supported operations (by seed emitter opcode mapping):
   `quotient`, `remainder`, `fuse`, `append`, `octet`, `unpack16`, `unpack32`
 - Ternary: `cut`, `slice`, `seek`, `poke`, `poke32`
 - Call: `call weave_name args...` emits `OP_CALL` (21), the callee's declaration
-  index as `u16`, and argument count as `u8`. Callees must be declared before
-  the call site (single-pass name table). Result type is the callee weave
-  result.
+  index as `u16`, and argument count as `u8`. A first pass records every weave
+  name and result type so forward calls are allowed. Result type is the callee
+  weave result.
 - Atoms: decimal `Whole` literals (optional leading `-`), `bright` / `dim`,
   text literals, `bytes "hex..."`, and `borrow` / `move` of `source` or `vN`
 
@@ -107,15 +109,14 @@ function table. This replaces the Stage 3 fixed two-weave (`compile` + synthetic
 
 The Seed Profile compiler does **not** claim support for:
 
-- Forward `call` to weaves declared later in the file (bootstrap full Aether
-  allows any order; the seed is single-pass)
 - Nested expression trees
 - Nested binding introduction
 - Host I/O, networking, or model access
-- CRLF source normalization (Seed Profile sources should use LF line endings)
 - Full Aether diagnostic fidelity (invalid Seed Profile input may fail late or
   produce a rejectable artifact; the bootstrap compiler remains the complete
   diagnostic authority for full Aether 0.4)
+- Sources that omit a final line terminator on the last statement line (prefer a
+  trailing LF; bootstrap is more tolerant than the seed line scanner)
 - Self-hosting of the complete language surface
 
 ## Reproducibility procedure
@@ -128,10 +129,11 @@ cargo run -p aether-cli -- forge .\target\aether_seed.aeth .\seed\aether_seed.ae
 Get-FileHash .\target\aether_seed.aeth, .\target\aether_seed.forged.aeth, .\seed\aether_seed.aeth
 ```
 
-All three SHA-256 digests must match. The regression test also forges a nearby
-source variant and requires a different verified artifact so the compiler cannot
-return a fixed stored payload. A second regression forges a multi-weave program
-with `call` and requires byte identity with bootstrap plus a successful run.
+All three SHA-256 digests must match. The regression tests also forge:
+
+1. A nearby source variant (different verified artifact — not a fixed payload).
+2. A multi-weave program with `call` (byte identity with bootstrap + run).
+3. A forward-call program (callee after caller) and a CRLF multi-weave source.
 
 ## Authority
 

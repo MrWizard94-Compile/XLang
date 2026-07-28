@@ -41,18 +41,19 @@ artifact-writing authority.
 ## Seed-Profile Self Hosting
 
 `seed/aether_seed.ae` is source in Aether itself. It parses the documented
-Seed Profile (Stage 4: multi-weave programs with `call`), derives local
-descriptors and instruction bytes per weave, patches structured-control-flow
-offsets using `poke32`, and constructs an AETH v4 function table through normal
-`Bytes` operations. It does not call a host parser, compiler, source generator,
-or fixed-artifact lookup.
+Seed Profile (Stage 4: multi-weave programs with `call`, including forward
+calls, plus CRLF input), derives local descriptors and instruction bytes per
+weave, patches structured-control-flow offsets using `poke32`, and constructs an
+AETH v4 function table through normal `Bytes` operations. It does not call a
+host parser, compiler, source generator, or fixed-artifact lookup.
 
 The checked-in `seed/aether_seed.aeth` is reproduced by both the Rust bootstrap
 compiler and the Aether seed compiler. `crates/xlang-core/tests/seed_self_host.rs`
-proves multi-generation self-host identity, a distinct valid source variant, and
-byte-identical multi-weave + `call` forge against bootstrap. This supports a
-self-hosting claim only for the Seed Profile. Full Aether remains
-bootstrap-compiled until a complete Aether compiler has the same proof.
+proves multi-generation self-host identity, a distinct valid source variant,
+byte-identical multi-weave + `call` forge (including forward callees), and CRLF
+input parity with LF bootstrap. This supports a self-hosting claim only for the
+Seed Profile. Full Aether remains bootstrap-compiled until a complete Aether
+compiler has the same proof.
 
 ## AI Boundary
 

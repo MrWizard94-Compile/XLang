@@ -16,6 +16,17 @@ const MULTI_WEAVE_SOURCE: &str = concat!(
     "  yield v0\n",
 );
 
+/// Callee declared after the call site (pass-1 name table).
+const FORWARD_CALL_SOURCE: &str = concat!(
+    "world demo\n",
+    "weave main [] -> Whole:\n",
+    "  bind mutable v0 <- call double 21\n",
+    "  speak render v0\n",
+    "  yield v0\n",
+    "weave double [v0: Whole] -> Whole:\n",
+    "  yield product v0 2\n",
+);
+
 #[test]
 fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
     let bootstrap = compile_to_bytecode(SEED_SOURCE)
@@ -91,6 +102,47 @@ fn seed_profile_compiler_forges_multi_weave_calls_byte_identically() {
     let run = run_bytecode(&multi_forged).expect("the multi-weave artifact must run");
     assert_eq!(run.exit_code, 42);
     assert_eq!(run.stdout, "42");
+}
+
+#[test]
+fn seed_profile_compiler_forges_forward_calls_and_crlf_sources() {
+    let bootstrap = compile_to_bytecode(SEED_SOURCE)
+        .expect("the checked-in Aether seed source must bootstrap")
+        .bytecode;
+
+    let forward_bootstrap = compile_to_bytecode(FORWARD_CALL_SOURCE)
+        .expect("the forward-call Seed Profile fixture must bootstrap")
+        .bytecode;
+    let forward_forged = bytes(
+        forge_bytecode(&bootstrap, FORWARD_CALL_SOURCE)
+            .expect("the seed compiler must forge forward call programs"),
+    );
+    verify_bytecode(&forward_forged).expect("the forward-call artifact must verify");
+    assert_eq!(
+        forward_forged, forward_bootstrap,
+        "seed forward-call forge must match bootstrap byte-for-byte"
+    );
+    let run = run_bytecode(&forward_forged).expect("the forward-call artifact must run");
+    assert_eq!(run.exit_code, 42);
+    assert_eq!(run.stdout, "42");
+
+    let crlf = MULTI_WEAVE_SOURCE.replace('\n', "\r\n");
+    assert!(crlf.contains("\r\n"), "fixture must exercise CRLF newlines");
+    let lf_bootstrap = compile_to_bytecode(MULTI_WEAVE_SOURCE)
+        .expect("the LF multi-weave fixture must bootstrap")
+        .bytecode;
+    let crlf_forged = bytes(
+        forge_bytecode(&bootstrap, &crlf)
+            .expect("the seed compiler must accept CRLF Seed Profile sources"),
+    );
+    verify_bytecode(&crlf_forged).expect("the CRLF-forged artifact must verify");
+    assert_eq!(
+        crlf_forged, lf_bootstrap,
+        "CRLF Seed Profile forge must match the LF bootstrap artifact"
+    );
+    let crlf_run = run_bytecode(&crlf_forged).expect("the CRLF-forged artifact must run");
+    assert_eq!(crlf_run.exit_code, 42);
+    assert_eq!(crlf_run.stdout, "42");
 }
 
 fn bytes(output: InvocationOutput) -> Vec<u8> {
