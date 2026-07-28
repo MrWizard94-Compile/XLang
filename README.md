@@ -38,6 +38,25 @@ AETH v5. See [docs/AETHER_0.5.md](docs/AETHER_0.5.md) and
   they become part of the product compile surface.
 - Bootstrap rebuild of the seed is still required after changing the seed source.
 
+## North star and evidence-led roadmap
+
+Aether 0.5 is the current executable contract, not the full long-range language
+vision. The project is deliberately designing for AI-primary authorship while
+keeping deterministic, locally verifiable compiler authority. Read the design
+set in this order:
+
+1. [docs/NORTH_STAR.md](docs/NORTH_STAR.md) — intended product direction and
+   current-law constraints.
+2. [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) — proven facts, accepted
+   directions, research hypotheses, and prohibited claims.
+3. [docs/research/](docs/research/) — primary-source reference study,
+   decomposition, and evidence plan.
+4. [docs/ROADMAP.md](docs/ROADMAP.md) — approved dependency order for future
+   language work.
+
+These documents do not claim that proposed allocators, effects, concurrency,
+SoA lowering, C interop, structural edits, or a native backend exist in 0.5.
+
 ## Workspace
 
 - `crates/xlang-core` — bootstrap parser/emitter/verifier/VM, forge API, seed path

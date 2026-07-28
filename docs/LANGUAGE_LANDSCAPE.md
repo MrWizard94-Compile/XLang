@@ -5,9 +5,10 @@ Date: 2026-07-28
 ## Scope
 
 No finite survey can literally enumerate every programming language ever created.
-This ledger decomposes the influential language families and their representative
-designs into reusable decisions. It is a design input, not a claim that Aether
-implements every feature listed here.
+This compact ledger decomposes influential language families into reusable
+questions. It is a design input, not a claim that Aether implements every
+feature listed here. The source-backed ten-system study, component matrix, and
+evidence plan are [research/](research/).
 
 ## Feature Ledger
 
@@ -26,26 +27,22 @@ implements every feature listed here.
 | MATLAB, R, Julia | array-first numerical thinking and multiple dispatch lessons | hidden allocation in hot paths |
 | COBOL, Smalltalk, Objective-C | domain vocabulary and message-oriented readability | ambient object graphs as the default storage model |
 
-## Sources Studied
+## Current Aether positions
 
-- Rust ownership, trait, and Result references: https://doc.rust-lang.org/stable/book/ch04-01-what-is-ownership.html, https://doc.rust-lang.org/stable/reference/items/traits.html, and https://doc.rust-lang.org/core/result/.
-- Zig language reference for explicit allocation and compile-time execution: https://ziglang.org/documentation/master/.
-- Go specification for compact grammar, packages, and concurrency: https://go.dev/ref/spec.
-- OCaml references for modules, interfaces, variants, and pattern matching: https://ocaml.org/docs/modules and https://ocaml.org/docs/basic-data-types.
-- Haskell report for typed functional design and type classes: https://www.haskell.org/definition/haskell98-report.pdf.
+1. Aether 0.5 implements explicit `borrow`/`move` within its bounded current
+   value surface. The complete scope is [AETHER_0.5.md](AETHER_0.5.md).
+2. Explicit allocation, typed errors/effects, compile-time execution, generic
+   shape folding, SoA lowering, C interop, and structured concurrency are
+   future directions or research hypotheses — not current syntax or runtime
+   claims. Their evidence and stop conditions are in
+   [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
+3. Canonical formatting and a bootstrap canonical-AST path exist today. A
+   versioned structural AI-edit protocol does not yet exist.
+4. The executable target remains AETH plus the Aether VM. No host-language or
+   LLVM backend is part of the current language contract.
+5. Immutable nominal records are the first aggregate value: primitive fields
+   only, explicit borrowed projection, structural equality, and AETH v5
+   encoding. Recursive layout, mutation, and partial moves remain deferred.
 
-## Aether Decisions
-
-1. Values are moved by default. Borrowing and copying are explicit source forms.
-2. Allocation is visible. Heap-owning APIs receive an `arena` capability.
-3. Errors are typed values and must be matched, forwarded, or converted.
-4. Compile-time work uses normal Aether syntax under `forge` blocks, not macros.
-5. The canonical formatter and AST serialization are compiler-owned and deterministic.
-6. The first executable target is Aether bytecode and the Aether VM. No host-language
-   backend is part of the language contract.
-7. C ABI interop, SoA lowering, generic shape folding, and structured concurrency are
-   specified future milestones after the bootstrap's move and allocator invariants hold.
-8. Immutable nominal records are the first aggregate value: primitive fields only,
-   explicit borrowed projection, structural equality, and AETH v5 encoding preserve
-   deterministic artifacts while recursive layout, mutation, and partial moves remain
-   deferred.
+See [NORTH_STAR.md](NORTH_STAR.md), [CORE_CLAIMS.md](CORE_CLAIMS.md), and
+[ROADMAP.md](ROADMAP.md) for the governed design direction.

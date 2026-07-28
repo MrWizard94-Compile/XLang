@@ -47,6 +47,7 @@ except under `target/` if unavoidable for inspection — prefer not to.
 | Language specs | `docs/AETHER_0.*.md`, `docs/SEED_PROFILE.md` |
 | Forge ABI | `docs/FORGE_CONTRACT.md` |
 | Architecture | `docs/ARCHITECTURE.md` |
+| Design direction | `docs/NORTH_STAR.md`, `docs/CORE_CLAIMS.md`, `docs/ROADMAP.md`, `docs/research/` |
 | Examples | `examples/*.ae` |
 | Legacy (reference only) | `legacy/` |
 | Level-4 law | `AGENTS.md` → pack `../../AGENTS Constitution/` |
@@ -54,8 +55,11 @@ except under `target/` if unavoidable for inspection — prefer not to.
 ## Invariants to respect when reporting
 
 - Aether does **not** transpile to C/Rust/JS/LLVM.
-- AETH v4 only in current production path.
-- Self-hosting is **Seed Profile only**, with byte-identical multi-generation proof.
+- AETH v4 is compatible for record-free programs; AETH v5 is used for bounded
+  immutable-record programs; older versions are rejected.
+- Self-hosting covers the documented canonical Aether 0.5 surface with
+  byte-identical multi-generation, shipped-example, and regression-corpus proof;
+  full invalid-source diagnostic parity is not claimed.
 - Ollama is optional review only — never compiler authority.
 - DigiChar is a separate product; do not mix paths or remotes.
 

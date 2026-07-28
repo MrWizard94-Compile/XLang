@@ -7,6 +7,17 @@ bootstrap for tooling, and **emits AETH v4 or v5 bytecode primarily through the
 Aether-written seed compiler** (forge ABI). The CLI and desktop app use the same
 seed-hosted compile path. Source is never translated to an existing language.
 
+## Scope Boundary
+
+This manifest is the executable Aether 0.5 product contract. It intentionally
+does not promote long-range research directions to implemented behavior. The
+AI-first systems-language direction, evidence policy, and staged dependencies
+are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
+[docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
+Proposed explicit allocators, typed effects, structured concurrency, generic
+shape/layout work, C interop, and structural editing are not Aether 0.5 surface
+area unless this manifest and the versioned language specification say so.
+
 ## Implemented Language Boundary
 
 Aether 0.5.0 includes the 0.4 scalar and byte surface plus immutable nominal

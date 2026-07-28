@@ -35,6 +35,17 @@ target language.
 `compile [borrow source: Text] -> Bytes`, gives it the source text, verifies the
 returned artifact bytes, and writes only a verified result.
 
+## Strategic Design Boundary
+
+This audit records the implemented Aether 0.5 migration/product boundary. The
+separate AI-first language direction is evidence-gated rather than represented
+as completed feature work: [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
+[docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
+Explicit allocators, typed effects, structured concurrency, data-layout/generic
+work, C interop, and structural AI edits are future research/design items. They
+must not be reported as present 0.5 capability or weaken AETH-only execution,
+verification, seed proof, or local-first authority.
+
 ## Seed-Profile Self-Hosting Boundary
 
 `seed/aether_seed.ae` is source in Aether. It parses the complete documented

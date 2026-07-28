@@ -19,6 +19,17 @@ flowchart LR
     Review --> Editor
 ~~~
 
+## Scope and Future-Design Boundary
+
+This document describes the implemented Aether 0.5 architecture. The broader
+AI-first systems-language direction is documented separately in
+[NORTH_STAR.md](NORTH_STAR.md), [CORE_CLAIMS.md](CORE_CLAIMS.md), and
+[ROADMAP.md](ROADMAP.md). In particular, Aether 0.5 has no explicit allocator
+API, typed effects, structured concurrency, generic shape folding, SoA lowering,
+C-header ingestion, structural-edit protocol, or native backend. Aether source
+continues to emit AETH only; future designs may not bypass verifier, forge, or
+host-capability boundaries.
+
 ## Compiler Boundary
 
 The Rust bootstrap core is a dependency-free crate. It parses UTF-8 Aether

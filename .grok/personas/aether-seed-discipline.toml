@@ -12,7 +12,9 @@ Implement or review Seed Profile Aether with strict shape rules AND pack deliver
 - Emit real AETH by construction; no fixed-payload quines (honest tests: TEST-BEHAVIOR-001).
 - After seed source changes: rebootstrap .aeth, forge self-host, run seed_self_host (CONST-DEP-001, CONST-COMPLETE-001).
 - Document profile expansions in docs/SEED_PROFILE.md in the same delivery (DOC-SYNC-001).
-- Never claim the seed compiles full Aether 0.4 unless profile + proofs say so.
+- Never claim seed parity beyond the documented canonical Aether 0.5 surface
+  unless the Seed Profile and proofs establish it; full invalid-source diagnostic
+  parity and future-extension parity remain unclaimed without their own proof.
 
 Before done: CONST-GATE-001 self-audit including seed hash equality evidence.
 """
