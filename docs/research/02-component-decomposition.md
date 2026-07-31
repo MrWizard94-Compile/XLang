@@ -1,7 +1,7 @@
 # Aether Component Decomposition Matrix
 
 **Status:** SOP phase 2 comparison matrix
-**Date:** 2026-07-28
+**Date:** 2026-07-28; current-contract update: 2026-07-31
 **Companion:** [01-reference-systems.md](01-reference-systems.md)
 
 ## Applying the SOP comparison lens to a programming language
@@ -66,14 +66,14 @@ flowchart TD
 
 | Component | Present boundary | Candidate future contract | Evidence needed before implementation |
 | --- | --- | --- | --- |
-| Canonical source and AST | Aether 0.5 has deterministic formatting and a bootstrap canonical-AST output. | A versioned, machine-readable schema and validated structural edit operations. | Round-trip corpus; malformed-edit rejection; stable schema/version policy; editor and CLI contract tests. |
+| Canonical source and AST | Aether 0.6 has deterministic formatting and a bootstrap canonical-AST output. | A versioned, machine-readable schema and validated structural edit operations. | Round-trip corpus; malformed-edit rejection; stable schema/version policy; editor and CLI contract tests. |
 | Ownership and values | `borrow` and `move` protect bounded scalar, byte, and immutable-record use. | A complete value/borrow/mutation/escape model for dynamic aggregates and resources. | Formal rules; negative compile tests; seed-emission proof; soundness review. |
 | Allocation | VM intentionally exposes no allocator API. | Explicit capability-passed allocators or arenas, with no ambient default allocation in the language contract. | Allocation trace tests; OOM behavior; ownership/destruction rules; ABI interaction design. |
 | Effects and errors | No typed effect or error-set surface exists. | Typed, inspectable error/effect propagation with no hidden exception path. | Semantics document; inference/handling tests; diagnostics; interaction with ownership and tasks. |
 | Concurrency | No concurrent Aether execution model exists. | Lexically scoped tasks, cancellation, joins, and effect-mediated blocking/async handlers. | Deterministic scheduler model; orphan-task property tests; cancellation and resource cleanup tests. |
 | Generics and layout | No generic/SoA language surface exists. | Shape-aware specialization and explicit or provably safe layout selection. | ABI/layout rules; benchmark protocol; semantic-equivalence tests across layouts. |
 | Interop | Forge invokes only a verified Aether compiler with a narrow primitive ABI. | A separately designed capability-mediated FFI, potentially including C ABI support. | Ownership mapping; fixture libraries; malformed-header/input handling; no ambient host authority. |
-| Artifact and runtime | AETH v4/v5 is verified before write or execution. | Evolve only through versioned verifier rules and compatibility tests. | Decoder fuzzing; old-artifact compatibility or deliberate rejection; seed and bootstrap parity. |
+| Artifact and runtime | AETH v4/v5 compatibility and v6 output are verified before write or execution. | Evolve only through versioned verifier rules and compatibility tests. | Decoder fuzzing; old-artifact compatibility or deliberate rejection; seed and bootstrap parity. |
 | Toolchain and administration | CLI, Studio, formatter, seed rebuild, and manual release gates exist. | Unified project metadata, dependency identity, LSP, and reproducible package workflow. | Threat model; offline reproducibility proof; upgrade/rollback plan; no implicit cloud state. |
 
 ## Design constraints derived from dependencies

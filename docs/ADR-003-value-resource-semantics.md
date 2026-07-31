@@ -1,21 +1,22 @@
-# ADR-003: Proposed owned values, ephemeral loans, and bounded arenas
+# ADR-003: Owned values, ephemeral loans, and bounded arenas
 
-**Status:** Proposed — pending human approval
+**Status:** Accepted — 2026-07-31 implementation direction
 **Date:** 2026-07-28
-**Decision makers:** WPAI product direction, with explicit human approval required
+**Decision makers:** WPAI product direction, with human approval recorded on
+2026-07-31
 **Related Rule IDs:** DOC-ADR-001, RND-INVAR-001, RND-CORE-001,
 RND-DOC-001, IP-INVENTION-001, SEC-INPUT-001, DOC-SYNC-001,
 TEST-BEHAVIOR-001
 
 ## Context
 
-Aether 0.5 has useful bounded source ownership rules: `Whole` and `Truth`
-copy by ordinary use; `Text`, `Bytes`, and immutable records require explicit
-`borrow` or `move`; mutable root bindings support `revise`; and the verifier
-tracks local initialization and move state. It does not yet have dynamic
-aggregates, an allocator capability, resource provenance, a non-escaping
-exclusive capability mode, an allocation-outcome type, or a user-visible
-destruction contract.
+At the original 0.5 decision boundary, Aether had useful bounded source
+ownership rules: `Whole` and `Truth` copy by ordinary use; `Text`, `Bytes`,
+and immutable records require explicit `borrow` or `move`; mutable root
+bindings support `revise`; and the verifier tracks local initialization and
+move state. It did not yet have dynamic aggregates, an allocator capability,
+resource provenance, a non-escaping exclusive capability mode, an
+allocation-outcome type, or a user-visible destruction contract.
 
 The long-range direction accepted in ADR-002 calls for explicit,
 capability-oriented allocation, but deliberately left the exact resource model
@@ -30,9 +31,10 @@ also forbids a host-capability leak, requires verified AETH execution, and
 requires seed/bootstrap proof before new source reaches default product
 compilation.
 
-## Proposed decision
+## Accepted decision
 
-If approved, Aether will use the following first resource model for M2:
+Aether uses the following first resource model as the direction for M2 and
+later ownership/effect work:
 
 1. **Owned values:** `Text`, `Bytes`, records, and future buffers are source
    owners. They transfer only through explicit `move`; copyable `Whole` and
@@ -66,8 +68,13 @@ If approved, Aether will use the following first resource model for M2:
    region-aware semantic IR before it can emit a new AETH version. v4/v5 remain
    byte-compatible and are not reinterpreted.
 
-The complete normative proposal, counterexamples, layer map, and approval gate
-are in [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md).
+The complete design vocabulary, counterexamples, and layer map are in
+[DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md).
+The executable Aether 0.6 subset deliberately narrows generic outcome
+propagation and buffer-returning boundaries while it establishes the verifier
+and seed proof. Those implementation choices are normative in
+[ADR-004](ADR-004-aeth-v6-bounded-resources.md), not an implicit weakening of
+the accepted direction.
 
 ## Consequences
 
@@ -95,9 +102,10 @@ are in [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTIC
   exchange for clear failure behavior.
 - Existing Aether 0.5 Text/Bytes runtime allocations remain a bounded
   compatibility behavior; they are not silently converted to the new model.
-- The proposal still requires a complete M2 implementation across bootstrap,
-  verifier, VM, seed, documentation, and tests before it becomes product
-  surface area.
+- The broader accepted direction remains future work outside the deliberately
+  closed Aether 0.6 subset. Any expansion still requires complete bootstrap,
+  verifier, VM, seed, documentation, and test evidence before it becomes
+  product surface area.
 
 ## Alternatives considered
 
@@ -123,22 +131,25 @@ are in [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTIC
 - Seed parity remains canonical-source emission parity; full invalid-source
   diagnostic parity is not claimed.
 
-## Approval condition
+## Approval and implementation record
 
-This ADR intentionally remains **Proposed** until the human approves the model
-itself. Approval must be recorded by changing the status to **Accepted** in a
-complete review package that confirms the linked design and validation matrix
-are the chosen rules.
+Human approval was recorded on 2026-07-31 before the bounded M2 implementation
+began. It authorized a complete implementation, not a waiver of the M2 ADR,
+dependency-first delivery, hostile-input tests, seed proof, zero-warning gate,
+or AETH-only/capability constraints.
 
-Approval authorizes a bounded M2 implementation plan only. It does not waive
-the required M2 ADR, complete dependency-first implementation, hostile-input
-tests, seed proof, zero-warning gate, or AETH-only/capability constraints.
+The implementation is Aether 0.6 / AETH v6. It carries a typed semantic
+resource plan into emission, verifies operand-stack buffer provenance, and
+proves the documented canonical resource corpus seed-identical to bootstrap.
+It intentionally does not claim that the broader M1 design has already gained
+generic outcome propagation, buffer results, or a typed effects language.
 
 ## Links
 
 - [M1 design specification](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md)
 - [M1 validation matrix](M1-VALIDATION-MATRIX.md)
+- [ADR-004: AETH v6 bounded resources](ADR-004-aeth-v6-bounded-resources.md)
 - [Value/resource research](research/04-value-resource-models.md)
 - [ADR-002: AI-first design foundation](ADR-002-ai-first-design-foundation.md)
 - [Roadmap](ROADMAP.md)
-- [Current Aether 0.5 specification](AETHER_0.5.md)
+- [Current Aether 0.6 specification](AETHER_0.6.md)

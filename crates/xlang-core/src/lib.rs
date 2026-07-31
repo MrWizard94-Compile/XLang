@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.5.0";
+pub const LANGUAGE_VERSION: &str = "0.6.0";
 
-/// Checked-in Aether-written seed compiler artifact (AETH v4).
+/// Checked-in Aether-written seed compiler artifact (AETH v6).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../seed/aether_seed.aeth"
@@ -21,6 +21,7 @@ pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
 const ARTIFACT_MAGIC: &[u8; 4] = b"AETH";
 const ARTIFACT_VERSION_V4: u8 = 4;
 const ARTIFACT_VERSION_V5: u8 = 5;
+const ARTIFACT_VERSION_V6: u8 = 6;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 const MAX_FUNCTIONS: usize = 256;
 const MAX_LOCALS: usize = u16::MAX as usize;
@@ -30,6 +31,8 @@ const MAX_TEXT_BYTES: usize = 1_000_000;
 const MAX_BYTES: usize = 1_000_000;
 const MAX_RECORD_BYTES: usize = 1_000_000;
 const MAX_CALL_DEPTH: usize = 1_024;
+const MAX_ARENA_BYTES: u32 = 1_000_000;
+const BUFFER_METADATA_BYTES: usize = 16;
 
 const OP_PUSH_TEXT: u8 = 1;
 const OP_PUSH_WHOLE: u8 = 2;
@@ -75,6 +78,13 @@ const OP_POKE32: u8 = 41;
 const OP_PACK64: u8 = 42;
 const OP_MAKE_RECORD: u8 = 43;
 const OP_FIELD: u8 = 44;
+const OP_ARENA: u8 = 45;
+const OP_BUFFER: u8 = 46;
+const OP_ACCESS: u8 = 47;
+const OP_ALLOCATE: u8 = 48;
+const OP_BUFFER_APPEND: u8 = 49;
+const OP_BUFFER_AT: u8 = 50;
+const OP_COUNT: u8 = 52;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -132,6 +142,12 @@ pub enum ValueType {
     Truth,
     Bytes,
     Record(u16),
+    Arena,
+    BufferWhole,
+    BufferTruth,
+    /// An internal verifier stack marker. It is never serializable, bindable,
+    /// returnable, or visible in Aether source type syntax.
+    AccessArena,
 }
 
 impl ValueType {
@@ -142,6 +158,10 @@ impl ValueType {
             Self::Truth => 3,
             Self::Bytes => 4,
             Self::Record(_) => 5,
+            Self::Arena => 6,
+            Self::BufferWhole => 7,
+            Self::BufferTruth => 8,
+            Self::AccessArena => 9,
         }
     }
 
@@ -164,6 +184,10 @@ impl fmt::Display for ValueType {
             Self::Truth => formatter.write_str("Truth"),
             Self::Bytes => formatter.write_str("Bytes"),
             Self::Record(record) => write!(formatter, "Record#{record}"),
+            Self::Arena => formatter.write_str("Arena"),
+            Self::BufferWhole => formatter.write_str("BufferWhole"),
+            Self::BufferTruth => formatter.write_str("BufferTruth"),
+            Self::AccessArena => formatter.write_str("exclusive Arena access"),
         }
     }
 }
@@ -171,7 +195,11 @@ impl fmt::Display for ValueType {
 const fn is_unique_value(value_type: ValueType) -> bool {
     matches!(
         value_type,
-        ValueType::Text | ValueType::Bytes | ValueType::Record(_)
+        ValueType::Text
+            | ValueType::Bytes
+            | ValueType::Record(_)
+            | ValueType::BufferWhole
+            | ValueType::BufferTruth
     )
 }
 
@@ -179,6 +207,7 @@ const fn is_unique_value(value_type: ValueType) -> bool {
 pub enum ParameterMode {
     Own,
     Borrow,
+    Access,
 }
 
 impl ParameterMode {
@@ -186,13 +215,19 @@ impl ParameterMode {
         match self {
             Self::Own => 1,
             Self::Borrow => 2,
+            Self::Access => 3,
         }
     }
 
-    fn from_byte(value: u8, offset: usize) -> Result<Self, BytecodeError> {
+    fn from_byte(value: u8, offset: usize, version: u8) -> Result<Self, BytecodeError> {
         match value {
             1 => Ok(Self::Own),
             2 => Ok(Self::Borrow),
+            3 if version == ARTIFACT_VERSION_V6 => Ok(Self::Access),
+            3 => Err(BytecodeError::new(
+                offset,
+                "access parameters are valid only in AETH v6 artifacts",
+            )),
             _ => Err(BytecodeError::new(offset, "unknown Aether parameter mode")),
         }
     }
@@ -311,6 +346,17 @@ pub struct Expression {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionKind {
     Atom(Atom),
+    /// The one VM-private, named capability declaration permitted per
+    /// invocation. The capacity is copied into the AETH v6 resource plan.
+    Arena {
+        capacity: u32,
+    },
+    /// An unallocated owner placeholder. A resource `choose` condition moves
+    /// it into an allocation attempt and restores either the allocated buffer
+    /// or the unchanged placeholder before a branch begins.
+    Buffer {
+        element: BufferElement,
+    },
     Unary {
         operation: UnaryOperation,
         argument: Atom,
@@ -348,6 +394,77 @@ pub enum ExpressionKind {
         record: Atom,
         field: String,
     },
+    /// A closed resource outcome. It is intentionally valid only as the
+    /// condition of a terminal `choose`, where both alternatives are handled
+    /// explicitly and the destination owner is restored before either branch.
+    Resource(ResourceOperation),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BufferElement {
+    Whole,
+    Truth,
+}
+
+impl BufferElement {
+    const fn value_type(self) -> ValueType {
+        match self {
+            Self::Whole => ValueType::BufferWhole,
+            Self::Truth => ValueType::BufferTruth,
+        }
+    }
+
+    const fn element_type(self) -> ValueType {
+        match self {
+            Self::Whole => ValueType::Whole,
+            Self::Truth => ValueType::Truth,
+        }
+    }
+
+    const fn type_tag(self) -> u8 {
+        match self {
+            Self::Whole => 2,
+            Self::Truth => 3,
+        }
+    }
+
+    fn from_type_tag(value: u8, offset: usize) -> Result<Self, BytecodeError> {
+        match value {
+            2 => Ok(Self::Whole),
+            3 => Ok(Self::Truth),
+            _ => Err(BytecodeError::new(
+                offset,
+                "buffer element kind must be Whole or Truth",
+            )),
+        }
+    }
+
+    const fn word(self) -> &'static str {
+        match self {
+            Self::Whole => "Whole",
+            Self::Truth => "Truth",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResourceOperation {
+    Allocate {
+        arena: Atom,
+        buffer: Atom,
+        capacity: Atom,
+        destination: String,
+    },
+    Append {
+        buffer: Atom,
+        value: Atom,
+        destination: String,
+    },
+    At {
+        buffer: Atom,
+        index: Atom,
+        destination: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -362,6 +479,7 @@ pub enum UnaryOperation {
     Pack16,
     Pack32,
     Pack64,
+    Count,
 }
 
 impl UnaryOperation {
@@ -377,6 +495,7 @@ impl UnaryOperation {
             Self::Pack16 => "pack16",
             Self::Pack32 => "pack32",
             Self::Pack64 => "pack64",
+            Self::Count => "count",
         }
     }
 }
@@ -452,6 +571,7 @@ pub enum AtomKind {
     Name(String),
     Borrow(String),
     Move(String),
+    Access(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -537,6 +657,188 @@ struct BindingState {
     value_type: ValueType,
     mutable: bool,
     moved: bool,
+    resource: ResourceBindingState,
+}
+
+type BindingScope = BTreeMap<String, BindingState>;
+type ResourceOutcomeScopes = (BindingScope, BindingScope);
+
+/// The immutable context shared by recursive M2 resource-outcome validation.
+/// Keeping it together prevents terminal branch validation from drifting away
+/// from the enclosing weave's type and result contract.
+struct ResourceValidationContext<'a> {
+    signatures: &'a BTreeMap<String, FunctionSignature>,
+    records: &'a [RecordDeclaration],
+    weave: &'a Weave,
+}
+
+/// Typed resource facts produced by source validation and consumed directly by
+/// AETH v6 lowering.  This is deliberately separate from the parsed AST: it
+/// records the resolved lexical region, owner place, element type, and stable
+/// replacement destination for every closed M2 outcome.
+#[derive(Clone)]
+struct SemanticResourcePlan {
+    arena: Option<SemanticArena>,
+    outcomes: BTreeMap<(usize, usize), SemanticResourceOperation>,
+}
+
+#[derive(Clone)]
+struct SemanticArena {
+    name: String,
+    capacity: u32,
+    span: Span,
+}
+
+#[derive(Clone)]
+enum SemanticResourceOperation {
+    Allocate {
+        region: String,
+        owner: String,
+        destination: String,
+        element: BufferElement,
+    },
+    Append {
+        region: String,
+        owner: String,
+        destination: String,
+        element: BufferElement,
+    },
+    At {
+        region: String,
+        owner: String,
+        destination: String,
+        element: BufferElement,
+    },
+}
+
+impl SemanticResourcePlan {
+    const fn empty() -> Self {
+        Self {
+            arena: None,
+            outcomes: BTreeMap::new(),
+        }
+    }
+
+    const fn arena_capacity(&self) -> u32 {
+        match &self.arena {
+            Some(arena) => arena.capacity,
+            None => 0,
+        }
+    }
+
+    fn record_outcome(
+        &mut self,
+        span: Span,
+        operation: SemanticResourceOperation,
+    ) -> Result<(), CompilerError> {
+        if self
+            .outcomes
+            .insert((span.line, span.column), operation)
+            .is_some()
+        {
+            return Err(CompilerError::new(
+                span,
+                "internal compiler found two resource operations at one source location",
+            ));
+        }
+        Ok(())
+    }
+
+    fn outcome(&self, span: Span) -> Result<&SemanticResourceOperation, CompilerError> {
+        self.outcomes.get(&(span.line, span.column)).ok_or_else(|| {
+            CompilerError::new(
+                span,
+                "internal compiler could not resolve the typed resource operation",
+            )
+        })
+    }
+}
+
+impl SemanticResourceOperation {
+    fn region(&self) -> &str {
+        match self {
+            Self::Allocate { region, .. }
+            | Self::Append { region, .. }
+            | Self::At { region, .. } => region,
+        }
+    }
+
+    fn destination(&self) -> &str {
+        match self {
+            Self::Allocate { destination, .. }
+            | Self::Append { destination, .. }
+            | Self::At { destination, .. } => destination,
+        }
+    }
+
+    const fn element(&self) -> BufferElement {
+        match self {
+            Self::Allocate { element, .. }
+            | Self::Append { element, .. }
+            | Self::At { element, .. } => *element,
+        }
+    }
+
+    fn matches_source(&self, operation: &ResourceOperation) -> bool {
+        match (self, operation) {
+            (
+                Self::Allocate {
+                    owner, destination, ..
+                },
+                ResourceOperation::Allocate {
+                    buffer,
+                    destination: source_destination,
+                    ..
+                },
+            )
+            | (
+                Self::Append {
+                    owner, destination, ..
+                },
+                ResourceOperation::Append {
+                    buffer,
+                    destination: source_destination,
+                    ..
+                },
+            ) => {
+                matches!(&buffer.kind, AtomKind::Move(name) if name == owner)
+                    && source_destination == destination
+            }
+            (
+                Self::At {
+                    owner, destination, ..
+                },
+                ResourceOperation::At {
+                    buffer,
+                    destination: source_destination,
+                    ..
+                },
+            ) => {
+                matches!(&buffer.kind, AtomKind::Borrow(name) if name == owner)
+                    && source_destination == destination
+            }
+            _ => false,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+enum ResourceBindingState {
+    Plain,
+    Arena {
+        name: String,
+    },
+    Buffer {
+        element: BufferElement,
+        arena: Option<String>,
+        allocated: bool,
+    },
+}
+
+impl ResourceBindingState {
+    const fn plain() -> Self {
+        Self::Plain
+    }
 }
 
 #[derive(Clone)]
@@ -570,6 +872,7 @@ struct ArtifactFunction {
 #[derive(Clone)]
 struct Artifact {
     version: u8,
+    arena_capacity: u32,
     records: Vec<ArtifactRecord>,
     functions: Vec<ArtifactFunction>,
 }
@@ -588,9 +891,76 @@ struct ArtifactRecordField {
 
 #[derive(Clone, PartialEq, Eq)]
 struct VerificationState {
-    stack: Vec<ValueType>,
+    stack: VerificationStack,
     initialized: Vec<bool>,
     moved: Vec<bool>,
+}
+
+/// The verifier records where a buffer value on the transient operand stack
+/// came from.  A raw placeholder, a read loan, a moved local owner, and an
+/// owned result from a checked call are not interchangeable.  This prevents a
+/// forged v6 instruction stream from substituting a fresh `buffer` placeholder
+/// when an operation promises to restore the specific owner it just moved.
+#[derive(Clone, PartialEq, Eq)]
+struct VerificationStack {
+    values: Vec<VerificationStackValue>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct VerificationStackValue {
+    value_type: ValueType,
+    buffer_provenance: BufferProvenance,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BufferProvenance {
+    NotBuffer,
+    Placeholder,
+    Borrowed,
+    MovedLocal(usize),
+}
+
+impl VerificationStack {
+    const fn new() -> Self {
+        Self { values: Vec::new() }
+    }
+
+    fn push(&mut self, value_type: ValueType) {
+        self.values.push(VerificationStackValue {
+            value_type,
+            buffer_provenance: if is_buffer_type(value_type) {
+                BufferProvenance::Borrowed
+            } else {
+                BufferProvenance::NotBuffer
+            },
+        });
+    }
+
+    fn push_buffer_placeholder(&mut self, element: BufferElement) {
+        self.values.push(VerificationStackValue {
+            value_type: element.value_type(),
+            buffer_provenance: BufferProvenance::Placeholder,
+        });
+    }
+
+    fn push_moved_local(&mut self, value_type: ValueType, slot: usize) {
+        self.values.push(VerificationStackValue {
+            value_type,
+            buffer_provenance: if is_buffer_type(value_type) {
+                BufferProvenance::MovedLocal(slot)
+            } else {
+                BufferProvenance::NotBuffer
+            },
+        });
+    }
+
+    fn pop(&mut self) -> Option<VerificationStackValue> {
+        self.values.pop()
+    }
+
+    const fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -603,6 +973,15 @@ enum RuntimeValue {
         record: u16,
         fields: Vec<RuntimeValue>,
     },
+    Arena,
+    AccessArena,
+    Buffer {
+        element: BufferElement,
+        allocated: bool,
+        offset: usize,
+        len: usize,
+        capacity: usize,
+    },
 }
 
 impl RuntimeValue {
@@ -613,7 +992,36 @@ impl RuntimeValue {
             Self::Truth(_) => ValueType::Truth,
             Self::Bytes(_) => ValueType::Bytes,
             Self::Record { record, .. } => ValueType::Record(*record),
+            Self::Arena => ValueType::Arena,
+            Self::AccessArena => ValueType::AccessArena,
+            Self::Buffer { element, .. } => element.value_type(),
         }
+    }
+}
+
+struct RuntimeState {
+    arena: ArenaState,
+}
+
+struct ArenaState {
+    bytes: Vec<u8>,
+    used: usize,
+}
+
+impl RuntimeState {
+    fn new(capacity: u32) -> Result<Self, BytecodeError> {
+        let capacity = usize::try_from(capacity)
+            .map_err(|_| BytecodeError::new(0, "arena capacity is outside platform limits"))?;
+        let mut bytes = Vec::new();
+        if capacity > 0 {
+            bytes.try_reserve_exact(capacity).map_err(|_| {
+                BytecodeError::new(0, "Aether arena admission failed before guest execution")
+            })?;
+            bytes.resize(capacity, 0);
+        }
+        Ok(Self {
+            arena: ArenaState { bytes, used: 0 },
+        })
     }
 }
 
@@ -652,6 +1060,9 @@ fn invocation_from_runtime(value: RuntimeValue) -> Result<InvocationValue, Bytec
             0,
             "host invocation cannot return a record; project a primitive field inside Aether",
         )),
+        RuntimeValue::Arena | RuntimeValue::AccessArena | RuntimeValue::Buffer { .. } => Err(
+            BytecodeError::new(0, "host invocation cannot return an Aether resource value"),
+        ),
     }
 }
 
@@ -697,8 +1108,30 @@ enum Instruction {
     Pack64,
     Render,
     MakeRecord(u16),
-    Field { record: u16, field: usize },
-    Call { function: usize, arguments: usize },
+    Field {
+        record: u16,
+        field: usize,
+    },
+    Arena,
+    Buffer(BufferElement),
+    Access(usize),
+    Allocate {
+        element: BufferElement,
+        destination: usize,
+    },
+    BufferAppend {
+        element: BufferElement,
+        destination: usize,
+    },
+    BufferAt {
+        element: BufferElement,
+        destination: usize,
+    },
+    Count,
+    Call {
+        function: usize,
+        arguments: usize,
+    },
     JumpIfDim(usize),
     Jump(usize),
 }
@@ -790,7 +1223,8 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
 
 pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError> {
     let program = compile_source(source)?;
-    let bytecode = emit_bytecode(&program)?;
+    let resource_plan = validate_program(&program)?;
+    let bytecode = emit_bytecode_with_resource_plan(&program, &resource_plan)?;
     verify_bytecode(&bytecode).map_err(|error| {
         CompilerError::new(
             Span::synthetic(),
@@ -853,8 +1287,10 @@ pub fn format_program(program: &Program) -> String {
             if index > 0 {
                 formatted.push_str(", ");
             }
-            if parameter.mode == ParameterMode::Borrow {
-                formatted.push_str("borrow ");
+            match parameter.mode {
+                ParameterMode::Own => {}
+                ParameterMode::Borrow => formatted.push_str("borrow "),
+                ParameterMode::Access => formatted.push_str("access "),
             }
             formatted.push_str(&parameter.name);
             formatted.push_str(": ");
@@ -897,8 +1333,10 @@ pub fn canonical_ast(program: &Program) -> String {
             if index > 0 {
                 output.push(',');
             }
-            if parameter.mode == ParameterMode::Borrow {
-                output.push_str("Borrow ");
+            match parameter.mode {
+                ParameterMode::Own => {}
+                ParameterMode::Borrow => output.push_str("Borrow "),
+                ParameterMode::Access => output.push_str("Access "),
             }
             output.push_str(&parameter.name);
             output.push(':');
@@ -950,6 +1388,7 @@ pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
                 ));
             }
         }
+        validate_artifact_resource_signature(function, artifact.version)?;
     }
 
     let Some(main_index) = main_index else {
@@ -963,6 +1402,8 @@ pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
         ));
     }
 
+    verify_resource_plan(&artifact, main_index)?;
+
     for (function_index, function) in artifact.functions.iter().enumerate() {
         verify_function(
             function_index,
@@ -971,6 +1412,126 @@ pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
             &artifact.records,
             artifact.version,
         )?;
+    }
+    Ok(())
+}
+
+fn validate_artifact_resource_signature(
+    function: &ArtifactFunction,
+    version: u8,
+) -> Result<(), BytecodeError> {
+    let access_count = function
+        .parameters
+        .iter()
+        .filter(|(_, mode)| *mode == ParameterMode::Access)
+        .count();
+    let has_buffer = function
+        .parameters
+        .iter()
+        .any(|(value_type, _)| is_buffer_type(*value_type));
+    for (value_type, mode) in &function.parameters {
+        if *mode == ParameterMode::Access && *value_type != ValueType::Arena {
+            return Err(BytecodeError::new(
+                0,
+                "artifact access parameters must use Arena",
+            ));
+        }
+        if *value_type == ValueType::Arena && *mode != ParameterMode::Access {
+            return Err(BytecodeError::new(
+                0,
+                "artifact Arena parameters must use access",
+            ));
+        }
+        if *value_type == ValueType::AccessArena {
+            return Err(BytecodeError::new(
+                0,
+                "artifact cannot serialize an access loan parameter",
+            ));
+        }
+    }
+    if matches!(function.result, ValueType::Arena | ValueType::AccessArena) {
+        return Err(BytecodeError::new(
+            0,
+            "artifact cannot return an Arena or access loan",
+        ));
+    }
+    if is_buffer_type(function.result) {
+        return Err(BytecodeError::new(
+            0,
+            "AETH v6 M2 does not permit Buffer values as weave results",
+        ));
+    }
+    if has_buffer && (version != ARTIFACT_VERSION_V6 || access_count != 1) {
+        return Err(BytecodeError::new(
+            0,
+            "artifact Buffer signatures require exactly one AETH v6 access Arena parameter",
+        ));
+    }
+    if function
+        .locals
+        .iter()
+        .any(|local| local.value_type == ValueType::AccessArena)
+    {
+        return Err(BytecodeError::new(
+            0,
+            "artifact cannot serialize an access loan local",
+        ));
+    }
+    Ok(())
+}
+
+fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), BytecodeError> {
+    let mut arena_declarations = 0_usize;
+    let mut resource_instruction_seen = false;
+    for (function_index, function) in artifact.functions.iter().enumerate() {
+        for instruction in decode_code(&function.code, artifact.version)? {
+            match instruction.instruction {
+                Instruction::Arena => {
+                    if function_index != main_index {
+                        return Err(BytecodeError::new(
+                            instruction.offset,
+                            "the AETH v6 arena declaration must occur in main",
+                        ));
+                    }
+                    arena_declarations += 1;
+                    resource_instruction_seen = true;
+                }
+                Instruction::Buffer(_)
+                | Instruction::Access(_)
+                | Instruction::Allocate { .. }
+                | Instruction::BufferAppend { .. }
+                | Instruction::BufferAt { .. }
+                | Instruction::Count => resource_instruction_seen = true,
+                _ => {}
+            }
+        }
+    }
+    if artifact.version != ARTIFACT_VERSION_V6 {
+        if artifact.arena_capacity != 0 || resource_instruction_seen {
+            return Err(BytecodeError::new(
+                0,
+                "pre-v6 artifacts cannot contain a resource plan or resource instructions",
+            ));
+        }
+        return Ok(());
+    }
+    if artifact.arena_capacity == 0 && resource_instruction_seen {
+        return Err(BytecodeError::new(
+            0,
+            "AETH v6 resource instructions require a nonzero arena resource plan",
+        ));
+    }
+    if artifact.arena_capacity > 0 && arena_declarations != 1 {
+        return Err(BytecodeError::new(
+            0,
+            "AETH v6 nonzero arena plan requires exactly one main arena declaration",
+        ));
+    }
+    if artifact.arena_capacity == 0 && arena_declarations != 0 {
+        return Err(BytecodeError::new(
+            0,
+            "AETH v6 zero arena plan cannot declare an Arena capability",
+        ));
     }
     Ok(())
 }
@@ -1062,13 +1623,22 @@ fn invoke_artifact(
         ));
     }
     let mut runtime_arguments = Vec::with_capacity(arguments.len());
-    for (index, (argument, (expected, _))) in arguments.iter().zip(&function.parameters).enumerate()
+    for (index, (argument, (expected, mode))) in
+        arguments.iter().zip(&function.parameters).enumerate()
     {
-        if matches!(expected, ValueType::Record(_)) {
+        if matches!(
+            expected,
+            ValueType::Record(_)
+                | ValueType::Arena
+                | ValueType::BufferWhole
+                | ValueType::BufferTruth
+                | ValueType::AccessArena
+        ) || *mode == ParameterMode::Access
+        {
             return Err(BytecodeError::new(
                 0,
                 format!(
-                    "weave {weave_name} argument {} is a record; host invocation accepts only primitive Aether values",
+                    "weave {weave_name} argument {} is a resource or record; host invocation accepts only primitive Aether values",
                     index + 1
                 ),
             ));
@@ -1086,7 +1656,15 @@ fn invoke_artifact(
         runtime_arguments.push(runtime_from_invocation(argument)?);
     }
     let mut stdout = String::new();
-    let value = execute_function(artifact, function_index, runtime_arguments, &mut stdout, 0)?;
+    let mut runtime_state = RuntimeState::new(artifact.arena_capacity)?;
+    let value = execute_function(
+        artifact,
+        function_index,
+        runtime_arguments,
+        &mut stdout,
+        &mut runtime_state,
+        0,
+    )?;
     Ok(InvocationOutput {
         stdout,
         value: invocation_from_runtime(value)?,
@@ -1220,6 +1798,8 @@ fn parse_parameters(
         }
         let (mode, declaration) = if let Some(rest) = trimmed.strip_prefix("borrow ") {
             (ParameterMode::Borrow, rest)
+        } else if let Some(rest) = trimmed.strip_prefix("access ") {
+            (ParameterMode::Access, rest)
         } else {
             (ParameterMode::Own, trimmed)
         };
@@ -1235,6 +1815,18 @@ fn parse_parameters(
             return Err(CompilerError::new(
                 line.span(1),
                 "borrow parameters are reserved for unique Text, Bytes, or record values",
+            ));
+        }
+        if mode == ParameterMode::Access && value_type != ValueType::Arena {
+            return Err(CompilerError::new(
+                line.span(1),
+                "access parameters require the Arena capability type",
+            ));
+        }
+        if value_type == ValueType::Arena && mode != ParameterMode::Access {
+            return Err(CompilerError::new(
+                line.span(1),
+                "Arena parameters must use access; arenas cannot be owned or borrowed",
             ));
         }
         if parameters
@@ -1266,6 +1858,9 @@ fn parse_value_type(
         "Whole" => Ok(ValueType::Whole),
         "Truth" => Ok(ValueType::Truth),
         "Bytes" => Ok(ValueType::Bytes),
+        "Arena" => Ok(ValueType::Arena),
+        "BufferWhole" => Ok(ValueType::BufferWhole),
+        "BufferTruth" => Ok(ValueType::BufferTruth),
         _ => record_types
             .get(source)
             .copied()
@@ -1273,7 +1868,7 @@ fn parse_value_type(
             .ok_or_else(|| {
                 CompilerError::new(
                     span,
-                    "Aether types are Text, Whole, Truth, Bytes, or a declared record",
+                    "Aether types are Text, Whole, Truth, Bytes, Arena, BufferWhole, BufferTruth, or a declared record",
                 )
             }),
     }
@@ -1552,6 +2147,40 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
     let first = tokens[0].as_str();
     let mut index = 1;
     let kind = match first {
+        "arena" if tokens.len() == 2 => {
+            let capacity = parse_atom_from(&tokens, &mut index, span)?;
+            let AtomKind::Whole(capacity) = capacity.kind else {
+                return Err(CompilerError::new(
+                    capacity.span,
+                    "arena requires one nonnegative Whole literal capacity",
+                ));
+            };
+            let capacity = u32::try_from(capacity).map_err(|_| {
+                CompilerError::new(
+                    span,
+                    format!("arena capacity must be between 0 and {MAX_ARENA_BYTES}"),
+                )
+            })?;
+            if capacity == 0 || capacity > MAX_ARENA_BYTES {
+                return Err(CompilerError::new(
+                    span,
+                    format!("arena capacity must be between 1 and {MAX_ARENA_BYTES}"),
+                ));
+            }
+            ExpressionKind::Arena { capacity }
+        }
+        "buffer" if tokens.len() == 2 => {
+            let Some(element) = tokens.get(index) else {
+                return Err(CompilerError::new(
+                    span,
+                    "buffer requires the element type Whole or Truth",
+                ));
+            };
+            index += 1;
+            ExpressionKind::Buffer {
+                element: parse_buffer_element(element, span)?,
+            }
+        }
         "not" => ExpressionKind::Unary {
             operation: UnaryOperation::Not,
             argument: parse_atom_from(&tokens, &mut index, span)?,
@@ -1590,6 +2219,10 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
         },
         "pack64" => ExpressionKind::Unary {
             operation: UnaryOperation::Pack64,
+            argument: parse_atom_from(&tokens, &mut index, span)?,
+        },
+        "count" if tokens.len() > 1 => ExpressionKind::Unary {
+            operation: UnaryOperation::Count,
             argument: parse_atom_from(&tokens, &mut index, span)?,
         },
         "sum" => ExpressionKind::Binary {
@@ -1642,11 +2275,46 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
             left: parse_atom_from(&tokens, &mut index, span)?,
             right: parse_atom_from(&tokens, &mut index, span)?,
         },
-        "append" => ExpressionKind::Binary {
-            operation: BinaryOperation::Append,
-            left: parse_atom_from(&tokens, &mut index, span)?,
-            right: parse_atom_from(&tokens, &mut index, span)?,
-        },
+        "append" => {
+            if tokens.iter().any(|token| token == "into") {
+                let buffer = parse_atom_from(&tokens, &mut index, span)?;
+                let value = parse_atom_from(&tokens, &mut index, span)?;
+                let destination = parse_resource_destination(&tokens, &mut index, span)?;
+                ExpressionKind::Resource(ResourceOperation::Append {
+                    buffer,
+                    value,
+                    destination,
+                })
+            } else {
+                ExpressionKind::Binary {
+                    operation: BinaryOperation::Append,
+                    left: parse_atom_from(&tokens, &mut index, span)?,
+                    right: parse_atom_from(&tokens, &mut index, span)?,
+                }
+            }
+        }
+        "allocate" if tokens.len() >= 6 => {
+            let arena = parse_atom_from(&tokens, &mut index, span)?;
+            let buffer = parse_atom_from(&tokens, &mut index, span)?;
+            let capacity = parse_atom_from(&tokens, &mut index, span)?;
+            let destination = parse_resource_destination(&tokens, &mut index, span)?;
+            ExpressionKind::Resource(ResourceOperation::Allocate {
+                arena,
+                buffer,
+                capacity,
+                destination,
+            })
+        }
+        "at" if tokens.iter().any(|token| token == "into") => {
+            let buffer = parse_atom_from(&tokens, &mut index, span)?;
+            let index_value = parse_atom_from(&tokens, &mut index, span)?;
+            let destination = parse_resource_destination(&tokens, &mut index, span)?;
+            ExpressionKind::Resource(ResourceOperation::At {
+                buffer,
+                index: index_value,
+                destination,
+            })
+        }
         "octet" => ExpressionKind::Binary {
             operation: BinaryOperation::Octet,
             left: parse_atom_from(&tokens, &mut index, span)?,
@@ -1755,6 +2423,40 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
     Ok(Expression { kind, span })
 }
 
+fn parse_buffer_element(source: &str, span: Span) -> Result<BufferElement, CompilerError> {
+    match source {
+        "Whole" => Ok(BufferElement::Whole),
+        "Truth" => Ok(BufferElement::Truth),
+        _ => Err(CompilerError::new(
+            span,
+            "M2 buffers may contain only Whole or Truth elements",
+        )),
+    }
+}
+
+fn parse_resource_destination(
+    tokens: &[String],
+    index: &mut usize,
+    span: Span,
+) -> Result<String, CompilerError> {
+    if tokens.get(*index).is_none_or(|token| token != "into") {
+        return Err(CompilerError::new(
+            span,
+            "resource outcomes require `into <mutable-root-binding>`",
+        ));
+    }
+    *index += 1;
+    let Some(destination) = tokens.get(*index) else {
+        return Err(CompilerError::new(
+            span,
+            "resource outcomes require a destination binding after into",
+        ));
+    };
+    validate_name(destination, span, "resource destination", false)?;
+    *index += 1;
+    Ok(destination.clone())
+}
+
 fn tokenize_fragment(source: &str, span: Span) -> Result<Vec<String>, CompilerError> {
     let bytes = source.as_bytes();
     let mut tokens = Vec::new();
@@ -1818,7 +2520,7 @@ fn parse_atom_from(
     let Some(token) = tokens.get(*index) else {
         return Err(CompilerError::new(span, "expression is missing an operand"));
     };
-    if token == "borrow" || token == "move" {
+    if token == "borrow" || token == "move" || token == "access" {
         let mode = token.as_str();
         *index += 1;
         let Some(name) = tokens.get(*index) else {
@@ -1830,10 +2532,11 @@ fn parse_atom_from(
         validate_name(name, span, "value name", false)?;
         *index += 1;
         return Ok(Atom {
-            kind: if mode == "borrow" {
-                AtomKind::Borrow(name.clone())
-            } else {
-                AtomKind::Move(name.clone())
+            kind: match mode {
+                "borrow" => AtomKind::Borrow(name.clone()),
+                "move" => AtomKind::Move(name.clone()),
+                "access" => AtomKind::Access(name.clone()),
+                _ => unreachable!("accepted access mode must be known"),
             },
             span,
         });
@@ -1988,8 +2691,9 @@ fn hex_nibble(byte: u8) -> Option<u8> {
     }
 }
 
-fn validate_program(program: &Program) -> Result<(), CompilerError> {
+fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerError> {
     validate_record_declarations(&program.records)?;
+    let mut resource_plan = validate_resource_plan(program)?;
     if program.weaves.is_empty() {
         return Err(CompilerError::new(
             Span::synthetic(),
@@ -2037,6 +2741,12 @@ fn validate_program(program: &Program) -> Result<(), CompilerError> {
 
     for weave in &program.weaves {
         validate_value_type(weave.result, &program.records, weave.span)?;
+        validate_resource_signature(weave)?;
+        let access_arena = weave
+            .parameters
+            .iter()
+            .find(|parameter| parameter.mode == ParameterMode::Access)
+            .map(|parameter| parameter.name.clone());
         let mut scope = BTreeMap::new();
         for parameter in &weave.parameters {
             validate_value_type(parameter.value_type, &program.records, parameter.span)?;
@@ -2046,6 +2756,7 @@ fn validate_program(program: &Program) -> Result<(), CompilerError> {
                     value_type: parameter.value_type,
                     mutable: false,
                     moved: false,
+                    resource: resource_parameter_state(parameter, access_arena.as_deref()),
                 },
             );
         }
@@ -2056,9 +2767,222 @@ fn validate_program(program: &Program) -> Result<(), CompilerError> {
             &program.records,
             weave,
             true,
+            &mut resource_plan,
         )?;
     }
+    Ok(resource_plan)
+}
+
+fn validate_resource_signature(weave: &Weave) -> Result<(), CompilerError> {
+    let access_count = weave
+        .parameters
+        .iter()
+        .filter(|parameter| parameter.mode == ParameterMode::Access)
+        .count();
+    let has_buffer = weave
+        .parameters
+        .iter()
+        .any(|parameter| is_buffer_type(parameter.value_type));
+
+    for parameter in &weave.parameters {
+        if parameter.mode == ParameterMode::Access && parameter.value_type != ValueType::Arena {
+            return Err(CompilerError::new(
+                parameter.span,
+                "access parameters require Arena",
+            ));
+        }
+        if parameter.value_type == ValueType::Arena && parameter.mode != ParameterMode::Access {
+            return Err(CompilerError::new(
+                parameter.span,
+                "Arena parameters require access and cannot be moved or borrowed",
+            ));
+        }
+    }
+    if weave.result == ValueType::Arena || weave.result == ValueType::AccessArena {
+        return Err(CompilerError::new(
+            weave.span,
+            "Aether M2 does not permit an Arena or access loan as a weave result",
+        ));
+    }
+    if is_buffer_type(weave.result) {
+        return Err(CompilerError::new(
+            weave.span,
+            "M2 Buffer ownership cannot yet cross a weave result; handle its closed outcome in the defining weave",
+        ));
+    }
+    if has_buffer && access_count != 1 {
+        return Err(CompilerError::new(
+            weave.span,
+            "a weave that accepts or returns a Buffer requires exactly one access Arena parameter",
+        ));
+    }
     Ok(())
+}
+
+fn resource_parameter_state(
+    parameter: &Parameter,
+    access_arena: Option<&str>,
+) -> ResourceBindingState {
+    match parameter.value_type {
+        ValueType::Arena => ResourceBindingState::Arena {
+            name: parameter.name.clone(),
+        },
+        ValueType::BufferWhole => ResourceBindingState::Buffer {
+            element: BufferElement::Whole,
+            arena: access_arena.map(str::to_owned),
+            allocated: true,
+        },
+        ValueType::BufferTruth => ResourceBindingState::Buffer {
+            element: BufferElement::Truth,
+            arena: access_arena.map(str::to_owned),
+            allocated: true,
+        },
+        _ => ResourceBindingState::plain(),
+    }
+}
+
+fn resource_state_for_expression(
+    expression: &Expression,
+    scope: &BTreeMap<String, BindingState>,
+) -> Result<ResourceBindingState, CompilerError> {
+    match &expression.kind {
+        ExpressionKind::Arena { .. } => Ok(ResourceBindingState::Arena {
+            name: String::new(),
+        }),
+        ExpressionKind::Buffer { element } => Ok(ResourceBindingState::Buffer {
+            element: *element,
+            arena: None,
+            allocated: false,
+        }),
+        ExpressionKind::Atom(Atom {
+            kind: AtomKind::Move(name),
+            span,
+        }) => scope
+            .get(name)
+            .map(|binding| binding.resource.clone())
+            .ok_or_else(|| {
+                CompilerError::new(
+                    *span,
+                    format!("value {name} has not been bound in this weave"),
+                )
+            }),
+        ExpressionKind::Call { .. } => Ok(ResourceBindingState::plain()),
+        _ => Ok(ResourceBindingState::plain()),
+    }
+}
+
+fn validate_resource_plan(program: &Program) -> Result<SemanticResourcePlan, CompilerError> {
+    let mut arenas = Vec::new();
+    let mut resource_operations = false;
+    for weave in &program.weaves {
+        collect_resource_declarations(
+            &weave.body,
+            &weave.name,
+            &mut arenas,
+            &mut resource_operations,
+        );
+    }
+    if arenas.len() > 1 {
+        return Err(CompilerError::new(
+            arenas[1].1.span,
+            "Aether M2 permits exactly one arena declaration per invocation",
+        ));
+    }
+    let mut plan = SemanticResourcePlan::empty();
+    if let Some((weave, arena)) = arenas.first() {
+        if weave != "main" {
+            return Err(CompilerError::new(
+                arena.span,
+                "the M2 arena declaration must be a root binding in weave main",
+            ));
+        }
+        if arena.name.is_empty() {
+            return Err(CompilerError::new(
+                arena.span,
+                "the M2 arena declaration requires a named root binding",
+            ));
+        }
+        plan.arena = Some(arena.clone());
+    }
+    if resource_operations && arenas.len() != 1 {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            "M2 resource operations require one named arena declaration in weave main",
+        ));
+    }
+    Ok(plan)
+}
+
+fn collect_resource_declarations(
+    statements: &[Statement],
+    weave: &str,
+    arenas: &mut Vec<(String, SemanticArena)>,
+    resource_operations: &mut bool,
+) {
+    for statement in statements {
+        match statement {
+            Statement::Bind {
+                name, value, span, ..
+            } => {
+                if let ExpressionKind::Arena { capacity } = &value.kind {
+                    arenas.push((
+                        weave.to_owned(),
+                        SemanticArena {
+                            name: name.clone(),
+                            capacity: *capacity,
+                            span: *span,
+                        },
+                    ));
+                }
+                *resource_operations |= expression_uses_resource(value);
+            }
+            Statement::Revise { value, .. }
+            | Statement::Speak { value, .. }
+            | Statement::Yield { value, .. } => {
+                *resource_operations |= expression_uses_resource(value);
+            }
+            Statement::Choose {
+                condition,
+                when_bright,
+                when_dim,
+                ..
+            } => {
+                if matches!(condition.kind, ExpressionKind::Resource(_)) {
+                    *resource_operations = true;
+                }
+                collect_resource_declarations(when_bright, weave, arenas, resource_operations);
+                collect_resource_declarations(when_dim, weave, arenas, resource_operations);
+            }
+            Statement::While { body, .. } => {
+                collect_resource_declarations(body, weave, arenas, resource_operations);
+            }
+        }
+    }
+}
+
+fn expression_uses_resource(expression: &Expression) -> bool {
+    matches!(
+        &expression.kind,
+        ExpressionKind::Arena { .. }
+            | ExpressionKind::Buffer { .. }
+            | ExpressionKind::Resource(_)
+            | ExpressionKind::Unary {
+                operation: UnaryOperation::Count,
+                ..
+            }
+    )
+}
+
+fn is_buffer_type(value_type: ValueType) -> bool {
+    matches!(value_type, ValueType::BufferWhole | ValueType::BufferTruth)
+}
+
+fn buffer_element_from_value_type(value_type: ValueType) -> Option<BufferElement> {
+    match value_type {
+        ValueType::BufferWhole => Some(BufferElement::Whole),
+        ValueType::BufferTruth => Some(BufferElement::Truth),
+        _ => None,
+    }
 }
 
 fn validate_block(
@@ -2068,6 +2992,7 @@ fn validate_block(
     records: &[RecordDeclaration],
     weave: &Weave,
     root: bool,
+    resource_plan: &mut SemanticResourcePlan,
 ) -> Result<(), CompilerError> {
     for (index, statement) in statements.iter().enumerate() {
         match statement {
@@ -2089,13 +3014,32 @@ fn validate_block(
                         format!("binding {name} already exists in this weave"),
                     ));
                 }
+                let mut resource = resource_state_for_expression(value, scope)?;
+                if matches!(value.kind, ExpressionKind::Arena { .. }) {
+                    if weave.name != "main" {
+                        return Err(CompilerError::new(
+                            *span,
+                            "the M2 arena declaration must appear in weave main",
+                        ));
+                    }
+                    if let ResourceBindingState::Arena { name: arena_name } = &mut resource {
+                        *arena_name = name.clone();
+                    }
+                }
                 let value_type = expression_type(value, scope, signatures, records)?;
+                if matches!(value_type, ValueType::AccessArena) {
+                    return Err(CompilerError::new(
+                        value.span,
+                        "an access loan must be consumed by one resource operation or access parameter call",
+                    ));
+                }
                 scope.insert(
                     name.clone(),
                     BindingState {
                         value_type,
                         mutable: *mutable,
                         moved: false,
+                        resource,
                     },
                 );
             }
@@ -2116,6 +3060,18 @@ fn validate_block(
                     return Err(CompilerError::new(
                         *span,
                         format!("binding {name} was moved and cannot be revised"),
+                    ));
+                }
+                if is_buffer_type(binding.value_type) || binding.value_type == ValueType::Arena {
+                    return Err(CompilerError::new(
+                        *span,
+                        "M2 resource owners are replaced only by their closed resource outcomes, never revise",
+                    ));
+                }
+                if expression_moves_name(value, name) {
+                    return Err(CompilerError::new(
+                        value.span,
+                        "revise cannot move its own target while that replacement is reserved",
                     ));
                 }
                 let expected = binding.value_type;
@@ -2142,6 +3098,28 @@ fn validate_block(
                 when_dim,
                 ..
             } => {
+                if matches!(condition.kind, ExpressionKind::Resource(_)) {
+                    if !root || index + 1 != statements.len() {
+                        return Err(CompilerError::new(
+                            condition.span,
+                            "a resource outcome choose must be the final statement of a weave root",
+                        ));
+                    }
+                    let context = ResourceValidationContext {
+                        signatures,
+                        records,
+                        weave,
+                    };
+                    validate_resource_choose(
+                        condition,
+                        when_bright,
+                        when_dim,
+                        scope,
+                        &context,
+                        resource_plan,
+                    )?;
+                    continue;
+                }
                 let condition_type = expression_type(condition, scope, signatures, records)?;
                 require_source_type(
                     condition_type,
@@ -2158,10 +3136,19 @@ fn validate_block(
                     records,
                     weave,
                     false,
+                    resource_plan,
                 )?;
                 let mut dim_scope = original.clone();
                 if !when_dim.is_empty() {
-                    validate_block(when_dim, &mut dim_scope, signatures, records, weave, false)?;
+                    validate_block(
+                        when_dim,
+                        &mut dim_scope,
+                        signatures,
+                        records,
+                        weave,
+                        false,
+                        resource_plan,
+                    )?;
                 }
                 merge_scope(scope, &bright_scope, &dim_scope, statement.span())?;
             }
@@ -2177,18 +3164,437 @@ fn validate_block(
                 )?;
                 let before_loop = scope.clone();
                 let mut body_scope = before_loop.clone();
-                validate_block(body, &mut body_scope, signatures, records, weave, false)?;
+                validate_block(
+                    body,
+                    &mut body_scope,
+                    signatures,
+                    records,
+                    weave,
+                    false,
+                    resource_plan,
+                )?;
                 merge_scope(scope, &before_loop, &body_scope, statement.span())?;
             }
         }
     }
-    if root && !matches!(statements.last(), Some(Statement::Yield { .. })) {
+    if root
+        && !matches!(
+            statements.last(),
+            Some(
+                Statement::Yield { .. }
+                    | Statement::Choose {
+                        condition: Expression {
+                            kind: ExpressionKind::Resource(_),
+                            ..
+                        },
+                        ..
+                    }
+            )
+        )
+    {
         return Err(CompilerError::new(
             weave.span,
             "every weave must end with yield",
         ));
     }
     Ok(())
+}
+
+fn validate_resource_choose(
+    condition: &Expression,
+    when_bright: &[Statement],
+    when_dim: &[Statement],
+    scope: &BindingScope,
+    context: &ResourceValidationContext<'_>,
+    resource_plan: &mut SemanticResourcePlan,
+) -> Result<(), CompilerError> {
+    if when_dim.is_empty() {
+        return Err(CompilerError::new(
+            condition.span,
+            "resource outcomes require an explicit otherwise branch for the dim outcome",
+        ));
+    }
+    let ExpressionKind::Resource(operation) = &condition.kind else {
+        return Err(CompilerError::new(
+            condition.span,
+            "internal compiler expected a resource outcome condition",
+        ));
+    };
+    let (mut bright_scope, mut dim_scope) =
+        resource_outcome_scopes(operation, scope, condition.span, resource_plan)?;
+    validate_resource_terminal_block(when_bright, &mut bright_scope, context, resource_plan)?;
+    validate_resource_terminal_block(when_dim, &mut dim_scope, context, resource_plan)
+}
+
+fn validate_resource_terminal_block(
+    statements: &[Statement],
+    scope: &mut BindingScope,
+    context: &ResourceValidationContext<'_>,
+    resource_plan: &mut SemanticResourcePlan,
+) -> Result<(), CompilerError> {
+    if statements.len() != 1 {
+        return Err(CompilerError::new(
+            statements
+                .first()
+                .map_or(context.weave.span, Statement::span),
+            "each M2 resource outcome branch must contain exactly one terminal yield or resource choose",
+        ));
+    }
+    match &statements[0] {
+        Statement::Yield { value, .. } => {
+            let value_type = expression_type(value, scope, context.signatures, context.records)?;
+            require_source_type(value_type, context.weave.result, value.span, "yield")
+        }
+        Statement::Choose {
+            condition,
+            when_bright,
+            when_dim,
+            ..
+        } if matches!(condition.kind, ExpressionKind::Resource(_)) => validate_resource_choose(
+            condition,
+            when_bright,
+            when_dim,
+            scope,
+            context,
+            resource_plan,
+        ),
+        statement => Err(CompilerError::new(
+            statement.span(),
+            "each M2 resource outcome branch must end in yield or another resource choose",
+        )),
+    }
+}
+
+fn resource_outcome_scopes(
+    operation: &ResourceOperation,
+    scope: &BindingScope,
+    span: Span,
+    resource_plan: &mut SemanticResourcePlan,
+) -> Result<ResourceOutcomeScopes, CompilerError> {
+    match operation {
+        ResourceOperation::Allocate {
+            arena,
+            buffer,
+            capacity,
+            destination,
+        } => {
+            let arena_name = validate_access_arena(arena, scope)?;
+            let (element, original) = validate_buffer_move_destination(buffer, destination, scope)?;
+            let mut capacity_scope = scope.clone();
+            let capacity_type = atom_type(capacity, &mut capacity_scope)?;
+            require_source_type(capacity_type, ValueType::Whole, capacity.span, "allocate")?;
+            resource_plan.record_outcome(
+                span,
+                SemanticResourceOperation::Allocate {
+                    region: arena_name.clone(),
+                    owner: destination.clone(),
+                    destination: destination.clone(),
+                    element,
+                },
+            )?;
+            let mut bright = scope.clone();
+            let mut dim = scope.clone();
+            let Some(bright_target) = bright.get_mut(destination) else {
+                return Err(CompilerError::new(
+                    span,
+                    "resource destination has not been introduced",
+                ));
+            };
+            bright_target.moved = false;
+            bright_target.resource = ResourceBindingState::Buffer {
+                element,
+                arena: Some(arena_name),
+                allocated: true,
+            };
+            let Some(dim_target) = dim.get_mut(destination) else {
+                return Err(CompilerError::new(
+                    span,
+                    "resource destination has not been introduced",
+                ));
+            };
+            dim_target.moved = false;
+            dim_target.resource = original.resource;
+            Ok((bright, dim))
+        }
+        ResourceOperation::Append {
+            buffer,
+            value,
+            destination,
+        } => {
+            let (element, original) = validate_buffer_move_destination(buffer, destination, scope)?;
+            let ResourceBindingState::Buffer {
+                arena: Some(region),
+                allocated: true,
+                ..
+            } = &original.resource
+            else {
+                return Err(CompilerError::new(
+                    buffer.span,
+                    "append requires a buffer that was successfully allocated or received through an access-boundary weave",
+                ));
+            };
+            let mut value_scope = scope.clone();
+            let value_type = atom_type(value, &mut value_scope)?;
+            require_source_type(value_type, element.element_type(), value.span, "append")?;
+            resource_plan.record_outcome(
+                span,
+                SemanticResourceOperation::Append {
+                    region: region.clone(),
+                    owner: destination.clone(),
+                    destination: destination.clone(),
+                    element,
+                },
+            )?;
+            let mut bright = scope.clone();
+            let mut dim = scope.clone();
+            for outcome_scope in [&mut bright, &mut dim] {
+                let Some(target) = outcome_scope.get_mut(destination) else {
+                    return Err(CompilerError::new(
+                        span,
+                        "resource destination has not been introduced",
+                    ));
+                };
+                target.moved = false;
+                target.resource = original.resource.clone();
+            }
+            Ok((bright, dim))
+        }
+        ResourceOperation::At {
+            buffer,
+            index,
+            destination,
+        } => {
+            let buffer_binding = validate_borrowed_allocated_buffer(buffer, scope)?;
+            let element =
+                buffer_element_from_value_type(buffer_binding.value_type).ok_or_else(|| {
+                    CompilerError::new(
+                        buffer.span,
+                        "at requires a BufferWhole or BufferTruth owner",
+                    )
+                })?;
+            let ResourceBindingState::Buffer {
+                arena: Some(region),
+                allocated: true,
+                ..
+            } = &buffer_binding.resource
+            else {
+                return Err(CompilerError::new(
+                    buffer.span,
+                    "at requires a buffer with a named Arena region",
+                ));
+            };
+            let mut index_scope = scope.clone();
+            let index_type = atom_type(index, &mut index_scope)?;
+            require_source_type(index_type, ValueType::Whole, index.span, "at")?;
+            let destination_binding = scope.get(destination).ok_or_else(|| {
+                CompilerError::new(
+                    span,
+                    format!("resource destination {destination} has not been introduced"),
+                )
+            })?;
+            if !destination_binding.mutable {
+                return Err(CompilerError::new(
+                    span,
+                    format!("resource destination {destination} must be a mutable root binding"),
+                ));
+            }
+            require_source_type(
+                destination_binding.value_type,
+                element.element_type(),
+                span,
+                "at destination",
+            )?;
+            let AtomKind::Borrow(owner) = &buffer.kind else {
+                return Err(CompilerError::new(
+                    buffer.span,
+                    "at requires borrow followed by an allocated buffer binding",
+                ));
+            };
+            resource_plan.record_outcome(
+                span,
+                SemanticResourceOperation::At {
+                    region: region.clone(),
+                    owner: owner.clone(),
+                    destination: destination.clone(),
+                    element,
+                },
+            )?;
+            Ok((scope.clone(), scope.clone()))
+        }
+    }
+}
+
+fn validate_access_arena(
+    arena: &Atom,
+    scope: &BTreeMap<String, BindingState>,
+) -> Result<String, CompilerError> {
+    let AtomKind::Access(name) = &arena.kind else {
+        return Err(CompilerError::new(
+            arena.span,
+            "allocate requires access followed by the named Arena capability",
+        ));
+    };
+    let binding = scope.get(name).ok_or_else(|| {
+        CompilerError::new(
+            arena.span,
+            format!("value {name} has not been bound in this weave"),
+        )
+    })?;
+    if binding.value_type != ValueType::Arena || binding.moved {
+        return Err(CompilerError::new(
+            arena.span,
+            "access requires a live Arena capability",
+        ));
+    }
+    match &binding.resource {
+        ResourceBindingState::Arena { name } => Ok(name.clone()),
+        _ => Err(CompilerError::new(
+            arena.span,
+            "access requires a named Arena capability",
+        )),
+    }
+}
+
+fn validate_buffer_move_destination(
+    buffer: &Atom,
+    destination: &str,
+    scope: &BTreeMap<String, BindingState>,
+) -> Result<(BufferElement, BindingState), CompilerError> {
+    let AtomKind::Move(name) = &buffer.kind else {
+        return Err(CompilerError::new(
+            buffer.span,
+            "resource replacement requires move followed by its buffer destination name",
+        ));
+    };
+    if name != destination {
+        return Err(CompilerError::new(
+            buffer.span,
+            "M2 resource outcomes must restore the same Buffer binding named after into",
+        ));
+    }
+    let binding = scope.get(name).cloned().ok_or_else(|| {
+        CompilerError::new(
+            buffer.span,
+            format!("value {name} has not been bound in this weave"),
+        )
+    })?;
+    if binding.moved {
+        return Err(CompilerError::new(
+            buffer.span,
+            format!("value {name} was already moved"),
+        ));
+    }
+    if !binding.mutable {
+        return Err(CompilerError::new(
+            buffer.span,
+            format!("resource destination {name} must be a mutable root binding"),
+        ));
+    }
+    let Some(element) = buffer_element_from_value_type(binding.value_type) else {
+        return Err(CompilerError::new(
+            buffer.span,
+            "resource replacement requires a BufferWhole or BufferTruth owner",
+        ));
+    };
+    Ok((element, binding))
+}
+
+fn validate_borrowed_allocated_buffer<'a>(
+    buffer: &Atom,
+    scope: &'a BTreeMap<String, BindingState>,
+) -> Result<&'a BindingState, CompilerError> {
+    let AtomKind::Borrow(name) = &buffer.kind else {
+        return Err(CompilerError::new(
+            buffer.span,
+            "at requires borrow followed by an allocated buffer binding",
+        ));
+    };
+    let binding = scope.get(name).ok_or_else(|| {
+        CompilerError::new(
+            buffer.span,
+            format!("value {name} has not been bound in this weave"),
+        )
+    })?;
+    if binding.moved {
+        return Err(CompilerError::new(
+            buffer.span,
+            format!("value {name} was moved and cannot be borrowed"),
+        ));
+    }
+    if !is_buffer_type(binding.value_type)
+        || !matches!(
+            binding.resource,
+            ResourceBindingState::Buffer {
+                allocated: true,
+                ..
+            }
+        )
+    {
+        return Err(CompilerError::new(
+            buffer.span,
+            "at requires a buffer that was successfully allocated or received through an access-boundary weave",
+        ));
+    }
+    Ok(binding)
+}
+
+fn expression_moves_name(expression: &Expression, target: &str) -> bool {
+    fn atom_moves_name(atom: &Atom, target: &str) -> bool {
+        matches!(&atom.kind, AtomKind::Move(name) if name == target)
+    }
+
+    match &expression.kind {
+        ExpressionKind::Atom(atom) | ExpressionKind::Unary { argument: atom, .. } => {
+            atom_moves_name(atom, target)
+        }
+        ExpressionKind::Arena { .. } | ExpressionKind::Buffer { .. } => false,
+        ExpressionKind::Binary { left, right, .. } => {
+            atom_moves_name(left, target) || atom_moves_name(right, target)
+        }
+        ExpressionKind::Cut { text, start, end }
+        | ExpressionKind::Slice {
+            bytes: text,
+            start,
+            end,
+        } => {
+            atom_moves_name(text, target)
+                || atom_moves_name(start, target)
+                || atom_moves_name(end, target)
+        }
+        ExpressionKind::Ternary {
+            first,
+            second,
+            third,
+            ..
+        } => {
+            atom_moves_name(first, target)
+                || atom_moves_name(second, target)
+                || atom_moves_name(third, target)
+        }
+        ExpressionKind::Call { arguments, .. }
+        | ExpressionKind::MakeRecord {
+            fields: arguments, ..
+        } => arguments
+            .iter()
+            .any(|argument| atom_moves_name(argument, target)),
+        ExpressionKind::Field { record, .. } => atom_moves_name(record, target),
+        ExpressionKind::Resource(ResourceOperation::Allocate {
+            arena,
+            buffer,
+            capacity,
+            ..
+        }) => {
+            atom_moves_name(arena, target)
+                || atom_moves_name(buffer, target)
+                || atom_moves_name(capacity, target)
+        }
+        ExpressionKind::Resource(ResourceOperation::Append { buffer, value, .. }) => {
+            atom_moves_name(buffer, target) || atom_moves_name(value, target)
+        }
+        ExpressionKind::Resource(ResourceOperation::At { buffer, index, .. }) => {
+            atom_moves_name(buffer, target) || atom_moves_name(index, target)
+        }
+    }
 }
 
 fn merge_scope(
@@ -2224,6 +3630,11 @@ fn merge_scope(
                 value_type: left_binding.value_type,
                 mutable: left_binding.mutable,
                 moved: left_binding.moved || right_binding.moved,
+                resource: if left_binding.resource == right_binding.resource {
+                    left_binding.resource.clone()
+                } else {
+                    ResourceBindingState::Plain
+                },
             },
         );
     }
@@ -2238,6 +3649,8 @@ fn expression_type(
 ) -> Result<ValueType, CompilerError> {
     match &expression.kind {
         ExpressionKind::Atom(atom) => atom_type(atom, scope),
+        ExpressionKind::Arena { .. } => Ok(ValueType::Arena),
+        ExpressionKind::Buffer { element } => Ok(element.value_type()),
         ExpressionKind::Unary {
             operation,
             argument,
@@ -2286,6 +3699,16 @@ fn expression_type(
                     )?;
                     Ok(ValueType::Bytes)
                 }
+                UnaryOperation::Count => {
+                    let Some(_) = buffer_element_from_value_type(argument_type) else {
+                        return Err(CompilerError::new(
+                            argument.span,
+                            "count requires borrow followed by an allocated BufferWhole or BufferTruth",
+                        ));
+                    };
+                    let _ = validate_borrowed_allocated_buffer(argument, scope)?;
+                    Ok(ValueType::Whole)
+                }
             }
         }
         ExpressionKind::Binary {
@@ -2316,6 +3739,18 @@ fn expression_type(
                     Ok(ValueType::Truth)
                 }
                 BinaryOperation::Same => {
+                    if matches!(
+                        left_type,
+                        ValueType::Arena
+                            | ValueType::BufferWhole
+                            | ValueType::BufferTruth
+                            | ValueType::AccessArena
+                    ) {
+                        return Err(CompilerError::new(
+                            expression.span,
+                            "same does not compare Aether resource values",
+                        ));
+                    }
                     if left_type != right_type {
                         return Err(CompilerError::new(
                             expression.span,
@@ -2456,12 +3891,12 @@ fn expression_type(
             }
             for (argument, parameter) in arguments.iter().zip(&signature.parameters) {
                 let argument_type = atom_type(argument, scope)?;
-                require_source_type(
-                    argument_type,
-                    parameter.value_type,
-                    argument.span,
-                    "call argument",
-                )?;
+                let expected = if parameter.mode == ParameterMode::Access {
+                    ValueType::AccessArena
+                } else {
+                    parameter.value_type
+                };
+                require_source_type(argument_type, expected, argument.span, "call argument")?;
                 let direct_owned_literal = matches!(
                     (&argument.kind, parameter.value_type),
                     (AtomKind::Text(_), ValueType::Text) | (AtomKind::Bytes(_), ValueType::Bytes)
@@ -2527,6 +3962,10 @@ fn expression_type(
             };
             Ok(declaration_field.value_type)
         }
+        ExpressionKind::Resource(_) => Err(CompilerError::new(
+            expression.span,
+            "a resource outcome must be handled immediately as a terminal choose condition",
+        )),
     }
 }
 
@@ -2555,7 +3994,14 @@ fn validate_record_declarations(records: &[RecordDeclaration]) -> Result<(), Com
                     format!("record field {} is declared more than once", field.name),
                 ));
             }
-            if matches!(field.value_type, ValueType::Record(_)) {
+            if matches!(
+                field.value_type,
+                ValueType::Record(_)
+                    | ValueType::Arena
+                    | ValueType::BufferWhole
+                    | ValueType::BufferTruth
+                    | ValueType::AccessArena
+            ) {
                 return Err(CompilerError::new(
                     field.span,
                     "record fields may use only Text, Whole, Truth, or Bytes",
@@ -2632,6 +4078,12 @@ fn atom_type(
                     format!("value {name} was moved and cannot be read"),
                 ));
             }
+            if binding.value_type == ValueType::Arena {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("Arena capability {name} requires explicit access"),
+                ));
+            }
             if is_unique_value(binding.value_type) {
                 return Err(CompilerError::new(
                     atom.span,
@@ -2656,6 +4108,24 @@ fn atom_type(
                     format!("value {name} was moved and cannot be borrowed"),
                 ));
             }
+            if binding.value_type == ValueType::Arena {
+                return Err(CompilerError::new(
+                    atom.span,
+                    "Arena capabilities cannot be borrowed; use access for one operation or call",
+                ));
+            }
+            if matches!(
+                binding.resource,
+                ResourceBindingState::Buffer {
+                    allocated: false,
+                    ..
+                }
+            ) {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("buffer {name} is unallocated and cannot be borrowed"),
+                ));
+            }
             Ok(binding.value_type)
         }
         AtomKind::Move(name) => {
@@ -2673,6 +4143,21 @@ fn atom_type(
             }
             binding.moved = true;
             Ok(binding.value_type)
+        }
+        AtomKind::Access(name) => {
+            let Some(binding) = scope.get(name) else {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("value {name} has not been bound in this weave"),
+                ));
+            };
+            if binding.value_type != ValueType::Arena || binding.moved {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("access requires the live Arena capability {name}"),
+                ));
+            }
+            Ok(ValueType::AccessArena)
         }
     }
 }
@@ -2693,7 +4178,10 @@ fn require_source_type(
     }
 }
 
-fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
+fn emit_bytecode_with_resource_plan(
+    program: &Program,
+    resource_plan: &SemanticResourcePlan,
+) -> Result<Vec<u8>, CompilerError> {
     let mut weave_indices = BTreeMap::new();
     let mut weave_results = BTreeMap::new();
     for (index, weave) in program.weaves.iter().enumerate() {
@@ -2710,6 +4198,7 @@ fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
             &layout,
             &weave_indices,
             &program.records,
+            resource_plan,
             &mut code,
         )?;
         let mut locals = vec![
@@ -2729,22 +4218,18 @@ fn emit_bytecode(program: &Program) -> Result<Vec<u8>, CompilerError> {
     }
 
     let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
-    let version = if program.records.is_empty() {
-        ARTIFACT_VERSION_V4
-    } else {
-        ARTIFACT_VERSION_V5
-    };
-    bytecode.push(version);
-    if version == ARTIFACT_VERSION_V5 {
-        write_u16(
-            &mut bytecode,
-            u16::try_from(program.records.len()).map_err(|_| {
-                CompilerError::new(
-                    Span::synthetic(),
-                    "artifact contains too many records for AETH",
-                )
-            })?,
-        );
+    bytecode.push(ARTIFACT_VERSION_V6);
+    write_u32(&mut bytecode, resource_plan.arena_capacity());
+    write_u16(
+        &mut bytecode,
+        u16::try_from(program.records.len()).map_err(|_| {
+            CompilerError::new(
+                Span::synthetic(),
+                "artifact contains too many records for AETH",
+            )
+        })?,
+    );
+    if !program.records.is_empty() {
         for record in &program.records {
             let name_length = u8::try_from(record.name.len()).map_err(|_| {
                 CompilerError::new(record.span, "record name exceeds the AETH name limit")
@@ -2868,6 +4353,8 @@ fn static_expression_type(
 ) -> Result<ValueType, CompilerError> {
     match &expression.kind {
         ExpressionKind::Atom(atom) => static_atom_type(atom, layout),
+        ExpressionKind::Arena { .. } => Ok(ValueType::Arena),
+        ExpressionKind::Buffer { element } => Ok(element.value_type()),
         ExpressionKind::Unary {
             operation,
             argument,
@@ -2885,6 +4372,7 @@ fn static_expression_type(
             UnaryOperation::Pack16 | UnaryOperation::Pack32 | UnaryOperation::Pack64 => {
                 Ok(ValueType::Bytes)
             }
+            UnaryOperation::Count => Ok(ValueType::Whole),
         },
         ExpressionKind::Binary {
             operation,
@@ -2969,6 +4457,7 @@ fn static_expression_type(
                     )
                 })
         }
+        ExpressionKind::Resource(_) => Ok(ValueType::Truth),
     }
 }
 
@@ -2989,6 +4478,15 @@ fn static_atom_type(
                 )
             })
         }
+        AtomKind::Access(name) => layout.get(name).map_or_else(
+            || {
+                Err(CompilerError::new(
+                    atom.span,
+                    format!("value {name} has not been introduced before this binding"),
+                ))
+            },
+            |_| Ok(ValueType::AccessArena),
+        ),
     }
 }
 
@@ -2997,12 +4495,13 @@ fn emit_block(
     layout: &BTreeMap<String, SlotInfo>,
     weave_indices: &BTreeMap<String, usize>,
     records: &[RecordDeclaration],
+    resource_plan: &SemanticResourcePlan,
     code: &mut Vec<u8>,
 ) -> Result<(), CompilerError> {
     for statement in statements {
         match statement {
             Statement::Bind { name, value, .. } => {
-                emit_expression(value, layout, weave_indices, records, code)?;
+                emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
                 code.push(OP_STORE);
                 write_u16(
                     code,
@@ -3018,7 +4517,7 @@ fn emit_block(
                 );
             }
             Statement::Revise { name, value, .. } => {
-                emit_expression(value, layout, weave_indices, records, code)?;
+                emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
                 code.push(OP_REVISE);
                 write_u16(
                     code,
@@ -3034,11 +4533,11 @@ fn emit_block(
                 );
             }
             Statement::Speak { value, .. } => {
-                emit_expression(value, layout, weave_indices, records, code)?;
+                emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
                 code.push(OP_SPEAK);
             }
             Statement::Yield { value, .. } => {
-                emit_expression(value, layout, weave_indices, records, code)?;
+                emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
                 code.push(OP_YIELD);
             }
             Statement::Choose {
@@ -3047,10 +4546,55 @@ fn emit_block(
                 when_dim,
                 ..
             } => {
-                emit_expression(condition, layout, weave_indices, records, code)?;
+                if matches!(condition.kind, ExpressionKind::Resource(_)) {
+                    emit_expression(
+                        condition,
+                        layout,
+                        weave_indices,
+                        records,
+                        resource_plan,
+                        code,
+                    )?;
+                    code.push(OP_JUMP_IF_DIM);
+                    let dim_target = reserve_u32(code);
+                    emit_block(
+                        when_bright,
+                        layout,
+                        weave_indices,
+                        records,
+                        resource_plan,
+                        code,
+                    )?;
+                    let dim_branch = code.len();
+                    patch_u32(code, dim_target, dim_branch)?;
+                    emit_block(
+                        when_dim,
+                        layout,
+                        weave_indices,
+                        records,
+                        resource_plan,
+                        code,
+                    )?;
+                    continue;
+                }
+                emit_expression(
+                    condition,
+                    layout,
+                    weave_indices,
+                    records,
+                    resource_plan,
+                    code,
+                )?;
                 code.push(OP_JUMP_IF_DIM);
                 let dim_target = reserve_u32(code);
-                emit_block(when_bright, layout, weave_indices, records, code)?;
+                emit_block(
+                    when_bright,
+                    layout,
+                    weave_indices,
+                    records,
+                    resource_plan,
+                    code,
+                )?;
                 if when_dim.is_empty() {
                     let continuation = code.len();
                     patch_u32(code, dim_target, continuation)?;
@@ -3059,7 +4603,14 @@ fn emit_block(
                     let end_target = reserve_u32(code);
                     let dim_branch = code.len();
                     patch_u32(code, dim_target, dim_branch)?;
-                    emit_block(when_dim, layout, weave_indices, records, code)?;
+                    emit_block(
+                        when_dim,
+                        layout,
+                        weave_indices,
+                        records,
+                        resource_plan,
+                        code,
+                    )?;
                     let continuation = code.len();
                     patch_u32(code, end_target, continuation)?;
                 }
@@ -3068,10 +4619,17 @@ fn emit_block(
                 condition, body, ..
             } => {
                 let loop_start = code.len();
-                emit_expression(condition, layout, weave_indices, records, code)?;
+                emit_expression(
+                    condition,
+                    layout,
+                    weave_indices,
+                    records,
+                    resource_plan,
+                    code,
+                )?;
                 code.push(OP_JUMP_IF_DIM);
                 let loop_end = reserve_u32(code);
-                emit_block(body, layout, weave_indices, records, code)?;
+                emit_block(body, layout, weave_indices, records, resource_plan, code)?;
                 code.push(OP_JUMP);
                 write_u32(
                     code,
@@ -3095,10 +4653,16 @@ fn emit_expression(
     layout: &BTreeMap<String, SlotInfo>,
     weave_indices: &BTreeMap<String, usize>,
     records: &[RecordDeclaration],
+    resource_plan: &SemanticResourcePlan,
     code: &mut Vec<u8>,
 ) -> Result<(), CompilerError> {
     match &expression.kind {
         ExpressionKind::Atom(atom) => emit_atom(atom, layout, code)?,
+        ExpressionKind::Arena { .. } => code.push(OP_ARENA),
+        ExpressionKind::Buffer { element } => {
+            code.push(OP_BUFFER);
+            code.push(element.type_tag());
+        }
         ExpressionKind::Unary {
             operation,
             argument,
@@ -3115,6 +4679,7 @@ fn emit_expression(
                 UnaryOperation::Pack16 => OP_PACK16,
                 UnaryOperation::Pack32 => OP_PACK32,
                 UnaryOperation::Pack64 => OP_PACK64,
+                UnaryOperation::Count => OP_COUNT,
             });
         }
         ExpressionKind::Binary {
@@ -3225,6 +4790,55 @@ fn emit_expression(
                 )
             })?);
         }
+        ExpressionKind::Resource(operation) => {
+            let semantic = resource_plan.outcome(expression.span)?;
+            if semantic.region().is_empty() || !semantic.matches_source(operation) {
+                return Err(CompilerError::new(
+                    expression.span,
+                    "internal compiler found a resource AST/semantic-plan disagreement",
+                ));
+            }
+            let destination_slot = layout.get(semantic.destination()).ok_or_else(|| {
+                CompilerError::new(
+                    expression.span,
+                    format!(
+                        "internal compiler could not resolve resource destination {}",
+                        semantic.destination()
+                    ),
+                )
+            })?;
+            let destination_index = destination_slot.index;
+
+            match operation {
+                ResourceOperation::Allocate {
+                    arena,
+                    buffer,
+                    capacity,
+                    ..
+                } => {
+                    emit_atom(arena, layout, code)?;
+                    emit_atom(buffer, layout, code)?;
+                    emit_atom(capacity, layout, code)?;
+                    code.push(OP_ALLOCATE);
+                    code.push(semantic.element().type_tag());
+                    write_u16(code, destination_index);
+                }
+                ResourceOperation::Append { buffer, value, .. } => {
+                    emit_atom(buffer, layout, code)?;
+                    emit_atom(value, layout, code)?;
+                    code.push(OP_BUFFER_APPEND);
+                    code.push(semantic.element().type_tag());
+                    write_u16(code, destination_index);
+                }
+                ResourceOperation::At { buffer, index, .. } => {
+                    emit_atom(buffer, layout, code)?;
+                    emit_atom(index, layout, code)?;
+                    code.push(OP_BUFFER_AT);
+                    code.push(semantic.element().type_tag());
+                    write_u16(code, destination_index);
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -3291,6 +4905,16 @@ fn emit_atom(
             code.push(OP_MOVE);
             write_u16(code, slot.index);
         }
+        AtomKind::Access(name) => {
+            let slot = layout.get(name).ok_or_else(|| {
+                CompilerError::new(
+                    atom.span,
+                    format!("internal compiler could not resolve Arena capability {name}"),
+                )
+            })?;
+            code.push(OP_ACCESS);
+            write_u16(code, slot.index);
+        }
     }
     Ok(())
 }
@@ -3303,20 +4927,35 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         return Err(BytecodeError::new(0, "artifact magic is not AETH"));
     }
     let version = bytecode[ARTIFACT_MAGIC.len()];
-    if !matches!(version, ARTIFACT_VERSION_V4 | ARTIFACT_VERSION_V5) {
+    if !matches!(
+        version,
+        ARTIFACT_VERSION_V4 | ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6
+    ) {
         return Err(BytecodeError::new(
             ARTIFACT_MAGIC.len(),
             "artifact version is not supported by this Aether VM",
         ));
     }
     let mut position = ARTIFACT_MAGIC.len() + 1;
-    let mut records = Vec::new();
-    if version == ARTIFACT_VERSION_V5 {
-        let record_count = usize::from(read_u16(bytecode, &mut position)?);
-        if record_count == 0 || record_count > MAX_RECORDS {
+    let arena_capacity = if version == ARTIFACT_VERSION_V6 {
+        let capacity = read_u32(bytecode, &mut position)?;
+        if capacity > MAX_ARENA_BYTES {
             return Err(BytecodeError::new(
                 position,
-                "AETH v5 record count is outside the Aether limit",
+                "AETH v6 arena capacity exceeds the M2 safety limit",
+            ));
+        }
+        capacity
+    } else {
+        0
+    };
+    let mut records = Vec::new();
+    if matches!(version, ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6) {
+        let record_count = usize::from(read_u16(bytecode, &mut position)?);
+        if (version == ARTIFACT_VERSION_V5 && record_count == 0) || record_count > MAX_RECORDS {
+            return Err(BytecodeError::new(
+                position,
+                "artifact record count is outside the Aether limit",
             ));
         }
         records.reserve(record_count);
@@ -3386,7 +5025,8 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         let mut parameters = Vec::with_capacity(parameter_count);
         for _ in 0..parameter_count {
             let value_type = read_value_type(bytecode, &mut position, version, records.len())?;
-            let mode = ParameterMode::from_byte(read_byte(bytecode, &mut position)?, position)?;
+            let mode =
+                ParameterMode::from_byte(read_byte(bytecode, &mut position)?, position, version)?;
             parameters.push((value_type, mode));
         }
         let result = read_value_type(bytecode, &mut position, version, records.len())?;
@@ -3441,6 +5081,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     }
     Ok(Artifact {
         version,
+        arena_capacity,
         records,
         functions,
     })
@@ -3482,7 +5123,7 @@ fn verify_function(
 
     let mut states = BTreeMap::new();
     let initial = VerificationState {
-        stack: Vec::new(),
+        stack: VerificationStack::new(),
         initialized: function
             .locals
             .iter()
@@ -3576,6 +5217,115 @@ fn verify_instruction(
             state.stack.push(ValueType::Truth);
             continue_with(state)
         }
+        Instruction::Arena => {
+            state.stack.push(ValueType::Arena);
+            continue_with(state)
+        }
+        Instruction::Buffer(element) => {
+            state.stack.push_buffer_placeholder(*element);
+            continue_with(state)
+        }
+        Instruction::Access(slot) => {
+            let local = local_descriptor(function, *slot, offset)?;
+            if local.value_type != ValueType::Arena {
+                return Err(BytecodeError::new(
+                    offset,
+                    "access targets a local that is not an Arena capability",
+                ));
+            }
+            ensure_readable(&state, *slot, offset, "access")?;
+            state.stack.push(ValueType::AccessArena);
+            continue_with(state)
+        }
+        Instruction::Allocate {
+            element,
+            destination,
+        } => {
+            let local = local_descriptor(function, *destination, offset)?;
+            if !local.mutable || local.value_type != element.value_type() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "allocate destination must be its matching mutable Buffer slot",
+                ));
+            }
+            if !state.initialized[*destination] || !state.moved[*destination] {
+                return Err(BytecodeError::new(
+                    offset,
+                    "allocate requires its destination Buffer slot to be moved",
+                ));
+            }
+            pop_type(&mut state.stack, ValueType::Whole, offset, "allocate")?;
+            let buffer = pop_type(&mut state.stack, element.value_type(), offset, "allocate")?;
+            require_moved_buffer_from(&buffer, *destination, offset, "allocate")?;
+            pop_type(&mut state.stack, ValueType::AccessArena, offset, "allocate")?;
+            state.moved[*destination] = false;
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::BufferAppend {
+            element,
+            destination,
+        } => {
+            let local = local_descriptor(function, *destination, offset)?;
+            if !local.mutable || local.value_type != element.value_type() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "buffer append destination must be its matching mutable Buffer slot",
+                ));
+            }
+            if !state.initialized[*destination] || !state.moved[*destination] {
+                return Err(BytecodeError::new(
+                    offset,
+                    "buffer append requires its destination Buffer slot to be moved",
+                ));
+            }
+            pop_type(
+                &mut state.stack,
+                element.element_type(),
+                offset,
+                "buffer append",
+            )?;
+            let buffer = pop_type(
+                &mut state.stack,
+                element.value_type(),
+                offset,
+                "buffer append",
+            )?;
+            require_moved_buffer_from(&buffer, *destination, offset, "buffer append")?;
+            state.moved[*destination] = false;
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::BufferAt {
+            element,
+            destination,
+        } => {
+            let local = local_descriptor(function, *destination, offset)?;
+            if !local.mutable || local.value_type != element.element_type() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "buffer lookup destination must be its matching mutable value slot",
+                ));
+            }
+            ensure_readable(&state, *destination, offset, "buffer lookup destination")?;
+            pop_type(&mut state.stack, ValueType::Whole, offset, "buffer at")?;
+            let buffer = pop_type(&mut state.stack, element.value_type(), offset, "buffer at")?;
+            require_borrowed_buffer(&buffer, offset, "buffer at")?;
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::Count => {
+            let buffer = pop_any_type(&mut state.stack, offset, "count")?;
+            if !is_buffer_type(buffer.value_type) {
+                return Err(BytecodeError::new(
+                    offset,
+                    "count requires a BufferWhole or BufferTruth value",
+                ));
+            }
+            require_borrowed_buffer(&buffer, offset, "count")?;
+            state.stack.push(ValueType::Whole);
+            continue_with(state)
+        }
         Instruction::Store(slot) => {
             let local = local_descriptor(function, *slot, offset)?;
             if state.initialized[*slot] {
@@ -3584,22 +5334,37 @@ fn verify_instruction(
                     "store may only initialize an unbound local slot",
                 ));
             }
-            pop_type(&mut state.stack, local.value_type, offset, "store")?;
+            let value = pop_type(&mut state.stack, local.value_type, offset, "store")?;
+            if is_buffer_type(local.value_type) {
+                require_storable_buffer(&value, offset, "store")?;
+            }
             state.initialized[*slot] = true;
             state.moved[*slot] = false;
             continue_with(state)
         }
         Instruction::Load(slot) => {
             let local = local_descriptor(function, *slot, offset)?;
+            if local.value_type == ValueType::Arena {
+                return Err(BytecodeError::new(
+                    offset,
+                    "Arena capabilities must be used through access, not load",
+                ));
+            }
             ensure_readable(&state, *slot, offset, "load")?;
             state.stack.push(local.value_type);
             continue_with(state)
         }
         Instruction::Move(slot) => {
             let local = local_descriptor(function, *slot, offset)?;
+            if local.value_type == ValueType::Arena {
+                return Err(BytecodeError::new(
+                    offset,
+                    "Arena capabilities cannot be moved",
+                ));
+            }
             ensure_readable(&state, *slot, offset, "move")?;
             state.moved[*slot] = true;
-            state.stack.push(local.value_type);
+            state.stack.push_moved_local(local.value_type, *slot);
             continue_with(state)
         }
         Instruction::Revise(slot) => {
@@ -3608,6 +5373,12 @@ fn verify_instruction(
                 return Err(BytecodeError::new(
                     offset,
                     "revise targets an immutable local slot",
+                ));
+            }
+            if is_buffer_type(local.value_type) || local.value_type == ValueType::Arena {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH v6 resource owners are replaced only by closed resource instructions",
                 ));
             }
             ensure_readable(&state, *slot, offset, "revise")?;
@@ -3619,7 +5390,10 @@ fn verify_instruction(
             continue_with(state)
         }
         Instruction::Yield => {
-            pop_type(&mut state.stack, function.result, offset, "yield")?;
+            let value = pop_type(&mut state.stack, function.result, offset, "yield")?;
+            if is_buffer_type(function.result) {
+                require_yieldable_buffer(&value, offset)?;
+            }
             if !state.stack.is_empty() {
                 return Err(BytecodeError::new(
                     offset,
@@ -3648,10 +5422,22 @@ fn verify_instruction(
         Instruction::Same => {
             let right = pop_any_type(&mut state.stack, offset, "same")?;
             let left = pop_any_type(&mut state.stack, offset, "same")?;
-            if left != right {
+            if left.value_type != right.value_type {
                 return Err(BytecodeError::new(
                     offset,
                     "same requires two values with the same type",
+                ));
+            }
+            if matches!(
+                left.value_type,
+                ValueType::Arena
+                    | ValueType::BufferWhole
+                    | ValueType::BufferTruth
+                    | ValueType::AccessArena
+            ) {
+                return Err(BytecodeError::new(
+                    offset,
+                    "same does not compare Aether resource values",
                 ));
             }
             state.stack.push(ValueType::Truth);
@@ -3758,7 +5544,15 @@ fn verify_instruction(
         }
         Instruction::Render => {
             let value_type = pop_any_type(&mut state.stack, offset, "render")?;
-            if matches!(value_type, ValueType::Bytes | ValueType::Record(_)) {
+            if matches!(
+                value_type.value_type,
+                ValueType::Bytes
+                    | ValueType::Record(_)
+                    | ValueType::Arena
+                    | ValueType::BufferWhole
+                    | ValueType::BufferTruth
+                    | ValueType::AccessArena
+            ) {
                 return Err(BytecodeError::new(
                     offset,
                     "render does not accept Bytes or records; project a record field first",
@@ -3808,8 +5602,24 @@ fn verify_instruction(
                     "call argument count disagrees with its weave signature",
                 ));
             }
-            for (expected, _) in called_function.parameters.iter().rev() {
-                pop_type(&mut state.stack, *expected, offset, "call")?;
+            for (expected, mode) in called_function.parameters.iter().rev() {
+                let expected = if *mode == ParameterMode::Access {
+                    ValueType::AccessArena
+                } else {
+                    *expected
+                };
+                let value = pop_type(&mut state.stack, expected, offset, "call")?;
+                if is_buffer_type(expected) {
+                    match mode {
+                        ParameterMode::Own => {
+                            require_moved_buffer(&value, offset, "call")?;
+                        }
+                        ParameterMode::Borrow => {
+                            require_borrowed_buffer(&value, offset, "call")?;
+                        }
+                        ParameterMode::Access => unreachable!("access parameters use AccessArena"),
+                    }
+                }
             }
             state.stack.push(called_function.result);
             let _ = function_index;
@@ -3867,6 +5677,7 @@ fn execute_function(
     function_index: usize,
     arguments: Vec<RuntimeValue>,
     stdout: &mut String,
+    runtime_state: &mut RuntimeState,
     depth: usize,
 ) -> Result<RuntimeValue, BytecodeError> {
     if depth >= MAX_CALL_DEPTH {
@@ -3887,7 +5698,19 @@ fn execute_function(
     }
     let mut locals = vec![None; function.locals.len()];
     for (index, argument) in arguments.into_iter().enumerate() {
-        if argument.value_type() != function.parameters[index].0 {
+        let (expected, mode) = function.parameters[index];
+        let argument = if mode == ParameterMode::Access {
+            if !matches!(argument, RuntimeValue::AccessArena) {
+                return Err(BytecodeError::new(
+                    0,
+                    "runtime access parameter did not receive an exclusive Arena access loan",
+                ));
+            }
+            RuntimeValue::Arena
+        } else {
+            argument
+        };
+        if argument.value_type() != expected {
             return Err(BytecodeError::new(
                 0,
                 "runtime call argument type is invalid",
@@ -3904,6 +5727,143 @@ fn execute_function(
             Instruction::PushBytes(value) => stack.push(RuntimeValue::Bytes(value)),
             Instruction::PushWhole(value) => stack.push(RuntimeValue::Whole(value)),
             Instruction::PushTruth(value) => stack.push(RuntimeValue::Truth(value)),
+            Instruction::Arena => stack.push(RuntimeValue::Arena),
+            Instruction::Buffer(element) => stack.push(RuntimeValue::Buffer {
+                element,
+                allocated: false,
+                offset: 0,
+                len: 0,
+                capacity: 0,
+            }),
+            Instruction::Access(slot) => {
+                let value = read_local(&locals, slot, decoded.offset, "access")?;
+                if !matches!(value, RuntimeValue::Arena) {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime access targets a local that is not an Arena",
+                    ));
+                }
+                stack.push(RuntimeValue::AccessArena);
+            }
+            Instruction::Allocate {
+                element,
+                destination,
+            } => {
+                let capacity = pop_whole(&mut stack, decoded.offset, "allocate")?;
+                let buffer = pop_buffer(&mut stack, element, decoded.offset, "allocate")?;
+                match pop_runtime(&mut stack, decoded.offset, "allocate")? {
+                    RuntimeValue::AccessArena => {}
+                    value => {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            format!(
+                                "allocate received {}, expected exclusive Arena access",
+                                value.value_type()
+                            ),
+                        ))
+                    }
+                }
+                let (buffer, allocated) =
+                    runtime_allocate_buffer(buffer, capacity, runtime_state, decoded.offset)?;
+                let local = function.locals.get(destination).ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "runtime allocate destination slot is invalid",
+                    )
+                })?;
+                if !local.mutable || local.value_type != element.value_type() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime allocate destination is not its matching mutable Buffer slot",
+                    ));
+                }
+                if locals[destination].is_some() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime allocate destination Buffer was not moved",
+                    ));
+                }
+                locals[destination] = Some(buffer);
+                stack.push(RuntimeValue::Truth(allocated));
+            }
+            Instruction::BufferAppend {
+                element,
+                destination,
+            } => {
+                let value =
+                    pop_buffer_element(&mut stack, element, decoded.offset, "buffer append")?;
+                let buffer = pop_buffer(&mut stack, element, decoded.offset, "buffer append")?;
+                let (buffer, appended) =
+                    runtime_append_buffer(buffer, value, runtime_state, decoded.offset)?;
+                let local = function.locals.get(destination).ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "runtime buffer append destination slot is invalid",
+                    )
+                })?;
+                if !local.mutable || local.value_type != element.value_type() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime buffer append destination is not its matching mutable Buffer slot",
+                    ));
+                }
+                if locals[destination].is_some() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime buffer append destination Buffer was not moved",
+                    ));
+                }
+                locals[destination] = Some(buffer);
+                stack.push(RuntimeValue::Truth(appended));
+            }
+            Instruction::BufferAt {
+                element,
+                destination,
+            } => {
+                let index = pop_whole(&mut stack, decoded.offset, "buffer at")?;
+                let buffer = pop_buffer(&mut stack, element, decoded.offset, "buffer at")?;
+                let local = function.locals.get(destination).ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "runtime buffer lookup destination slot is invalid",
+                    )
+                })?;
+                if !local.mutable || local.value_type != element.element_type() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime buffer lookup destination is not its matching mutable value slot",
+                    ));
+                }
+                let fallback = read_local(
+                    &locals,
+                    destination,
+                    decoded.offset,
+                    "buffer lookup destination",
+                )?
+                .clone();
+                let (value, found) =
+                    runtime_buffer_at(buffer, index, fallback, runtime_state, decoded.offset)?;
+                locals[destination] = Some(value);
+                stack.push(RuntimeValue::Truth(found));
+            }
+            Instruction::Count => {
+                let buffer = pop_runtime(&mut stack, decoded.offset, "count")?;
+                let RuntimeValue::Buffer { len, allocated, .. } = buffer else {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "count received a non-buffer value",
+                    ));
+                };
+                if !allocated {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "count received an unallocated buffer",
+                    ));
+                }
+                stack.push(RuntimeValue::Whole(i64::try_from(len).map_err(|_| {
+                    BytecodeError::new(decoded.offset, "buffer count is outside the Whole range")
+                })?));
+            }
             Instruction::Store(slot) => {
                 if slot >= locals.len() || locals[slot].is_some() {
                     return Err(BytecodeError::new(
@@ -4259,6 +6219,14 @@ fn execute_function(
                             decoded.offset,
                             "render does not accept Bytes or records; project a record field first",
                         )),
+                        RuntimeValue::Arena
+                        | RuntimeValue::AccessArena
+                        | RuntimeValue::Buffer { .. } => {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "render does not accept Aether resource values",
+                            ))
+                        }
                     };
                 stack.push(RuntimeValue::Text(text));
             }
@@ -4322,9 +6290,18 @@ fn execute_function(
                     ));
                 }
                 let mut values = Vec::with_capacity(arguments);
-                for (value_type, _) in called_function.parameters.iter().rev() {
+                for (value_type, mode) in called_function.parameters.iter().rev() {
                     let value = pop_runtime(&mut stack, decoded.offset, "call")?;
-                    require_runtime_type(&value, *value_type, decoded.offset, "call")?;
+                    if *mode == ParameterMode::Access {
+                        if !matches!(value, RuntimeValue::AccessArena) {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime call access argument is not an exclusive Arena access loan",
+                            ));
+                        }
+                    } else {
+                        require_runtime_type(&value, *value_type, decoded.offset, "call")?;
+                    }
                     values.push(value);
                 }
                 values.reverse();
@@ -4333,6 +6310,7 @@ fn execute_function(
                     called,
                     values,
                     stdout,
+                    runtime_state,
                     depth + 1,
                 )?);
             }
@@ -4424,25 +6402,65 @@ fn decode_instruction(
         OP_POKE32 => Instruction::Poke32,
         OP_PACK64 => Instruction::Pack64,
         OP_MAKE_RECORD => {
-            if version != ARTIFACT_VERSION_V5 {
+            if !matches!(version, ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record construction is valid only in AETH v5 artifacts",
+                    "record construction is valid only in AETH v5 or v6 artifacts",
                 ));
             }
             Instruction::MakeRecord(read_u16(code, position)?)
         }
         OP_FIELD => {
-            if version != ARTIFACT_VERSION_V5 {
+            if !matches!(version, ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record field projection is valid only in AETH v5 artifacts",
+                    "record field projection is valid only in AETH v5 or v6 artifacts",
                 ));
             }
             Instruction::Field {
                 record: read_u16(code, position)?,
                 field: usize::from(read_byte(code, position)?),
             }
+        }
+        OP_ARENA => {
+            require_v6_instruction(version, offset, "arena declaration")?;
+            Instruction::Arena
+        }
+        OP_BUFFER => {
+            require_v6_instruction(version, offset, "buffer placeholder")?;
+            Instruction::Buffer(BufferElement::from_type_tag(
+                read_byte(code, position)?,
+                offset,
+            )?)
+        }
+        OP_ACCESS => {
+            require_v6_instruction(version, offset, "arena access")?;
+            Instruction::Access(usize::from(read_u16(code, position)?))
+        }
+        OP_ALLOCATE => {
+            require_v6_instruction(version, offset, "buffer allocation")?;
+            Instruction::Allocate {
+                element: BufferElement::from_type_tag(read_byte(code, position)?, offset)?,
+                destination: usize::from(read_u16(code, position)?),
+            }
+        }
+        OP_BUFFER_APPEND => {
+            require_v6_instruction(version, offset, "buffer append")?;
+            Instruction::BufferAppend {
+                element: BufferElement::from_type_tag(read_byte(code, position)?, offset)?,
+                destination: usize::from(read_u16(code, position)?),
+            }
+        }
+        OP_BUFFER_AT => {
+            require_v6_instruction(version, offset, "buffer lookup")?;
+            Instruction::BufferAt {
+                element: BufferElement::from_type_tag(read_byte(code, position)?, offset)?,
+                destination: usize::from(read_u16(code, position)?),
+            }
+        }
+        OP_COUNT => {
+            require_v6_instruction(version, offset, "buffer count")?;
+            Instruction::Count
         }
         OP_CALL => Instruction::Call {
             function: usize::from(read_u16(code, position)?),
@@ -4457,6 +6475,17 @@ fn decode_instruction(
         next_offset: *position,
         instruction,
     })
+}
+
+fn require_v6_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
+    if version == ARTIFACT_VERSION_V6 {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{subject} is valid only in AETH v6 artifacts"),
+        ))
+    }
 }
 
 fn local_descriptor(
@@ -4505,33 +6534,114 @@ fn ensure_readable(
 }
 
 fn pop_type(
-    stack: &mut Vec<ValueType>,
+    stack: &mut VerificationStack,
     expected: ValueType,
     offset: usize,
     operation: &str,
-) -> Result<(), BytecodeError> {
+) -> Result<VerificationStackValue, BytecodeError> {
     let actual = pop_any_type(stack, offset, operation)?;
-    if actual == expected {
-        Ok(())
+    if actual.value_type == expected {
+        Ok(actual)
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{operation} requires {expected}, but artifact stack has {actual}"),
+            format!(
+                "{operation} requires {expected}, but artifact stack has {}",
+                actual.value_type
+            ),
         ))
     }
 }
 
 fn pop_any_type(
-    stack: &mut Vec<ValueType>,
+    stack: &mut VerificationStack,
     offset: usize,
     operation: &str,
-) -> Result<ValueType, BytecodeError> {
+) -> Result<VerificationStackValue, BytecodeError> {
     stack.pop().ok_or_else(|| {
         BytecodeError::new(
             offset,
             format!("{operation} would underflow the operand stack"),
         )
     })
+}
+
+fn require_moved_buffer_from(
+    value: &VerificationStackValue,
+    destination: usize,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if value.buffer_provenance == BufferProvenance::MovedLocal(destination) {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{operation} must receive the Buffer owner moved from its destination slot"),
+        ))
+    }
+}
+
+fn require_moved_buffer(
+    value: &VerificationStackValue,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if matches!(value.buffer_provenance, BufferProvenance::MovedLocal(_)) {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{operation} requires a Buffer owner moved from a local slot"),
+        ))
+    }
+}
+
+fn require_borrowed_buffer(
+    value: &VerificationStackValue,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if value.buffer_provenance == BufferProvenance::Borrowed {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{operation} requires a transient borrowed Buffer value"),
+        ))
+    }
+}
+
+fn require_storable_buffer(
+    value: &VerificationStackValue,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if matches!(
+        value.buffer_provenance,
+        BufferProvenance::Placeholder | BufferProvenance::MovedLocal(_)
+    ) {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{operation} cannot persist a borrowed Buffer value"),
+        ))
+    }
+}
+
+fn require_yieldable_buffer(
+    value: &VerificationStackValue,
+    offset: usize,
+) -> Result<(), BytecodeError> {
+    if matches!(value.buffer_provenance, BufferProvenance::MovedLocal(_)) {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            "yield cannot expose a placeholder or borrowed Buffer value",
+        ))
+    }
 }
 
 fn read_local<'a>(
@@ -4646,6 +6756,297 @@ fn pop_bytes(
     }
 }
 
+fn pop_buffer(
+    stack: &mut Vec<RuntimeValue>,
+    element: BufferElement,
+    offset: usize,
+    operation: &str,
+) -> Result<RuntimeValue, BytecodeError> {
+    let value = pop_runtime(stack, offset, operation)?;
+    match &value {
+        RuntimeValue::Buffer {
+            element: actual, ..
+        } if *actual == element => Ok(value),
+        _ => Err(BytecodeError::new(
+            offset,
+            format!(
+                "{operation} received {}, expected {}",
+                value.value_type(),
+                element.value_type()
+            ),
+        )),
+    }
+}
+
+fn pop_buffer_element(
+    stack: &mut Vec<RuntimeValue>,
+    element: BufferElement,
+    offset: usize,
+    operation: &str,
+) -> Result<RuntimeValue, BytecodeError> {
+    let value = pop_runtime(stack, offset, operation)?;
+    require_runtime_type(&value, element.element_type(), offset, operation)?;
+    Ok(value)
+}
+
+fn runtime_allocate_buffer(
+    buffer: RuntimeValue,
+    capacity: i64,
+    runtime_state: &mut RuntimeState,
+    offset: usize,
+) -> Result<(RuntimeValue, bool), BytecodeError> {
+    let RuntimeValue::Buffer {
+        element, allocated, ..
+    } = buffer
+    else {
+        return Err(BytecodeError::new(
+            offset,
+            "allocate received a non-buffer placeholder",
+        ));
+    };
+    if allocated {
+        return Err(BytecodeError::new(
+            offset,
+            "allocate requires an unallocated buffer placeholder",
+        ));
+    }
+    let count = match usize::try_from(capacity) {
+        Ok(value) => value,
+        Err(_) => {
+            return Ok((
+                RuntimeValue::Buffer {
+                    element,
+                    allocated: false,
+                    offset: 0,
+                    len: 0,
+                    capacity: 0,
+                },
+                false,
+            ))
+        }
+    };
+    let stride = buffer_element_stride(element);
+    let payload = match count.checked_mul(stride) {
+        Some(value) => value,
+        None => {
+            return Ok((
+                RuntimeValue::Buffer {
+                    element,
+                    allocated: false,
+                    offset: 0,
+                    len: 0,
+                    capacity: 0,
+                },
+                false,
+            ))
+        }
+    };
+    let required = match BUFFER_METADATA_BYTES.checked_add(payload) {
+        Some(value) => value,
+        None => {
+            return Ok((
+                RuntimeValue::Buffer {
+                    element,
+                    allocated: false,
+                    offset: 0,
+                    len: 0,
+                    capacity: 0,
+                },
+                false,
+            ))
+        }
+    };
+    let Some(end) = runtime_state.arena.used.checked_add(required) else {
+        return Ok((
+            RuntimeValue::Buffer {
+                element,
+                allocated: false,
+                offset: 0,
+                len: 0,
+                capacity: 0,
+            },
+            false,
+        ));
+    };
+    if end > runtime_state.arena.bytes.len() {
+        return Ok((
+            RuntimeValue::Buffer {
+                element,
+                allocated: false,
+                offset: 0,
+                len: 0,
+                capacity: 0,
+            },
+            false,
+        ));
+    }
+    let offset = runtime_state
+        .arena
+        .used
+        .checked_add(BUFFER_METADATA_BYTES)
+        .ok_or_else(|| BytecodeError::new(offset, "buffer data offset overflowed"))?;
+    runtime_state.arena.used = end;
+    Ok((
+        RuntimeValue::Buffer {
+            element,
+            allocated: true,
+            offset,
+            len: 0,
+            capacity: count,
+        },
+        true,
+    ))
+}
+
+fn runtime_append_buffer(
+    buffer: RuntimeValue,
+    value: RuntimeValue,
+    runtime_state: &mut RuntimeState,
+    offset: usize,
+) -> Result<(RuntimeValue, bool), BytecodeError> {
+    let RuntimeValue::Buffer {
+        element,
+        allocated,
+        offset: data_offset,
+        len,
+        capacity,
+    } = buffer
+    else {
+        return Err(BytecodeError::new(
+            offset,
+            "buffer append received a non-buffer value",
+        ));
+    };
+    if !allocated || len >= capacity {
+        return Ok((
+            RuntimeValue::Buffer {
+                element,
+                allocated,
+                offset: data_offset,
+                len,
+                capacity,
+            },
+            false,
+        ));
+    }
+    let stride = buffer_element_stride(element);
+    let write_offset = data_offset
+        .checked_add(
+            len.checked_mul(stride)
+                .ok_or_else(|| BytecodeError::new(offset, "buffer append index overflowed"))?,
+        )
+        .ok_or_else(|| BytecodeError::new(offset, "buffer append offset overflowed"))?;
+    let end = write_offset
+        .checked_add(stride)
+        .ok_or_else(|| BytecodeError::new(offset, "buffer append range overflowed"))?;
+    let bytes = runtime_state
+        .arena
+        .bytes
+        .get_mut(write_offset..end)
+        .ok_or_else(|| {
+            BytecodeError::new(offset, "buffer append range is outside the reserved arena")
+        })?;
+    match (element, value) {
+        (BufferElement::Whole, RuntimeValue::Whole(value)) => {
+            bytes.copy_from_slice(&value.to_le_bytes());
+        }
+        (BufferElement::Truth, RuntimeValue::Truth(value)) => {
+            bytes[0] = u8::from(value);
+        }
+        (_, value) => {
+            return Err(BytecodeError::new(
+                offset,
+                format!(
+                    "buffer append received {}, expected {}",
+                    value.value_type(),
+                    element.element_type()
+                ),
+            ))
+        }
+    }
+    Ok((
+        RuntimeValue::Buffer {
+            element,
+            allocated: true,
+            offset: data_offset,
+            len: len + 1,
+            capacity,
+        },
+        true,
+    ))
+}
+
+fn runtime_buffer_at(
+    buffer: RuntimeValue,
+    index: i64,
+    fallback: RuntimeValue,
+    runtime_state: &RuntimeState,
+    offset: usize,
+) -> Result<(RuntimeValue, bool), BytecodeError> {
+    let RuntimeValue::Buffer {
+        element,
+        allocated,
+        offset: data_offset,
+        len,
+        ..
+    } = buffer
+    else {
+        return Err(BytecodeError::new(
+            offset,
+            "buffer at received a non-buffer value",
+        ));
+    };
+    let Ok(index) = usize::try_from(index) else {
+        return Ok((fallback, false));
+    };
+    if !allocated || index >= len {
+        return Ok((fallback, false));
+    }
+    let stride = buffer_element_stride(element);
+    let read_offset = data_offset
+        .checked_add(
+            index
+                .checked_mul(stride)
+                .ok_or_else(|| BytecodeError::new(offset, "buffer at index overflowed"))?,
+        )
+        .ok_or_else(|| BytecodeError::new(offset, "buffer at offset overflowed"))?;
+    let end = read_offset
+        .checked_add(stride)
+        .ok_or_else(|| BytecodeError::new(offset, "buffer at range overflowed"))?;
+    let bytes = runtime_state
+        .arena
+        .bytes
+        .get(read_offset..end)
+        .ok_or_else(|| {
+            BytecodeError::new(offset, "buffer at range is outside the reserved arena")
+        })?;
+    let value = match element {
+        BufferElement::Whole => {
+            let mut data = [0_u8; 8];
+            data.copy_from_slice(bytes);
+            RuntimeValue::Whole(i64::from_le_bytes(data))
+        }
+        BufferElement::Truth => match bytes[0] {
+            0 => RuntimeValue::Truth(false),
+            1 => RuntimeValue::Truth(true),
+            _ => {
+                return Err(BytecodeError::new(
+                    offset,
+                    "buffer truth element is malformed inside the arena",
+                ))
+            }
+        },
+    };
+    Ok((value, true))
+}
+
+const fn buffer_element_stride(element: BufferElement) -> usize {
+    match element {
+        BufferElement::Whole => std::mem::size_of::<i64>(),
+        BufferElement::Truth => 1,
+    }
+}
+
 fn runtime_values_equal(left: &RuntimeValue, right: &RuntimeValue) -> bool {
     match (left, right) {
         (RuntimeValue::Text(left), RuntimeValue::Text(right)) => left == right,
@@ -4669,6 +7070,30 @@ fn runtime_values_equal(left: &RuntimeValue, right: &RuntimeValue) -> bool {
                     .zip(right_fields)
                     .all(|(left, right)| runtime_values_equal(left, right))
         }
+        (
+            RuntimeValue::Buffer {
+                element: left_element,
+                allocated: left_allocated,
+                offset: left_offset,
+                len: left_len,
+                capacity: left_capacity,
+            },
+            RuntimeValue::Buffer {
+                element: right_element,
+                allocated: right_allocated,
+                offset: right_offset,
+                len: right_len,
+                capacity: right_capacity,
+            },
+        ) => {
+            left_element == right_element
+                && left_allocated == right_allocated
+                && left_offset == right_offset
+                && left_len == right_len
+                && left_capacity == right_capacity
+        }
+        (RuntimeValue::Arena, RuntimeValue::Arena)
+        | (RuntimeValue::AccessArena, RuntimeValue::AccessArena) => true,
         _ => false,
     }
 }
@@ -4716,6 +7141,12 @@ fn runtime_value_size(value: &RuntimeValue, offset: usize) -> Result<usize, Byte
                 }
             }
             Ok(size)
+        }
+        RuntimeValue::Arena | RuntimeValue::AccessArena | RuntimeValue::Buffer { .. } => {
+            Err(BytecodeError::new(
+                offset,
+                "Aether resource values cannot be measured as record payloads",
+            ))
         }
     }
 }
@@ -4769,23 +7200,37 @@ fn read_value_type(
 ) -> Result<ValueType, BytecodeError> {
     let offset = *position;
     let tag = read_byte(bytes, position)?;
-    if tag != ValueType::Record(0).to_tag() {
-        return ValueType::from_primitive_tag(tag, offset);
-    }
-    if version != ARTIFACT_VERSION_V5 {
-        return Err(BytecodeError::new(
+    match tag {
+        1..=4 => ValueType::from_primitive_tag(tag, offset),
+        5 => {
+            if !matches!(version, ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6) {
+                return Err(BytecodeError::new(
+                    offset,
+                    "record types are valid only in AETH v5 or v6 artifacts",
+                ));
+            }
+            let record_id = read_u16(bytes, position)?;
+            if usize::from(record_id) >= record_count {
+                return Err(BytecodeError::new(
+                    offset,
+                    "record type identifier is outside the artifact record table",
+                ));
+            }
+            Ok(ValueType::Record(record_id))
+        }
+        6 if version == ARTIFACT_VERSION_V6 => Ok(ValueType::Arena),
+        7 if version == ARTIFACT_VERSION_V6 => Ok(ValueType::BufferWhole),
+        8 if version == ARTIFACT_VERSION_V6 => Ok(ValueType::BufferTruth),
+        9 => Err(BytecodeError::new(
             offset,
-            "record types are valid only in AETH v5 artifacts",
-        ));
-    }
-    let record_id = read_u16(bytes, position)?;
-    if usize::from(record_id) >= record_count {
-        return Err(BytecodeError::new(
+            "access loans are verifier-internal and cannot be serialized",
+        )),
+        6..=8 => Err(BytecodeError::new(
             offset,
-            "record type identifier is outside the artifact record table",
-        ));
+            "resource value types are valid only in AETH v6 artifacts",
+        )),
+        _ => Err(BytecodeError::new(offset, "unknown Aether value type")),
     }
-    Ok(ValueType::Record(record_id))
 }
 
 fn read_u32(bytes: &[u8], position: &mut usize) -> Result<u32, BytecodeError> {
@@ -4923,6 +7368,7 @@ fn write_u16(bytes: &mut Vec<u8>, value: u16) {
 }
 
 fn write_value_type(bytes: &mut Vec<u8>, value_type: ValueType) {
+    debug_assert_ne!(value_type, ValueType::AccessArena);
     bytes.push(value_type.to_tag());
     if let ValueType::Record(record_id) = value_type {
         write_u16(bytes, record_id);
@@ -4934,7 +7380,14 @@ fn write_primitive_value_type(
     value_type: ValueType,
     span: Span,
 ) -> Result<(), CompilerError> {
-    if matches!(value_type, ValueType::Record(_)) {
+    if matches!(
+        value_type,
+        ValueType::Record(_)
+            | ValueType::Arena
+            | ValueType::BufferWhole
+            | ValueType::BufferTruth
+            | ValueType::AccessArena
+    ) {
         return Err(CompilerError::new(
             span,
             "record fields may use only Text, Whole, Truth, or Bytes",
@@ -5037,6 +7490,14 @@ fn write_block(statements: &[Statement], indentation: usize, output: &mut String
 fn write_expression(expression: &Expression, output: &mut String) {
     match &expression.kind {
         ExpressionKind::Atom(atom) => write_atom(atom, output),
+        ExpressionKind::Arena { capacity } => {
+            output.push_str("arena ");
+            output.push_str(&capacity.to_string());
+        }
+        ExpressionKind::Buffer { element } => {
+            output.push_str("buffer ");
+            output.push_str(element.word());
+        }
         ExpressionKind::Unary {
             operation,
             argument,
@@ -5108,6 +7569,51 @@ fn write_expression(expression: &Expression, output: &mut String) {
             output.push(' ');
             output.push_str(field);
         }
+        ExpressionKind::Resource(operation) => write_resource_operation(operation, output),
+    }
+}
+
+fn write_resource_operation(operation: &ResourceOperation, output: &mut String) {
+    match operation {
+        ResourceOperation::Allocate {
+            arena,
+            buffer,
+            capacity,
+            destination,
+        } => {
+            output.push_str("allocate ");
+            write_atom(arena, output);
+            output.push(' ');
+            write_atom(buffer, output);
+            output.push(' ');
+            write_atom(capacity, output);
+            output.push_str(" into ");
+            output.push_str(destination);
+        }
+        ResourceOperation::Append {
+            buffer,
+            value,
+            destination,
+        } => {
+            output.push_str("append ");
+            write_atom(buffer, output);
+            output.push(' ');
+            write_atom(value, output);
+            output.push_str(" into ");
+            output.push_str(destination);
+        }
+        ResourceOperation::At {
+            buffer,
+            index,
+            destination,
+        } => {
+            output.push_str("at ");
+            write_atom(buffer, output);
+            output.push(' ');
+            write_atom(index, output);
+            output.push_str(" into ");
+            output.push_str(destination);
+        }
     }
 }
 
@@ -5142,6 +7648,10 @@ fn write_atom(atom: &Atom, output: &mut String) {
         }
         AtomKind::Move(name) => {
             output.push_str("move ");
+            output.push_str(name);
+        }
+        AtomKind::Access(name) => {
+            output.push_str("access ");
             output.push_str(name);
         }
     }
@@ -5219,6 +7729,16 @@ fn write_ast_block(statements: &[Statement], output: &mut String) {
 fn write_ast_expression(expression: &Expression, output: &mut String) {
     match &expression.kind {
         ExpressionKind::Atom(atom) => write_ast_atom(atom, output),
+        ExpressionKind::Arena { capacity } => {
+            output.push_str("Arena(");
+            output.push_str(&capacity.to_string());
+            output.push(')');
+        }
+        ExpressionKind::Buffer { element } => {
+            output.push_str("Buffer(");
+            output.push_str(element.word());
+            output.push(')');
+        }
         ExpressionKind::Unary {
             operation,
             argument,
@@ -5298,6 +7818,51 @@ fn write_ast_expression(expression: &Expression, output: &mut String) {
             output.push_str(field);
             output.push(')');
         }
+        ExpressionKind::Resource(operation) => {
+            output.push_str("Outcome(");
+            match operation {
+                ResourceOperation::Allocate {
+                    arena,
+                    buffer,
+                    capacity,
+                    destination,
+                } => {
+                    output.push_str("allocate,");
+                    write_ast_atom(arena, output);
+                    output.push(',');
+                    write_ast_atom(buffer, output);
+                    output.push(',');
+                    write_ast_atom(capacity, output);
+                    output.push(',');
+                    output.push_str(destination);
+                }
+                ResourceOperation::Append {
+                    buffer,
+                    value,
+                    destination,
+                } => {
+                    output.push_str("append,");
+                    write_ast_atom(buffer, output);
+                    output.push(',');
+                    write_ast_atom(value, output);
+                    output.push(',');
+                    output.push_str(destination);
+                }
+                ResourceOperation::At {
+                    buffer,
+                    index,
+                    destination,
+                } => {
+                    output.push_str("at,");
+                    write_ast_atom(buffer, output);
+                    output.push(',');
+                    write_ast_atom(index, output);
+                    output.push(',');
+                    output.push_str(destination);
+                }
+            }
+            output.push(')');
+        }
     }
 }
 
@@ -5337,6 +7902,11 @@ fn write_ast_atom(atom: &Atom, output: &mut String) {
         }
         AtomKind::Move(name) => {
             output.push_str("Move(");
+            output.push_str(name);
+            output.push(')');
+        }
+        AtomKind::Access(name) => {
+            output.push_str("Access(");
             output.push_str(name);
             output.push(')');
         }
@@ -5552,26 +8122,26 @@ mod tests {
     const HELLO: &str = "world genesis\n\nweave main [] -> Whole:\n  bind greeting <- \"Hello from Aether\\n\"\n  speak borrow greeting\n  yield 0\n";
 
     #[test]
-    fn compiles_runs_and_formats_stage_one_source() {
+    fn compiles_runs_and_formats_legacy_source_in_current_aeth_v6() {
         let output = compile_to_bytecode(HELLO).expect("Aether source should compile");
         let run = run_bytecode(&output.bytecode).expect("Aether artifact should run");
         assert_eq!(run.stdout, "Hello from Aether\n");
         assert_eq!(run.exit_code, 0);
         assert_eq!(format_program(&output.program), HELLO);
         assert!(canonical_ast(&output.program).contains("Borrow(greeting)"));
-        assert_eq!(&output.bytecode[..5], b"AETH\x04");
+        assert_eq!(&output.bytecode[..5], b"AETH\x06");
     }
 
     #[test]
     fn runs_bounded_search_packing_and_binary_patching_primitives() {
         let source = "world forge_tools\n\nweave main [] -> Whole:\n  bind sample <- \"aéabc\"\n  bind found <- seek borrow sample \"abc\" 0\n  bind parsed <- number \"42\"\n  bind packed16 <- pack16 4660\n  bind unpacked16 <- unpack16 borrow packed16 0\n  bind packed32 <- pack32 16909060\n  bind patched <- poke borrow packed32 1 255\n  bind patched_value <- unpack32 borrow patched 0\n  bind restored <- poke32 borrow patched 0 16909060\n  bind restored_value <- unpack32 borrow restored 0\n  bind score <- sum found parsed\n  bind score2 <- sum score unpacked16\n  bind score3 <- sum score2 patched_value\n  yield sum score3 restored_value\n";
-        let output = compile_to_bytecode(source).expect("v4 primitives should compile");
-        let run = run_bytecode(&output.bytecode).expect("v4 primitive artifact should run");
+        let output = compile_to_bytecode(source).expect("current primitives should compile");
+        let run = run_bytecode(&output.bytecode).expect("current primitive artifact should run");
         assert_eq!(run.exit_code, 33_887_336);
     }
 
     #[test]
-    fn rejects_invalid_v4_numeric_and_binary_ranges_at_runtime() {
+    fn rejects_invalid_numeric_and_binary_ranges_at_runtime() {
         let invalid_number = "world invalid\n\nweave main [] -> Whole:\n  bind value <- number \"01\"\n  yield value\n";
         let artifact = compile_to_bytecode(invalid_number)
             .expect("number operand shape is checked at runtime")
@@ -5755,7 +8325,7 @@ mod tests {
         let first = compile_to_bytecode(HELLO).expect("first compilation should work");
         let second = compile_to_bytecode(HELLO).expect("second compilation should work");
         assert_eq!(first.bytecode, second.bytecode);
-        assert_eq!(&first.bytecode[..5], b"AETH\x04");
+        assert_eq!(&first.bytecode[..5], b"AETH\x06");
         verify_bytecode(&first.bytecode).expect("compiler artifact must verify");
     }
 
@@ -5774,17 +8344,21 @@ mod tests {
         artifact[last] = 255;
         assert!(verify_bytecode(&artifact).is_err());
 
-        let mut artifact = compile_to_bytecode(HELLO)
-            .expect("source should compile")
+        let record_source = "world records\n\nrecord card [score: Whole]\n\nweave main [] -> Whole:\n  bind value <- make card 7\n  bind score <- field borrow value score\n  yield score\n";
+        let mut artifact = compile_to_bytecode(record_source)
+            .expect("record source should compile")
             .bytecode;
-        let yield_offset = artifact
+        artifact[4] = ARTIFACT_VERSION_V5;
+        artifact.drain(5..9).for_each(drop);
+        verify_bytecode(&artifact).expect("the translated v5 compatibility fixture should verify");
+        let field_offset = artifact
             .iter()
-            .rposition(|byte| *byte == OP_YIELD)
-            .expect("fixture should contain a terminal yield opcode");
-        artifact[yield_offset] = OP_MAKE_RECORD;
+            .position(|byte| *byte == OP_FIELD)
+            .expect("fixture should contain a record field opcode");
+        artifact[field_offset] = OP_ARENA;
         let error = verify_bytecode(&artifact)
-            .expect_err("v4 artifacts must reject v5-only record instructions");
-        assert!(error.message.contains("valid only in AETH v5"));
+            .expect_err("v5 artifacts must reject v6-only resource instructions");
+        assert!(error.message.contains("valid only in AETH v6"));
     }
 
     #[test]
@@ -5795,13 +8369,13 @@ mod tests {
     }
 
     #[test]
-    fn compiles_runs_and_formats_immutable_records_in_aeth_v5() {
+    fn compiles_runs_and_formats_immutable_records_in_aeth_v6() {
         let source = "world records\n\nrecord card [label: Text, score: Whole, payload: Bytes, active: Truth]\n\nweave inspect [borrow value: card] -> Whole:\n  bind score <- field borrow value score\n  yield score\n\nweave main [] -> Whole:\n  bind card_value <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind label <- field borrow card_value label\n  speak borrow label\n  bind score <- call inspect borrow card_value\n  bind duplicate <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind equal <- same borrow card_value borrow duplicate\n  bind mutable result <- score\n  choose equal:\n    revise result <- sum result 1\n  yield result\n";
         let output = compile_to_bytecode(source).expect("record source should compile");
         let run = run_bytecode(&output.bytecode).expect("record artifact should run");
         assert_eq!(run.stdout, "Aether");
         assert_eq!(run.exit_code, 8);
-        assert_eq!(&output.bytecode[..5], b"AETH\x05");
+        assert_eq!(&output.bytecode[..5], b"AETH\x06");
         assert_eq!(format_program(&output.program), source);
         assert!(canonical_ast(&output.program).contains("Record(card)[label:Text"));
 
@@ -5837,6 +8411,279 @@ mod tests {
         let error = verify_bytecode(&artifact)
             .expect_err("a projection must reference a declared record identifier");
         assert!(error.message.contains("record identifier"));
+    }
+
+    #[test]
+    fn runs_bounded_arena_buffer_operations() {
+        let source = "world arena_buffer\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 0\n  choose allocate access memory move values 2 into values:\n    choose append move values 7 into values:\n      choose at borrow values 0 into observed:\n        yield observed\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
+        let output = compile_to_bytecode(source).expect("arena-buffer source should compile");
+        assert_eq!(&output.bytecode[..5], b"AETH\x06");
+        assert_eq!(
+            u32::from_le_bytes(output.bytecode[5..9].try_into().expect("v6 capacity bytes")),
+            64
+        );
+        let run = run_bytecode(&output.bytecode).expect("arena-buffer artifact should run");
+        assert_eq!(run.exit_code, 7);
+
+        let count_source = "world buffer_count\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  choose allocate access memory move values 2 into values:\n    choose append move values 7 into values:\n      yield count borrow values\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
+        let count_artifact = compile_to_bytecode(count_source)
+            .expect("count source should compile")
+            .bytecode;
+        assert_eq!(
+            run_bytecode(&count_artifact)
+                .expect("count artifact should run")
+                .exit_code,
+            1
+        );
+    }
+
+    #[test]
+    fn resource_outcomes_preserve_owners_and_copy_lookup_fallbacks() {
+        let exhausted = "world exhausted\n\nweave main [] -> Whole:\n  bind memory <- arena 31\n  bind mutable values <- buffer Whole\n  choose allocate access memory move values 2 into values:\n    yield 1\n  otherwise:\n    yield -1\n";
+        let exhausted_artifact = compile_to_bytecode(exhausted)
+            .expect("exhaustion fixture should compile")
+            .bytecode;
+        assert_eq!(
+            run_bytecode(&exhausted_artifact)
+                .expect("exhaustion fixture should run")
+                .exit_code,
+            -1
+        );
+
+        let full = "world full\n\nweave main [] -> Whole:\n  bind memory <- arena 24\n  bind mutable values <- buffer Whole\n  choose allocate access memory move values 1 into values:\n    choose append move values 7 into values:\n      choose append move values 8 into values:\n        yield 1\n      otherwise:\n        yield -2\n    otherwise:\n      yield -3\n  otherwise:\n    yield -1\n";
+        let full_artifact = compile_to_bytecode(full)
+            .expect("full-buffer fixture should compile")
+            .bytecode;
+        assert_eq!(
+            run_bytecode(&full_artifact)
+                .expect("full-buffer fixture should run")
+                .exit_code,
+            -2
+        );
+
+        let absent = "world absent\n\nweave main [] -> Whole:\n  bind memory <- arena 24\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 99\n  choose allocate access memory move values 1 into values:\n    choose append move values 7 into values:\n      choose at borrow values 1 into observed:\n        yield -4\n      otherwise:\n        yield observed\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
+        let absent_artifact = compile_to_bytecode(absent)
+            .expect("absent-lookup fixture should compile")
+            .bytecode;
+        assert_eq!(
+            run_bytecode(&absent_artifact)
+                .expect("absent-lookup fixture should run")
+                .exit_code,
+            99
+        );
+
+        let truth = "world truth_buffer\n\nweave main [] -> Whole:\n  bind memory <- arena 17\n  bind mutable flags <- buffer Truth\n  bind mutable observed <- dim\n  choose allocate access memory move flags 1 into flags:\n    choose append move flags bright into flags:\n      choose at borrow flags 0 into observed:\n        yield 1\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
+        let truth_artifact = compile_to_bytecode(truth)
+            .expect("truth-buffer fixture should compile")
+            .bytecode;
+        assert_eq!(
+            run_bytecode(&truth_artifact)
+                .expect("truth-buffer fixture should run")
+                .exit_code,
+            1
+        );
+    }
+
+    #[test]
+    fn passes_arena_access_through_a_named_weave() {
+        let source = "world access_call\n\nweave provision [access memory: Arena] -> Whole:\n  bind mutable values <- buffer Whole\n  choose allocate access memory move values 1 into values:\n    choose append move values 42 into values:\n      yield 1\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n\nweave main [] -> Whole:\n  bind memory <- arena 24\n  yield call provision access memory\n";
+        let output = compile_to_bytecode(source).expect("access-call source should compile");
+        let run = run_bytecode(&output.bytecode).expect("access-call artifact should run");
+        assert_eq!(run.exit_code, 1);
+    }
+
+    #[test]
+    fn rejects_invalid_resource_source_shapes() {
+        let oversized_arena =
+            "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 1000001\n  yield 0\n";
+        let error = compile_source(oversized_arena).expect_err("arena capacity must be bounded");
+        assert!(error.message.contains("between 1"));
+
+        let unsupported_element = "world invalid\n\nweave main [] -> Whole:\n  bind mutable values <- buffer Text\n  yield 0\n";
+        let error = compile_source(unsupported_element)
+            .expect_err("buffers may contain only Whole or Truth values");
+        assert!(error.message.contains("only Whole or Truth"));
+
+        let mismatched_destination = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  bind mutable other <- buffer Whole\n  choose allocate access memory move values 1 into other:\n    yield 1\n  otherwise:\n    yield 0\n";
+        let error = compile_source(mismatched_destination)
+            .expect_err("allocation must restore the moved owner into itself");
+        assert!(error.message.contains("same Buffer binding"));
+
+        let unallocated_borrow = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  bind size <- count borrow values\n  yield size\n";
+        let error =
+            compile_source(unallocated_borrow).expect_err("unallocated buffers cannot be borrowed");
+        assert!(error.message.contains("unallocated"));
+
+        let nonterminal_outcome = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  choose allocate access memory move values 1 into values:\n    yield 1\n  otherwise:\n    yield 0\n  yield 2\n";
+        let error = compile_source(nonterminal_outcome)
+            .expect_err("resource outcomes must be handled as terminal choices");
+        assert!(error.message.contains("final statement"));
+
+        let helper_arena = "world invalid\n\nweave helper [] -> Whole:\n  bind memory <- arena 64\n  yield 0\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(helper_arena)
+            .expect_err("a local helper cannot manufacture an escaping arena region");
+        assert!(error.message.contains("weave main"));
+
+        let revise_buffer = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  revise values <- buffer Whole\n  yield 0\n";
+        let error = compile_source(revise_buffer)
+            .expect_err("buffer owners have only closed replacement operations in M2");
+        assert!(error.message.contains("closed resource outcomes"));
+
+        let buffer_result = "world invalid\n\nweave create [access memory: Arena] -> BufferWhole:\n  bind mutable values <- buffer Whole\n  choose allocate access memory move values 1 into values:\n    yield move values\n  otherwise:\n    yield move values\n\nweave main [] -> Whole:\n  bind memory <- arena 24\n  yield 0\n";
+        let error = compile_source(buffer_result)
+            .expect_err("buffer ownership cannot cross a result before outcome propagation exists");
+        assert!(error.message.contains("cannot yet cross a weave result"));
+    }
+
+    #[test]
+    fn verifier_rejects_hostile_resource_artifacts() {
+        let source = include_str!("../../../examples/arena-buffer.ae");
+        let artifact = compile_to_bytecode(source)
+            .expect("resource source should compile")
+            .bytecode;
+
+        let mut oversized = artifact.clone();
+        oversized[5..9].copy_from_slice(&(MAX_ARENA_BYTES + 1).to_le_bytes());
+        let error = verify_bytecode(&oversized)
+            .expect_err("an oversized resource plan must fail before execution");
+        assert!(error.message.contains("safety limit"));
+
+        let mut invalid_destination = artifact.clone();
+        let allocate_offset = invalid_destination
+            .iter()
+            .position(|byte| *byte == OP_ALLOCATE)
+            .expect("fixture should contain a buffer allocation opcode");
+        invalid_destination[allocate_offset + 2] = u8::MAX;
+        invalid_destination[allocate_offset + 3] = u8::MAX;
+        let error = verify_bytecode(&invalid_destination)
+            .expect_err("a resource destination must be a declared local slot");
+        assert!(error.message.contains("outside the local table"));
+
+        let mut unplanned = compile_to_bytecode(HELLO)
+            .expect("legacy fixture should compile")
+            .bytecode;
+        let yield_offset = unplanned
+            .iter()
+            .rposition(|byte| *byte == OP_YIELD)
+            .expect("fixture should contain a yield opcode");
+        unplanned[yield_offset] = OP_ARENA;
+        let error = verify_bytecode(&unplanned)
+            .expect_err("a zero-capacity artifact cannot introduce arena capability bytecode");
+        assert!(error.message.contains("nonzero arena resource plan"));
+
+        let mut forged_owner = Vec::from(&ARTIFACT_MAGIC[..]);
+        forged_owner.push(ARTIFACT_VERSION_V6);
+        write_u32(&mut forged_owner, 64);
+        write_u16(&mut forged_owner, 0);
+        write_u16(&mut forged_owner, 1);
+        forged_owner.push(4);
+        forged_owner.extend_from_slice(b"main");
+        forged_owner.push(0);
+        forged_owner.push(ValueType::Whole.to_tag());
+        write_u16(&mut forged_owner, 3);
+        forged_owner.push(ValueType::Arena.to_tag());
+        forged_owner.push(0);
+        forged_owner.push(ValueType::BufferWhole.to_tag());
+        forged_owner.push(1);
+        forged_owner.push(ValueType::BufferWhole.to_tag());
+        forged_owner.push(0);
+
+        let mut code = vec![OP_ARENA, OP_STORE];
+        write_u16(&mut code, 0);
+        code.extend_from_slice(&[OP_BUFFER, BufferElement::Whole.type_tag(), OP_STORE]);
+        write_u16(&mut code, 1);
+        code.push(OP_MOVE);
+        write_u16(&mut code, 1);
+        code.push(OP_STORE);
+        write_u16(&mut code, 2);
+        code.push(OP_ACCESS);
+        write_u16(&mut code, 0);
+        code.extend_from_slice(&[OP_BUFFER, BufferElement::Whole.type_tag(), OP_PUSH_WHOLE]);
+        code.extend_from_slice(&1_i64.to_le_bytes());
+        code.extend_from_slice(&[OP_ALLOCATE, BufferElement::Whole.type_tag()]);
+        write_u16(&mut code, 1);
+        code.push(OP_JUMP_IF_DIM);
+        let dim_target = reserve_u32(&mut code);
+        code.push(OP_PUSH_WHOLE);
+        code.extend_from_slice(&1_i64.to_le_bytes());
+        code.push(OP_YIELD);
+        let dim_offset = code.len();
+        patch_u32(&mut code, dim_target, dim_offset)
+            .expect("crafted jump target should fit in the test artifact");
+        code.push(OP_PUSH_WHOLE);
+        code.extend_from_slice(&0_i64.to_le_bytes());
+        code.push(OP_YIELD);
+        write_u32(
+            &mut forged_owner,
+            u32::try_from(code.len()).expect("crafted code length should fit"),
+        );
+        forged_owner.extend_from_slice(&code);
+
+        let error = verify_bytecode(&forged_owner)
+            .expect_err("a forged placeholder cannot replace the moved Buffer owner");
+        assert!(error.message.contains("moved from its destination slot"));
+    }
+
+    #[test]
+    fn seed_matches_bootstrap_for_the_canonical_m2_resource_corpus() {
+        let corpus = [
+            (
+                "arena-buffer",
+                include_str!("../../../examples/arena-buffer.ae"),
+                7,
+            ),
+            (
+                "arena-exhausted",
+                include_str!("../../../examples/arena-exhausted.ae"),
+                -1,
+            ),
+            (
+                "arena-full",
+                include_str!("../../../examples/arena-full.ae"),
+                -2,
+            ),
+            (
+                "arena-lookup-fallback",
+                include_str!("../../../examples/arena-lookup-fallback.ae"),
+                99,
+            ),
+            (
+                "arena-truth-buffer",
+                include_str!("../../../examples/arena-truth-buffer.ae"),
+                1,
+            ),
+            (
+                "arena-access-weave",
+                include_str!("../../../examples/arena-access-weave.ae"),
+                1,
+            ),
+        ];
+        let compiler = compile_to_bytecode(include_str!("../../../seed/aether_seed.ae"))
+            .expect("the seed source should bootstrap")
+            .bytecode;
+        for (name, source, expected_exit_code) in corpus {
+            let forged = forge_bytecode(&compiler, source)
+                .unwrap_or_else(|error| panic!("the seed compiler must forge {name}: {error}"));
+            let InvocationValue::Bytes(generated) = forged.value else {
+                panic!("the seed compiler must return AETH bytes for {name}");
+            };
+            let bootstrap = compile_to_bytecode(source)
+                .unwrap_or_else(|error| panic!("the bootstrap must compile {name}: {error}"))
+                .bytecode;
+            assert_eq!(generated, bootstrap, "seed and bootstrap differ for {name}");
+            verify_bytecode(&generated).unwrap_or_else(|error| {
+                panic!("the seed-produced {name} artifact must verify: {error}")
+            });
+            assert_eq!(
+                run_bytecode(&generated)
+                    .unwrap_or_else(|error| panic!(
+                        "the seed-produced {name} artifact must run: {error}"
+                    ))
+                    .exit_code,
+                expected_exit_code,
+                "the canonical M2 fixture {name} returned the wrong outcome"
+            );
+        }
     }
 
     fn hex_encode(bytes: &[u8]) -> String {

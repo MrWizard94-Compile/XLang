@@ -1,11 +1,11 @@
 # M1 Validation Matrix: Value and Resource Semantics
 
-**Status:** Design proof plan — implementation tests become mandatory only after
-human approval of ADR-003
-**Date:** 2026-07-28
-**Scope:** Exact intended-behavior and hostile-artifact obligations for the M2
-resource increment. This is not evidence that the proposed forms exist in
-Aether 0.5 today.
+**Status:** Active validation matrix — Aether 0.6 delivers the bounded M2
+subset; broader proposed rows remain future obligations
+**Date:** 2026-07-28; implementation record updated 2026-07-31
+**Scope:** Intended-behavior and hostile-artifact obligations for resource
+work. The exact implemented subset is [AETHER_0.6.md](AETHER_0.6.md) and
+[ADR-004](ADR-004-aeth-v6-bounded-resources.md).
 
 ## Purpose
 
@@ -19,7 +19,28 @@ The tests below must be written against these intended semantics. A failing test
 is evidence to correct the implementation or return to human design review; it
 is not permission to weaken the test into current behavior.
 
-## Current-boundary audit
+## Aether 0.6 implementation record
+
+The following rows are delivered by the Aether 0.6 bounded M2 surface and are
+covered in the core behavior/hostile-artifact suite plus the seed corpus:
+
+| Matrix IDs | Evidence now in the product |
+| --- | --- |
+| M1-OWN-001, M1-OWN-002 | Existing explicit owner move/borrow validation remains active; buffers participate as owners. |
+| M1-LOAN-001, M1-ACCESS-001 | `borrow` and `access` are operation-scoped in the accepted M2 grammar; the verifier refuses persistent access representation and distinguishes transient buffer borrows. |
+| M1-REGION-001, M1-REGION-002 | One named main arena plus access-bound helper relation is source-checked; buffers cannot be returned from weaves or cross the host ABI. |
+| M1-ALLOC-001 through M1-ALLOC-003 | Named access, explicit bright/dim handling, bounded checked accounting, and owner/capacity preservation on dim paths. |
+| M1-BUF-001, M1-BUF-002 | Whole/Truth-only element tags, metadata-plus-payload accounting, exhaustion/full behavior, and checked arithmetic. |
+| M1-CFG-001 | Resource outcomes are terminal, avoiding unproven owner joins; verifier state merges include stack provenance. |
+| M1-COMPAT-001, M1-SEED-001, M1-BOUND-001 | v4/v5 compatibility, v6 verifier gate, six-example seed/bootstrap byte corpus, and primitive-only host/forge ABI. |
+
+The following parts of the original broader plan are deliberately **not**
+claimed complete in 0.6: first-class/propagated outcomes, Buffer weave results,
+general resource `revise`, property-generated sequence suites, generic effects,
+and any resource extension beyond one arena and fixed-copy-element buffers.
+They remain a future design-and-proof obligation rather than a silent gap.
+
+## Historical current-boundary audit
 
 | Current fact | Evidence location | M2 implication |
 | --- | --- | --- |

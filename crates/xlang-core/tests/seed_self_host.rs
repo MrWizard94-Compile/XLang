@@ -157,15 +157,69 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
     );
 
     let examples = [
-        include_str!("../../../examples/welcome.ae"),
-        include_str!("../../../examples/control-flow.ae"),
-        include_str!("../../../examples/weaves.ae"),
-        include_str!("../../../examples/unicode.ae"),
-        include_str!("../../../examples/seed-multi-weave.ae"),
-        include_str!("../../../examples/seed-forward-call.ae"),
-        include_str!("../../../examples/records.ae"),
+        (
+            "welcome",
+            include_str!("../../../examples/welcome.ae"),
+            None,
+        ),
+        (
+            "control-flow",
+            include_str!("../../../examples/control-flow.ae"),
+            None,
+        ),
+        ("weaves", include_str!("../../../examples/weaves.ae"), None),
+        (
+            "unicode",
+            include_str!("../../../examples/unicode.ae"),
+            None,
+        ),
+        (
+            "seed-multi-weave",
+            include_str!("../../../examples/seed-multi-weave.ae"),
+            None,
+        ),
+        (
+            "seed-forward-call",
+            include_str!("../../../examples/seed-forward-call.ae"),
+            None,
+        ),
+        (
+            "records",
+            include_str!("../../../examples/records.ae"),
+            None,
+        ),
+        (
+            "arena-buffer",
+            include_str!("../../../examples/arena-buffer.ae"),
+            Some(7),
+        ),
+        (
+            "arena-exhausted",
+            include_str!("../../../examples/arena-exhausted.ae"),
+            Some(-1),
+        ),
+        (
+            "arena-full",
+            include_str!("../../../examples/arena-full.ae"),
+            Some(-2),
+        ),
+        (
+            "arena-lookup-fallback",
+            include_str!("../../../examples/arena-lookup-fallback.ae"),
+            Some(99),
+        ),
+        (
+            "arena-truth-buffer",
+            include_str!("../../../examples/arena-truth-buffer.ae"),
+            Some(1),
+        ),
+        (
+            "arena-access-weave",
+            include_str!("../../../examples/arena-access-weave.ae"),
+            Some(1),
+        ),
     ];
-    for source in examples {
+    for (name, source, expected_exit_code) in examples {
         let bootstrap = compile_to_bytecode(source)
             .expect("example must bootstrap")
             .bytecode;
@@ -174,13 +228,20 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
             .bytecode;
         assert_eq!(
             seeded, bootstrap,
-            "seed-hosted compile must match bootstrap for shipped examples"
+            "seed-hosted compile must match bootstrap for shipped example {name}"
         );
         let run = run_bytecode(&seeded).expect("seed-hosted artifact must run");
-        assert!(
-            run.exit_code >= 0,
-            "seed-hosted example should produce a Whole exit"
-        );
+        if let Some(expected_exit_code) = expected_exit_code {
+            assert_eq!(
+                run.exit_code, expected_exit_code,
+                "seed-hosted M2 example {name} should preserve its defined outcome"
+            );
+        } else {
+            assert!(
+                run.exit_code >= 0,
+                "seed-hosted example {name} should produce a nonnegative Whole exit"
+            );
+        }
     }
 }
 

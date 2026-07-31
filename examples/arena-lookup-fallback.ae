@@ -1,0 +1,16 @@
+world arena_lookup_fallback
+
+weave main [] -> Whole:
+  bind memory <- arena 24
+  bind mutable values <- buffer Whole
+  bind mutable observed <- 99
+  choose allocate access memory move values 1 into values:
+    choose append move values 7 into values:
+      choose at borrow values 1 into observed:
+        yield -4
+      otherwise:
+        yield observed
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1

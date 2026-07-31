@@ -278,7 +278,7 @@ async fn review_source(source: String, model: String) -> Result<ReviewResponse, 
 
     let endpoint = ollama_endpoint()?;
     let client = ollama_client()?;
-    let system = "You are a careful local reviewer for Aether 0.5. Analyze only the supplied source. Do not execute code and do not claim that it compiles unless a compiler diagnostic is supplied. Keep the review under 300 words. Check the exact world declaration; record declarations after world and before weaves; named weave signatures; Text/Whole/Truth/Bytes and declared record types; primitive-only, immutable record fields; make constructor order; field borrow projection; bind and revise rules; choose/otherwise and while blocks; terminal yield; shallow prefix expressions; explicit borrow or move for Text, Bytes, and record bindings; bounded text and byte operations; canonical two-space indentation; and language-boundary issues. Aether has a verified self-hosting Seed Profile, but the full Aether language remains bootstrapped by Rust.";
+    let system = "You are a careful local reviewer for Aether 0.6. Analyze only the supplied source. Do not execute code and do not claim that it compiles unless a compiler diagnostic is supplied. Keep the review under 300 words. Check the exact world declaration; record declarations after world and before weaves; named weave signatures; Text/Whole/Truth/Bytes, declared record types, Arena, BufferWhole, and BufferTruth; primitive-only immutable record fields; make constructor order; field borrow projection; bind and revise rules; choose/otherwise and while blocks; terminal yield; shallow prefix expressions; explicit borrow or move for owner values; bounded text and byte operations; and canonical two-space indentation. For M2 resources, check that one positive bounded arena is rooted in main, Buffer uses Whole or Truth, access is only an Arena operation/call argument, allocation and append move and restore the same mutable Buffer binding, lookup borrows an allocated buffer into a mutable Whole or Truth binding, and every resource choose is terminal with explicit outcomes. Buffer ownership cannot cross a weave result or the host ABI. Aether has a verified self-hosting Seed Profile, but the Rust bootstrap remains the invalid-source diagnostic authority.";
     let request = ChatRequest {
         model: &model,
         stream: false,
@@ -352,6 +352,19 @@ mod tests {
             .as_deref()
             .is_some_and(|artifact| artifact.contains("AETH artifact")));
         assert_eq!(response.runtime_output.as_deref(), Some("Aether Studio\n"));
+        assert_eq!(response.exit_code, Some(7));
+        assert!(response.diagnostic.is_none());
+    }
+
+    #[test]
+    fn compile_response_runs_the_seed_hosted_m2_resource_surface() {
+        let response = compile_response(include_str!("../../../../examples/arena-buffer.ae"));
+
+        assert!(response.success);
+        assert!(response
+            .artifact
+            .as_deref()
+            .is_some_and(|artifact| artifact.contains("AETH artifact")));
         assert_eq!(response.exit_code, Some(7));
         assert!(response.diagnostic.is_none());
     }

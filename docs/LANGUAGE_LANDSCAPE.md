@@ -1,6 +1,6 @@
 # Language Landscape
 
-Date: 2026-07-28
+Date: 2026-07-28; current-contract update: 2026-07-31
 
 ## Scope
 
@@ -29,20 +29,21 @@ evidence plan are [research/](research/).
 
 ## Current Aether positions
 
-1. Aether 0.5 implements explicit `borrow`/`move` within its bounded current
-   value surface. The complete scope is [AETHER_0.5.md](AETHER_0.5.md).
-2. Explicit allocation, typed errors/effects, compile-time execution, generic
-   shape folding, SoA lowering, C interop, and structured concurrency are
-   future directions or research hypotheses — not current syntax or runtime
-   claims. Their evidence and stop conditions are in
+1. Aether 0.6 implements explicit `borrow`/`move`, operation-scoped `access`,
+   and one bounded arena/Whole-or-Truth-buffer surface. The complete scope is
+   [AETHER_0.6.md](AETHER_0.6.md).
+2. Typed errors/effects, compile-time execution, generic shape folding, SoA
+   lowering, C interop, structured concurrency, first-class resource outcomes,
+   and Buffer weave results are future directions or research hypotheses — not
+   current syntax or runtime claims. Their evidence and stop conditions are in
    [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
 3. Canonical formatting and a bootstrap canonical-AST path exist today. A
    versioned structural AI-edit protocol does not yet exist.
 4. The executable target remains AETH plus the Aether VM. No host-language or
    LLVM backend is part of the current language contract.
-5. Immutable nominal records are the first aggregate value: primitive fields
-   only, explicit borrowed projection, structural equality, and AETH v5
-   encoding. Recursive layout, mutation, and partial moves remain deferred.
+5. Immutable nominal records remain the first aggregate value: primitive fields
+   only, explicit borrowed projection, structural equality, and AETH v6 record
+   table encoding. Recursive layout, mutation, and partial moves remain deferred.
 
 See [NORTH_STAR.md](NORTH_STAR.md), [CORE_CLAIMS.md](CORE_CLAIMS.md), and
 [ROADMAP.md](ROADMAP.md) for the governed design direction.

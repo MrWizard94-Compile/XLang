@@ -1,9 +1,11 @@
 # Aether Reference Systems Study
 
 **Status:** SOP phases 1 and 3 evidence log
-**Date:** 2026-07-28
+**Date:** 2026-07-28; current-contract update: 2026-07-31
 **Decision boundary:** This study informs Aether's future design. It does not
-change the implemented Aether 0.5 contract or authorize a new backend.
+change the historical Aether 0.5 contract or authorize a new backend. The
+current executable contract is Aether 0.6; its bounded resource implementation
+does not alter this research record's backend boundary.
 
 ## Purpose and method
 
@@ -24,7 +26,7 @@ trade-offs carefully rather than to copy it.
 | Reference system | Purpose and primary users | Official evidence examined | Reusable strength to test | Aether relevance and boundary |
 | --- | --- | --- | --- | --- |
 | Rust | Memory-safe systems programming for developers who need ownership-aware APIs. | [Ownership chapter](https://doc.rust-lang.org/stable/book/ch04-01-what-is-ownership.html), [traits reference](https://doc.rust-lang.org/stable/reference/items/traits.html), [Result API](https://doc.rust-lang.org/core/result/) | Compile-time ownership rules, explicit result values, toolchain integration. | Study safety proof and diagnostics; do not inherit lifetime syntax or macro dependence by default. |
-| Zig | Low-level systems programming for developers who want visible memory and compile-time control. | [Language reference](https://ziglang.org/documentation/master/) | Allocator parameters, compile-time execution, C-facing build discipline. | Primary evidence for an explicit-allocation experiment; no allocator surface exists in Aether 0.5. |
+| Zig | Low-level systems programming for developers who want visible memory and compile-time control. | [Language reference](https://ziglang.org/documentation/master/) | Allocator parameters, compile-time execution, C-facing build discipline. | Primary evidence for the original explicit-allocation experiment; Aether 0.6 now has a deliberately narrower named arena surface. |
 | Swift | General-purpose, strongly typed application and systems-adjacent programming. | [Type system](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/types/), [ownership declarations](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/declarations/) | Named value types and explicit borrowing/consuming parameter modes. | Compare ergonomic ownership syntax and type-directed tooling without importing ARC or platform assumptions. |
 | Hylo | Experimental high-level systems language centered on mutable value semantics and generic programming. | [Introduction](https://hylo-lang.org/introduction/), [language specification](https://hylo-lang.org/docs/reference/specification/) | Value semantics, projections, and a distinct ownership model without explicit lifetimes. | The closest conceptual probe for the original mutable-value-semantics goal; experimental status prevents treating it as settled proof. |
 | Koka | Research language for typed functional programming with effect types and handlers. | [Official language book](https://koka-lang.github.io/koka/doc/book.html) | Inferred effect rows and handlers as a way to expose observable behavior. | Supplies a typed-effect comparison point; Aether currently has neither effect types nor handlers. |

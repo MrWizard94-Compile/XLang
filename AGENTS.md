@@ -51,13 +51,13 @@ Aether parses only Aether source, emits **AETH** bytecode, verifies every
 artifact, and runs it in the Aether VM. It never transpiles source to Rust, C,
 JavaScript, LLVM, or another language.
 
-**Stage status:** Stage 6 (bounded immutable records on the seed-hosted product
-compile path) is implemented.
+**Stage status:** Stage 7 (bounded arenas and Copy-element buffers on the
+seed-hosted product compile path) is implemented.
 Default CLI/Studio compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
-proof dual-compare. Seed Profile self-host, all shipped examples, and the
-complete canonical-surface regression corpus, including records, match bootstrap
-byte-for-byte.
+proof dual-compare. Seed Profile self-host, all shipped examples, the complete
+prior canonical surface (including records), and the documented M2
+arena/buffer corpus match bootstrap byte-for-byte.
 Full diagnostic parity is not claimed for the seed.
 
 ### Product docs (Level 4)
@@ -67,10 +67,10 @@ Full diagnostic parity is not claimed for the seed.
 | Overview | [README.md](README.md) |
 | Contract / release gate | [MANIFEST.md](MANIFEST.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Language (0.5 current / 0.4 historical) | [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
+| Language (0.6 current / 0.5 and 0.4 historical) | [docs/AETHER_0.6.md](docs/AETHER_0.6.md), [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
 | Record decision | [docs/ADR-001-records-and-aeth-v5.md](docs/ADR-001-records-and-aeth-v5.md) |
 | AI-first design foundation | [docs/NORTH_STAR.md](docs/NORTH_STAR.md), [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), [docs/ADR-002-ai-first-design-foundation.md](docs/ADR-002-ai-first-design-foundation.md) |
-| M1 resource-model decision package | [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md), [docs/ADR-003-value-resource-semantics.md](docs/ADR-003-value-resource-semantics.md), [docs/M1-VALIDATION-MATRIX.md](docs/M1-VALIDATION-MATRIX.md) |
+| M1/M2 resource decisions | [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md), [docs/ADR-003-value-resource-semantics.md](docs/ADR-003-value-resource-semantics.md), [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md), [docs/M1-VALIDATION-MATRIX.md](docs/M1-VALIDATION-MATRIX.md) |
 | Research and roadmap | [docs/research/](docs/research/), [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Seed Profile | [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) |
 | Forge ABI | [docs/FORGE_CONTRACT.md](docs/FORGE_CONTRACT.md) |
@@ -82,10 +82,10 @@ Full diagnostic parity is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.5.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.5.0) |
-| Desktop | Tauri 2 + React/TypeScript at `apps/xlang-studio` (0.5.0) |
-| Artifact format | AETH **v4** compatibility + **v5** for record-bearing programs (earlier versions rejected) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.6.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.6.0) |
+| Desktop | Tauri 2 + React/TypeScript at `apps/xlang-studio` (0.6.0) |
+| Artifact format | AETH **v4/v5** compatibility input + deterministic **v6** output with bounded arena metadata (earlier/unknown versions rejected) |
 | Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |
 | Seed compiler | `seed/aether_seed.ae` + checked-in `seed/aether_seed.aeth` |
@@ -94,9 +94,9 @@ Full diagnostic parity is not claimed for the seed.
 ### Invariants (may tighten pack; never weaken CONST-\*)
 
 1. **Seed-hosted product compile** — CLI/Studio default compile uses the Aether-written seed; bootstrap is not the product compiler path.
-2. **Verify before run / write** — VM and forge only accept verified AETH v4 or v5.
+2. **Verify before run / write** — VM and forge only accept verified supported AETH v4, v5, or v6.
 3. **No host capability leak** — invoked artifacts have no file, process, network, or shell authority; forge host owns I/O after verification.
-4. **Honest self-host claims** — Seed Profile, shipped examples, and the complete documented canonical 0.5 surface (including immutable records) match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
+4. **Honest self-host claims** — Seed Profile, shipped examples, the complete documented prior canonical surface (including immutable records), and the documented M2 arena/buffer corpus match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
 5. **Local-first data** — Studio source/model choices stay in local WebView storage; no cloud sync of source or artifacts.
 6. **Legacy is reference only** — `legacy/` is never a production build input.
 7. **Zero-warning gate** — workspace Clippy `all = "deny"`; `unsafe_code = "forbid"`.

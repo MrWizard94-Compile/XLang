@@ -1,0 +1,15 @@
+world arena_full
+
+weave main [] -> Whole:
+  bind memory <- arena 24
+  bind mutable values <- buffer Whole
+  choose allocate access memory move values 1 into values:
+    choose append move values 7 into values:
+      choose append move values 8 into values:
+        yield 1
+      otherwise:
+        yield -2
+    otherwise:
+      yield -3
+  otherwise:
+    yield -1

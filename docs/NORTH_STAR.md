@@ -1,9 +1,9 @@
 # Aether North Star
 
 **Status:** Human-approved product direction; not a language-version contract
-**Date:** 2026-07-28
+**Date:** 2026-07-31
 **Current executable contract:** [MANIFEST.md](../MANIFEST.md) and
-[AETHER_0.5.md](AETHER_0.5.md)
+[AETHER_0.6.md](AETHER_0.6.md)
 
 ## Vision
 
@@ -21,10 +21,10 @@ execution, and capability-constrained integration.
 
 | Level | What it means | Authoritative documents |
 | --- | --- | --- |
-| **Implemented Aether 0.5** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.5.md](AETHER_0.5.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md) |
+| **Implemented Aether 0.6** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.6.md](AETHER_0.6.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md) |
 | **North-star direction** | A planned design hypothesis and ordered research program. It is not an implementation claim or syntax promise. | This document, [CORE_CLAIMS.md](CORE_CLAIMS.md), [ROADMAP.md](ROADMAP.md), and [research/](research/) |
 
-No future-facing paragraph in this document changes Aether 0.5 behavior. A
+No future-facing paragraph in this document changes Aether 0.6 behavior. A
 feature becomes part of the product only when its specification, ADR where
 material, implementation, seed proof, tests, documentation, and constitution
 gate all agree.
@@ -78,12 +78,14 @@ flowchart LR
     Semantic -. future, separately approved .-> Interop["Narrow foreign/host interfaces"]
 ~~~
 
-The current 0.5 implementation covers a deliberately small portion of this:
+The current 0.6 implementation covers a deliberately small portion of this:
 canonical source formatting, bounded value semantics, a bootstrap canonical-AST
-path, AETH v4/v5 verification, seed-hosted product compilation, a narrow forge
-ABI, and a capability-free VM. It does **not** yet provide explicit allocator
-APIs, typed effects, structured concurrency, generic shape folding, SoA
-lowering, C-header ingestion, a structural-edit protocol, or a native backend.
+path, AETH v4/v5 compatibility and v6 verification, seed-hosted product
+compilation, a narrow forge ABI, a capability-free VM, and one explicit bounded
+arena with closed Whole/Truth buffer outcomes. It does **not** yet provide typed
+effects, structured concurrency, generic shape folding, SoA lowering, C-header
+ingestion, a structural-edit protocol, a native backend, first-class resource
+outcomes, or Buffer weave results.
 
 ## Explicit non-goals and constraints
 

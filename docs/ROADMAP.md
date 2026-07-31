@@ -1,18 +1,20 @@
 # Aether Language Development Roadmap
 
-**Status:** Human-approved planning foundation
-**Date:** 2026-07-28
-**Scope:** This orders future design and engineering work. It does not grant
-blanket authorization to implement every milestone without its own approved
-specification and constitution gate.
+**Status:** M2 implementation record and forward plan
+**Date:** 2026-07-31
+**Scope:** This orders language design and engineering work. Each future
+milestone still requires its own versioned specification, evidence, and
+constitution gate.
 
 ## Current baseline
 
-Stage 6 is complete: Aether 0.5 has a seed-hosted product compile path,
-deterministic verified AETH v4/v5 artifacts, bounded value/byte behavior, and
-immutable nominal records. Its exact executable scope is
-[MANIFEST.md](../MANIFEST.md). The long-range direction is
-[NORTH_STAR.md](NORTH_STAR.md); it must not be mistaken for current behavior.
+Stage 7 is complete: Aether 0.6 has a seed-hosted product compile path,
+deterministic verified AETH v6 output while retaining verified AETH v4/v5
+compatibility, bounded value/byte behavior, immutable nominal records, and one
+explicit bounded arena with Whole/Truth buffers. Its exact executable scope is
+[MANIFEST.md](../MANIFEST.md) and [AETHER_0.6.md](AETHER_0.6.md). The
+long-range direction is [NORTH_STAR.md](NORTH_STAR.md); it must not be
+mistaken for current behavior.
 
 ## Ordering principles
 
@@ -31,9 +33,9 @@ immutable nominal records. Its exact executable scope is
 
 | ID | Milestone | Dependency | Primary deliverable | Done only when | Status |
 | --- | --- | --- | --- | --- | --- |
-| M0 | Research, design foundation, and evidence register | None | Reference study, component matrix, north star, claims, ADR, and this roadmap. | Cross-links/claims are consistent, source-backed, and current-vs-future boundaries are explicit. | **This delivery** |
-| M1 | Value and resource semantic specification | M0 | A precise ownership, borrow, move, mutation, escape, dynamic-aggregate, and destruction design; typed semantic-IR proposal. | Rules have counterexamples, negative compile cases, verifier consequences, seed feasibility plan, and human approval of the chosen model. | **Decision package delivered — awaiting human approval** |
-| M2 | Explicit allocation and bounded dynamic aggregates | M1 | Allocator/arena capability API plus one representative dynamic collection. | No ambient allocation in the language API; deterministic OOM/cleanup behavior; ownership/escape tests; seed/bootstrap parity; docs/ADR synchronized. | Planned |
+| M0 | Research, design foundation, and evidence register | None | Reference study, component matrix, north star, claims, ADR, and this roadmap. | Cross-links/claims are consistent, source-backed, and current-vs-future boundaries are explicit. | Complete |
+| M1 | Value and resource semantic specification | M0 | A precise ownership, borrow, move, mutation, escape, dynamic-aggregate, and destruction design; typed semantic-IR proposal. | Rules have counterexamples, negative compile cases, verifier consequences, seed feasibility plan, and human approval of the chosen model. | **Accepted direction; ADR-003** |
+| M2 | Explicit allocation and bounded dynamic aggregates | M1 | Allocator/arena capability API plus one representative dynamic collection. | No ambient allocation in the language API; deterministic OOM/cleanup behavior; ownership/escape tests; seed/bootstrap parity; docs/ADR synchronized. | **Implemented in Aether 0.6: closed one-arena Whole/Truth Buffer core** |
 | M3 | Versioned structural authoring contract | M1 | Machine-readable semantic AST schema, diagnostic code/span contract, and a small validated edit protocol. | Round-trip corpus, stale/malformed-edit rejection, canonical formatting, local-only storage behavior, and CLI/Studio contract tests. | Planned |
 | M4 | Typed errors and effects | M1 | Error/effect semantics with one bounded handled/forwarded/rejected capability. | The type/effect checker, diagnostics, ownership interactions, verifier representation, and seed proof agree; no hidden exception route. | Research-gated |
 | M5 | Deterministic compile-time execution | M1 and M4 design decision | A pure, resource-bounded compile-time subset using ordinary Aether forms. | Determinism, limits, no host I/O, diagnostics, and artifact provenance are tested; no macro/text expansion bypass exists. | Research-gated |
@@ -44,19 +46,19 @@ immutable nominal records. Its exact executable scope is
 
 ## Milestone detail
 
-### M1 — value and resource semantics first
+### M1 — accepted value and resource direction
 
-This is the next design decision because every original pillar depends on it.
-The work is a specification and bounded proof plan, not a broad code rewrite.
-The proposed package is [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md),
+This was the foundational design decision because every original pillar depends
+on it. The accepted package is [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md),
 [ADR-003](ADR-003-value-resource-semantics.md),
 [M1 validation matrix](M1-VALIDATION-MATRIX.md), and
 [value/resource research](research/04-value-resource-models.md). It recommends
 owned values, non-escaping `borrow`/`access` loans, explicit bounded arenas,
 closed allocation outcomes, and logical destruction without user code. The
-model is **Proposed**, not accepted or implemented.
+direction is accepted; Aether 0.6 implements the deliberately closed first M2
+surface in [ADR-004](ADR-004-aeth-v6-bounded-resources.md).
 
-Human approval must affirm or alter the following proposed rules:
+The accepted rules are:
 
 - `Whole`/`Truth` copy; owners use explicit `borrow`/`move`; `access` is the
   only non-escaping exclusive capability loan; and `revise` is failure-atomic;
@@ -72,12 +74,19 @@ Human approval must affirm or alter the following proposed rules:
 implicit allocation, an ambiguous destruction rule, host capability leakage, or
 a model the seed cannot represent/prove.
 
-### M2 and M3 — two complementary foundations
+### M2 and M3 — completed bounded resource core and next authoring foundation
 
-M2 validates resource behavior with a real, small dynamic collection. M3 gives
-AI/human tools a stable semantic contract. They may be developed in separate
-approved increments after M1, but neither may silently redefine source
-ownership or artifact semantics.
+M2 validates resource behavior with a real, small dynamic collection. Aether
+0.6 completes the one-arena Whole/Truth Buffer core: a typed semantic plan,
+closed outcomes, v6 verifier/VM behavior, hostile-artifact defense, seed proof,
+and synchronized documentation. First-class outcome propagation, Buffer results,
+and resource-owner `revise` remain deliberately out of scope and cannot be
+added without their own specification and proof.
+
+M3 is next: it gives AI/human tools a stable machine-readable semantic AST,
+diagnostic code/span contract, and validated edit protocol. It must consume the
+current 0.6 contract rather than bypassing source validation or AETH
+verification.
 
 ### M4 through M8 — controlled experiments, not feature pile-on
 
@@ -130,9 +139,8 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Review and approve, reject, or refine the M1 model in
-[ADR-003](ADR-003-value-resource-semantics.md). No semantic implementation
-begins until that human decision is recorded. If accepted, M2 starts as one
-complete bounded increment: explicit arena resource plan, one copy-element
-buffer, source/IR/verifier/VM/seed proof, hostile-artifact tests, and
-documentation synchronization.
+Begin the M3 design package: a versioned semantic-AST schema, stable diagnostic
+codes/spans, and a constrained local structural-edit protocol for AI-generated
+source. Any expansion of M2 must first specify first-class outcome propagation
+and cross-weave resource ownership without weakening the Aether 0.6 verifier or
+seed proof boundary.

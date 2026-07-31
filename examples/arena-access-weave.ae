@@ -1,0 +1,15 @@
+world arena_access_weave
+
+weave provision [access memory: Arena] -> Whole:
+  bind mutable values <- buffer Whole
+  choose allocate access memory move values 1 into values:
+    choose append move values 42 into values:
+      yield 1
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1
+
+weave main [] -> Whole:
+  bind memory <- arena 24
+  yield call provision access memory

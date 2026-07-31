@@ -1,7 +1,7 @@
 # Aether Synthesis and Evidence Plan
 
 **Status:** SOP phases 3 and 4 design synthesis
-**Date:** 2026-07-28
+**Date:** 2026-07-28; current-contract update: 2026-07-31
 **Inputs:** [reference systems](01-reference-systems.md) and
 [component decomposition](02-component-decomposition.md)
 
@@ -12,7 +12,7 @@ claim. Every statement in the design set uses one of these labels:
 
 | Label | Meaning | Required proof before it can advance |
 | --- | --- | --- |
-| **Implemented** | Present in the current Aether 0.5 product contract and covered by repository evidence. | Code, specifications, behavior tests, and applicable seed proof already exist. |
+| **Implemented** | Present in the current Aether 0.6 product contract and covered by repository evidence. | Code, specifications, behavior tests, and applicable seed proof already exist. |
 | **Accepted direction** | A human-approved direction for future design, not source syntax or runtime behavior. | A feature ADR/specification, security and compatibility review, implementation plan, and normal gates. |
 | **Research hypothesis** | A promising claim suggested by sources or the original brief. | A falsifiable experiment, comparison criteria, and a decision record. |
 | **Rejected / prohibited** | Incompatible with Aether's current law or trust model. | It remains out of scope unless a human-approved law/ADR change resolves the conflict. |
@@ -22,8 +22,8 @@ claim. Every statement in the design set uses one of these labels:
 | Proposition | Status | Evidence and reason | Required boundary |
 | --- | --- | --- | --- |
 | Verified, local-first artifacts are the product foundation. | **Implemented** | AETH is verified before run/write; forge verifies compiler output; optional model review has no compiler authority. | Preserve this below every future source feature and backend discussion. |
-| Values should make ownership and resource transfer locally visible. | **Accepted direction** | Rust, Swift, Hylo, and Zig provide contrasting evidence that memory/resource behavior should be explicit. Aether 0.5 already has bounded `borrow`/`move`. | Specify dynamic aggregates, mutation, destruction, and escape rules before allocator, FFI, or task work. |
-| Allocation should be explicit and capability-oriented. | **Accepted direction** | Zig and Odin demonstrate allocator-visible APIs; the original Aether brief prioritizes arenas. | Aether 0.5 has no allocator API. Define no ambient allocator, OOM, lifetime, and ABI rules before implementation. |
+| Values should make ownership and resource transfer locally visible. | **Implemented, bounded M2 scope** | Rust, Swift, Hylo, and Zig provide contrasting evidence that memory/resource behavior should be explicit. Aether 0.6 adds closed arena/Buffer owner behavior. | Preserve the verified closed outcome boundary before adding cross-weave results or effects. |
+| Allocation should be explicit and capability-oriented. | **Implemented, bounded M2 scope** | Zig and Odin demonstrate allocator-visible APIs; Aether 0.6 provides one named bounded arena with no ambient allocator. | Specify outcome propagation, extended lifetime, and ABI behavior before expansion. |
 | Macro-free compile-time execution should use ordinary, type-checked Aether forms. | **Research hypothesis** | Zig demonstrates compile-time execution; the original brief identifies macro/tooling opacity as a risk. | Design a constrained, deterministic evaluation model and resource limits before adding a `comptime`/`forge` source surface. |
 | Errors and environmental behavior should be typed rather than hidden. | **Research hypothesis** | Koka, OCaml 5, and Roc provide effect/handler and host-boundary models. | Prove interaction with ownership, cancellation, diagnostics, and the VM before choosing syntax or inference. |
 | Data-layout choice and generic specialization should be explicit or proven semantics-preserving. | **Research hypothesis** | Odin provides visible SoA facilities; shape-based folding from the original brief remains an untested idea. | No automatic layout rewrite without semantic-equivalence tests and a benchmark protocol. |

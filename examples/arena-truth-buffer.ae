@@ -1,0 +1,16 @@
+world arena_truth_buffer
+
+weave main [] -> Whole:
+  bind memory <- arena 17
+  bind mutable flags <- buffer Truth
+  bind mutable observed <- dim
+  choose allocate access memory move flags 1 into flags:
+    choose append move flags bright into flags:
+      choose at borrow flags 0 into observed:
+        yield 1
+      otherwise:
+        yield -3
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1

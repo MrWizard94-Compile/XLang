@@ -1,0 +1,9 @@
+world arena_exhausted
+
+weave main [] -> Whole:
+  bind memory <- arena 31
+  bind mutable values <- buffer Whole
+  choose allocate access memory move values 2 into values:
+    yield 1
+  otherwise:
+    yield -1

@@ -1,27 +1,27 @@
 # Aether Seed Profile
 
-Status: normative Stage 6 Seed Profile (complete canonical 0.5 source surface + product compile path), 2026-07-28.
+Status: normative Stage 7 Seed Profile (complete canonical 0.6 source surface +
+product compile path), 2026-07-31.
 
 This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
-It covers the complete documented canonical Aether 0.5 source surface. Product
+It covers the complete documented canonical Aether 0.6 source surface. Product
 `compile` uses this profile via the seed artifact. Rust bootstrap remains for
 seed rebuild, `check` AST, and dual-compare proofs. A Seed Profile claim is not
 a claim of full bootstrap diagnostic parity for invalid input.
 
-Here, *canonical* means the Aether 0.5 grammar and formatting constraints in
-[AETHER_0.5.md](AETHER_0.5.md): shallow prefix expressions, exact indentation,
-root-only bindings, and bounded immutable records. The profile does not expand
-that language surface.
+Here, *canonical* means the Aether 0.6 grammar and formatting constraints in
+[AETHER_0.6.md](AETHER_0.6.md): shallow prefix expressions, exact indentation,
+root-only bindings, bounded immutable records, and the closed bounded-resource
+forms. The profile does not expand that language surface.
 
 ## Claim
 
 `seed/aether_seed.ae` is an Aether-written compiler that:
 
-1. Accepts complete canonical Aether 0.5 source as `Text`.
+1. Accepts complete canonical Aether 0.6 source as `Text`.
 2. Parses statements and expressions itself (no host parser callback).
-3. Emits a complete AETH **v4** artifact for record-free programs and a complete
-   AETH **v5** artifact for record-bearing programs through ordinary `Bytes`
-   operations.
+3. Emits a complete AETH **v6** artifact with a resource-capacity header and
+   optional record table through ordinary `Bytes` operations.
 4. Exposes the forge ABI `weave compile [borrow source: Text] -> Bytes`.
 5. Rebuilds its own source byte-for-byte under `aether forge`.
 6. Compiles every documented canonical statement, shallow expression, literal,
@@ -32,7 +32,9 @@ that language surface.
 8. Decodes the Aether text escapes `\\`, `\"`, `\n`, `\r`, and `\t` before
    recording UTF-8 byte lengths.
 9. Parses bounded immutable record declarations, constructors, and explicit
-   borrowed field projections, and matches the bootstrap v5 output byte-for-byte.
+   borrowed field projections, plus `arena`, Whole/Truth `buffer`, `access`,
+   `count`, and closed allocation/append/lookup outcomes; it matches bootstrap
+   v6 output byte-for-byte for the documented canonical corpus.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
@@ -65,14 +67,20 @@ compiled from source, including `main`.
 - `vN` names still work when bound/declared that way (the seed source itself uses
   them heavily).
 - Parameter lists may include multiple entries separated by commas. Optional
-  `borrow` ownership is accepted for `Text`, `Bytes`, and declared record
-  parameters; owned is the default.
+  `borrow` ownership is accepted for owners, `access` is accepted only for an
+  `Arena` parameter, and owned is the default. A Buffer parameter requires
+  exactly one access Arena parameter in the same weave.
 - Result types are `Text`, `Whole`, `Truth`, `Bytes`, or a declared record name.
+  `Arena`, access loans, `BufferWhole`, and `BufferTruth` are not result types.
 - Nested blocks may `revise` existing locals but must not introduce bindings.
 - `bind` / `bind mutable` establish locals; `revise` replaces a live local.
 - Hex `bytes "ff…"` literals decode to raw bytes. Text literals decode the five
   defined escapes (`\\`, `\"`, `\n`, `\r`, `\t`) and record **byte** length of
   UTF-8 content after decoding (not scalar count).
+- `arena N` appears only in `main` and becomes the one v6 resource-plan
+  capacity. `buffer Whole` and `buffer Truth` establish unallocated owner
+  placeholders. Resource owner replacement uses only closed outcomes, never
+  `revise`.
 
 ## Statements
 
@@ -99,7 +107,7 @@ Expressions are shallow prefix forms. Operands are atoms (literals or
 Supported operations (by seed emitter opcode mapping):
 
 - Unary: `not`, `measure`, `render`, `extent`, `encode`, `decode`, `number`,
-  `pack16`, `pack32`, `pack64`
+  `pack16`, `pack32`, `pack64`, `count borrow buffer`
 - Binary: `sum`, `difference`, `product`, `less`, `same`, `join`, `glyph`,
   `quotient`, `remainder`, `fuse`, `append`, `octet`, `unpack16`, `unpack32`
 - Ternary: `cut`, `slice`, `seek`, `poke`, `poke32`
@@ -112,7 +120,13 @@ Supported operations (by seed emitter opcode mapping):
   weave result.
 - Atoms: decimal `Whole` literals (optional leading `-`), `bright` / `dim`,
   text literals, `bytes "hex..."`, ordinary names for copyable values, and
-  `borrow` / `move` of declared `Text`, `Bytes`, or record locals and parameters
+  `borrow` / `move` of owner locals and parameters, plus `access` of a live
+  Arena only in a resource operation or access-parameter call.
+- Resources: `allocate access arena move buffer count into buffer`,
+  `append move buffer value into buffer`, and `at borrow buffer index into
+  target`. Each is emitted only from a terminal resource `choose`, has an
+  explicit `otherwise` branch, and lowers to direct v6 replacement/update
+  instructions.
 
 ## Multi-weave emission
 
@@ -125,24 +139,25 @@ at end of source it flushes the previous weave record:
 - local count, then `(type, mutable)` pairs (parameters occupy the leading slots)
 - code length and instruction bytes
 
-The final artifact is `AETH` + version `4` + function count + the accumulated
-function table for a record-free source. A record-bearing source uses version
-`5` and places a bounded record schema table before the same function table.
-Record type descriptors contain tag `5` plus a record identifier. This replaces
-the Stage 3 fixed two-weave (`compile` + synthetic `main`) emitter.
+The final artifact is `AETH` + version `6` + arena capacity (`u32` little
+endian) + bounded record schema table + function table. Record type descriptors
+retain tag `5` plus a record identifier; v6 also uses Arena/Buffer type tags,
+access parameter mode, and the closed resource instruction payloads. This
+replaces the Stage 3 fixed two-weave (`compile` + synthetic `main`) emitter.
 
 ## Explicit non-goals
 
-Seed parity does not change Aether 0.5 language rules. In particular, nested
+Seed parity does not expand Aether 0.6 language rules. In particular, nested
 expression trees, nested binding introduction, nested record fields, record
-mutation, and host record invocation remain outside the language grammar rather
+mutation, host record invocation, first-class resource outcomes, Buffer weave
+results, and resource-owner `revise` remain outside the language grammar rather
 than Seed Profile exclusions. The Seed Profile compiler does **not** claim
 support for:
 
 - Host I/O, networking, or model access
 - Full Aether diagnostic fidelity (invalid Seed Profile input may fail late or
   produce a rejectable artifact; the bootstrap compiler remains the complete
-  diagnostic authority for invalid Aether 0.5 input)
+  diagnostic authority for invalid Aether 0.6 input)
 - Future Aether language extensions until they meet the same byte-identity proof
 
 ## Reproducibility procedure
@@ -162,12 +177,16 @@ All three SHA-256 digests must match. The regression tests also forge:
 3. A forward-call program (callee after caller) and a CRLF multi-weave source.
 4. Every shipped `examples/*.ae` file seed-compiles byte-identically to bootstrap
    (`compile_with_seed`).
-5. A canonical-surface corpus covering every statement, expression, ownership
-   mode, literal mode, record operation, and final-line termination behavior.
+5. A prior canonical-surface corpus covering every statement, expression,
+   ownership mode, literal mode, record operation, and final-line termination
+   behavior.
+6. The canonical M2 arena/buffer corpus: Whole allocation/append/lookup,
+   allocation exhaustion, append full, lookup fallback, Truth elements, and an
+   access-bound helper weave.
 
 ## Authority
 
-- Full language: [AETHER_0.5.md](AETHER_0.5.md)
+- Full language: [AETHER_0.6.md](AETHER_0.6.md)
 - Host forge ABI: [FORGE_CONTRACT.md](FORGE_CONTRACT.md)
 - Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Product gate: [../MANIFEST.md](../MANIFEST.md)

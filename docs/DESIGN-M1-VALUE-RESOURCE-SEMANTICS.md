@@ -1,18 +1,20 @@
 # M1 Design: Owned Values, Ephemeral Loans, and Bounded Arenas
 
-**Status:** Proposed — requires explicit human approval before implementation
-**Date:** 2026-07-28
-**Decision scope:** Future Aether language/resource model; no Aether 0.5 source,
-AETH v4/v5 artifact, seed artifact, VM, forge, or Studio behavior changes here.
+**Status:** Accepted design direction; Aether 0.6 implements the bounded M2
+subset recorded in [ADR-004](ADR-004-aeth-v6-bounded-resources.md)
+**Date:** 2026-07-28; implementation record updated 2026-07-31
+**Decision scope:** This remains the design foundation for future Aether
+resource work. Aether 0.6 adds a deliberately narrower executable M2 subset;
+its exact source and artifact contract is [AETHER_0.6.md](AETHER_0.6.md).
 **Related:** [ADR-003](ADR-003-value-resource-semantics.md),
 [M1 validation matrix](M1-VALIDATION-MATRIX.md),
 [resource-model research](research/04-value-resource-models.md),
 [roadmap](ROADMAP.md), and [current 0.5 specification](AETHER_0.5.md).
 
-## Decision requested
+## Accepted direction
 
-Approve, reject, or revise this proposed resource model before any M2 compiler,
-VM, seed, or Studio implementation begins:
+Human approval on 2026-07-31 accepted this resource direction before M2
+implementation began:
 
 > **Aether should use owned values, ephemeral non-escaping loans, and explicit
 > bounded arena capabilities.** Copyable values duplicate by ordinary use;
@@ -25,6 +27,28 @@ VM, seed, or Studio implementation begins:
 The model is deliberately narrower than a general reference/lifetime system.
 It gives an AI author a small, visible state machine that the source checker,
 typed semantic IR, AETH verifier, VM, and seed can each prove independently.
+
+## Aether 0.6 implementation boundary
+
+The accepted direction is broader than the first executable increment. Aether
+0.6 delivers one arena, `Whole`/`Truth` buffers, `access`, closed terminal
+`choose` outcomes, a typed resource semantic plan, AETH v6 validation, VM
+accounting, and seed byte-identity proof. It does **not** claim every proposed
+surface below is already executable.
+
+| Design item | Aether 0.6 status |
+| --- | --- |
+| Named bounded arena, no ambient allocator, Copy-only buffer elements | Implemented. |
+| Source-visible `borrow`, `move`, and ephemeral `access` for resource operations | Implemented within the closed M2 grammar. |
+| Typed semantic resource facts before bytecode emission | Implemented as `SemanticResourcePlan`, recording region, element, owner/borrow place, and destination. |
+| Allocation, append, and lookup total outcomes | Implemented as immediate bright/dim `choose` conditions; outcomes are not values. |
+| Failure atomicity for allocation/append/lookup | Implemented and behavior-tested. |
+| Buffer owner result / generic outcome propagation | Deliberately deferred; 0.6 rejects Buffer weave results. |
+| General `revise` of a resource owner, generic effects, arbitrary references, individual reclamation | Deliberately deferred. |
+
+The definitive 0.6 contract takes precedence over illustrative proposed
+spellings in this design document. Future work may extend the design only with
+a versioned specification, verifier/seed proof, and ADR update.
 
 ## 1. Existing 0.5 boundary
 

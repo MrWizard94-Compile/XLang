@@ -1,11 +1,13 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and desktop workbench.
-Aether **0.5.0** parses only Aether source, emits deterministic AETH v4 or v5 bytecode,
-verifies every artifact, and runs it in the Aether VM. It never translates
-source to Rust, C, JavaScript, LLVM, or another language.
+Aether **0.6.0** parses only Aether source, emits deterministic AETH v6
+bytecode, verifies every artifact, and runs it in the Aether VM. It never
+translates source to Rust, C, JavaScript, LLVM, or another language. Verified
+AETH v4 and v5 artifacts remain compatible inputs; new 0.6 compilation emits
+v6.
 
-## Stage 6: Immutable records on the seed-hosted compile path
+## Stage 7: bounded arenas and buffers on the seed-hosted compile path
 
 **Default compilation is no longer bootstrap-hosted for user programs.**
 
@@ -17,30 +19,30 @@ source to Rust, C, JavaScript, LLVM, or another language.
 - The seed self-hosts, and the shipped examples plus a complete canonical-surface
   regression corpus produce bytecode **byte-identical** to the Rust bootstrap.
 
-Seed Profile Stage 6 emits the complete documented **canonical Aether 0.5 source
-surface**: named locals/parameters (not only `vN`), every statement and shallow
-expression family, `borrow`/`move`, multi-weave `call` (including forward
-callees), hex `bytes "..."` literals, UTF-8 text constants, the canonical
-`\\`, `\"`, `\n`, `\r`, and `\t` text escapes, and CRLF or LF input (including a
-valid final line without a terminal LF). It also supports bounded immutable
-nominal records: `record`, `make`, and explicit `field borrow` projection.
-Programs without records remain AETH v4; record-bearing programs emit verified
-AETH v5. See [docs/AETHER_0.5.md](docs/AETHER_0.5.md) and
+Seed Profile Stage 7 emits the complete prior canonical surface plus Aether
+0.6's documented M2 resource corpus: named locals/parameters, every statement
+and shallow expression family, `borrow`/`move`/`access`, multi-weave `call`, hex
+`bytes "..."` literals, UTF-8 text constants, canonical escapes, immutable
+records, and closed `arena` / Whole-or-Truth-buffer outcomes. New compilation
+emits verified AETH v6. See [docs/AETHER_0.6.md](docs/AETHER_0.6.md) and
 [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ### Still honest limits
 
 - Full invalid-source diagnostic parity is not claimed; the Rust bootstrap
   remains the diagnostic authority (`aether check`).
-- Records are intentionally non-recursive and immutable in 0.5. Host invocation
-  accepts and returns primitives only; use an Aether weave to project a field.
+- Records are intentionally non-recursive and immutable. Resource outcomes are
+  immediate terminal `choose` conditions, not first-class values; Buffer owners
+  cannot be weave results or cross the host ABI.
+- Host invocation accepts and returns primitives only; use an Aether weave to
+  project a record field.
 - Future language extensions require their own seed-emission parity proof before
   they become part of the product compile surface.
 - Bootstrap rebuild of the seed is still required after changing the seed source.
 
 ## North star and evidence-led roadmap
 
-Aether 0.5 is the current executable contract, not the full long-range language
+Aether 0.6 is the current executable contract, not the full long-range language
 vision. The project is deliberately designing for AI-primary authorship while
 keeping deterministic, locally verifiable compiler authority. Read the design
 set in this order:
@@ -51,36 +53,40 @@ set in this order:
    directions, research hypotheses, and prohibited claims.
 3. [docs/research/](docs/research/) — primary-source reference study,
    decomposition, and evidence plan.
-4. [docs/ROADMAP.md](docs/ROADMAP.md) — approved dependency order for future
-   language work.
-5. [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md)
-   — proposed owned-value, loan, arena, destruction, and allocation-outcome
-   model; it is awaiting human approval and is not Aether 0.5 behavior.
+4. [docs/AETHER_0.6.md](docs/AETHER_0.6.md) and
+   [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md)
+   — current resource contract and deliberate limits.
+5. [docs/ROADMAP.md](docs/ROADMAP.md) — completed M2 scope and approved
+   dependency order for future language work.
 
-These documents do not claim that proposed allocators, effects, concurrency,
-SoA lowering, C interop, structural edits, or a native backend exist in 0.5.
+These documents do not claim effects, concurrency, SoA lowering, C interop,
+structural edits, or a native backend exist in 0.6.
 
 ## Workspace
 
-- `crates/xlang-core` — bootstrap parser/emitter/verifier/VM, forge API, seed path
+- `crates/xlang-core` — bootstrap parser, typed resource semantic plan,
+  emitter/verifier/VM, forge API, seed path
 - `apps/xlang-cli` — `aether` CLI (seed compile by default)
 - `apps/xlang-studio` — Tauri workbench (seed-hosted compile)
 - `seed/` — Aether-written compiler source + checked-in artifact
-- `examples/` — programs proven seed-identical to bootstrap
+- `examples/` — programs proven seed-identical to bootstrap, including M2 cases
 - `AGENTS.md` — Level 4 entry → AGENTS Constitution pack
 
 ## Command Line
 
 ```powershell
 Set-Location C:\WPAI\Software\XLang
-cargo run -p aether-cli -- check (Resolve-Path .\examples\welcome.ae)
-cargo run -p aether-cli -- compile (Resolve-Path .\examples\welcome.ae) --output .\target\welcome.aeth
-cargo run -p aether-cli -- run .\target\welcome.aeth
+cargo run -p aether-cli -- check (Resolve-Path .\examples\arena-buffer.ae)
+cargo run -p aether-cli -- compile (Resolve-Path .\examples\arena-buffer.ae) --output .\target\arena-buffer.aeth
+cargo run -p aether-cli -- run .\target\arena-buffer.aeth
 
-# Rebuild seed with the Rust bootstrap (after editing seed/aether_seed.ae)
-cargo run -p aether-cli -- compile .\seed\aether_seed.ae --output .\seed\aether_seed.aeth --bootstrap
-cargo run -p aether-cli -- forge .\seed\aether_seed.aeth .\seed\aether_seed.ae --output .\target\aether_seed.forged.aeth
-Get-FileHash .\seed\aether_seed.aeth, .\target\aether_seed.forged.aeth
+# Rebuild the seed safely after editing seed/aether_seed.ae.
+# Promote it only after the bootstrap and self-forged hashes are identical.
+cargo run -p aether-cli -- compile .\seed\aether_seed.ae --output .\target\aether_seed.bootstrap.aeth --bootstrap
+cargo run -p aether-cli -- forge .\target\aether_seed.bootstrap.aeth .\seed\aether_seed.ae --output .\target\aether_seed.forged.aeth
+Get-FileHash .\target\aether_seed.bootstrap.aeth, .\target\aether_seed.forged.aeth
+Copy-Item .\target\aether_seed.bootstrap.aeth .\seed\aether_seed.aeth
+cargo build -p aether-cli
 ```
 
 ## Desktop Studio

@@ -6,14 +6,21 @@
 **Related Rule IDs:** DOC-ADR-001, SOP-PHASE-001, RND-INVAR-001, RND-CORE-001,
 RND-DOC-001, IP-INVENTION-001, DOC-SYNC-001
 
+**Implementation update (2026-07-31):** The 0.5 boundary described below is
+the historical decision context. The current executable contract is Aether 0.6,
+including the bounded resource core in
+[ADR-004](ADR-004-aeth-v6-bounded-resources.md).
+
 ## Context
 
 The original Aether brief describes an ambitious AI-first systems language:
 mutable value semantics, explicit allocators, compile-time execution without
 macros, typed errors/effects, data-oriented layout, interop, integrated tooling,
-and structural AI editing. The executable product has a smaller, strong Aether
-0.5 boundary: seed-hosted compilation, verified AETH v4/v5 artifacts, a
-capability-free VM, and bounded value semantics.
+and structural AI editing. At this ADR's decision time, the executable product
+had a smaller, strong Aether 0.5 boundary: seed-hosted compilation, verified
+AETH v4/v5 artifacts, a capability-free VM, and bounded value semantics.
+Aether 0.6 now extends that foundation with verified AETH v6 bounded arenas and
+buffers; see [ADR-004](ADR-004-aeth-v6-bounded-resources.md).
 
 The repository lacked an Aether-specific SOP research set that decomposed the
 reference systems, recorded current-vs-future truth, defined measurable claims,

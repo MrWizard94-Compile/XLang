@@ -1,0 +1,16 @@
+world arena_buffer
+
+weave main [] -> Whole:
+  bind memory <- arena 64
+  bind mutable values <- buffer Whole
+  bind mutable observed <- 0
+  choose allocate access memory move values 2 into values:
+    choose append move values 7 into values:
+      choose at borrow values 0 into observed:
+        yield observed
+      otherwise:
+        yield -3
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1
