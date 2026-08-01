@@ -21,10 +21,10 @@ execution, and capability-constrained integration.
 
 | Level | What it means | Authoritative documents |
 | --- | --- | --- |
-| **Implemented Aether 0.6** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.6.md](AETHER_0.6.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md) |
+| **Implemented Aether 0.7** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.7.md](AETHER_0.7.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md) |
 | **North-star direction** | A planned design hypothesis and ordered research program. It is not an implementation claim or syntax promise. | This document, [CORE_CLAIMS.md](CORE_CLAIMS.md), [ROADMAP.md](ROADMAP.md), and [research/](research/) |
 
-No future-facing paragraph in this document changes Aether 0.6 behavior. A
+No future-facing paragraph in this document changes Aether 0.7 behavior. A
 feature becomes part of the product only when its specification, ADR where
 material, implementation, seed proof, tests, documentation, and constitution
 gate all agree.
@@ -79,14 +79,16 @@ flowchart LR
     Semantic -. future, separately approved .-> Interop["Narrow foreign/host interfaces"]
 ~~~
 
-The current 0.6 implementation covers a deliberately small portion of this:
+The current 0.7 implementation covers a deliberately small portion of this:
 canonical source formatting, bounded value semantics, a bootstrap canonical-AST
-path, AETH v4/v5 compatibility and v6 verification, seed-hosted product
+path, AETH v4/v5/v6 compatibility and v7 verification, seed-hosted product
 compilation, a narrow forge ABI, a capability-free VM, and one explicit bounded
-arena with closed Whole/Truth buffer outcomes. M3 now adds local `aether.ast/v1`
-structure, diagnostic codes/spans, and bounded top-level `aether.edit/v1`
-operations; see [AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md).
-It does **not** yet provide typed effects, structured concurrency, generic shape
+arena with closed Whole/Truth buffer outcomes. M3/M4 add local `aether.ast/v2`
+structure, diagnostic codes/spans, bounded top-level `aether.edit/v2`
+operations, and one abortive, terminal `Error[Whole]` route; see
+[AETHER_AUTHORING_PROTOCOL_v2.md](AETHER_AUTHORING_PROTOCOL_v2.md) and
+[AETHER_0.7.md](AETHER_0.7.md). It does **not** yet provide general typed
+effects or resumptions, structured concurrency, generic shape
 folding, SoA lowering, C-header ingestion, a native backend, first-class
 resource outcomes, Buffer weave results, or fine-grained arbitrary-node edits.
 

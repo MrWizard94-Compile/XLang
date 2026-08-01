@@ -1,13 +1,13 @@
 # Aether in XLang
 
-This repository hosts Aether, a new local-first language and CLI toolchain.
-Aether **0.6.0** parses only Aether source, emits deterministic AETH v6
-bytecode, verifies every artifact, and runs it in the Aether VM. It never
-translates source to Rust, C, JavaScript, LLVM, or another language. Verified
-AETH v4 and v5 artifacts remain compatible inputs; new 0.6 compilation emits
-v6.
+This repository hosts Aether, a new local-first language and CLI toolchain for
+deterministic, AI-primary authorship. Aether **0.7.0** parses only Aether
+source, emits deterministic AETH v7 bytecode, verifies every artifact, and runs
+it in the Aether VM. It never translates source to Rust, C, JavaScript, LLVM,
+or another language. Verified AETH v4/v5/v6 artifacts remain compatible inputs
+with their original meanings; new compilation emits v7.
 
-## Stage 7: bounded arenas and buffers on the seed-hosted compile path
+## Seed-hosted compile path, M2 resources, and M4 errors
 
 **Default compilation is no longer bootstrap-hosted for user programs.**
 
@@ -19,22 +19,39 @@ v6.
 - The seed self-hosts, and the shipped examples plus a complete canonical-surface
   regression corpus produce bytecode **byte-identical** to the Rust bootstrap.
 
-Seed Profile Stage 7 emits the complete prior canonical surface plus Aether
-0.6's documented M2 resource corpus: named locals/parameters, every statement
-and shallow expression family, `borrow`/`move`/`access`, multi-weave `call`, hex
-`bytes "..."` literals, UTF-8 text constants, canonical escapes, immutable
-records, and closed `arena` / Whole-or-Truth-buffer outcomes. New compilation
-emits verified AETH v6. See [docs/AETHER_0.6.md](docs/AETHER_0.6.md) and
+Seed Profile emits the complete prior canonical surface plus Aether 0.7's
+documented M2 resource and M4 error corpora: named locals/parameters, every
+statement and shallow expression family, `borrow`/`move`/`access`, multi-weave
+calls, immutable records, closed `arena` / Whole-or-Truth-buffer outcomes, and
+the explicit `raises Whole`, `raise`, `forward call`, and terminal `handle call`
+forms. New compilation emits verified AETH v7. See
+[docs/AETHER_0.7.md](docs/AETHER_0.7.md) and
 [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
-## M3: versioned structural authoring contract
+```aether
+weave leaf [value: Whole] -> Whole raises Whole:
+  raise value
 
-Aether 0.6 tooling now exposes a local, machine-readable `aether.ast/v1`
-document and accepts bounded `aether.edit/v1` structural edits. The protocol
+weave main [] -> Whole:
+  bind mutable success <- 0
+  bind mutable code <- 0
+  handle call leaf 17 into success otherwise error into code
+```
+
+M4 is deliberately one bounded abortive `Error[Whole]` effect, not a general
+exception or algebraic-effects system. Effect boundaries are copy-only and
+cannot cross live owners, loans, arenas, buffers, or M2 outcomes.
+
+## Versioned structural authoring contract
+
+Aether 0.7 tooling exposes a local, machine-readable `aether.ast/v2` document
+and accepts bounded `aether.edit/v2` structural edits. The protocol
 uses exact canonical source revisions to reject stale requests, supports typed
 top-level record/weave insert, replace, and delete operations, reparses the
 formatter-owned result, and seed-compiles it before the CLI writes source to an
-explicit output path. See [docs/AETHER_AUTHORING_PROTOCOL_v1.md](docs/AETHER_AUTHORING_PROTOCOL_v1.md)
+explicit output path. It exposes effect annotations and M4 statement nodes
+without reinterpreting v1. See
+[docs/AETHER_AUTHORING_PROTOCOL_v2.md](docs/AETHER_AUTHORING_PROTOCOL_v2.md)
 and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-authoring-contract.md).
 
 ### Still honest limits
@@ -44,6 +61,9 @@ and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-auth
 - Records are intentionally non-recursive and immutable. Resource outcomes are
   immediate terminal `choose` conditions, not first-class values; Buffer owners
   cannot be weave results or cross the host ABI.
+- M4 supports only `Error[Whole]`, `Whole` erroring results, and terminal
+  handling. It has no effect inference, resumption, cleanup, cancellation, or
+  resource/effect composition.
 - Host invocation accepts and returns primitives only; use an Aether weave to
   project a record field.
 - Future language extensions require their own seed-emission parity proof before
@@ -55,7 +75,7 @@ and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-auth
 
 ## North star and evidence-led roadmap
 
-Aether 0.6 is the current executable contract, not the full long-range language
+Aether 0.7 is the current executable contract, not the full long-range language
 vision. The project is deliberately designing for AI-primary authorship while
 keeping deterministic, locally verifiable compiler authority. Read the design
 set in this order:
@@ -66,17 +86,21 @@ set in this order:
    directions, research hypotheses, and prohibited claims.
 3. [docs/research/](docs/research/) — primary-source reference study,
    decomposition, and evidence plan.
-4. [docs/AETHER_0.6.md](docs/AETHER_0.6.md) and
+4. [docs/AETHER_0.7.md](docs/AETHER_0.7.md) and
    [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md)
    — current resource contract and deliberate limits.
-5. [docs/AETHER_AUTHORING_PROTOCOL_v1.md](docs/AETHER_AUTHORING_PROTOCOL_v1.md)
+5. [docs/AETHER_AUTHORING_PROTOCOL_v2.md](docs/AETHER_AUTHORING_PROTOCOL_v2.md)
    and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-authoring-contract.md)
    — implemented M3 authoring contract and its limits.
-6. [docs/ROADMAP.md](docs/ROADMAP.md) — completed M2/M3 scope and approved
-   dependency order for future language work.
+6. [docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md](docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md),
+   [docs/ADR-007-m4-typed-error-effect.md](docs/ADR-007-m4-typed-error-effect.md),
+   and [docs/M4-VALIDATION-MATRIX.md](docs/M4-VALIDATION-MATRIX.md) — implemented
+   M4 design, executable semantic kernel, and proof matrix.
+7. [docs/ROADMAP.md](docs/ROADMAP.md) — completed M2/M3/M4 scope,
+   and approved dependency order for future language work.
 
-These documents do not claim effects, concurrency, SoA lowering, C interop,
-fine-grained structural edits, or a native backend exist in 0.6.
+These documents do not claim general effects, concurrency, SoA lowering, C
+interop, fine-grained structural edits, or a native backend exist in 0.7.
 
 ## Workspace
 
@@ -91,10 +115,10 @@ fine-grained structural edits, or a native backend exist in 0.6.
 
 ```powershell
 Set-Location C:\WPAI\Software\XLang
-cargo run -p aether-cli -- check (Resolve-Path .\examples\arena-buffer.ae)
-cargo run -p aether-cli -- structure (Resolve-Path .\examples\arena-buffer.ae)
-cargo run -p aether-cli -- compile (Resolve-Path .\examples\arena-buffer.ae) --output .\target\arena-buffer.aeth
-cargo run -p aether-cli -- run .\target\arena-buffer.aeth
+cargo run -p aether-cli -- check (Resolve-Path .\examples\error-effect.ae)
+cargo run -p aether-cli -- structure (Resolve-Path .\examples\error-effect.ae)
+cargo run -p aether-cli -- compile (Resolve-Path .\examples\error-effect.ae) --output .\target\error-effect.aeth
+cargo run -p aether-cli -- run .\target\error-effect.aeth
 
 # Rebuild the seed safely after editing seed/aether_seed.ae.
 # Promote it only after the bootstrap and self-forged hashes are identical.

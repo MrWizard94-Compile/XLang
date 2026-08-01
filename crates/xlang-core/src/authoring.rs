@@ -14,17 +14,17 @@ use serde_json::{json, Map, Number, Value};
 
 use crate::{
     compile_source, format_program, Atom, AtomKind, BinaryOperation, BufferElement, CompilerError,
-    Diagnostic, Expression, ExpressionKind, Parameter, ParameterMode, Program, RecordDeclaration,
-    RecordField, ResourceOperation, Span, Statement, TernaryOperation, UnaryOperation, ValueType,
-    Weave, LANGUAGE_NAME, LANGUAGE_VERSION,
+    Diagnostic, Effect, Expression, ExpressionKind, Parameter, ParameterMode, Program,
+    RecordDeclaration, RecordField, ResourceOperation, Span, Statement, TernaryOperation,
+    UnaryOperation, ValueType, Weave, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 /// The JSON schema identifier emitted for a validated semantic document.
-pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v1";
+pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v2";
 /// The JSON protocol identifier accepted for a structural edit request.
-pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v1";
+pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v2";
 /// The JSON schema identifier used for machine-readable diagnostic envelopes.
-pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v1";
+pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v2";
 
 const MAX_STRUCTURAL_EDIT_BYTES: usize = 4_000_000;
 const MAX_STRUCTURAL_EDIT_OPERATIONS: usize = 32;
@@ -75,14 +75,14 @@ impl From<CompilerError> for StructuralEditError {
     }
 }
 
-/// Return deterministic, pretty-printed `aether.ast/v1` JSON for valid source.
+/// Return deterministic, pretty-printed `aether.ast/v2` JSON for valid source.
 /// Source spans always refer to the returned document's canonical LF source.
 pub fn structural_document_json(source: &str) -> Result<String, CompilerError> {
     let (program, canonical_source) = canonicalize_source(source)?;
     serialize_document(&canonical_source, &program).map_err(serialization_error)
 }
 
-/// Serialize a stable `aether.diagnostic/v1` envelope for any compiler or
+/// Serialize a stable `aether.diagnostic/v2` envelope for any compiler or
 /// structural-authoring diagnostic.
 #[must_use]
 pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
@@ -95,7 +95,7 @@ pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
     .to_string()
 }
 
-/// Apply one bounded `aether.edit/v1` document to matching source.
+/// Apply one bounded `aether.edit/v2` document to matching source.
 ///
 /// The function does not write files, invoke a model, execute code, or compile
 /// an artifact. It is intentionally pure apart from memory allocation. The CLI
@@ -243,6 +243,7 @@ fn weave_value(weave: &Weave, records: &[RecordDeclaration]) -> Value {
         "name": &weave.name,
         "parameters": parameters,
         "result": value_type_name(weave.result, records),
+        "effect": effect_name(weave.effect),
         "body": body,
     })
 }
@@ -280,6 +281,42 @@ fn statement_value(statement: &Statement, id: &str) -> Value {
             "kind": "Yield",
             "span": span_value(*span),
             "value": expression_value(value, &format!("{id}/value")),
+        }),
+        Statement::Raise { code, span } => json!({
+            "id": id,
+            "kind": "Raise",
+            "span": span_value(*span),
+            "code": atom_value(code, &format!("{id}/code")),
+        }),
+        Statement::Forward {
+            weave,
+            arguments,
+            span,
+        } => json!({
+            "id": id,
+            "kind": "Forward",
+            "span": span_value(*span),
+            "weave": weave,
+            "arguments": arguments.iter().enumerate().map(|(index, argument)| {
+                atom_value(argument, &format!("{id}/argument/{index}"))
+            }).collect::<Vec<_>>(),
+        }),
+        Statement::Handle {
+            weave,
+            arguments,
+            success_destination,
+            error_destination,
+            span,
+        } => json!({
+            "id": id,
+            "kind": "Handle",
+            "span": span_value(*span),
+            "weave": weave,
+            "arguments": arguments.iter().enumerate().map(|(index, argument)| {
+                atom_value(argument, &format!("{id}/argument/{index}"))
+            }).collect::<Vec<_>>(),
+            "successDestination": success_destination,
+            "errorDestination": error_destination,
         }),
         Statement::Choose {
             condition,
@@ -511,6 +548,13 @@ fn parameter_mode_name(mode: ParameterMode) -> &'static str {
         ParameterMode::Own => "own",
         ParameterMode::Borrow => "borrow",
         ParameterMode::Access => "access",
+    }
+}
+
+fn effect_name(effect: Effect) -> &'static str {
+    match effect {
+        Effect::Total => "Total",
+        Effect::ErrorWhole => "ErrorWhole",
     }
 }
 
@@ -802,7 +846,7 @@ fn apply_replace(
         }
         (EditTarget::World, _) => Err(protocol_error(
             "AE-EDIT-004",
-            "the world node cannot be replaced by structural edit v1",
+            "the world node cannot be replaced by structural edit v2",
         )),
         (EditTarget::Record(_), EditableDeclaration::Weave(_))
         | (EditTarget::Weave(_), EditableDeclaration::Record(_)) => Err(protocol_error(
@@ -865,7 +909,7 @@ fn apply_delete(program: &mut Program, target: &EditTarget) -> Result<(), Struct
         }
         EditTarget::World => Err(protocol_error(
             "AE-EDIT-004",
-            "the world node cannot be deleted by structural edit v1",
+            "the world node cannot be deleted by structural edit v2",
         )),
     }
 }
@@ -1036,7 +1080,7 @@ fn parse_weave_declaration(
 ) -> Result<Weave, StructuralEditError> {
     ensure_only_fields(
         object,
-        &["kind", "name", "parameters", "result", "body"],
+        &["kind", "name", "parameters", "result", "effect", "body"],
         "Weave declaration",
     )?;
     require_kind(object, "Weave", "Weave declaration")?;
@@ -1049,6 +1093,16 @@ fn parse_weave_declaration(
         required_value(object, "result", "Weave declaration")?,
         records,
     )?;
+    let effect = match required_string(object, "effect", "Weave declaration")?.as_str() {
+        "Total" => Effect::Total,
+        "ErrorWhole" => Effect::ErrorWhole,
+        other => {
+            return Err(protocol_error(
+                "AE-EDIT-001",
+                format!("Weave effect {other:?} is not a supported Aether effect"),
+            ));
+        }
+    };
     let body = parse_statements(
         required_array(object, "body", "Weave declaration")?,
         records,
@@ -1059,6 +1113,7 @@ fn parse_weave_declaration(
         name,
         parameters,
         result,
+        effect,
         body,
         span: synthetic_span(),
     })
@@ -1207,6 +1262,54 @@ fn parse_statement(
                     records,
                     node_budget,
                 )?,
+                span: synthetic_span(),
+            })
+        }
+        "Raise" => {
+            ensure_only_fields(object, &["kind", "code"], "Raise statement")?;
+            Ok(Statement::Raise {
+                code: parse_atom(
+                    required_value(object, "code", "Raise statement")?,
+                    node_budget,
+                )?,
+                span: synthetic_span(),
+            })
+        }
+        "Forward" => {
+            ensure_only_fields(object, &["kind", "weave", "arguments"], "Forward statement")?;
+            Ok(Statement::Forward {
+                weave: required_string(object, "weave", "Forward statement")?,
+                arguments: required_array(object, "arguments", "Forward statement")?
+                    .iter()
+                    .map(|argument| parse_atom(argument, node_budget))
+                    .collect::<Result<Vec<_>, _>>()?,
+                span: synthetic_span(),
+            })
+        }
+        "Handle" => {
+            ensure_only_fields(
+                object,
+                &[
+                    "kind",
+                    "weave",
+                    "arguments",
+                    "successDestination",
+                    "errorDestination",
+                ],
+                "Handle statement",
+            )?;
+            Ok(Statement::Handle {
+                weave: required_string(object, "weave", "Handle statement")?,
+                arguments: required_array(object, "arguments", "Handle statement")?
+                    .iter()
+                    .map(|argument| parse_atom(argument, node_budget))
+                    .collect::<Result<Vec<_>, _>>()?,
+                success_destination: required_string(
+                    object,
+                    "successDestination",
+                    "Handle statement",
+                )?,
+                error_destination: required_string(object, "errorDestination", "Handle statement")?,
                 span: synthetic_span(),
             })
         }
@@ -1941,8 +2044,8 @@ mod tests {
     fn replacement_edit(base_source: &str, value: i64) -> String {
         format!(
             r#"{{
-  "protocol": "aether.edit/v1",
-  "schema": "aether.ast/v1",
+  "protocol": "aether.edit/v2",
+  "schema": "aether.ast/v2",
   "baseSource": {},
   "operations": [{{
     "op": "replace",
@@ -1952,6 +2055,7 @@ mod tests {
       "name": "main",
       "parameters": [],
       "result": "Whole",
+      "effect": "Total",
       "body": [{{
         "kind": "Yield",
         "value": {{
@@ -1966,7 +2070,7 @@ mod tests {
         )
     }
 
-    fn shipped_examples() -> [(&'static str, &'static str); 13] {
+    fn shipped_examples() -> [(&'static str, &'static str); 14] {
         [
             ("welcome", include_str!("../../../examples/welcome.ae")),
             (
@@ -2008,6 +2112,10 @@ mod tests {
                 "arena-access-weave",
                 include_str!("../../../examples/arena-access-weave.ae"),
             ),
+            (
+                "error-effect",
+                include_str!("../../../examples/error-effect.ae"),
+            ),
         ]
     }
 
@@ -2032,6 +2140,30 @@ mod tests {
         assert_eq!(
             document,
             structural_document_json(source).expect("document must be deterministic")
+        );
+    }
+
+    #[test]
+    fn structural_document_exposes_the_bounded_m4_effect_nodes() {
+        let source = include_str!("../../../examples/error-effect.ae");
+        let document = structural_document_json(source).expect("M4 source should describe");
+        let parsed: Value = serde_json::from_str(&document).expect("document should be JSON");
+        let weaves = parsed["program"]["weaves"]
+            .as_array()
+            .expect("M4 document must contain weaves");
+        assert!(weaves.iter().any(|weave| weave["effect"] == "ErrorWhole"));
+        assert!(weaves.iter().any(|weave| {
+            weave["body"]
+                .as_array()
+                .is_some_and(|body| body.iter().any(|statement| statement["kind"] == "Handle"))
+        }));
+        let canonical_source = parsed["canonicalSource"]
+            .as_str()
+            .expect("M4 document must include canonical source");
+        let result = apply_structural_edit(canonical_source, &identity_edit_from_document(&parsed));
+        assert_eq!(
+            result.expect("M4 identity edit should apply").source,
+            canonical_source
         );
     }
 
@@ -2207,12 +2339,12 @@ mod tests {
 
     #[test]
     fn malformed_and_duplicate_edit_fields_are_rejected() {
-        let malformed = r#"{"protocol":"aether.edit/v1","schema":"aether.ast/v1","baseSource":"x","operations":[],"extra":true}"#;
+        let malformed = r#"{"protocol":"aether.edit/v2","schema":"aether.ast/v2","baseSource":"x","operations":[],"extra":true}"#;
         let malformed_error =
             apply_structural_edit(BASE_SOURCE, malformed).expect_err("unknown field must fail");
         assert_eq!(malformed_error.diagnostic().code, "AE-EDIT-001");
 
-        let duplicate = r#"{"protocol":"aether.edit/v1","protocol":"aether.edit/v1","schema":"aether.ast/v1","baseSource":"x","operations":[]}"#;
+        let duplicate = r#"{"protocol":"aether.edit/v2","protocol":"aether.edit/v2","schema":"aether.ast/v2","baseSource":"x","operations":[]}"#;
         let duplicate_error = apply_structural_edit(BASE_SOURCE, duplicate)
             .expect_err("duplicate JSON key must fail");
         assert_eq!(duplicate_error.diagnostic().code, "AE-EDIT-001");
@@ -2223,8 +2355,8 @@ mod tests {
     fn insert_and_delete_are_structural_top_level_operations() {
         let insert = format!(
             r#"{{
-  "protocol": "aether.edit/v1",
-  "schema": "aether.ast/v1",
+  "protocol": "aether.edit/v2",
+  "schema": "aether.ast/v2",
   "baseSource": {},
   "operations": [{{
     "op": "insertAfter",
@@ -2234,6 +2366,7 @@ mod tests {
       "name": "helper",
       "parameters": [],
       "result": "Whole",
+      "effect": "Total",
       "body": [{{"kind":"Yield","value":{{"kind":"Atom","atom":{{"kind":"Whole","value":1}}}}}}]
     }}
   }}]
@@ -2244,7 +2377,7 @@ mod tests {
         assert!(inserted.source.contains("weave helper [] -> Whole:"));
 
         let delete = format!(
-            r#"{{"protocol":"aether.edit/v1","schema":"aether.ast/v1","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
+            r#"{{"protocol":"aether.edit/v2","schema":"aether.ast/v2","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
             serde_json::to_string(&inserted.source).expect("source string must serialize")
         );
         let deleted =
@@ -2256,7 +2389,7 @@ mod tests {
     fn inserting_a_record_reindexes_existing_record_type_references_by_name() {
         let source = include_str!("../../../examples/records.ae");
         let insert = format!(
-            r#"{{"protocol":"aether.edit/v1","schema":"aether.ast/v1","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
+            r#"{{"protocol":"aether.edit/v2","schema":"aether.ast/v2","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
             serde_json::to_string(&format_program(
                 &compile_source(source).expect("record source should parse")
             ))
@@ -2282,7 +2415,7 @@ mod tests {
         let envelope: Value = serde_json::from_str(&diagnostic_json(&diagnostic))
             .expect("diagnostic envelope must be JSON");
         let schema: Value = serde_json::from_str(include_str!(
-            "../../../schemas/aether-diagnostic-v1.schema.json"
+            "../../../schemas/aether-diagnostic-v2.schema.json"
         ))
         .expect("diagnostic schema must be JSON");
         assert_eq!(envelope["schema"], DIAGNOSTIC_SCHEMA_VERSION);
@@ -2290,7 +2423,7 @@ mod tests {
         assert_eq!(envelope["span"]["line"], 4);
         assert_eq!(
             schema["$id"],
-            "https://aether.local/schemas/aether-diagnostic-v1.schema.json"
+            "https://aether.local/schemas/aether-diagnostic-v2.schema.json"
         );
         assert!(schema["required"]
             .as_array()

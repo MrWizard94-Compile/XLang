@@ -1,6 +1,6 @@
 # Aether Language Development Roadmap
 
-**Status:** M3 implementation record and forward plan
+**Status:** M4 implemented; controlled product-forward plan
 **Date:** 2026-08-01
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
@@ -8,16 +8,18 @@ constitution gate.
 
 ## Current baseline
 
-Stage 7 and M3 are complete: Aether 0.6 has a seed-hosted product compile path,
-deterministic verified AETH v6 output while retaining verified AETH v4/v5
+Stage 7, M3, and M4 are complete: Aether 0.7 has a seed-hosted product compile
+path, deterministic verified AETH v7 output while retaining verified AETH v4/v5/v6
 compatibility, bounded value/byte behavior, immutable nominal records, and one
-explicit bounded arena with Whole/Truth buffers. M3 adds `aether.ast/v1`,
-`aether.edit/v1`, and `aether.diagnostic/v1` as local tooling contracts without
-changing source grammar or AETH. Its exact executable scope is
-[MANIFEST.md](../MANIFEST.md), [AETHER_0.6.md](AETHER_0.6.md), and
-[AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md). The
+explicit bounded arena with Whole/Truth buffers. M3/M4 add `aether.ast/v2`,
+`aether.edit/v2`, and `aether.diagnostic/v2` as local tooling contracts over
+the current grammar/AETH surface. Its exact executable scope is
+[MANIFEST.md](../MANIFEST.md), [AETHER_0.7.md](AETHER_0.7.md), and
+[AETHER_AUTHORING_PROTOCOL_v2.md](AETHER_AUTHORING_PROTOCOL_v2.md). The
 long-range direction is [NORTH_STAR.md](NORTH_STAR.md); it must not be mistaken
-for current behavior.
+for current behavior. M4 implements the accepted bounded `Error[Whole]`
+surface in source, AETH v7, VM, Seed Profile, and authoring v2, with no claim
+of general effects or seed invalid-source diagnostic parity.
 
 ## Ordering principles
 
@@ -39,8 +41,8 @@ for current behavior.
 | M0 | Research, design foundation, and evidence register | None | Reference study, component matrix, north star, claims, ADR, and this roadmap. | Cross-links/claims are consistent, source-backed, and current-vs-future boundaries are explicit. | Complete |
 | M1 | Value and resource semantic specification | M0 | A precise ownership, borrow, move, mutation, escape, dynamic-aggregate, and destruction design; typed semantic-IR proposal. | Rules have counterexamples, negative compile cases, verifier consequences, seed feasibility plan, and human approval of the chosen model. | **Accepted direction; ADR-003** |
 | M2 | Explicit allocation and bounded dynamic aggregates | M1 | Allocator/arena capability API plus one representative dynamic collection. | No ambient allocation in the language API; deterministic OOM/cleanup behavior; ownership/escape tests; seed/bootstrap parity; docs/ADR synchronized. | **Implemented in Aether 0.6: closed one-arena Whole/Truth Buffer core** |
-| M3 | Versioned structural authoring contract | M1 | Machine-readable semantic AST schema, diagnostic code/span contract, and a small validated edit protocol. | Round-trip corpus, stale/malformed-edit rejection, canonical formatting, explicit local CLI I/O, and core/CLI contract tests. | **Implemented: `aether.ast/v1` / `aether.edit/v1` / `aether.diagnostic/v1`** |
-| M4 | Typed errors and effects | M1 | Error/effect semantics with one bounded handled/forwarded/rejected capability. | The type/effect checker, diagnostics, ownership interactions, verifier representation, and seed proof agree; no hidden exception route. | Research-gated |
+| M3 | Versioned structural authoring contract | M1 | Machine-readable semantic AST schema, diagnostic code/span contract, and a small validated edit protocol. | Round-trip corpus, stale/malformed-edit rejection, canonical formatting, explicit local CLI I/O, and core/CLI contract tests. | **Implemented: v1 historical; v2 current with M4 nodes** |
+| M4 | Typed errors and effects | M1 | One bounded handled/forwarded/rejected `Error[Whole]` capability. | Source, v7 verifier/VM, seed, v2 authoring, and byte identity agree; no hidden exception route. | **Implemented in Aether 0.7/AETH v7** |
 | M5 | Deterministic compile-time execution | M1 and M4 design decision | A pure, resource-bounded compile-time subset using ordinary Aether forms. | Determinism, limits, no host I/O, diagnostics, and artifact provenance are tested; no macro/text expansion bypass exists. | Research-gated |
 | M6 | Generic shapes and data-layout experiment | M1 and M2 | Explicit-layout collection plus a constrained shape-analysis prototype. | Layout/ABI rules, semantic-equivalence tests, and reproducible performance methodology demonstrate a scoped benefit. | Research-gated |
 | M7 | Structured concurrency | M2 and M4 | Lexical task-group model with join, failure, cancellation, and effect-mediated blocking. | No orphan task/property tests, deterministic cleanup, capability rules, diagnostics, and seed parity pass. | Research-gated |
@@ -86,16 +88,33 @@ and synchronized documentation. First-class outcome propagation, Buffer results,
 and resource-owner `revise` remain deliberately out of scope and cannot be
 added without their own specification and proof.
 
-M3 now gives AI/human tools a stable machine-readable semantic AST, diagnostic
+M3/M4 now give AI/human tools a stable machine-readable semantic AST, diagnostic
 code/span contract, and validated edit protocol. Its exact-base stale guard,
 strict typed JSON payloads, canonical reparse, and seed compile before explicit
 CLI output are documented in
-[AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md). The v1
-operation surface is intentionally limited to top-level record/weave
+[AETHER_AUTHORING_PROTOCOL_v2.md](AETHER_AUTHORING_PROTOCOL_v2.md). The v2
+operation surface remains intentionally limited to top-level record/weave
 insert/replace/delete; it does not bypass source validation or AETH
 verification.
 
-### M4 through M8 — controlled experiments, not feature pile-on
+### M4 — implemented bounded error effect
+
+M4's accepted design is [DESIGN-M4-TYPED-ERROR-EFFECTS.md](DESIGN-M4-TYPED-ERROR-EFFECTS.md),
+[ADR-007](ADR-007-m4-typed-error-effect.md), and
+[M4 validation matrix](M4-VALIDATION-MATRIX.md). It selects one abortive,
+typed `Error[Whole]` capability with visible `raises Whole`, `raise`,
+terminal `forward call`, and terminal one-line `handle call` forms. The pure
+reference model plus source, verifier, VM, seed, and v2 authoring tests prove
+the handled, forwarded, rejected, clean-boundary, and total-entry claims.
+
+The design deliberately prohibits continuation capture/resumption, effect
+inference, generic error payloads, owner/loan/resource crossings, resource
+outcome mixing, host error exits, and a v6 reinterpretation. The completed
+product increment is Aether 0.7/AETH v7 plus `aether.ast/v2`,
+`aether.edit/v2`, and `aether.diagnostic/v2`; broader effects still require a
+new decision and proof.
+
+### M5 through M8 — controlled experiments, not feature pile-on
 
 Effects, compile-time execution, layouts/generics, structured concurrency, and
 foreign interfaces have large interaction surfaces. Each begins with the
@@ -110,7 +129,7 @@ No milestone advances merely because its happy path works.
 | Exact mutable-value / borrowing / copying vocabulary | It determines source compatibility, diagnostics, IR, and every future ownership guarantee. | M1 |
 | Allocator capability form and OOM contract | It governs every dynamic collection, FFI boundary, and resource cleanup. | M1/M2 |
 | Fine-grained structural-edit vocabulary beyond top-level declarations | It must preserve transparent ownership/resource invariants without turning JSON paths into a second unsafe language. | Post-M3 |
-| Error/effect representation and inference boundary | It affects function types, handlers, cancellation, and compile-time rules. | M4 |
+| General error/effect representation and inference boundary beyond `Error[Whole]` | It affects function types, handlers, cancellation, and compile-time rules. The M4 initial abortive representation is decided in ADR-007; generalization remains open. | Post-M4 |
 | Compile-time evaluator limits | It affects determinism, denial-of-service resistance, and host authority. | M5 |
 | Generic shape and layout semantics | It affects ABI, correctness, performance claims, and debuggability. | M6 |
 | Task model and cancellation semantics | It affects resource lifetime, scheduler behavior, and failure propagation. | M7 |
@@ -146,9 +165,8 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Begin the M4 research/design package: one bounded typed error/effect capability
-with handled, forwarded, and rejected paths. It must specify interactions with
-current ownership/resource behavior and M3 diagnostics before new source syntax
-or seed emission is attempted. Any expansion of M2 still must first specify
-first-class outcome propagation and cross-weave resource ownership without
-weakening the Aether 0.6 verifier or seed proof boundary.
+Stabilize the implemented M4 release surface, collect measured performance and
+reliability evidence, then begin only the research-gated M5 design work.
+Any expansion of M2/M4 interaction must first specify first-class outcome
+propagation, cross-weave resource ownership, destruction, and cancellation
+without weakening the Aether 0.7 verifier or seed proof boundary.

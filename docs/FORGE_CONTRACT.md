@@ -1,7 +1,7 @@
 # Forge Contract
 
-Status: implemented host ABI for Aether 0.6.0 Stage 7. Supports complete
-canonical Aether 0.6 Seed Profile self-hosting proofs; does not grant host
+Status: implemented host ABI for Aether 0.7.0 Stage 7/M4. Supports complete
+canonical Aether 0.7 Seed Profile self-hosting proofs; does not grant host
 capabilities to artifacts.
 
 ## Command
@@ -55,8 +55,9 @@ Stage 7 uses this contract for the checked-in seed compiler:
 4. Forge a second generation and a distinct source variant (regression test).
 5. Forge multi-weave Seed Profile programs with `call` and require
    byte-identical bootstrap match plus a successful run.
-6. Compare the prior canonical surface and the complete documented Aether 0.6
-   M2 resource corpus against bootstrap, including immutable records, text
+6. Compare the prior canonical surface, the complete documented Aether 0.6 M2
+   resource corpus, and the Aether 0.7 M4 effect corpus against bootstrap,
+   including immutable records, text
    escapes, a final source line without a terminator, arena exhaustion, buffer
    full, lookup fallback, Truth elements, and an access-bound helper.
 
@@ -65,7 +66,7 @@ Seed Profile. See [SEED_PROFILE.md](SEED_PROFILE.md).
 
 ## Current Limitation
 
-Canonical Aether 0.6 source-emission parity is proven under this contract. This
+Canonical Aether 0.7 source-emission parity is proven under this contract. This
 does not claim parity for invalid-source diagnostics: the Rust bootstrap remains
 the diagnostic authority. Any future language extension must meet the same
 reproducible comparison standard before it joins the seed product path.

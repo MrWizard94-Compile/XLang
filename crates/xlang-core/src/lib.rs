@@ -18,9 +18,9 @@ pub use authoring::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.6.0";
+pub const LANGUAGE_VERSION: &str = "0.7.0";
 
-/// Checked-in Aether-written seed compiler artifact (AETH v6).
+/// Checked-in Aether-written seed compiler artifact (AETH v7).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../seed/aether_seed.aeth"
@@ -30,6 +30,7 @@ const ARTIFACT_MAGIC: &[u8; 4] = b"AETH";
 const ARTIFACT_VERSION_V4: u8 = 4;
 const ARTIFACT_VERSION_V5: u8 = 5;
 const ARTIFACT_VERSION_V6: u8 = 6;
+const ARTIFACT_VERSION_V7: u8 = 7;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 const MAX_FUNCTIONS: usize = 256;
 const MAX_LOCALS: usize = u16::MAX as usize;
@@ -93,6 +94,9 @@ const OP_ALLOCATE: u8 = 48;
 const OP_BUFFER_APPEND: u8 = 49;
 const OP_BUFFER_AT: u8 = 50;
 const OP_COUNT: u8 = 52;
+const OP_RAISE: u8 = 53;
+const OP_FORWARD_CALL: u8 = 54;
+const OP_HANDLE_CALL: u8 = 55;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -154,6 +158,14 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-effect-004") {
+        "AE-EFFECT-004"
+    } else if normalized.contains("ae-effect-003") {
+        "AE-EFFECT-003"
+    } else if normalized.contains("ae-effect-002") {
+        "AE-EFFECT-002"
+    } else if normalized.contains("ae-effect-001") || normalized.contains("raises whole") {
+        "AE-EFFECT-001"
     } else if normalized.contains("arena")
         || normalized.contains("buffer")
         || normalized.contains("resource outcome")
@@ -281,6 +293,33 @@ pub enum ParameterMode {
     Access,
 }
 
+/// The bounded, statically declared control behavior of a weave.
+///
+/// Aether 0.7 admits only a total weave or the abortive `Error[Whole]` effect.
+/// It deliberately has no inferred row, ambient handler, or resumption.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Effect {
+    Total,
+    ErrorWhole,
+}
+
+impl Effect {
+    const fn to_byte(self) -> u8 {
+        match self {
+            Self::Total => 0,
+            Self::ErrorWhole => 1,
+        }
+    }
+
+    fn from_byte(value: u8, offset: usize) -> Result<Self, BytecodeError> {
+        match value {
+            0 => Ok(Self::Total),
+            1 => Ok(Self::ErrorWhole),
+            _ => Err(BytecodeError::new(offset, "unknown Aether effect tag")),
+        }
+    }
+}
+
 impl ParameterMode {
     fn to_byte(self) -> u8 {
         match self {
@@ -294,10 +333,10 @@ impl ParameterMode {
         match value {
             1 => Ok(Self::Own),
             2 => Ok(Self::Borrow),
-            3 if version == ARTIFACT_VERSION_V6 => Ok(Self::Access),
+            3 if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) => Ok(Self::Access),
             3 => Err(BytecodeError::new(
                 offset,
-                "access parameters are valid only in AETH v6 artifacts",
+                "access parameters are valid only in AETH v6 or v7 artifacts",
             )),
             _ => Err(BytecodeError::new(offset, "unknown Aether parameter mode")),
         }
@@ -349,6 +388,7 @@ pub struct Weave {
     pub name: String,
     pub parameters: Vec<Parameter>,
     pub result: ValueType,
+    pub effect: Effect,
     pub body: Vec<Statement>,
     pub span: Span,
 }
@@ -382,6 +422,22 @@ pub enum Statement {
         value: Expression,
         span: Span,
     },
+    Raise {
+        code: Atom,
+        span: Span,
+    },
+    Forward {
+        weave: String,
+        arguments: Vec<Atom>,
+        span: Span,
+    },
+    Handle {
+        weave: String,
+        arguments: Vec<Atom>,
+        success_destination: String,
+        error_destination: String,
+        span: Span,
+    },
     Choose {
         condition: Expression,
         when_bright: Vec<Statement>,
@@ -402,6 +458,9 @@ impl Statement {
             | Self::Revise { span, .. }
             | Self::Speak { span, .. }
             | Self::Yield { span, .. }
+            | Self::Raise { span, .. }
+            | Self::Forward { span, .. }
+            | Self::Handle { span, .. }
             | Self::Choose { span, .. }
             | Self::While { span, .. } => *span,
         }
@@ -418,7 +477,7 @@ pub struct Expression {
 pub enum ExpressionKind {
     Atom(Atom),
     /// The one VM-private, named capability declaration permitted per
-    /// invocation. The capacity is copied into the AETH v6 resource plan.
+    /// invocation. The capacity is copied into the AETH v6/v7 resource plan.
     Arena {
         capacity: u32,
     },
@@ -744,7 +803,7 @@ struct ResourceValidationContext<'a> {
 }
 
 /// Typed resource facts produced by source validation and consumed directly by
-/// AETH v6 lowering.  This is deliberately separate from the parsed AST: it
+/// AETH v6/v7 lowering. This is deliberately separate from the parsed AST: it
 /// records the resolved lexical region, owner place, element type, and stable
 /// replacement destination for every closed M2 outcome.
 #[derive(Clone)]
@@ -916,6 +975,7 @@ impl ResourceBindingState {
 struct FunctionSignature {
     parameters: Vec<Parameter>,
     result: ValueType,
+    effect: Effect,
 }
 
 #[derive(Clone, Copy)]
@@ -936,6 +996,7 @@ struct ArtifactFunction {
     name: String,
     parameters: Vec<(ValueType, ParameterMode)>,
     result: ValueType,
+    effect: Effect,
     locals: Vec<LocalDescriptor>,
     code: Vec<u8>,
 }
@@ -965,6 +1026,16 @@ struct VerificationState {
     stack: VerificationStack,
     initialized: Vec<bool>,
     moved: Vec<bool>,
+}
+
+/// Immutable verifier inputs shared by every instruction in one weave.
+/// Grouping these prevents the instruction checker from gaining a fragile,
+/// ever-growing parameter list as the verified instruction set evolves.
+struct VerificationContext<'a> {
+    function_index: usize,
+    function: &'a ArtifactFunction,
+    functions: &'a [ArtifactFunction],
+    records: &'a [ArtifactRecord],
 }
 
 /// The verifier records where a buffer value on the transient operand stack
@@ -1053,6 +1124,11 @@ enum RuntimeValue {
         len: usize,
         capacity: usize,
     },
+}
+
+enum RuntimeExit {
+    Return(RuntimeValue),
+    ErrorWhole(i64),
 }
 
 impl RuntimeValue {
@@ -1199,6 +1275,19 @@ enum Instruction {
         destination: usize,
     },
     Count,
+    Raise,
+    ForwardCall {
+        function: usize,
+        arguments: usize,
+    },
+    HandleCall {
+        function: usize,
+        arguments: usize,
+        success_destination: usize,
+        error_destination: usize,
+        success_target: usize,
+        error_target: usize,
+    },
     Call {
         function: usize,
         arguments: usize,
@@ -1265,7 +1354,7 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
                 "record declarations must appear after world and before every weave",
             ));
         }
-        let (name, parameters, result) = parse_weave_header(line, &record_types)?;
+        let (name, parameters, result, effect) = parse_weave_header(line, &record_types)?;
         index += 1;
         let body = parse_block(&lines, &mut index, 1)?;
         if body.is_empty() {
@@ -1278,6 +1367,7 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
             name,
             parameters,
             result,
+            effect,
             body,
             span: line.span(1),
         });
@@ -1369,6 +1459,9 @@ pub fn format_program(program: &Program) -> String {
         }
         formatted.push_str("] -> ");
         formatted.push_str(&format_value_type(weave.result, &program.records));
+        if weave.effect == Effect::ErrorWhole {
+            formatted.push_str(" raises Whole");
+        }
         formatted.push_str(":\n");
         write_block(&weave.body, 1, &mut formatted);
     }
@@ -1399,6 +1492,11 @@ pub fn canonical_ast(program: &Program) -> String {
         output.push_str(&weave.name);
         output.push_str("->");
         output.push_str(&format_value_type(weave.result, &program.records));
+        output.push('#');
+        output.push_str(match weave.effect {
+            Effect::Total => "Total",
+            Effect::ErrorWhole => "ErrorWhole",
+        });
         output.push_str(")[");
         for (index, parameter) in weave.parameters.iter().enumerate() {
             if index > 0 {
@@ -1460,16 +1558,20 @@ pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
             }
         }
         validate_artifact_resource_signature(function, artifact.version)?;
+        validate_artifact_effect_signature(function, artifact.version)?;
     }
 
     let Some(main_index) = main_index else {
         return Err(BytecodeError::new(0, "artifact has no main weave"));
     };
     let main = &artifact.functions[main_index];
-    if !main.parameters.is_empty() || main.result != ValueType::Whole {
+    if !main.parameters.is_empty()
+        || main.result != ValueType::Whole
+        || main.effect != Effect::Total
+    {
         return Err(BytecodeError::new(
             0,
-            "main must accept no parameters and yield Whole",
+            "main must accept no parameters, remain total, and yield Whole",
         ));
     }
 
@@ -1532,10 +1634,12 @@ fn validate_artifact_resource_signature(
             "AETH v6 M2 does not permit Buffer values as weave results",
         ));
     }
-    if has_buffer && (version != ARTIFACT_VERSION_V6 || access_count != 1) {
+    if has_buffer
+        && (!matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) || access_count != 1)
+    {
         return Err(BytecodeError::new(
             0,
-            "artifact Buffer signatures require exactly one AETH v6 access Arena parameter",
+            "artifact Buffer signatures require exactly one AETH v6/v7 access Arena parameter",
         ));
     }
     if function
@@ -1546,6 +1650,36 @@ fn validate_artifact_resource_signature(
         return Err(BytecodeError::new(
             0,
             "artifact cannot serialize an access loan local",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_artifact_effect_signature(
+    function: &ArtifactFunction,
+    version: u8,
+) -> Result<(), BytecodeError> {
+    if version != ARTIFACT_VERSION_V7 && function.effect != Effect::Total {
+        return Err(BytecodeError::new(
+            0,
+            "pre-v7 artifacts cannot declare an Aether error effect",
+        ));
+    }
+    if function.effect != Effect::ErrorWhole {
+        return Ok(());
+    }
+    if function.result != ValueType::Whole {
+        return Err(BytecodeError::new(
+            0,
+            "AETH Error[Whole] functions must return Whole for the bounded terminal handler form",
+        ));
+    }
+    if function.parameters.iter().any(|(value_type, mode)| {
+        *mode != ParameterMode::Own || !matches!(value_type, ValueType::Whole | ValueType::Truth)
+    }) {
+        return Err(BytecodeError::new(
+            0,
+            "AETH Error[Whole] functions accept only ordinary Whole or Truth copy parameters",
         ));
     }
     Ok(())
@@ -1577,7 +1711,7 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
             }
         }
     }
-    if artifact.version != ARTIFACT_VERSION_V6 {
+    if !matches!(artifact.version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) {
         if artifact.arena_capacity != 0 || resource_instruction_seen {
             return Err(BytecodeError::new(
                 0,
@@ -1589,19 +1723,19 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
     if artifact.arena_capacity == 0 && resource_instruction_seen {
         return Err(BytecodeError::new(
             0,
-            "AETH v6 resource instructions require a nonzero arena resource plan",
+            "AETH v6/v7 resource instructions require a nonzero arena resource plan",
         ));
     }
     if artifact.arena_capacity > 0 && arena_declarations != 1 {
         return Err(BytecodeError::new(
             0,
-            "AETH v6 nonzero arena plan requires exactly one main arena declaration",
+            "AETH v6/v7 nonzero arena plan requires exactly one main arena declaration",
         ));
     }
     if artifact.arena_capacity == 0 && arena_declarations != 0 {
         return Err(BytecodeError::new(
             0,
-            "AETH v6 zero arena plan cannot declare an Arena capability",
+            "AETH v6/v7 zero arena plan cannot declare an Arena capability",
         ));
     }
     Ok(())
@@ -1683,6 +1817,14 @@ fn invoke_artifact(
         .functions
         .get(function_index)
         .ok_or_else(|| BytecodeError::new(0, "artifact invocation index is invalid"))?;
+    if function.effect != Effect::Total {
+        return Err(BytecodeError::new(
+            0,
+            format!(
+                "host invocation refuses weave {weave_name} because Error[Whole] must be handled inside Aether"
+            ),
+        ));
+    }
     if function.parameters.len() != arguments.len() {
         return Err(BytecodeError::new(
             0,
@@ -1728,7 +1870,7 @@ fn invoke_artifact(
     }
     let mut stdout = String::new();
     let mut runtime_state = RuntimeState::new(artifact.arena_capacity)?;
-    let value = execute_function(
+    let exit = execute_function(
         artifact,
         function_index,
         runtime_arguments,
@@ -1736,6 +1878,12 @@ fn invoke_artifact(
         &mut runtime_state,
         0,
     )?;
+    let RuntimeExit::Return(value) = exit else {
+        return Err(BytecodeError::new(
+            0,
+            "a total host invocation reached an unhandled Aether Error[Whole] exit",
+        ));
+    };
     Ok(InvocationOutput {
         stdout,
         value: invocation_from_runtime(value)?,
@@ -1809,7 +1957,7 @@ fn parse_world(line: SourceLine<'_>) -> Result<String, CompilerError> {
 fn parse_weave_header(
     line: SourceLine<'_>,
     record_types: &BTreeMap<String, u16>,
-) -> Result<(String, Vec<Parameter>, ValueType), CompilerError> {
+) -> Result<(String, Vec<Parameter>, ValueType, Effect), CompilerError> {
     let Some(without_colon) = line.content.strip_suffix(':') else {
         return Err(CompilerError::new(
             line.span(1),
@@ -1845,8 +1993,18 @@ fn parse_weave_header(
             "weave result must use -> Type",
         ));
     };
+    let (result_text, effect) = if let Some(result) = result_text.strip_suffix(" raises Whole") {
+        (result, Effect::ErrorWhole)
+    } else if result_text.contains(" raises ") {
+        return Err(CompilerError::new(
+            line.span(line.content.len()),
+            "Aether M4 supports only the typed effect phrase raises Whole",
+        ));
+    } else {
+        (result_text, Effect::Total)
+    };
     let result = parse_value_type(result_text, line.span(line.content.len()), record_types)?;
-    Ok((name.to_owned(), parameters, result))
+    Ok((name.to_owned(), parameters, result, effect))
 }
 
 fn parse_parameters(
@@ -2204,9 +2362,94 @@ fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerErro
             span,
         });
     }
+    if let Some(code) = line.content.strip_prefix("raise ") {
+        return Ok(Statement::Raise {
+            code: parse_single_atom(code, span, "raise")?,
+            span,
+        });
+    }
+    if let Some(call_source) = line.content.strip_prefix("forward ") {
+        let (weave, arguments) = parse_effect_call(call_source, span, "forward")?;
+        return Ok(Statement::Forward {
+            weave,
+            arguments,
+            span,
+        });
+    }
+    if let Some(handle_source) = line.content.strip_prefix("handle ") {
+        let (weave, arguments, success_destination, error_destination) =
+            parse_handle_header(handle_source, span)?;
+        return Ok(Statement::Handle {
+            weave,
+            arguments,
+            success_destination,
+            error_destination,
+            span,
+        });
+    }
     Err(CompilerError::new(
         span,
-        "unknown Aether statement; use bind, revise, speak, yield, choose, or while",
+        "unknown Aether statement; use bind, revise, speak, yield, raise, forward, choose, while, or handle",
+    ))
+}
+
+fn parse_single_atom(source: &str, span: Span, operation: &str) -> Result<Atom, CompilerError> {
+    let tokens = tokenize_fragment(source, span)?;
+    if tokens.len() != 1 {
+        return Err(CompilerError::new(
+            span,
+            format!("{operation} requires exactly one atom"),
+        ));
+    }
+    let mut index = 0;
+    parse_atom_from(&tokens, &mut index, span)
+}
+
+fn parse_effect_call(
+    source: &str,
+    span: Span,
+    operation: &str,
+) -> Result<(String, Vec<Atom>), CompilerError> {
+    let expression = parse_expression(source, span)?;
+    let ExpressionKind::Call { weave, arguments } = expression.kind else {
+        return Err(CompilerError::new(
+            span,
+            format!("{operation} requires call followed by a weave name"),
+        ));
+    };
+    Ok((weave, arguments))
+}
+
+fn parse_handle_header(
+    source: &str,
+    span: Span,
+) -> Result<(String, Vec<Atom>, String, String), CompilerError> {
+    let Some((success_source, error_destination)) = source.rsplit_once(" otherwise error into ")
+    else {
+        return Err(CompilerError::new(
+            span,
+            "handle requires call weave arguments into a success destination otherwise error into an error destination",
+        ));
+    };
+    let Some((call_source, success_destination)) = success_source.rsplit_once(" into ") else {
+        return Err(CompilerError::new(
+            span,
+            "handle requires call weave arguments into a mutable destination",
+        ));
+    };
+    validate_name(
+        success_destination,
+        span,
+        "handle success destination",
+        false,
+    )?;
+    validate_name(error_destination, span, "handle error destination", false)?;
+    let (weave, arguments) = parse_effect_call(call_source, span, "handle")?;
+    Ok((
+        weave,
+        arguments,
+        success_destination.to_owned(),
+        error_destination.to_owned(),
     ))
 }
 
@@ -2786,6 +3029,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
                 FunctionSignature {
                     parameters: weave.parameters.clone(),
                     result: weave.result,
+                    effect: weave.effect,
                 },
             )
             .is_some()
@@ -2803,16 +3047,29 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
             "an Aether program must declare weave main [] -> Whole:",
         ));
     };
+    if main.effect != Effect::Total {
+        return Err(CompilerError::new(
+            main.span,
+            "AE-EFFECT-001: main must remain total; handle Error[Whole] before the program entry boundary",
+        ));
+    }
     if !main.parameters.is_empty() || main.result != ValueType::Whole {
         return Err(CompilerError::new(
             main.span,
-            "main must use the declaration weave main [] -> Whole:",
+            "main must use the total declaration weave main [] -> Whole:",
         ));
     }
 
     for weave in &program.weaves {
         validate_value_type(weave.result, &program.records, weave.span)?;
         validate_resource_signature(weave)?;
+        validate_effect_signature(weave)?;
+        if weave_uses_resource(weave) && weave_uses_effect_control(weave) {
+            return Err(CompilerError::new(
+                weave.span,
+                "AE-EFFECT-003: Aether M4 error control cannot share a weave with M2 arena, Buffer, access, or resource outcomes",
+            ));
+        }
         let access_arena = weave
             .parameters
             .iter()
@@ -2842,6 +3099,35 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         )?;
     }
     Ok(resource_plan)
+}
+
+fn validate_effect_signature(weave: &Weave) -> Result<(), CompilerError> {
+    if weave.effect == Effect::Total {
+        return Ok(());
+    }
+    if weave.name == "main" {
+        return Err(CompilerError::new(
+            weave.span,
+            "main must remain total; handle Error[Whole] before the program entry boundary",
+        ));
+    }
+    if weave.result != ValueType::Whole {
+        return Err(CompilerError::new(
+            weave.span,
+            "AE-EFFECT-003: a weave that raises Whole must return Whole so a terminal handler can preserve a total result",
+        ));
+    }
+    for parameter in &weave.parameters {
+        if parameter.mode != ParameterMode::Own
+            || !matches!(parameter.value_type, ValueType::Whole | ValueType::Truth)
+        {
+            return Err(CompilerError::new(
+                parameter.span,
+                "AE-EFFECT-003: a weave that raises Whole accepts only ordinary Whole or Truth copy parameters",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_resource_signature(weave: &Weave) -> Result<(), CompilerError> {
@@ -3012,6 +3298,8 @@ fn collect_resource_declarations(
             | Statement::Yield { value, .. } => {
                 *resource_operations |= expression_uses_resource(value);
             }
+            Statement::Raise { .. } | Statement::Forward { .. } => {}
+            Statement::Handle { .. } => {}
             Statement::Choose {
                 condition,
                 when_bright,
@@ -3042,6 +3330,52 @@ fn expression_uses_resource(expression: &Expression) -> bool {
                 ..
             }
     )
+}
+
+fn weave_uses_resource(weave: &Weave) -> bool {
+    fn block_uses_resource(statements: &[Statement]) -> bool {
+        statements.iter().any(|statement| match statement {
+            Statement::Bind { value, .. }
+            | Statement::Revise { value, .. }
+            | Statement::Speak { value, .. }
+            | Statement::Yield { value, .. } => expression_uses_resource(value),
+            Statement::Raise { .. } | Statement::Forward { .. } => false,
+            Statement::Handle { .. } => false,
+            Statement::Choose {
+                condition,
+                when_bright,
+                when_dim,
+                ..
+            } => {
+                expression_uses_resource(condition)
+                    || block_uses_resource(when_bright)
+                    || block_uses_resource(when_dim)
+            }
+            Statement::While {
+                condition, body, ..
+            } => expression_uses_resource(condition) || block_uses_resource(body),
+        })
+    }
+    block_uses_resource(&weave.body)
+}
+
+fn weave_uses_effect_control(weave: &Weave) -> bool {
+    fn block_uses_effect_control(statements: &[Statement]) -> bool {
+        statements.iter().any(|statement| match statement {
+            Statement::Raise { .. } | Statement::Forward { .. } | Statement::Handle { .. } => true,
+            Statement::Choose {
+                when_bright,
+                when_dim,
+                ..
+            } => block_uses_effect_control(when_bright) || block_uses_effect_control(when_dim),
+            Statement::While { body, .. } => block_uses_effect_control(body),
+            Statement::Bind { .. }
+            | Statement::Revise { .. }
+            | Statement::Speak { .. }
+            | Statement::Yield { .. } => false,
+        })
+    }
+    block_uses_effect_control(&weave.body)
 }
 
 fn is_buffer_type(value_type: ValueType) -> bool {
@@ -3163,6 +3497,101 @@ fn validate_block(
                 let value_type = expression_type(value, scope, signatures, records)?;
                 require_source_type(value_type, weave.result, value.span, "yield")?;
             }
+            Statement::Raise { code, span } => {
+                if !root || index + 1 != statements.len() {
+                    return Err(CompilerError::new(
+                        *span,
+                        "raise is allowed only as the final statement of an erroring weave root",
+                    ));
+                }
+                if weave.effect != Effect::ErrorWhole {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-EFFECT-001: raise requires the weave signature phrase raises Whole",
+                    ));
+                }
+                validate_effect_boundary(scope, *span)?;
+                validate_effect_code(code, scope)?;
+            }
+            Statement::Forward {
+                weave: called,
+                arguments,
+                span,
+            } => {
+                if !root || index + 1 != statements.len() {
+                    return Err(CompilerError::new(
+                        *span,
+                        "forward is allowed only as the final statement of an erroring weave root",
+                    ));
+                }
+                if weave.effect != Effect::ErrorWhole {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-EFFECT-001: forward requires the weave signature phrase raises Whole",
+                    ));
+                }
+                validate_effect_boundary(scope, *span)?;
+                let signature =
+                    validate_effect_call(called, arguments, scope, signatures, *span, "forward")?;
+                if signature.result != weave.result {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!(
+                            "AE-EFFECT-002: forward call {called} returns {}, but this weave returns {}",
+                            signature.result, weave.result
+                        ),
+                    ));
+                }
+            }
+            Statement::Handle {
+                weave: called,
+                arguments,
+                success_destination,
+                error_destination,
+                span,
+            } => {
+                if !root || index + 1 != statements.len() {
+                    return Err(CompilerError::new(
+                        *span,
+                        "handle is allowed only as the final statement of a total weave root",
+                    ));
+                }
+                if weave.effect != Effect::Total {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-EFFECT-002: handle discharges Error[Whole], so its enclosing weave must be total",
+                    ));
+                }
+                validate_effect_boundary(scope, *span)?;
+                let signature =
+                    validate_effect_call(called, arguments, scope, signatures, *span, "handle")?;
+                if weave.result != ValueType::Whole || signature.result != ValueType::Whole {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-EFFECT-002: the terminal M4 handle form requires both caller and callee results to be Whole",
+                    ));
+                }
+                validate_effect_destination(
+                    scope,
+                    success_destination,
+                    signature.result,
+                    *span,
+                    "handle success",
+                )?;
+                if success_destination == error_destination {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-EFFECT-002: handle success and error destinations must be distinct mutable root bindings",
+                    ));
+                }
+                validate_effect_destination(
+                    scope,
+                    error_destination,
+                    ValueType::Whole,
+                    *span,
+                    "handle error",
+                )?;
+            }
             Statement::Choose {
                 condition,
                 when_bright,
@@ -3253,6 +3682,9 @@ fn validate_block(
             statements.last(),
             Some(
                 Statement::Yield { .. }
+                    | Statement::Raise { .. }
+                    | Statement::Forward { .. }
+                    | Statement::Handle { .. }
                     | Statement::Choose {
                         condition: Expression {
                             kind: ExpressionKind::Resource(_),
@@ -3266,6 +3698,128 @@ fn validate_block(
         return Err(CompilerError::new(
             weave.span,
             "every weave must end with yield",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_effect_boundary(scope: &BindingScope, span: Span) -> Result<(), CompilerError> {
+    let Some((name, _)) = scope.iter().find(|(_, binding)| {
+        !binding.moved
+            && (is_unique_value(binding.value_type)
+                || binding.value_type == ValueType::Arena
+                || !matches!(binding.resource, ResourceBindingState::Plain))
+    }) else {
+        return Ok(());
+    };
+    Err(CompilerError::new(
+        span,
+        format!(
+            "AE-EFFECT-003: effect control cannot cross live owner, loan, arena, or Buffer binding {name}"
+        ),
+    ))
+}
+
+fn validate_effect_code(code: &Atom, scope: &mut BindingScope) -> Result<(), CompilerError> {
+    if !matches!(code.kind, AtomKind::Whole(_) | AtomKind::Name(_)) {
+        return Err(CompilerError::new(
+            code.span,
+            "AE-EFFECT-004: raise requires a Whole literal or copy binding name",
+        ));
+    }
+    let value_type = atom_type(code, scope)?;
+    if value_type != ValueType::Whole {
+        return Err(CompilerError::new(
+            code.span,
+            "AE-EFFECT-004: raise requires a Whole literal or copy binding name",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_effect_call(
+    called: &str,
+    arguments: &[Atom],
+    scope: &mut BindingScope,
+    signatures: &BTreeMap<String, FunctionSignature>,
+    span: Span,
+    operation: &str,
+) -> Result<FunctionSignature, CompilerError> {
+    let Some(signature) = signatures.get(called) else {
+        return Err(CompilerError::new(
+            span,
+            format!("weave {called} has not been declared"),
+        ));
+    };
+    if signature.effect != Effect::ErrorWhole {
+        return Err(CompilerError::new(
+            span,
+            format!(
+                "AE-EFFECT-002: {operation} call {called} must target a weave that raises Whole"
+            ),
+        ));
+    }
+    if signature.parameters.len() != arguments.len() {
+        return Err(CompilerError::new(
+            span,
+            format!(
+                "{operation} call {called} requires {} argument(s), received {}",
+                signature.parameters.len(),
+                arguments.len()
+            ),
+        ));
+    }
+    for (argument, parameter) in arguments.iter().zip(&signature.parameters) {
+        if parameter.mode != ParameterMode::Own
+            || !matches!(parameter.value_type, ValueType::Whole | ValueType::Truth)
+        {
+            return Err(CompilerError::new(
+                span,
+                format!(
+                    "AE-EFFECT-003: {operation} call {called} cannot cross a non-copy parameter boundary"
+                ),
+            ));
+        }
+        if !matches!(
+            argument.kind,
+            AtomKind::Whole(_) | AtomKind::Truth(_) | AtomKind::Name(_)
+        ) {
+            return Err(CompilerError::new(
+                argument.span,
+                format!(
+                    "AE-EFFECT-003: {operation} call arguments must be copy literals or copy binding names"
+                ),
+            ));
+        }
+        require_source_type(
+            atom_type(argument, scope)?,
+            parameter.value_type,
+            argument.span,
+            "effect call argument",
+        )?;
+    }
+    Ok(signature.clone())
+}
+
+fn validate_effect_destination(
+    scope: &BindingScope,
+    destination: &str,
+    expected: ValueType,
+    span: Span,
+    operation: &str,
+) -> Result<(), CompilerError> {
+    let Some(binding) = scope.get(destination) else {
+        return Err(CompilerError::new(
+            span,
+            format!("AE-EFFECT-002: {operation} destination {destination} has not been introduced"),
+        ));
+    };
+    if !binding.mutable || binding.moved || binding.value_type != expected {
+        return Err(CompilerError::new(
+            span,
+            format!(
+                "AE-EFFECT-004: {operation} destination {destination} must be a live mutable {expected} root binding"
+            ),
         ));
     }
     Ok(())
@@ -3950,6 +4504,14 @@ fn expression_type(
                     format!("weave {weave} has not been declared"),
                 ));
             };
+            if signature.effect != Effect::Total {
+                return Err(CompilerError::new(
+                    expression.span,
+                    format!(
+                        "AE-EFFECT-001: call {weave} raises Whole; use terminal handle or forward instead of an ordinary call"
+                    ),
+                ));
+            }
             if signature.parameters.len() != arguments.len() {
                 return Err(CompilerError::new(
                     expression.span,
@@ -4289,7 +4851,7 @@ fn emit_bytecode_with_resource_plan(
     }
 
     let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
-    bytecode.push(ARTIFACT_VERSION_V6);
+    bytecode.push(ARTIFACT_VERSION_V7);
     write_u32(&mut bytecode, resource_plan.arena_capacity());
     write_u16(
         &mut bytecode,
@@ -4344,6 +4906,7 @@ fn emit_bytecode_with_resource_plan(
             bytecode.push(parameter.mode.to_byte());
         }
         write_value_type(&mut bytecode, weave.result);
+        bytecode.push(weave.effect.to_byte());
         write_u16(
             &mut bytecode,
             u16::try_from(locals.len()).map_err(|_| {
@@ -4609,6 +5172,92 @@ fn emit_block(
             }
             Statement::Yield { value, .. } => {
                 emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
+                code.push(OP_YIELD);
+            }
+            Statement::Raise { code: value, .. } => {
+                emit_atom(value, layout, code)?;
+                code.push(OP_RAISE);
+            }
+            Statement::Forward {
+                weave, arguments, ..
+            } => {
+                for argument in arguments {
+                    emit_atom(argument, layout, code)?;
+                }
+                let function = weave_indices.get(weave).ok_or_else(|| {
+                    CompilerError::new(
+                        statement.span(),
+                        format!("internal compiler could not resolve weave {weave}"),
+                    )
+                })?;
+                code.push(OP_FORWARD_CALL);
+                write_u16(
+                    code,
+                    u16::try_from(*function).map_err(|_| {
+                        CompilerError::new(
+                            statement.span(),
+                            "weave index is outside the AETH range",
+                        )
+                    })?,
+                );
+                code.push(u8::try_from(arguments.len()).map_err(|_| {
+                    CompilerError::new(statement.span(), "call has too many AETH arguments")
+                })?);
+            }
+            Statement::Handle {
+                weave,
+                arguments,
+                success_destination,
+                error_destination,
+                ..
+            } => {
+                for argument in arguments {
+                    emit_atom(argument, layout, code)?;
+                }
+                let function = weave_indices.get(weave).ok_or_else(|| {
+                    CompilerError::new(
+                        statement.span(),
+                        format!("internal compiler could not resolve weave {weave}"),
+                    )
+                })?;
+                let success_slot = layout.get(success_destination).ok_or_else(|| {
+                    CompilerError::new(
+                        statement.span(),
+                        "internal compiler could not resolve handle success destination",
+                    )
+                })?;
+                let error_slot = layout.get(error_destination).ok_or_else(|| {
+                    CompilerError::new(
+                        statement.span(),
+                        "internal compiler could not resolve handle error destination",
+                    )
+                })?;
+                code.push(OP_HANDLE_CALL);
+                write_u16(
+                    code,
+                    u16::try_from(*function).map_err(|_| {
+                        CompilerError::new(
+                            statement.span(),
+                            "weave index is outside the AETH range",
+                        )
+                    })?,
+                );
+                code.push(u8::try_from(arguments.len()).map_err(|_| {
+                    CompilerError::new(statement.span(), "call has too many AETH arguments")
+                })?);
+                write_u16(code, success_slot.index);
+                write_u16(code, error_slot.index);
+                let success_target = reserve_u32(code);
+                let error_target = reserve_u32(code);
+                let success_start = code.len();
+                patch_u32(code, success_target, success_start)?;
+                code.push(OP_LOAD);
+                write_u16(code, success_slot.index);
+                code.push(OP_YIELD);
+                let error_start = code.len();
+                patch_u32(code, error_target, error_start)?;
+                code.push(OP_LOAD);
+                write_u16(code, error_slot.index);
                 code.push(OP_YIELD);
             }
             Statement::Choose {
@@ -5000,7 +5649,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     let version = bytecode[ARTIFACT_MAGIC.len()];
     if !matches!(
         version,
-        ARTIFACT_VERSION_V4 | ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6
+        ARTIFACT_VERSION_V4 | ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
     ) {
         return Err(BytecodeError::new(
             ARTIFACT_MAGIC.len(),
@@ -5008,12 +5657,12 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         ));
     }
     let mut position = ARTIFACT_MAGIC.len() + 1;
-    let arena_capacity = if version == ARTIFACT_VERSION_V6 {
+    let arena_capacity = if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) {
         let capacity = read_u32(bytecode, &mut position)?;
         if capacity > MAX_ARENA_BYTES {
             return Err(BytecodeError::new(
                 position,
-                "AETH v6 arena capacity exceeds the M2 safety limit",
+                "AETH v6/v7 arena capacity exceeds the M2 safety limit",
             ));
         }
         capacity
@@ -5021,7 +5670,10 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         0
     };
     let mut records = Vec::new();
-    if matches!(version, ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6) {
+    if matches!(
+        version,
+        ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
+    ) {
         let record_count = usize::from(read_u16(bytecode, &mut position)?);
         if (version == ARTIFACT_VERSION_V5 && record_count == 0) || record_count > MAX_RECORDS {
             return Err(BytecodeError::new(
@@ -5101,6 +5753,11 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             parameters.push((value_type, mode));
         }
         let result = read_value_type(bytecode, &mut position, version, records.len())?;
+        let effect = if version == ARTIFACT_VERSION_V7 {
+            Effect::from_byte(read_byte(bytecode, &mut position)?, position)?
+        } else {
+            Effect::Total
+        };
         let local_count = usize::from(read_u16(bytecode, &mut position)?);
         if local_count > MAX_LOCALS {
             return Err(BytecodeError::new(
@@ -5140,6 +5797,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             name,
             parameters,
             result,
+            effect,
             locals,
             code: code.to_vec(),
         });
@@ -5206,6 +5864,13 @@ fn verify_function(
     states.insert(0_usize, initial);
     let mut queue = VecDeque::from([0_usize]);
     let mut yielded = false;
+    let mut effect_exited = false;
+    let context = VerificationContext {
+        function_index,
+        function,
+        functions,
+        records,
+    };
 
     while let Some(offset) = queue.pop_front() {
         let state = states
@@ -5217,13 +5882,11 @@ fn verify_function(
             .ok_or_else(|| BytecodeError::new(offset, "instruction offset is invalid"))?]
         .clone();
         let successors = verify_instruction(
-            function_index,
-            function,
-            functions,
-            records,
+            &context,
             &instruction,
             state,
             &mut yielded,
+            &mut effect_exited,
         )?;
         for (target, next_state) in successors {
             merge_verifier_state(
@@ -5235,7 +5898,7 @@ fn verify_function(
             )?;
         }
     }
-    if !yielded {
+    if !(yielded || function.effect == Effect::ErrorWhole && effect_exited) {
         return Err(BytecodeError::new(0, "weave has no reachable yield"));
     }
     if states.len() != decoded.len() {
@@ -5248,14 +5911,16 @@ fn verify_function(
 }
 
 fn verify_instruction(
-    function_index: usize,
-    function: &ArtifactFunction,
-    functions: &[ArtifactFunction],
-    records: &[ArtifactRecord],
+    context: &VerificationContext<'_>,
     decoded: &DecodedInstruction,
     mut state: VerificationState,
     yielded: &mut bool,
+    effect_exited: &mut bool,
 ) -> Result<Vec<(usize, VerificationState)>, BytecodeError> {
+    let function_index = context.function_index;
+    let function = context.function;
+    let functions = context.functions;
+    let records = context.records;
     let offset = decoded.offset;
     let next = decoded.next_offset;
     let continue_with = |state: VerificationState| Ok(vec![(next, state)]);
@@ -5657,6 +6322,102 @@ fn verify_instruction(
             state.stack.push(field.value_type);
             continue_with(state)
         }
+        Instruction::Raise => {
+            if function.effect != Effect::ErrorWhole {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH RAISE requires an Error[Whole] function signature",
+                ));
+            }
+            pop_type(&mut state.stack, ValueType::Whole, offset, "raise")?;
+            require_verifier_effect_boundary(function, &state, offset)?;
+            *effect_exited = true;
+            Ok(Vec::new())
+        }
+        Instruction::ForwardCall {
+            function: called,
+            arguments,
+        } => {
+            if function.effect != Effect::ErrorWhole {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH FORWARD_CALL requires an Error[Whole] function signature",
+                ));
+            }
+            let Some(called_function) = functions.get(*called) else {
+                return Err(BytecodeError::new(
+                    offset,
+                    "forward call references an unknown weave",
+                ));
+            };
+            verify_effect_call_signature(function, called_function, *arguments, offset, "forward")?;
+            pop_verifier_effect_arguments(&mut state.stack, called_function, offset, "forward")?;
+            require_verifier_effect_boundary(function, &state, offset)?;
+            *effect_exited = true;
+            Ok(Vec::new())
+        }
+        Instruction::HandleCall {
+            function: called,
+            arguments,
+            success_destination,
+            error_destination,
+            success_target,
+            error_target,
+        } => {
+            if function.effect != Effect::Total {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH HANDLE_CALL must occur in a total function",
+                ));
+            }
+            let Some(called_function) = functions.get(*called) else {
+                return Err(BytecodeError::new(
+                    offset,
+                    "handle call references an unknown weave",
+                ));
+            };
+            verify_effect_call_signature(function, called_function, *arguments, offset, "handle")?;
+            if function.result != ValueType::Whole || called_function.result != ValueType::Whole {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH HANDLE_CALL requires Whole caller and callee results for the bounded terminal handler form",
+                ));
+            }
+            pop_verifier_effect_arguments(&mut state.stack, called_function, offset, "handle")?;
+            require_verifier_effect_boundary(function, &state, offset)?;
+            if success_destination == error_destination {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH HANDLE_CALL requires distinct success and error destination slots",
+                ));
+            }
+            let success_local = local_descriptor(function, *success_destination, offset)?;
+            if !success_local.mutable
+                || success_local.value_type != called_function.result
+                || !state.initialized[*success_destination]
+                || state.moved[*success_destination]
+            {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH HANDLE_CALL success destination must be a live mutable matching local",
+                ));
+            }
+            let error_local = local_descriptor(function, *error_destination, offset)?;
+            if !error_local.mutable
+                || error_local.value_type != ValueType::Whole
+                || !state.initialized[*error_destination]
+                || state.moved[*error_destination]
+            {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH HANDLE_CALL error destination must be a live mutable Whole local",
+                ));
+            }
+            Ok(vec![
+                (*success_target, state.clone()),
+                (*error_target, state),
+            ])
+        }
         Instruction::Call {
             function: called,
             arguments,
@@ -5667,6 +6428,12 @@ fn verify_instruction(
                     "call references an unknown weave",
                 ));
             };
+            if called_function.effect != Effect::Total {
+                return Err(BytecodeError::new(
+                    offset,
+                    "ordinary AETH CALL cannot invoke an Error[Whole] weave; use HANDLE_CALL or FORWARD_CALL",
+                ));
+            }
             if called_function.parameters.len() != *arguments {
                 return Err(BytecodeError::new(
                     offset,
@@ -5709,6 +6476,82 @@ fn verify_instruction(
     }
 }
 
+fn require_verifier_effect_boundary(
+    function: &ArtifactFunction,
+    state: &VerificationState,
+    offset: usize,
+) -> Result<(), BytecodeError> {
+    if !state.stack.is_empty() {
+        return Err(BytecodeError::new(
+            offset,
+            "AETH effect control requires an empty operand stack after its arguments",
+        ));
+    }
+    if function.locals.iter().enumerate().any(|(index, local)| {
+        state.initialized[index]
+            && !state.moved[index]
+            && (is_unique_value(local.value_type)
+                || local.value_type == ValueType::Arena
+                || is_buffer_type(local.value_type))
+    }) {
+        return Err(BytecodeError::new(
+            offset,
+            "AETH effect control cannot cross a live owner, Arena, or Buffer local",
+        ));
+    }
+    Ok(())
+}
+
+fn verify_effect_call_signature(
+    caller: &ArtifactFunction,
+    callee: &ArtifactFunction,
+    arguments: usize,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if callee.effect != Effect::ErrorWhole {
+        return Err(BytecodeError::new(
+            offset,
+            format!("AETH {operation} call must target an Error[Whole] weave"),
+        ));
+    }
+    if callee.parameters.len() != arguments {
+        return Err(BytecodeError::new(
+            offset,
+            format!("AETH {operation} call argument count disagrees with its weave signature"),
+        ));
+    }
+    if callee.parameters.iter().any(|(value_type, mode)| {
+        *mode != ParameterMode::Own || !matches!(value_type, ValueType::Whole | ValueType::Truth)
+    }) {
+        return Err(BytecodeError::new(
+            offset,
+            format!("AETH {operation} call cannot cross a non-copy parameter boundary"),
+        ));
+    }
+    if operation == "forward"
+        && (caller.effect != Effect::ErrorWhole || caller.result != callee.result)
+    {
+        return Err(BytecodeError::new(
+            offset,
+            "AETH FORWARD_CALL requires matching Error[Whole] caller and callee result signatures",
+        ));
+    }
+    Ok(())
+}
+
+fn pop_verifier_effect_arguments(
+    stack: &mut VerificationStack,
+    callee: &ArtifactFunction,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    for (expected, _) in callee.parameters.iter().rev() {
+        pop_type(stack, *expected, offset, operation)?;
+    }
+    Ok(())
+}
+
 fn merge_verifier_state(
     target: usize,
     next: VerificationState,
@@ -5739,6 +6582,11 @@ fn merge_verifier_state(
 fn jump_targets(instruction: &Instruction) -> Vec<usize> {
     match instruction {
         Instruction::JumpIfDim(target) | Instruction::Jump(target) => vec![*target],
+        Instruction::HandleCall {
+            success_target,
+            error_target,
+            ..
+        } => vec![*success_target, *error_target],
         _ => Vec::new(),
     }
 }
@@ -5750,7 +6598,7 @@ fn execute_function(
     stdout: &mut String,
     runtime_state: &mut RuntimeState,
     depth: usize,
-) -> Result<RuntimeValue, BytecodeError> {
+) -> Result<RuntimeExit, BytecodeError> {
     if depth >= MAX_CALL_DEPTH {
         return Err(BytecodeError::new(
             0,
@@ -6005,7 +6853,7 @@ fn execute_function(
                         "yield left values on the runtime stack",
                     ));
                 }
-                return Ok(value);
+                return Ok(RuntimeExit::Return(value));
             }
             Instruction::Sum => {
                 let right = pop_whole(&mut stack, decoded.offset, "sum")?;
@@ -6347,6 +7195,182 @@ fn execute_function(
                 require_runtime_type(&value, definition.value_type, decoded.offset, "field")?;
                 stack.push(value);
             }
+            Instruction::Raise => {
+                if function.effect != Effect::ErrorWhole {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime raise occurred in a total weave",
+                    ));
+                }
+                let code = pop_whole(&mut stack, decoded.offset, "raise")?;
+                if !stack.is_empty() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime raise left values on the operand stack",
+                    ));
+                }
+                return Ok(RuntimeExit::ErrorWhole(code));
+            }
+            Instruction::ForwardCall {
+                function: called,
+                arguments,
+            } => {
+                if function.effect != Effect::ErrorWhole {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime forward occurred in a total weave",
+                    ));
+                }
+                let called_function = artifact.functions.get(called).ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "runtime forward references an unknown weave",
+                    )
+                })?;
+                if called_function.effect != Effect::ErrorWhole
+                    || called_function.result != function.result
+                    || called_function.parameters.len() != arguments
+                {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime forward signature is invalid",
+                    ));
+                }
+                let mut values = Vec::with_capacity(arguments);
+                for (value_type, mode) in called_function.parameters.iter().rev() {
+                    if *mode != ParameterMode::Own
+                        || !matches!(value_type, ValueType::Whole | ValueType::Truth)
+                    {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime forward crosses a non-copy parameter boundary",
+                        ));
+                    }
+                    let value = pop_runtime(&mut stack, decoded.offset, "forward")?;
+                    require_runtime_type(&value, *value_type, decoded.offset, "forward")?;
+                    values.push(value);
+                }
+                if !stack.is_empty() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime forward left values on the operand stack",
+                    ));
+                }
+                values.reverse();
+                return execute_function(
+                    artifact,
+                    called,
+                    values,
+                    stdout,
+                    runtime_state,
+                    depth + 1,
+                );
+            }
+            Instruction::HandleCall {
+                function: called,
+                arguments,
+                success_destination,
+                error_destination,
+                success_target,
+                error_target,
+            } => {
+                if function.effect != Effect::Total {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime handle occurred in an erroring weave",
+                    ));
+                }
+                if success_destination == error_destination {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime handle requires distinct destinations",
+                    ));
+                }
+                let called_function = artifact.functions.get(called).ok_or_else(|| {
+                    BytecodeError::new(decoded.offset, "runtime handle references an unknown weave")
+                })?;
+                if called_function.effect != Effect::ErrorWhole
+                    || called_function.parameters.len() != arguments
+                {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime handle signature is invalid",
+                    ));
+                }
+                let mut values = Vec::with_capacity(arguments);
+                for (value_type, mode) in called_function.parameters.iter().rev() {
+                    if *mode != ParameterMode::Own
+                        || !matches!(value_type, ValueType::Whole | ValueType::Truth)
+                    {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime handle crosses a non-copy parameter boundary",
+                        ));
+                    }
+                    let value = pop_runtime(&mut stack, decoded.offset, "handle")?;
+                    require_runtime_type(&value, *value_type, decoded.offset, "handle")?;
+                    values.push(value);
+                }
+                if !stack.is_empty() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime handle left values on the operand stack",
+                    ));
+                }
+                values.reverse();
+                match execute_function(artifact, called, values, stdout, runtime_state, depth + 1)?
+                {
+                    RuntimeExit::Return(value) => {
+                        let local = function.locals.get(success_destination).ok_or_else(|| {
+                            BytecodeError::new(
+                                decoded.offset,
+                                "runtime handle success destination is invalid",
+                            )
+                        })?;
+                        if !local.mutable || local.value_type != called_function.result {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime handle success destination is invalid",
+                            ));
+                        }
+                        require_runtime_type(&value, local.value_type, decoded.offset, "handle")?;
+                        if locals.get(success_destination).is_none()
+                            || locals[success_destination].is_none()
+                        {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime handle success destination is not live",
+                            ));
+                        }
+                        locals[success_destination] = Some(value);
+                        position = success_target;
+                    }
+                    RuntimeExit::ErrorWhole(code) => {
+                        let local = function.locals.get(error_destination).ok_or_else(|| {
+                            BytecodeError::new(
+                                decoded.offset,
+                                "runtime handle error destination is invalid",
+                            )
+                        })?;
+                        if !local.mutable || local.value_type != ValueType::Whole {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime handle error destination is invalid",
+                            ));
+                        }
+                        if locals.get(error_destination).is_none()
+                            || locals[error_destination].is_none()
+                        {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime handle error destination is not live",
+                            ));
+                        }
+                        locals[error_destination] = Some(RuntimeValue::Whole(code));
+                        position = error_target;
+                    }
+                }
+            }
             Instruction::Call {
                 function: called,
                 arguments,
@@ -6354,6 +7378,12 @@ fn execute_function(
                 let called_function = artifact.functions.get(called).ok_or_else(|| {
                     BytecodeError::new(decoded.offset, "runtime call references an unknown weave")
                 })?;
+                if called_function.effect != Effect::Total {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime ordinary call cannot invoke an Error[Whole] weave",
+                    ));
+                }
                 if called_function.parameters.len() != arguments {
                     return Err(BytecodeError::new(
                         decoded.offset,
@@ -6376,14 +7406,15 @@ fn execute_function(
                     values.push(value);
                 }
                 values.reverse();
-                stack.push(execute_function(
-                    artifact,
-                    called,
-                    values,
-                    stdout,
-                    runtime_state,
-                    depth + 1,
-                )?);
+                let RuntimeExit::Return(value) =
+                    execute_function(artifact, called, values, stdout, runtime_state, depth + 1)?
+                else {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime total call reached an Error[Whole] exit",
+                    ));
+                };
+                stack.push(value);
             }
             Instruction::JumpIfDim(target) => {
                 if !pop_truth(&mut stack, decoded.offset, "conditional jump")? {
@@ -6473,19 +7504,25 @@ fn decode_instruction(
         OP_POKE32 => Instruction::Poke32,
         OP_PACK64 => Instruction::Pack64,
         OP_MAKE_RECORD => {
-            if !matches!(version, ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6) {
+            if !matches!(
+                version,
+                ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
+            ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record construction is valid only in AETH v5 or v6 artifacts",
+                    "record construction is valid only in AETH v5, v6, or v7 artifacts",
                 ));
             }
             Instruction::MakeRecord(read_u16(code, position)?)
         }
         OP_FIELD => {
-            if !matches!(version, ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6) {
+            if !matches!(
+                version,
+                ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
+            ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record field projection is valid only in AETH v5 or v6 artifacts",
+                    "record field projection is valid only in AETH v5, v6, or v7 artifacts",
                 ));
             }
             Instruction::Field {
@@ -6533,6 +7570,28 @@ fn decode_instruction(
             require_v6_instruction(version, offset, "buffer count")?;
             Instruction::Count
         }
+        OP_RAISE => {
+            require_v7_instruction(version, offset, "raise")?;
+            Instruction::Raise
+        }
+        OP_FORWARD_CALL => {
+            require_v7_instruction(version, offset, "forward call")?;
+            Instruction::ForwardCall {
+                function: usize::from(read_u16(code, position)?),
+                arguments: usize::from(read_byte(code, position)?),
+            }
+        }
+        OP_HANDLE_CALL => {
+            require_v7_instruction(version, offset, "handle call")?;
+            Instruction::HandleCall {
+                function: usize::from(read_u16(code, position)?),
+                arguments: usize::from(read_byte(code, position)?),
+                success_destination: usize::from(read_u16(code, position)?),
+                error_destination: usize::from(read_u16(code, position)?),
+                success_target: read_usize_u32(code, position)?,
+                error_target: read_usize_u32(code, position)?,
+            }
+        }
         OP_CALL => Instruction::Call {
             function: usize::from(read_u16(code, position)?),
             arguments: usize::from(read_byte(code, position)?),
@@ -6549,12 +7608,23 @@ fn decode_instruction(
 }
 
 fn require_v6_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if version == ARTIFACT_VERSION_V6 {
+    if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v6 artifacts"),
+            format!("{subject} is valid only in AETH v6 or v7 artifacts"),
+        ))
+    }
+}
+
+fn require_v7_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
+    if version == ARTIFACT_VERSION_V7 {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{subject} is valid only in AETH v7 artifacts"),
         ))
     }
 }
@@ -7274,10 +8344,13 @@ fn read_value_type(
     match tag {
         1..=4 => ValueType::from_primitive_tag(tag, offset),
         5 => {
-            if !matches!(version, ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6) {
+            if !matches!(
+                version,
+                ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
+            ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record types are valid only in AETH v5 or v6 artifacts",
+                    "record types are valid only in AETH v5, v6, or v7 artifacts",
                 ));
             }
             let record_id = read_u16(bytes, position)?;
@@ -7289,16 +8362,20 @@ fn read_value_type(
             }
             Ok(ValueType::Record(record_id))
         }
-        6 if version == ARTIFACT_VERSION_V6 => Ok(ValueType::Arena),
-        7 if version == ARTIFACT_VERSION_V6 => Ok(ValueType::BufferWhole),
-        8 if version == ARTIFACT_VERSION_V6 => Ok(ValueType::BufferTruth),
+        6 if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) => Ok(ValueType::Arena),
+        7 if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) => {
+            Ok(ValueType::BufferWhole)
+        }
+        8 if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) => {
+            Ok(ValueType::BufferTruth)
+        }
         9 => Err(BytecodeError::new(
             offset,
             "access loans are verifier-internal and cannot be serialized",
         )),
         6..=8 => Err(BytecodeError::new(
             offset,
-            "resource value types are valid only in AETH v6 artifacts",
+            "resource value types are valid only in AETH v6 or v7 artifacts",
         )),
         _ => Err(BytecodeError::new(offset, "unknown Aether value type")),
     }
@@ -7528,6 +8605,41 @@ fn write_block(statements: &[Statement], indentation: usize, output: &mut String
             Statement::Yield { value, .. } => {
                 output.push_str("yield ");
                 write_expression(value, output);
+                output.push('\n');
+            }
+            Statement::Raise { code, .. } => {
+                output.push_str("raise ");
+                write_atom(code, output);
+                output.push('\n');
+            }
+            Statement::Forward {
+                weave, arguments, ..
+            } => {
+                output.push_str("forward call ");
+                output.push_str(weave);
+                for argument in arguments {
+                    output.push(' ');
+                    write_atom(argument, output);
+                }
+                output.push('\n');
+            }
+            Statement::Handle {
+                weave,
+                arguments,
+                success_destination,
+                error_destination,
+                ..
+            } => {
+                output.push_str("handle call ");
+                output.push_str(weave);
+                for argument in arguments {
+                    output.push(' ');
+                    write_atom(argument, output);
+                }
+                output.push_str(" into ");
+                output.push_str(success_destination);
+                output.push_str(" otherwise error into ");
+                output.push_str(error_destination);
                 output.push('\n');
             }
             Statement::Choose {
@@ -7772,6 +8884,41 @@ fn write_ast_block(statements: &[Statement], output: &mut String) {
                 write_ast_expression(value, output);
                 output.push(')');
             }
+            Statement::Raise { code, .. } => {
+                output.push_str("Raise(");
+                write_ast_atom(code, output);
+                output.push(')');
+            }
+            Statement::Forward {
+                weave, arguments, ..
+            } => {
+                output.push_str("Forward(");
+                output.push_str(weave);
+                for argument in arguments {
+                    output.push(',');
+                    write_ast_atom(argument, output);
+                }
+                output.push(')');
+            }
+            Statement::Handle {
+                weave,
+                arguments,
+                success_destination,
+                error_destination,
+                ..
+            } => {
+                output.push_str("Handle(");
+                output.push_str(weave);
+                output.push(',');
+                output.push_str(success_destination);
+                output.push(',');
+                output.push_str(error_destination);
+                for argument in arguments {
+                    output.push(',');
+                    write_ast_atom(argument, output);
+                }
+                output.push(')');
+            }
             Statement::Choose {
                 condition,
                 when_bright,
@@ -7992,6 +9139,8 @@ fn statement_token_count(statements: &[Statement]) -> usize {
             | Statement::Revise { .. }
             | Statement::Speak { .. }
             | Statement::Yield { .. } => 2,
+            Statement::Raise { .. } | Statement::Forward { .. } => 2,
+            Statement::Handle { .. } => 4,
             Statement::Choose {
                 when_bright,
                 when_dim,
@@ -8036,6 +9185,12 @@ fn validate_name(
             | "revise"
             | "speak"
             | "yield"
+            | "raise"
+            | "forward"
+            | "handle"
+            | "raises"
+            | "error"
+            | "into"
             | "choose"
             | "otherwise"
             | "while"
@@ -8122,6 +9277,12 @@ fn validate_artifact_name(
             | "revise"
             | "speak"
             | "yield"
+            | "raise"
+            | "forward"
+            | "handle"
+            | "raises"
+            | "error"
+            | "into"
             | "choose"
             | "otherwise"
             | "while"
@@ -8193,14 +9354,14 @@ mod tests {
     const HELLO: &str = "world genesis\n\nweave main [] -> Whole:\n  bind greeting <- \"Hello from Aether\\n\"\n  speak borrow greeting\n  yield 0\n";
 
     #[test]
-    fn compiles_runs_and_formats_legacy_source_in_current_aeth_v6() {
+    fn compiles_runs_and_formats_legacy_source_in_current_aeth_v7() {
         let output = compile_to_bytecode(HELLO).expect("Aether source should compile");
         let run = run_bytecode(&output.bytecode).expect("Aether artifact should run");
         assert_eq!(run.stdout, "Hello from Aether\n");
         assert_eq!(run.exit_code, 0);
         assert_eq!(format_program(&output.program), HELLO);
         assert!(canonical_ast(&output.program).contains("Borrow(greeting)"));
-        assert_eq!(&output.bytecode[..5], b"AETH\x06");
+        assert_eq!(&output.bytecode[..5], b"AETH\x07");
     }
 
     #[test]
@@ -8396,7 +9557,7 @@ mod tests {
         let first = compile_to_bytecode(HELLO).expect("first compilation should work");
         let second = compile_to_bytecode(HELLO).expect("second compilation should work");
         assert_eq!(first.bytecode, second.bytecode);
-        assert_eq!(&first.bytecode[..5], b"AETH\x06");
+        assert_eq!(&first.bytecode[..5], b"AETH\x07");
         verify_bytecode(&first.bytecode).expect("compiler artifact must verify");
     }
 
@@ -8421,6 +9582,13 @@ mod tests {
             .bytecode;
         artifact[4] = ARTIFACT_VERSION_V5;
         artifact.drain(5..9).for_each(drop);
+        // The fixture has one primitive record and one parameterless `main`.
+        // v5 has the same record/function layout as v7 except that it has no
+        // arena header and no per-weave effect byte.
+        let effect_offset =
+            5 + 2 + 1 + "card".len() + 1 + 1 + "score".len() + 1 + 2 + 1 + "main".len() + 1 + 1;
+        assert_eq!(artifact[effect_offset], 0, "fixture main must be total");
+        artifact.remove(effect_offset);
         verify_bytecode(&artifact).expect("the translated v5 compatibility fixture should verify");
         let field_offset = artifact
             .iter()
@@ -8440,13 +9608,13 @@ mod tests {
     }
 
     #[test]
-    fn compiles_runs_and_formats_immutable_records_in_aeth_v6() {
+    fn compiles_runs_and_formats_immutable_records_in_current_aeth_v7() {
         let source = "world records\n\nrecord card [label: Text, score: Whole, payload: Bytes, active: Truth]\n\nweave inspect [borrow value: card] -> Whole:\n  bind score <- field borrow value score\n  yield score\n\nweave main [] -> Whole:\n  bind card_value <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind label <- field borrow card_value label\n  speak borrow label\n  bind score <- call inspect borrow card_value\n  bind duplicate <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind equal <- same borrow card_value borrow duplicate\n  bind mutable result <- score\n  choose equal:\n    revise result <- sum result 1\n  yield result\n";
         let output = compile_to_bytecode(source).expect("record source should compile");
         let run = run_bytecode(&output.bytecode).expect("record artifact should run");
         assert_eq!(run.stdout, "Aether");
         assert_eq!(run.exit_code, 8);
-        assert_eq!(&output.bytecode[..5], b"AETH\x06");
+        assert_eq!(&output.bytecode[..5], b"AETH\x07");
         assert_eq!(format_program(&output.program), source);
         assert!(canonical_ast(&output.program).contains("Record(card)[label:Text"));
 
@@ -8488,9 +9656,9 @@ mod tests {
     fn runs_bounded_arena_buffer_operations() {
         let source = "world arena_buffer\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 0\n  choose allocate access memory move values 2 into values:\n    choose append move values 7 into values:\n      choose at borrow values 0 into observed:\n        yield observed\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
         let output = compile_to_bytecode(source).expect("arena-buffer source should compile");
-        assert_eq!(&output.bytecode[..5], b"AETH\x06");
+        assert_eq!(&output.bytecode[..5], b"AETH\x07");
         assert_eq!(
-            u32::from_le_bytes(output.bytecode[5..9].try_into().expect("v6 capacity bytes")),
+            u32::from_le_bytes(output.bytecode[5..9].try_into().expect("v7 capacity bytes")),
             64
         );
         let run = run_bytecode(&output.bytecode).expect("arena-buffer artifact should run");
@@ -8755,6 +9923,105 @@ mod tests {
                 "the canonical M2 fixture {name} returned the wrong outcome"
             );
         }
+    }
+
+    #[test]
+    fn compiles_verifies_and_runs_the_bounded_m4_error_effect() {
+        let source = "world effects\n\nweave leaf [value: Whole] -> Whole raises Whole:\n  raise value\n\nweave forwarded [value: Whole] -> Whole raises Whole:\n  forward call leaf value\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call forwarded 17 into success otherwise error into code\n";
+        let output = compile_to_bytecode(source).expect("M4 handled source should compile");
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V7);
+        assert_eq!(format_program(&output.program), source);
+        verify_bytecode(&output.bytecode).expect("M4 artifact should verify");
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("M4 artifact should run")
+                .exit_code,
+            17
+        );
+    }
+
+    #[test]
+    fn handles_the_normal_exit_of_a_may_error_weave() {
+        let source = "world effects\n\nweave value [] -> Whole raises Whole:\n  yield 23\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call value into success otherwise error into code\n";
+        let bytecode = compile_to_bytecode(source)
+            .expect("M4 normal source should compile")
+            .bytecode;
+        assert_eq!(
+            run_bytecode(&bytecode)
+                .expect("M4 normal artifact should run")
+                .exit_code,
+            23
+        );
+    }
+
+    #[test]
+    fn rejects_unhandled_or_unsafe_m4_source_shapes() {
+        let unhandled = "world invalid\n\nweave leaf [] -> Whole raises Whole:\n  raise 1\n\nweave main [] -> Whole:\n  bind value <- call leaf\n  yield value\n";
+        let error = compile_source(unhandled).expect_err("ordinary calls cannot hide effects");
+        assert_eq!(error.diagnostic().code, "AE-EFFECT-001");
+
+        let owner_boundary = "world invalid\n\nweave leaf [] -> Whole raises Whole:\n  bind label <- \"owned\"\n  raise 1\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call leaf into success otherwise error into code\n";
+        let error =
+            compile_source(owner_boundary).expect_err("M4 control cannot cross a live owner");
+        assert_eq!(error.diagnostic().code, "AE-EFFECT-003");
+
+        let resource_mix = "world invalid\n\nweave leaf [] -> Whole raises Whole:\n  raise 1\n\nweave main [] -> Whole:\n  bind memory <- arena 8\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call leaf into success otherwise error into code\n";
+        let error = compile_source(resource_mix)
+            .expect_err("M4 control cannot share a weave with resources");
+        assert_eq!(error.diagnostic().code, "AE-EFFECT-003");
+
+        let erroring_main = "world invalid\n\nweave main [] -> Whole raises Whole:\n  raise 1\n";
+        let error = compile_source(erroring_main).expect_err("main must remain total");
+        assert_eq!(error.diagnostic().code, "AE-EFFECT-001");
+
+        let wrong_result = "world invalid\n\nweave leaf [] -> Truth raises Whole:\n  yield bright\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(wrong_result)
+            .expect_err("an Error[Whole] weave must retain the terminal Whole result");
+        assert_eq!(error.diagnostic().code, "AE-EFFECT-003");
+
+        let wrong_code = "world invalid\n\nweave leaf [] -> Whole raises Whole:\n  raise bright\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(wrong_code)
+            .expect_err("raise must carry a Whole literal or copy binding");
+        assert_eq!(error.diagnostic().code, "AE-EFFECT-004");
+    }
+
+    #[test]
+    fn verifier_rejects_effect_opcodes_or_metadata_outside_v7() {
+        let source = "world effects\n\nweave leaf [] -> Whole raises Whole:\n  raise 1\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call leaf into success otherwise error into code\n";
+        let mut artifact = compile_to_bytecode(source)
+            .expect("M4 artifact source should compile")
+            .bytecode;
+        artifact[4] = ARTIFACT_VERSION_V6;
+        let error = verify_bytecode(&artifact)
+            .expect_err("v6 must not reinterpret v7 function effect metadata");
+        assert!(
+            error.message.contains("artifact local count")
+                || error.message.contains("trailing bytes")
+                || error.message.contains("unknown")
+        );
+
+        let mut totalized_leaf = compile_to_bytecode(source)
+            .expect("M4 artifact source should compile")
+            .bytecode;
+        // v7 header + empty record table + function count + leaf descriptor:
+        // name length/name, parameter count, result tag, then effect tag.
+        let leaf_effect_offset = 4 + 1 + 4 + 2 + 2 + 1 + "leaf".len() + 1 + 1;
+        totalized_leaf[leaf_effect_offset] = 0;
+        let error = verify_bytecode(&totalized_leaf)
+            .expect_err("RAISE must not be accepted under a forged total signature");
+        assert!(error.message.contains("RAISE requires an Error[Whole]"));
+
+        let total_main = "world total\n\nweave main [] -> Whole:\n  yield 0\n";
+        let mut effectful_main = compile_to_bytecode(total_main)
+            .expect("total main source should compile")
+            .bytecode;
+        let main_effect_offset = 4 + 1 + 4 + 2 + 2 + 1 + "main".len() + 1 + 1;
+        effectful_main[main_effect_offset] = 1;
+        let error = verify_bytecode(&effectful_main)
+            .expect_err("a forged Error[Whole] entry weave must be rejected");
+        assert!(error
+            .message
+            .contains("main must accept no parameters, remain total, and yield Whole"));
     }
 
     fn hex_encode(bytes: &[u8]) -> String {

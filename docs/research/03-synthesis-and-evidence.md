@@ -12,7 +12,7 @@ claim. Every statement in the design set uses one of these labels:
 
 | Label | Meaning | Required proof before it can advance |
 | --- | --- | --- |
-| **Implemented** | Present in the current Aether 0.6 product contract and covered by repository evidence. | Code, specifications, behavior tests, and applicable seed proof already exist. |
+| **Implemented** | Present in the current Aether 0.7 product contract and covered by repository evidence. | Code, specifications, behavior tests, and applicable seed proof already exist. |
 | **Accepted direction** | A human-approved direction for future design, not source syntax or runtime behavior. | A feature ADR/specification, security and compatibility review, implementation plan, and normal gates. |
 | **Research hypothesis** | A promising claim suggested by sources or the original brief. | A falsifiable experiment, comparison criteria, and a decision record. |
 | **Rejected / prohibited** | Incompatible with Aether's current law or trust model. | It remains out of scope unless a human-approved law/ADR change resolves the conflict. |
@@ -25,9 +25,9 @@ claim. Every statement in the design set uses one of these labels:
 | Values should make ownership and resource transfer locally visible. | **Implemented, bounded M2 scope** | Rust, Swift, Hylo, and Zig provide contrasting evidence that memory/resource behavior should be explicit. Aether 0.6 adds closed arena/Buffer owner behavior. | Preserve the verified closed outcome boundary before adding cross-weave results or effects. |
 | Allocation should be explicit and capability-oriented. | **Implemented, bounded M2 scope** | Zig and Odin demonstrate allocator-visible APIs; Aether 0.6 provides one named bounded arena with no ambient allocator. | Specify outcome propagation, extended lifetime, and ABI behavior before expansion. |
 | Macro-free compile-time execution should use ordinary, type-checked Aether forms. | **Research hypothesis** | Zig demonstrates compile-time execution; the original brief identifies macro/tooling opacity as a risk. | Design a constrained, deterministic evaluation model and resource limits before adding a `comptime`/`forge` source surface. |
-| Errors and environmental behavior should be typed rather than hidden. | **Research hypothesis** | Koka, OCaml 5, and Roc provide effect/handler and host-boundary models. | Prove interaction with ownership, cancellation, diagnostics, and the VM before choosing syntax or inference. |
+| Errors and environmental behavior should be typed rather than hidden. | **Implemented, bounded M4 scope** | Koka and OCaml effect/handler research plus [ADR-007](../ADR-007-m4-typed-error-effect.md) yielded one verified abortive `Error[Whole]` route. | Preserve the clean ownership/resource boundary, total host entry points, v2 diagnostics/structure, and seed identity before expanding the effect surface. |
 | Data-layout choice and generic specialization should be explicit or proven semantics-preserving. | **Research hypothesis** | Odin provides visible SoA facilities; shape-based folding from the original brief remains an untested idea. | No automatic layout rewrite without semantic-equivalence tests and a benchmark protocol. |
-| AI authoring should target validated structure, while retaining canonical human-readable text. | **Implemented, bounded M3 scope** | `aether.ast/v1`, `aether.edit/v1`, code/span diagnostics, and strict local validation establish the first evidence-backed contract. | Preserve the exact-base, typed top-level-edit boundary; a stable schema and validated operations still precede any “syntax-error-proof” claim. |
+| AI authoring should target validated structure, while retaining canonical human-readable text. | **Implemented, bounded M3/M4 scope** | `aether.ast/v2`, `aether.edit/v2`, code/span diagnostics, and strict local validation expose the current grammar without granting unbounded edits. | Preserve the exact-base, typed top-level-edit boundary; a stable schema and validated operations still precede any “syntax-error-proof” claim. |
 
 ## Current-law reconciliation
 
@@ -71,9 +71,10 @@ properties testable:
    deterministic compiler/VM decisions.
 
 The first partial foundations existed in 0.5 (canonical formatting and a
-canonical AST output). M3 now completes the bounded schema, edit protocol,
-stable diagnostics, and local tooling contract for Aether 0.6. Its evidence and
-limits are [AETHER_AUTHORING_PROTOCOL_v1.md](../AETHER_AUTHORING_PROTOCOL_v1.md);
+canonical AST output). M3 established the bounded schema, edit protocol,
+stable diagnostics, and local tooling contract; M4 extends that contract in
+Aether 0.7 with effect-aware v2 nodes. Its evidence and limits are
+[AETHER_AUTHORING_PROTOCOL_v2.md](../AETHER_AUTHORING_PROTOCOL_v2.md);
 fine-grained arbitrary-node edits remain future work.
 
 ## Falsifiable research spikes
@@ -86,7 +87,7 @@ with an explicit stop condition instead of building a broad incomplete feature.
 | Mutable value semantics | Dynamic aggregate with borrow, move, revise, and destruction paths. | All alias/use-after-move paths rejected; seed/bootstrap artifacts match; rules are explainable from local source. | Semantics require hidden global lifetime inference or unsound escape exceptions. |
 | Explicit allocators | One arena-backed collection with injected failing allocator. | No ambient allocation in its Aether API; deterministic OOM behavior; cleanup/escape rules hold. | Library API needs an implicit global allocator or cannot explain ownership across calls. |
 | Compile-time evaluation | Pure bounded evaluator over a specified Aether subset. | Deterministic byte-identical output, resource caps, diagnostics, and no host I/O. | It needs textual macro expansion, runtime host capabilities, or unbounded compiler execution. |
-| Typed effects | One typed operation with handled, forwarded, and rejected paths. | Effect set/row is visible and diagnostics explain propagation; ownership remains sound. | The feature reintroduces hidden exception flow or requires special async coloring. |
+| Typed effects | One abortive `Error[Whole]` operation with handled, forwarded, and rejected paths. **Semantic kernel met; product work remains gated.** | `raises Whole`, `raise`, `forward`, and `handle` have visible two-exit semantics; clean boundaries reject owners/loans/resources. | The feature reintroduces hidden exception flow, resumable continuation, resource crossing, or special async coloring. |
 | Structural edits | Schema plus typed top-level insert/replace/delete operations over a canonical corpus. | **Met in M3:** valid edits round-trip through formatter/parser and seed validation; invalid/stale/duplicate/malformed edits are rejected deterministically. | Future tooling relies on line-number text replacement or can write semantically unchecked source. |
 | SoA / shape analysis | A layout-explicit collection and a candidate same-shape specialization. | Observable semantics and ABI are preserved; benchmark harness reports a reproducible workload. | Performance benefit depends on undocumented layout changes or unsound type erasure. |
 | Structured concurrency | Lexical task group with join, failure, and cancellation tests. | No task survives its scope; cleanup/cancellation is deterministic; effects describe blocking. | Detached background work or hidden scheduler ownership is necessary. |

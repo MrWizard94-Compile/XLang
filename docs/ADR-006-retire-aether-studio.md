@@ -64,6 +64,6 @@ repository's active tree and lockfile no longer carry it.
 
 ## Links
 
-* Related product contract: [MANIFEST.md](../MANIFEST.md), [ARCHITECTURE.md](ARCHITECTURE.md), [AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md).
+* Related product contract: [MANIFEST.md](../MANIFEST.md), [ARCHITECTURE.md](ARCHITECTURE.md), [AETHER_AUTHORING_PROTOCOL_v2.md](AETHER_AUTHORING_PROTOCOL_v2.md).
 * Related structural decision: [ADR-005](ADR-005-structural-authoring-contract.md).
 * Related historical intake: [LEGACY.md](LEGACY.md), [AUDIT_REPORT.md](../AUDIT_REPORT.md).

@@ -29,22 +29,23 @@ evidence plan are [research/](research/).
 
 ## Current Aether positions
 
-1. Aether 0.6 implements explicit `borrow`/`move`, operation-scoped `access`,
-   and one bounded arena/Whole-or-Truth-buffer surface. The complete scope is
-   [AETHER_0.6.md](AETHER_0.6.md).
-2. Typed errors/effects, compile-time execution, generic shape folding, SoA
-   lowering, C interop, structured concurrency, first-class resource outcomes,
-   and Buffer weave results are future directions or research hypotheses — not
+1. Aether 0.7 implements explicit `borrow`/`move`, operation-scoped `access`,
+   one bounded arena/Whole-or-Truth-buffer surface, and one terminal,
+   abortive `Error[Whole]` effect. The complete scope is
+   [AETHER_0.7.md](AETHER_0.7.md).
+2. General typed errors/effects and resumptions, compile-time execution,
+   generic shape folding, SoA lowering, C interop, structured concurrency,
+   first-class resource outcomes, Buffer weave results, and fine-grained arbitrary-node edits are future directions or research hypotheses — not
    current syntax or runtime claims. Their evidence and stop conditions are in
    [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
 3. Canonical formatting, a bootstrap canonical-AST path, and the bounded,
    versioned M3 structural authoring contract exist today. See
-   [AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md).
+   [AETHER_AUTHORING_PROTOCOL_v2.md](AETHER_AUTHORING_PROTOCOL_v2.md).
 4. The executable target remains AETH plus the Aether VM. No host-language or
    LLVM backend is part of the current language contract.
 5. Immutable nominal records remain the first aggregate value: primitive fields
-   only, explicit borrowed projection, structural equality, and AETH v6 record
-   table encoding. Recursive layout, mutation, and partial moves remain deferred.
+   only, explicit borrowed projection, structural equality, and AETH v5/v7
+   record-table encoding. Recursive layout, mutation, and partial moves remain deferred.
 
 See [NORTH_STAR.md](NORTH_STAR.md), [CORE_CLAIMS.md](CORE_CLAIMS.md), and
 [ROADMAP.md](ROADMAP.md) for the governed design direction.

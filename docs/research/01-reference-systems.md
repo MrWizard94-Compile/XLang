@@ -1,11 +1,11 @@
 # Aether Reference Systems Study
 
 **Status:** SOP phases 1 and 3 evidence log
-**Date:** 2026-07-28; current-contract update: 2026-07-31
+**Date:** 2026-07-28; current-contract update: 2026-08-01
 **Decision boundary:** This study informs Aether's future design. It does not
 change the historical Aether 0.5 contract or authorize a new backend. The
-current executable contract is Aether 0.6; its bounded resource implementation
-does not alter this research record's backend boundary.
+current executable contract is Aether 0.7; its bounded resource and M4 effect
+implementations do not alter this research record's backend boundary.
 
 ## Purpose and method
 
@@ -29,7 +29,7 @@ trade-offs carefully rather than to copy it.
 | Zig | Low-level systems programming for developers who want visible memory and compile-time control. | [Language reference](https://ziglang.org/documentation/master/) | Allocator parameters, compile-time execution, C-facing build discipline. | Primary evidence for the original explicit-allocation experiment; Aether 0.6 now has a deliberately narrower named arena surface. |
 | Swift | General-purpose, strongly typed application and systems-adjacent programming. | [Type system](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/types/), [ownership declarations](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/declarations/) | Named value types and explicit borrowing/consuming parameter modes. | Compare ergonomic ownership syntax and type-directed tooling without importing ARC or platform assumptions. |
 | Hylo | Experimental high-level systems language centered on mutable value semantics and generic programming. | [Introduction](https://hylo-lang.org/introduction/), [language specification](https://hylo-lang.org/docs/reference/specification/) | Value semantics, projections, and a distinct ownership model without explicit lifetimes. | The closest conceptual probe for the original mutable-value-semantics goal; experimental status prevents treating it as settled proof. |
-| Koka | Research language for typed functional programming with effect types and handlers. | [Official language book](https://koka-lang.github.io/koka/doc/book.html) | Inferred effect rows and handlers as a way to expose observable behavior. | Supplies a typed-effect comparison point; Aether currently has neither effect types nor handlers. |
+| Koka | Research language for typed functional programming with effect types and handlers. | [Official language book](https://koka-lang.github.io/koka/doc/book.html) | Inferred effect rows and handlers as a way to expose observable behavior. | Supplies a typed-effect comparison point; Aether implements only one closed abortive `Error[Whole]` effect, not inferred rows or resumptive handlers. |
 | OCaml 5 | General-purpose functional language with modular programming and standardized effect-handler support. | [Effect-handler manual](https://ocaml.org/manual/effects.html) | Defined handler semantics and examples spanning resumable control flow and concurrency. | Tests whether a small effect core can support multiple execution strategies; not a direct syntax model. |
 | Roc | Functional language organized around applications and host-provided platforms. | [Platforms and applications](https://www.roc-lang.org/platforms), [tutorial](https://www.roc-lang.org/tutorial) | A clear boundary between pure application logic and host-provided effects. | Useful for capability-oriented host boundaries and AI-readable documents; it does not define Aether's runtime or artifact format. |
 | Go | Production language with built-in goroutines, channels, and a compact deployment story. | [Language specification](https://go.dev/ref/spec) | Simple concurrency surface and explicit communication primitives. | Counterexample and comparison for unstructured task lifetime: Aether will not claim a concurrency model until structured cancellation is proved. |

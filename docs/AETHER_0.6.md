@@ -7,10 +7,11 @@ Aether 0.6 emits deterministic AETH v6 bytecode for the Aether VM and verifies
 every artifact before it runs or forge writes it. Aether source is never
 translated to Rust, C, JavaScript, LLVM, or another language.
 
-This specification supersedes [AETHER_0.5.md](AETHER_0.5.md) as the current
-language contract. Aether 0.4 and 0.5 documents remain historical compatibility
-references. Their AETH v4/v5 artifacts retain their byte meanings and remain
-accepted by the verifier and VM.
+This historical specification superseded [AETHER_0.5.md](AETHER_0.5.md) for
+the Aether 0.6 release. It is now superseded by
+[AETHER_0.7.md](AETHER_0.7.md). Aether 0.4 and 0.5 documents remain historical
+compatibility references. Their AETH v4/v5 artifacts retain their byte meanings
+and remain accepted by the verifier and VM.
 
 ## Compatibility surface
 

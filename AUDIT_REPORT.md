@@ -1,6 +1,6 @@
 # Aether Migration Audit
 
-Date: 2026-08-01 (Stage 7 bounded-resource and M3 authoring-contract baseline; active Studio retirement)
+Date: 2026-08-01 (Aether 0.7: Stage 7 bounded resources, M3/M4 authoring and typed-error baseline; active Studio retirement)
 
 ## Legacy Intake
 
@@ -12,10 +12,12 @@ Date: 2026-08-01 (Stage 7 bounded-resource and M3 authoring-contract baseline; a
 
 ## Production Boundary
 
-The production bootstrap compiler accepts Aether 0.6.0 source. It produces a
-canonical AST and deterministic AETH v6 bytecode artifact, verifies that
-artifact, and runs it in the Aether VM. Verified AETH v4/v5 remain compatibility
-inputs. The command line is the sole active product interface.
+The production compiler accepts Aether 0.7.0 source. Default CLI compilation
+uses the Aether-written seed compiler; the Rust bootstrap remains the canonical
+AST and invalid-source diagnostic authority and is selected explicitly with
+`--bootstrap`. Both paths produce deterministic AETH v7, which is verified
+before the VM runs it. Verified AETH v4/v5/v6 remain compatibility inputs. The
+command line is the sole active product interface.
 
 Stage 7 completes canonical Aether 0.6 source-emission parity in the
 Aether-written seed compiler. It preserves every prior statement and shallow
@@ -30,8 +32,8 @@ Rust-shaped, V1, V2, and pre-v4 AETH input remains intentionally rejected. The
 repository does not transpile Aether to C, Rust, JavaScript, LLVM, or another
 target language.
 
-M3 adds local `aether.ast/v1`, `aether.edit/v1`, and
-`aether.diagnostic/v1` tooling contracts. They are not another Aether grammar
+M3/M4 add local `aether.ast/v2`, `aether.edit/v2`, and
+`aether.diagnostic/v2` tooling contracts. They are not another Aether grammar
 or artifact format: every accepted edit is formatter-canonicalized and
 bootstrap-validated, and the CLI seed-compiles it before source is written to
 the caller-supplied output path. The protocol accepts only typed top-level record/weave
@@ -39,30 +41,34 @@ insert/replace/delete operations against an exact canonical base source.
 
 `aether forge` verifies a compiler artifact, requires
 `compile [borrow source: Text] -> Bytes`, gives it the source text, verifies the
-returned artifact bytes, and writes only a verified result.
+returned artifact bytes, and writes only a verified result. The v2 structures
+also expose the bounded M4 `Error[Whole]` effect and its terminal `raise`,
+`forward`, and one-line `handle` statements without creating a hidden host
+exception route.
 
 ## Strategic Design Boundary
 
-This audit records the implemented Aether 0.6 migration/product boundary. The
+This audit records the implemented Aether 0.7 migration/product boundary. The
 separate AI-first language direction is evidence-gated rather than represented
 as completed feature work: [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
 [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
-Explicit allocators, typed effects, structured concurrency, data-layout/generic
-work, C interop, and fine-grained arbitrary-node structural AI edits are future
-research/design items. M3's implemented bounded protocol must not be reported
+General effects/resumptions, structured concurrency, data-layout/generic work,
+C interop, and fine-grained arbitrary-node structural AI edits are future
+research/design items. M3/M4's implemented bounded protocols must not be reported
 as arbitrary text editing or a source-language feature, and it must not weaken AETH-only execution,
 verification, seed proof, or local-first authority.
 
 ## Seed-Profile Self-Hosting Boundary
 
 `seed/aether_seed.ae` is source in Aether. It parses the complete documented
-canonical Aether 0.6 surface and emits v6 through ordinary language
+canonical Aether 0.7 surface and emits v7 through ordinary language
 operations. The regression tests prove bootstrap, first forge, and second forge
 match the checked-in artifact; a distinct source variant produces a different
-verified artifact; and multi-weave + `call`, records, every shipped example, and
-a complete canonical-surface corpus match bootstrap.
+verified artifact; and multi-weave + `call`, records, every shipped example,
+the documented M2 corpus, and the bounded M4 error-effect corpus match
+bootstrap.
 
-This is canonical Aether 0.6 source-emission self-hosting. Rust remains the
+This is canonical Aether 0.7 source-emission self-hosting. Rust remains the
 bootstrap and invalid-source diagnostic authority; full diagnostic parity is not
 claimed. Scope: [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
@@ -103,5 +109,6 @@ validation rejects duplicate keys, unknown fields, unsupported versions,
 malformed payloads, stale base source, and bounded-input violations. Core and
 CLI contract tests prove a valid edit round-trip plus seed validation, while
 malformed/stale requests return deterministic machine-readable diagnostics and
-do not replace source. The full v1 contract is
-[docs/AETHER_AUTHORING_PROTOCOL_v1.md](docs/AETHER_AUTHORING_PROTOCOL_v1.md).
+do not replace source. The current v2 contract is
+[docs/AETHER_AUTHORING_PROTOCOL_v2.md](docs/AETHER_AUTHORING_PROTOCOL_v2.md);
+the v1 contract remains historical compatibility documentation.

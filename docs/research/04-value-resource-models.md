@@ -1,12 +1,12 @@
 # Value and Resource Model Research
 
 **Status:** Primary-source evidence record for M1; implementation follow-up in
-Aether 0.6
-**Date:** 2026-07-28; implementation record updated 2026-07-31
+Aether 0.6 and current Aether 0.7 boundary
+**Date:** 2026-07-28; implementation record updated 2026-08-01
 **Scope:** Ownership, borrowing, destruction, explicit allocation, and bounded
 dynamic storage for the M1 decision. It is historical research evidence; the
-executable bounded M2 contract is [AETHER_0.6.md](../AETHER_0.6.md) and
-[ADR-004](../ADR-004-aeth-v6-bounded-resources.md).
+executable bounded M2/M4 contract is [AETHER_0.7.md](../AETHER_0.7.md), with
+the M2 decision retained in [ADR-004](../ADR-004-aeth-v6-bounded-resources.md).
 
 ## Question
 

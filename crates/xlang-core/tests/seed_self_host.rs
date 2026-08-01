@@ -27,6 +27,20 @@ const FORWARD_CALL_SOURCE: &str = concat!(
     "  yield product v0 2\n",
 );
 
+const M4_ERROR_EFFECT_SOURCE: &str = include_str!("../../../examples/error-effect.ae");
+
+const M4_NORMAL_EFFECT_SOURCE: &str = concat!(
+    "world normal_effect\n",
+    "\n",
+    "weave may_succeed [] -> Whole raises Whole:\n",
+    "  yield 23\n",
+    "\n",
+    "weave main [] -> Whole:\n",
+    "  bind mutable value <- 0\n",
+    "  bind mutable code <- 0\n",
+    "  handle call may_succeed into value otherwise error into code\n",
+);
+
 #[test]
 fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
     let bootstrap = compile_to_bytecode(SEED_SOURCE)
@@ -146,6 +160,39 @@ fn seed_profile_compiler_forges_forward_calls_and_crlf_sources() {
 }
 
 #[test]
+fn seed_profile_compiler_forges_bounded_m4_error_effects_byte_identically() {
+    let bootstrap_seed = compile_to_bytecode(SEED_SOURCE)
+        .expect("the checked-in Aether seed source must bootstrap")
+        .bytecode;
+    for (name, source, expected_exit) in [
+        ("M4 error exit", M4_ERROR_EFFECT_SOURCE, 17),
+        ("M4 normal exit", M4_NORMAL_EFFECT_SOURCE, 23),
+    ] {
+        let bootstrap = compile_to_bytecode(source)
+            .unwrap_or_else(|error| panic!("{name} fixture must bootstrap: {error}"))
+            .bytecode;
+        let forged = bytes(
+            forge_bytecode(&bootstrap_seed, source).unwrap_or_else(|error| {
+                panic!("{name} fixture must forge through the seed: {error}")
+            }),
+        );
+        verify_bytecode(&forged)
+            .unwrap_or_else(|error| panic!("{name} forged artifact must verify: {error}"));
+        assert_eq!(
+            forged, bootstrap,
+            "{name} must match bootstrap byte-for-byte"
+        );
+        assert_eq!(
+            run_bytecode(&forged)
+                .unwrap_or_else(|error| panic!("{name} forged artifact must run: {error}"))
+                .exit_code,
+            expected_exit,
+            "{name} should preserve its documented outcome"
+        );
+    }
+}
+
+#[test]
 fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
     assert_eq!(
         SEED_COMPILER_ARTIFACT,
@@ -217,6 +264,11 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
             "arena-access-weave",
             include_str!("../../../examples/arena-access-weave.ae"),
             Some(1),
+        ),
+        (
+            "error-effect",
+            include_str!("../../../examples/error-effect.ae"),
+            Some(17),
         ),
     ];
     for (name, source, expected_exit_code) in examples {

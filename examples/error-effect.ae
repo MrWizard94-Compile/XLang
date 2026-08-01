@@ -1,0 +1,12 @@
+world error_effect
+
+weave leaf [value: Whole] -> Whole raises Whole:
+  raise value
+
+weave forwarded [value: Whole] -> Whole raises Whole:
+  forward call leaf value
+
+weave main [] -> Whole:
+  bind mutable success <- 0
+  bind mutable code <- 0
+  handle call forwarded 17 into success otherwise error into code
