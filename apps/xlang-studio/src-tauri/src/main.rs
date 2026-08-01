@@ -2,7 +2,10 @@ use std::env;
 use std::fmt::Write as _;
 use std::time::Duration;
 
-use aether_core::{canonical_ast, compile_with_seed, run_bytecode};
+use aether_core::{
+    apply_structural_edit as apply_structural_edit_core, canonical_ast, compile_with_seed,
+    run_bytecode, structural_document_json, Diagnostic, DIAGNOSTIC_SCHEMA_VERSION,
+};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
@@ -22,6 +25,32 @@ struct CompileResponse {
     runtime_output: Option<String>,
     exit_code: Option<i64>,
     diagnostic: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthoringSpan {
+    line: usize,
+    column: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthoringDiagnostic {
+    schema: &'static str,
+    code: &'static str,
+    span: AuthoringSpan,
+    message: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StructuralAuthoringResponse {
+    success: bool,
+    source: Option<String>,
+    document: Option<String>,
+    operation_count: Option<usize>,
+    diagnostic: Option<AuthoringDiagnostic>,
 }
 
 #[derive(Debug, Serialize)]
@@ -144,6 +173,45 @@ fn failed_compile(diagnostic: String) -> CompileResponse {
     }
 }
 
+fn authoring_diagnostic(diagnostic: &Diagnostic) -> AuthoringDiagnostic {
+    AuthoringDiagnostic {
+        schema: DIAGNOSTIC_SCHEMA_VERSION,
+        code: diagnostic.code,
+        span: AuthoringSpan {
+            line: diagnostic.span.line,
+            column: diagnostic.span.column,
+        },
+        message: diagnostic.message.clone(),
+    }
+}
+
+fn failed_authoring(diagnostic: &Diagnostic) -> StructuralAuthoringResponse {
+    StructuralAuthoringResponse {
+        success: false,
+        source: None,
+        document: None,
+        operation_count: None,
+        diagnostic: Some(authoring_diagnostic(diagnostic)),
+    }
+}
+
+fn source_limit_authoring_response() -> StructuralAuthoringResponse {
+    StructuralAuthoringResponse {
+        success: false,
+        source: None,
+        document: None,
+        operation_count: None,
+        diagnostic: Some(AuthoringDiagnostic {
+            schema: DIAGNOSTIC_SCHEMA_VERSION,
+            code: "AE-SOURCE-001",
+            span: AuthoringSpan { line: 1, column: 1 },
+            message: format!(
+                "Source is too large for Aether Studio. Keep it within {MAX_COMPILE_SOURCE_BYTES} bytes."
+            ),
+        }),
+    }
+}
+
 fn artifact_summary(bytecode: &[u8], ast: &str) -> String {
     let preview_length = bytecode.len().min(MAX_ARTIFACT_PREVIEW_BYTES);
     let mut summary = format!("AETH artifact\n{} byte(s)\n\n", bytecode.len());
@@ -193,9 +261,58 @@ fn compile_response(source: &str) -> CompileResponse {
     }
 }
 
+fn inspect_structure_response(source: &str) -> StructuralAuthoringResponse {
+    if source.len() > MAX_COMPILE_SOURCE_BYTES {
+        return source_limit_authoring_response();
+    }
+
+    match structural_document_json(source) {
+        Ok(document) => StructuralAuthoringResponse {
+            success: true,
+            source: None,
+            document: Some(document),
+            operation_count: None,
+            diagnostic: None,
+        },
+        Err(error) => failed_authoring(&error.diagnostic()),
+    }
+}
+
+fn apply_structural_edit_response(source: &str, edit: &str) -> StructuralAuthoringResponse {
+    if source.len() > MAX_COMPILE_SOURCE_BYTES {
+        return source_limit_authoring_response();
+    }
+
+    let edited = match apply_structural_edit_core(source, edit) {
+        Ok(edited) => edited,
+        Err(error) => return failed_authoring(error.diagnostic()),
+    };
+    if let Err(error) = compile_with_seed(&edited.source) {
+        return failed_authoring(&error.diagnostic());
+    }
+
+    StructuralAuthoringResponse {
+        success: true,
+        source: Some(edited.source),
+        document: Some(edited.document_json),
+        operation_count: Some(edited.operation_count),
+        diagnostic: None,
+    }
+}
+
 #[tauri::command]
 fn compile_source(source: String) -> CompileResponse {
     compile_response(&source)
+}
+
+#[tauri::command]
+fn inspect_structure(source: String) -> StructuralAuthoringResponse {
+    inspect_structure_response(&source)
+}
+
+#[tauri::command]
+fn apply_structural_edit(source: String, edit: String) -> StructuralAuthoringResponse {
+    apply_structural_edit_response(&source, &edit)
 }
 
 #[tauri::command]
@@ -329,6 +446,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             compile_source,
+            inspect_structure,
+            apply_structural_edit,
             ollama_status,
             review_source
         ])
@@ -379,5 +498,79 @@ mod tests {
             .diagnostic
             .as_deref()
             .is_some_and(|diagnostic| diagnostic.contains("world")));
+    }
+
+    #[test]
+    fn structure_response_returns_the_versioned_local_semantic_document() {
+        let response = inspect_structure_response(
+            "world studio_structure\n\nweave main [] -> Whole:\n  yield 0\n",
+        );
+
+        assert!(response.success);
+        assert!(response.source.is_none());
+        assert!(response.diagnostic.is_none());
+        assert!(response
+            .document
+            .as_deref()
+            .is_some_and(|document| document.contains("aether.ast/v1")));
+    }
+
+    #[test]
+    fn structural_edit_response_seed_validates_before_returning_canonical_source() {
+        let source = "world studio_edit\n\nweave main [] -> Whole:\n  yield 0\n";
+        let edit = r#"{
+  "protocol": "aether.edit/v1",
+  "schema": "aether.ast/v1",
+  "baseSource": "world studio_edit\n\nweave main [] -> Whole:\n  yield 0\n",
+  "operations": [{
+    "op": "replace",
+    "target": "weave:main",
+    "declaration": {
+      "kind": "Weave",
+      "name": "main",
+      "parameters": [],
+      "result": "Whole",
+      "body": [{
+        "kind": "Yield",
+        "value": {"kind": "Atom", "atom": {"kind": "Whole", "value": 11}}
+      }]
+    }
+  }]
+}"#;
+
+        let response = apply_structural_edit_response(source, edit);
+
+        assert!(response.success);
+        assert_eq!(
+            response.source.as_deref(),
+            Some("world studio_edit\n\nweave main [] -> Whole:\n  yield 11\n")
+        );
+        assert_eq!(response.operation_count, Some(1));
+        assert!(response.diagnostic.is_none());
+    }
+
+    #[test]
+    fn stale_structural_edit_returns_machine_readable_diagnostic_without_source() {
+        let response = apply_structural_edit_response(
+            "world studio_stale\n\nweave main [] -> Whole:\n  yield 0\n",
+            r#"{"protocol":"aether.edit/v1","schema":"aether.ast/v1","baseSource":"world other\n\nweave main [] -> Whole:\n  yield 0\n","operations":[{"op":"delete","target":"weave:main"}]}"#,
+        );
+
+        assert!(!response.success);
+        assert!(response.source.is_none());
+        assert_eq!(
+            response
+                .diagnostic
+                .as_ref()
+                .map(|diagnostic| diagnostic.code),
+            Some("AE-EDIT-003")
+        );
+        assert_eq!(
+            response
+                .diagnostic
+                .as_ref()
+                .map(|diagnostic| diagnostic.span.line),
+            Some(1)
+        );
     }
 }

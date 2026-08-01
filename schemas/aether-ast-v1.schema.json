@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.local/schemas/aether-ast-v1.schema.json",
+  "title": "Aether semantic AST v1",
+  "description": "Canonical, local machine-readable Aether 0.6 semantic structure.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "language", "canonicalSource", "program"],
+  "properties": {
+    "schema": { "const": "aether.ast/v1" },
+    "language": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "Aether" },
+        "version": { "type": "string" }
+      }
+    },
+    "canonicalSource": { "type": "string", "maxLength": 1000000 },
+    "program": { "$ref": "#/$defs/program" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9:._/-]+$" },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["line", "column"],
+      "properties": {
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "valueType": {
+      "oneOf": [
+        { "enum": ["Text", "Whole", "Truth", "Bytes", "Arena", "BufferWhole", "BufferTruth"] },
+        { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+      ]
+    },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "world", "records", "weaves"],
+      "properties": {
+        "id": { "const": "program" },
+        "kind": { "const": "Program" },
+        "world": { "$ref": "#/$defs/world" },
+        "records": { "type": "array", "items": { "$ref": "#/$defs/record" } },
+        "weaves": { "type": "array", "items": { "$ref": "#/$defs/weave" } }
+      }
+    },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "name"],
+      "properties": {
+        "id": { "const": "world" },
+        "kind": { "const": "World" },
+        "span": { "$ref": "#/$defs/span" },
+        "name": { "type": "string" }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "name", "fields"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "Record" },
+        "span": { "$ref": "#/$defs/span" },
+        "name": { "type": "string" },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/field" } }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "name", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "RecordField" },
+        "span": { "$ref": "#/$defs/span" },
+        "name": { "type": "string" },
+        "type": { "enum": ["Text", "Whole", "Truth", "Bytes"] }
+      }
+    },
+    "weave": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "name", "parameters", "result", "body"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "Weave" },
+        "span": { "$ref": "#/$defs/span" },
+        "name": { "type": "string" },
+        "parameters": { "type": "array", "items": { "$ref": "#/$defs/parameter" } },
+        "result": { "$ref": "#/$defs/valueType" },
+        "body": { "type": "array", "items": { "$ref": "#/$defs/statement" } }
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "name", "mode", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "Parameter" },
+        "span": { "$ref": "#/$defs/span" },
+        "name": { "type": "string" },
+        "mode": { "enum": ["own", "borrow", "access"] },
+        "type": { "$ref": "#/$defs/valueType" }
+      }
+    },
+    "statement": {
+      "oneOf": [
+        { "$ref": "#/$defs/bind" },
+        { "$ref": "#/$defs/revise" },
+        { "$ref": "#/$defs/speak" },
+        { "$ref": "#/$defs/yield" },
+        { "$ref": "#/$defs/choose" },
+        { "$ref": "#/$defs/while" }
+      ]
+    },
+    "bind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "name", "mutable", "value"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "kind": { "const": "Bind" }, "span": { "$ref": "#/$defs/span" },
+        "name": { "type": "string" }, "mutable": { "type": "boolean" }, "value": { "$ref": "#/$defs/expression" }
+      }
+    },
+    "revise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "name", "value"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "kind": { "const": "Revise" }, "span": { "$ref": "#/$defs/span" },
+        "name": { "type": "string" }, "value": { "$ref": "#/$defs/expression" }
+      }
+    },
+    "speak": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "value"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "kind": { "const": "Speak" }, "span": { "$ref": "#/$defs/span" },
+        "value": { "$ref": "#/$defs/expression" }
+      }
+    },
+    "yield": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "value"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "kind": { "const": "Yield" }, "span": { "$ref": "#/$defs/span" },
+        "value": { "$ref": "#/$defs/expression" }
+      }
+    },
+    "choose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "condition", "whenBright", "whenDim"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "kind": { "const": "Choose" }, "span": { "$ref": "#/$defs/span" },
+        "condition": { "$ref": "#/$defs/expression" },
+        "whenBright": { "type": "array", "items": { "$ref": "#/$defs/statement" } },
+        "whenDim": { "type": "array", "items": { "$ref": "#/$defs/statement" } }
+      }
+    },
+    "while": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span", "condition", "body"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "kind": { "const": "While" }, "span": { "$ref": "#/$defs/span" },
+        "condition": { "$ref": "#/$defs/expression" }, "body": { "type": "array", "items": { "$ref": "#/$defs/statement" } }
+      }
+    },
+    "expression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "kind": { "type": "string" }, "span": { "$ref": "#/$defs/span" },
+        "atom": { "$ref": "#/$defs/atom" }, "capacity": { "type": "integer", "minimum": 0 },
+        "element": { "enum": ["Whole", "Truth"] }, "operation": { "type": "string" },
+        "argument": { "$ref": "#/$defs/atom" }, "left": { "$ref": "#/$defs/atom" }, "right": { "$ref": "#/$defs/atom" },
+        "text": { "$ref": "#/$defs/atom" }, "bytes": { "$ref": "#/$defs/atom" }, "start": { "$ref": "#/$defs/atom" },
+        "end": { "$ref": "#/$defs/atom" }, "first": { "$ref": "#/$defs/atom" }, "second": { "$ref": "#/$defs/atom" },
+        "third": { "$ref": "#/$defs/atom" }, "weave": { "type": "string" }, "arguments": { "type": "array", "items": { "$ref": "#/$defs/atom" } },
+        "record": { "oneOf": [{ "$ref": "#/$defs/atom" }, { "type": "string" }] }, "fields": { "type": "array", "items": { "$ref": "#/$defs/atom" } },
+        "field": { "type": "string" }, "arena": { "$ref": "#/$defs/atom" }, "buffer": { "$ref": "#/$defs/atom" },
+        "value": { "$ref": "#/$defs/atom" }, "destination": { "type": "string" }, "index": { "$ref": "#/$defs/atom" }
+      }
+    },
+    "atom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "span"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "kind": { "enum": ["Text", "Bytes", "Whole", "Truth", "Name", "Borrow", "Move", "Access"] },
+        "span": { "$ref": "#/$defs/span" }, "value": {}, "name": { "type": "string" }
+      }
+    },
+    "editableDeclaration": {
+      "oneOf": [
+        { "$ref": "#/$defs/editableRecord" },
+        { "$ref": "#/$defs/editableWeave" }
+      ]
+    },
+    "editableRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "fields"],
+      "properties": {
+        "kind": { "const": "Record" }, "name": { "type": "string" },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/editableField" } }
+      }
+    },
+    "editableField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "type"],
+      "properties": { "kind": { "const": "RecordField" }, "name": { "type": "string" }, "type": { "enum": ["Text", "Whole", "Truth", "Bytes"] } }
+    },
+    "editableWeave": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "parameters", "result", "body"],
+      "properties": {
+        "kind": { "const": "Weave" }, "name": { "type": "string" },
+        "parameters": { "type": "array", "items": { "$ref": "#/$defs/editableParameter" } },
+        "result": { "$ref": "#/$defs/valueType" }, "body": { "type": "array", "items": { "$ref": "#/$defs/editableStatement" } }
+      }
+    },
+    "editableParameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "mode", "type"],
+      "properties": { "kind": { "const": "Parameter" }, "name": { "type": "string" }, "mode": { "enum": ["own", "borrow", "access"] }, "type": { "$ref": "#/$defs/valueType" } }
+    },
+    "editableStatement": {
+      "oneOf": [
+        { "$ref": "#/$defs/editableBind" },
+        { "$ref": "#/$defs/editableRevise" },
+        { "$ref": "#/$defs/editableSpeak" },
+        { "$ref": "#/$defs/editableYield" },
+        { "$ref": "#/$defs/editableChoose" },
+        { "$ref": "#/$defs/editableWhile" }
+      ]
+    },
+    "editableBind": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "name", "mutable", "value"],
+      "properties": { "kind": { "const": "Bind" }, "name": { "type": "string" }, "mutable": { "type": "boolean" }, "value": { "$ref": "#/$defs/editableExpression" } }
+    },
+    "editableRevise": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "name", "value"],
+      "properties": { "kind": { "const": "Revise" }, "name": { "type": "string" }, "value": { "$ref": "#/$defs/editableExpression" } }
+    },
+    "editableSpeak": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": { "kind": { "const": "Speak" }, "value": { "$ref": "#/$defs/editableExpression" } }
+    },
+    "editableYield": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": { "kind": { "const": "Yield" }, "value": { "$ref": "#/$defs/editableExpression" } }
+    },
+    "editableChoose": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "condition", "whenBright", "whenDim"],
+      "properties": {
+        "kind": { "const": "Choose" }, "condition": { "$ref": "#/$defs/editableExpression" },
+        "whenBright": { "type": "array", "items": { "$ref": "#/$defs/editableStatement" } },
+        "whenDim": { "type": "array", "items": { "$ref": "#/$defs/editableStatement" } }
+      }
+    },
+    "editableWhile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "condition", "body"],
+      "properties": {
+        "kind": { "const": "While" }, "condition": { "$ref": "#/$defs/editableExpression" },
+        "body": { "type": "array", "items": { "$ref": "#/$defs/editableStatement" } }
+      }
+    },
+    "editableExpression": {
+      "oneOf": [
+        { "$ref": "#/$defs/editableAtomExpression" }, { "$ref": "#/$defs/editableArenaExpression" },
+        { "$ref": "#/$defs/editableBufferExpression" }, { "$ref": "#/$defs/editableUnaryExpression" },
+        { "$ref": "#/$defs/editableBinaryExpression" }, { "$ref": "#/$defs/editableCutExpression" },
+        { "$ref": "#/$defs/editableSliceExpression" }, { "$ref": "#/$defs/editableTernaryExpression" },
+        { "$ref": "#/$defs/editableCallExpression" }, { "$ref": "#/$defs/editableMakeRecordExpression" },
+        { "$ref": "#/$defs/editableFieldExpression" }, { "$ref": "#/$defs/editableResourceExpression" }
+      ]
+    },
+    "editableAtomExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "atom"],
+      "properties": { "kind": { "const": "Atom" }, "atom": { "$ref": "#/$defs/editableAtom" } }
+    },
+    "editableArenaExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "capacity"],
+      "properties": { "kind": { "const": "Arena" }, "capacity": { "type": "integer", "minimum": 0, "maximum": 4294967295 } }
+    },
+    "editableBufferExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "element"],
+      "properties": { "kind": { "const": "Buffer" }, "element": { "enum": ["Whole", "Truth"] } }
+    },
+    "editableUnaryExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "operation", "argument"],
+      "properties": { "kind": { "const": "Unary" }, "operation": { "enum": ["not", "measure", "render", "extent", "encode", "decode", "number", "pack16", "pack32", "pack64", "count"] }, "argument": { "$ref": "#/$defs/editableAtom" } }
+    },
+    "editableBinaryExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "operation", "left", "right"],
+      "properties": { "kind": { "const": "Binary" }, "operation": { "enum": ["sum", "difference", "product", "less", "same", "join", "glyph", "quotient", "remainder", "fuse", "append", "octet", "unpack16", "unpack32"] }, "left": { "$ref": "#/$defs/editableAtom" }, "right": { "$ref": "#/$defs/editableAtom" } }
+    },
+    "editableCutExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "text", "start", "end"],
+      "properties": { "kind": { "const": "Cut" }, "text": { "$ref": "#/$defs/editableAtom" }, "start": { "$ref": "#/$defs/editableAtom" }, "end": { "$ref": "#/$defs/editableAtom" } }
+    },
+    "editableSliceExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "bytes", "start", "end"],
+      "properties": { "kind": { "const": "Slice" }, "bytes": { "$ref": "#/$defs/editableAtom" }, "start": { "$ref": "#/$defs/editableAtom" }, "end": { "$ref": "#/$defs/editableAtom" } }
+    },
+    "editableTernaryExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "operation", "first", "second", "third"],
+      "properties": { "kind": { "const": "Ternary" }, "operation": { "enum": ["seek", "poke", "poke32"] }, "first": { "$ref": "#/$defs/editableAtom" }, "second": { "$ref": "#/$defs/editableAtom" }, "third": { "$ref": "#/$defs/editableAtom" } }
+    },
+    "editableCallExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "weave", "arguments"],
+      "properties": { "kind": { "const": "Call" }, "weave": { "type": "string" }, "arguments": { "type": "array", "items": { "$ref": "#/$defs/editableAtom" } } }
+    },
+    "editableMakeRecordExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "record", "fields"],
+      "properties": { "kind": { "const": "MakeRecord" }, "record": { "type": "string" }, "fields": { "type": "array", "items": { "$ref": "#/$defs/editableAtom" } } }
+    },
+    "editableFieldExpression": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "record", "field"],
+      "properties": { "kind": { "const": "Field" }, "record": { "$ref": "#/$defs/editableAtom" }, "field": { "type": "string" } }
+    },
+    "editableResourceExpression": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false, "required": ["kind", "operation", "arena", "buffer", "capacity", "destination"],
+          "properties": { "kind": { "const": "Resource" }, "operation": { "const": "allocate" }, "arena": { "$ref": "#/$defs/editableAtom" }, "buffer": { "$ref": "#/$defs/editableAtom" }, "capacity": { "$ref": "#/$defs/editableAtom" }, "destination": { "type": "string" } }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["kind", "operation", "buffer", "value", "destination"],
+          "properties": { "kind": { "const": "Resource" }, "operation": { "const": "append" }, "buffer": { "$ref": "#/$defs/editableAtom" }, "value": { "$ref": "#/$defs/editableAtom" }, "destination": { "type": "string" } }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["kind", "operation", "buffer", "index", "destination"],
+          "properties": { "kind": { "const": "Resource" }, "operation": { "const": "at" }, "buffer": { "$ref": "#/$defs/editableAtom" }, "index": { "$ref": "#/$defs/editableAtom" }, "destination": { "type": "string" } }
+        }
+      ]
+    },
+    "editableAtom": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": { "kind": { "const": "Text" }, "value": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": { "kind": { "const": "Bytes" }, "value": { "type": "string", "pattern": "^(?:[0-9a-f]{2})*$" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": { "kind": { "const": "Whole" }, "value": { "type": "integer" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": { "kind": { "const": "Truth" }, "value": { "type": "boolean" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "name"], "properties": { "kind": { "const": "Name" }, "name": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "name"], "properties": { "kind": { "const": "Borrow" }, "name": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "name"], "properties": { "kind": { "const": "Move" }, "name": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["kind", "name"], "properties": { "kind": { "const": "Access" }, "name": { "type": "string" } } }
+      ]
+    }
+  }
+}

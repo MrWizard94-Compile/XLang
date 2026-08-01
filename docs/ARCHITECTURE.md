@@ -4,6 +4,9 @@
 flowchart LR
     Editor["Aether Studio editor"] -->|"Tauri command"| SeedPath["compile_with_seed"]
     CLI["aether compile"] --> SeedPath
+    Editor -->|"Structure / Apply edit"| Authoring["aether.ast/v1 + aether.edit/v1"]
+    CLI -->|"structure / apply-edit"| Authoring
+    Authoring -->|"canonical validated source"| SeedPath
     SeedPath --> SeedArt["embedded seed AETH v6 compiler"]
     SeedArt --> Artifact["Verified AETH v4, v5, or v6 artifact"]
     Artifact --> VM["Aether VM"]
@@ -28,15 +31,18 @@ AI-first systems-language direction is documented separately in
 [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md);
 the executable bounded M2 subset is [ADR-004](ADR-004-aeth-v6-bounded-resources.md).
 In particular, Aether 0.6 has no typed effects, structured concurrency, generic
-shape folding, SoA lowering, C-header ingestion, structural-edit protocol, or
-native backend. Aether source
+shape folding, SoA lowering, C-header ingestion, fine-grained arbitrary-node
+structural edits, or native backend. M3 provides a bounded top-level structural
+authoring protocol described in [AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md).
+Aether source
 continues to emit AETH only; future designs may not bypass verifier, forge, or
 host-capability boundaries.
 
 ## Compiler Boundary
 
-The Rust bootstrap core is a dependency-free crate. It parses UTF-8 Aether
-source, validates names, types, mutation, `Text` and `Bytes` move state, and
+The Rust bootstrap core uses pinned `serde`/`serde_json` only for strict local
+M3 JSON parsing and deterministic structural-document serialization. It parses
+UTF-8 Aether source, validates names, types, mutation, `Text` and `Bytes` move state, and
 structured control flow, serializes a deterministic AST, builds a typed M2
 resource semantic plan, and emits AETH v6 bytecode. The bytecode verifier runs
 before the VM. The compiler does not call a
@@ -125,13 +131,33 @@ See
 Bootstrap is not gone: it rebuilds the seed, supplies the full invalid-source
 diagnostic path, and dual-checks proofs. Product bytecode is seed-produced.
 
+## Structural Authoring Boundary
+
+M3 has two local wire contracts: `aether.ast/v1` exports the fully validated,
+formatter-canonical semantic tree, and `aether.edit/v1` carries an exact
+canonical base source plus typed top-level Record/Weave `replace`,
+`insertAfter`, or `delete` operations. Strict parsing rejects duplicate JSON
+keys, unknown fields, unsupported versions, invalid shapes, excessive depth,
+and bounded-input violations before an edit can affect a Program. Existing
+record type references are reindexed by nominal name when records move, so a
+record insertion cannot silently retarget a weave signature.
+
+The core edit operation is pure: it formats and bootstrap-validates candidate
+source but does not persist, execute, or invoke a model. CLI and Studio then
+seed-compile the returned canonical source, which verifies the AETH artifact,
+before writing or persisting it. The protocol is not a guest capability, does
+not modify Forge, and cannot become compiler authority for an AI model.
+
 ## Desktop Boundary
 
 Studio is a Tauri 2 desktop app. The React renderer owns the active document.
 The native command layer **seed-compiles** the document, runs only verified AETH
 output, and returns bounded artifact metadata plus VM output. Source persistence
 uses `aether.source` and model persistence uses `aether.model` in local WebView
-storage.
+storage. M3 Structure returns a renderer-local semantic document; Apply edit
+replaces that local source only after the native seed-validation command accepts
+it, after which the existing `aether.source` persistence path stores the
+canonical text locally.
 
 ## Local Model Selection
 

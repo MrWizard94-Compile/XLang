@@ -12,7 +12,7 @@ focusing only on syntax or only on VM internals.
 
 | SOP category | Aether-equivalent component | Core question |
 | --- | --- | --- |
-| UI | Human source, canonical formatting, editor/LSP, and future AI structural editing | Can humans and agents express the same intent without ambiguous text surgery? |
+| UI | Human source, canonical formatting, editor/LSP, and M3 AI structural editing | Can humans and agents express the same intent without ambiguous text surgery? |
 | Workflow logic | Parse, resolve, type-check, compile, verify, run, and package | Is every transformation deterministic, inspectable, and testable? |
 | Data model | Source AST, semantic IR, value/ownership model, artifacts, and package metadata | Which facts are explicit at every boundary, and which are inferred? |
 | Integrations | Host invoke/forge ABI, optional model review, future C and package interfaces | Can a boundary be narrow, typed, and independently verified? |
@@ -53,7 +53,7 @@ flowchart TD
     Ir --> Aeth["AETH emission and verifier"]
     Aeth --> Vm["Capability-free Aether VM"]
 
-    Ast --> Ai["Candidate structural edit protocol"]
+    Ast --> Ai["M3 validated structural edit protocol"]
     Semantics --> Resources["Candidate allocator and resource rules"]
     Resources --> Abi["Candidate FFI / host ABI"]
     Semantics --> Effects["Candidate typed effects"]
@@ -66,7 +66,7 @@ flowchart TD
 
 | Component | Present boundary | Candidate future contract | Evidence needed before implementation |
 | --- | --- | --- | --- |
-| Canonical source and AST | Aether 0.6 has deterministic formatting and a bootstrap canonical-AST output. | A versioned, machine-readable schema and validated structural edit operations. | Round-trip corpus; malformed-edit rejection; stable schema/version policy; editor and CLI contract tests. |
+| Canonical source and AST | Aether 0.6 M3 has deterministic formatting, `aether.ast/v1`, `aether.diagnostic/v1`, and bounded `aether.edit/v1` top-level operations. | Fine-grained structural edits only after a separately versioned safety design. | Preserve round-trip, malformed/stale rejection, schema/version, editor/CLI, and local-only storage tests for each extension. |
 | Ownership and values | `borrow` and `move` protect bounded scalar, byte, and immutable-record use. | A complete value/borrow/mutation/escape model for dynamic aggregates and resources. | Formal rules; negative compile tests; seed-emission proof; soundness review. |
 | Allocation | VM intentionally exposes no allocator API. | Explicit capability-passed allocators or arenas, with no ambient default allocation in the language contract. | Allocation trace tests; OOM behavior; ownership/destruction rules; ABI interaction design. |
 | Effects and errors | No typed effect or error-set surface exists. | Typed, inspectable error/effect propagation with no hidden exception path. | Semantics document; inference/handling tests; diagnostics; interaction with ownership and tasks. |
@@ -83,8 +83,9 @@ flowchart TD
    ownership before this model exists.
 2. Typed effects precede colorless blocking/async behavior. Adding a scheduler
    before an effect contract would hide important behavior behind runtime magic.
-3. A stable semantic AST precedes a structural AI-edit protocol. A formatter
-   alone cannot make arbitrary tree edits valid.
+3. M3 proves that a stable semantic AST precedes a structural AI-edit protocol.
+   A formatter alone cannot make arbitrary tree edits valid; v1 therefore
+   permits typed top-level declarations only.
 4. Generic shape analysis precedes any automatic data-layout transformation.
    Layout changes must preserve observable semantics or be explicit in source.
 5. The AETH verifier remains below every future compiler path. New source

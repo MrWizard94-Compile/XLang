@@ -18,6 +18,10 @@ dependencies = [
 [[package]]
 name = "aether-core"
 version = "0.6.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "aether-studio"

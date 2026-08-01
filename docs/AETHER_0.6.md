@@ -25,6 +25,22 @@ rejected, while `borrow name` reads and `move name` transfers. `Whole` and
 `Truth` are copy values. Existing Text/Bytes behavior is retained as a bounded
 0.5 compatibility surface; it is not silently redefined as arena allocation.
 
+## M3 structural-authoring tooling contract
+
+M3 adds no Aether grammar, value, AETH, VM, Forge ABI, or Seed Profile source
+form. It is a local tooling boundary over this exact validated 0.6 surface:
+`aether.ast/v1` exports a canonical semantic AST and `aether.edit/v1` accepts
+typed top-level record/weave `replace`, `insertAfter`, and `delete` operations
+only when their complete canonical source revision matches. The edited tree is
+formatted and parsed again by the bootstrap; the CLI and Studio seed-compile it
+before writing or persisting the canonical source.
+
+The contract's node IDs, diagnostic code/span envelope, strict JSON rules,
+limits, schemas, and compatibility policy are normative in
+[AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md). It does
+not claim fine-grained arbitrary-node editing or seed invalid-source diagnostic
+parity.
+
 ## M2 bounded-resource surface
 
 M2 adds one explicit resource region and one fixed-capacity homogeneous

@@ -27,7 +27,7 @@ claim. Every statement in the design set uses one of these labels:
 | Macro-free compile-time execution should use ordinary, type-checked Aether forms. | **Research hypothesis** | Zig demonstrates compile-time execution; the original brief identifies macro/tooling opacity as a risk. | Design a constrained, deterministic evaluation model and resource limits before adding a `comptime`/`forge` source surface. |
 | Errors and environmental behavior should be typed rather than hidden. | **Research hypothesis** | Koka, OCaml 5, and Roc provide effect/handler and host-boundary models. | Prove interaction with ownership, cancellation, diagnostics, and the VM before choosing syntax or inference. |
 | Data-layout choice and generic specialization should be explicit or proven semantics-preserving. | **Research hypothesis** | Odin provides visible SoA facilities; shape-based folding from the original brief remains an untested idea. | No automatic layout rewrite without semantic-equivalence tests and a benchmark protocol. |
-| AI authoring should target validated structure, while retaining canonical human-readable text. | **Accepted direction** | The current formatter/canonical AST establish a base; the original brief identifies fragile text patches as a problem. | A stable machine-readable AST schema and validated edit operations must precede any “syntax-error-proof” claim. |
+| AI authoring should target validated structure, while retaining canonical human-readable text. | **Implemented, bounded M3 scope** | `aether.ast/v1`, `aether.edit/v1`, code/span diagnostics, and strict local validation establish the first evidence-backed contract. | Preserve the exact-base, typed top-level-edit boundary; a stable schema and validated operations still precede any “syntax-error-proof” claim. |
 
 ## Current-law reconciliation
 
@@ -70,9 +70,11 @@ properties testable:
    type-checking, compilation, verification, and execution remain deterministic
    compiler/VM decisions.
 
-The first two partial foundations exist in 0.5 (canonical formatting and a
-canonical AST output). The schema, edit protocol, stable diagnostics, and AI
-tooling contract are future work.
+The first partial foundations existed in 0.5 (canonical formatting and a
+canonical AST output). M3 now completes the bounded schema, edit protocol,
+stable diagnostics, and local tooling contract for Aether 0.6. Its evidence and
+limits are [AETHER_AUTHORING_PROTOCOL_v1.md](../AETHER_AUTHORING_PROTOCOL_v1.md);
+fine-grained arbitrary-node edits remain future work.
 
 ## Falsifiable research spikes
 
@@ -85,7 +87,7 @@ with an explicit stop condition instead of building a broad incomplete feature.
 | Explicit allocators | One arena-backed collection with injected failing allocator. | No ambient allocation in its Aether API; deterministic OOM behavior; cleanup/escape rules hold. | Library API needs an implicit global allocator or cannot explain ownership across calls. |
 | Compile-time evaluation | Pure bounded evaluator over a specified Aether subset. | Deterministic byte-identical output, resource caps, diagnostics, and no host I/O. | It needs textual macro expansion, runtime host capabilities, or unbounded compiler execution. |
 | Typed effects | One typed operation with handled, forwarded, and rejected paths. | Effect set/row is visible and diagnostics explain propagation; ownership remains sound. | The feature reintroduces hidden exception flow or requires special async coloring. |
-| Structural edits | Schema plus a small set of insert/replace/delete operations over a canonical corpus. | Valid edits round-trip through formatter/parser; invalid/stale edits are rejected deterministically. | Tooling relies on line-number text replacement or can write semantically unchecked source. |
+| Structural edits | Schema plus typed top-level insert/replace/delete operations over a canonical corpus. | **Met in M3:** valid edits round-trip through formatter/parser and seed validation; invalid/stale/duplicate/malformed edits are rejected deterministically. | Future tooling relies on line-number text replacement or can write semantically unchecked source. |
 | SoA / shape analysis | A layout-explicit collection and a candidate same-shape specialization. | Observable semantics and ABI are preserved; benchmark harness reports a reproducible workload. | Performance benefit depends on undocumented layout changes or unsound type erasure. |
 | Structured concurrency | Lexical task group with join, failure, and cancellation tests. | No task survives its scope; cleanup/cancellation is deterministic; effects describe blocking. | Detached background work or hidden scheduler ownership is necessary. |
 

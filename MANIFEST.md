@@ -20,8 +20,10 @@ The accepted M1 direction is
 The bounded executable M2 decision is
 [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md).
 Typed effects, structured concurrency, generic shape/layout work, C interop,
-and structural editing are not Aether 0.6 surface area unless this manifest and
-the versioned language specification say so.
+and a native backend are not Aether 0.6 surface area. M3 structural authoring
+is implemented tooling metadata, not a source-grammar, AETH, Seed Profile, or
+host-capability expansion; its contract is
+[docs/AETHER_AUTHORING_PROTOCOL_v1.md](docs/AETHER_AUTHORING_PROTOCOL_v1.md).
 
 ## Implemented Language Boundary
 
@@ -56,6 +58,20 @@ possibly empty bounded record table. v6 verifies `MAKE_RECORD` / `FIELD` plus
 `ARENA`, `BUFFER`, `ACCESS`, `ALLOCATE`, `BUFFER_APPEND`, `BUFFER_AT`, and
 `COUNT`. AETH v4/v5 remain accepted with their original bytes and meanings;
 earlier and unknown versions are rejected.
+
+## Structural authoring boundary
+
+`aether.ast/v1` describes successfully parsed Aether 0.6 source after
+formatter canonicalization. `aether.edit/v1` accepts only a matching complete
+canonical `baseSource` and bounded typed top-level Record/Weave
+`replace`/`insertAfter`/`delete` operations. The bootstrap revalidates the
+formatter-owned result; CLI and Studio seed-compile it before writing or
+persisting source. It cannot execute code, write a file by itself, contact an
+AI/model service, change artifact bytes, or grant a guest capability.
+
+Stable `aether.diagnostic/v1` code/span envelopes make source and edit failures
+machine-readable. The exact schemas, limits, operation vocabulary, and
+compatibility policy are in [docs/AETHER_AUTHORING_PROTOCOL_v1.md](docs/AETHER_AUTHORING_PROTOCOL_v1.md).
 
 ## Compile Path Boundary
 
@@ -98,7 +114,8 @@ features without the same proof.
 
 ## AI Boundary
 
-Ollama is optional, loopback-only, user-triggered review. Never compiler authority.
+Ollama is optional, loopback-only, user-triggered review. It never receives a
+structural edit automatically and is never compiler authority.
 
 ## Quality Gate
 

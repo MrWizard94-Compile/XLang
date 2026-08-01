@@ -5,13 +5,14 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use aether_core::{
-    canonical_ast, compile_source, compile_to_bytecode, compile_with_seed, forge_bytecode,
-    run_bytecode, verify_bytecode, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    apply_structural_edit, canonical_ast, compile_source, compile_to_bytecode, compile_with_seed,
+    forge_bytecode, run_bytecode, structural_document_json, verify_bytecode, InvocationValue,
+    LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default.\nstructure emits aether.ast/v1 JSON. apply-edit accepts aether.edit/v1, validates canonical source, then seed-compiles before writing.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -52,6 +53,32 @@ fn compile(source_path: &Path, output_path: &Path, use_bootstrap: bool) -> Resul
     Ok(())
 }
 
+fn structure(source_path: &Path) -> Result<(), String> {
+    let source = read_source(source_path)?;
+    let document = structural_document_json(&source).map_err(|error| error.to_string())?;
+    println!("{document}");
+    Ok(())
+}
+
+fn apply_edit(source_path: &Path, edit_path: &Path, output_path: &Path) -> Result<(), String> {
+    let source = read_source(source_path)?;
+    let edit = read_source(edit_path)?;
+    let result = apply_structural_edit(&source, &edit).map_err(|error| error.to_string())?;
+    compile_with_seed(&result.source).map_err(|error| {
+        format!(
+            "refusing to write structurally edited source because seed compilation failed: {error}"
+        )
+    })?;
+    write_source(output_path, &result.source)?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} applied {} validated structural edit(s) from {} to {}",
+        result.operation_count,
+        edit_path.display(),
+        output_path.display()
+    );
+    Ok(())
+}
+
 fn write_artifact(output_path: &Path, artifact: Vec<u8>) -> Result<(), String> {
     verify_bytecode(&artifact).map_err(|error| {
         format!(
@@ -70,6 +97,22 @@ fn write_artifact(output_path: &Path, artifact: Vec<u8>) -> Result<(), String> {
         ));
     }
     fs::write(output_path, artifact)
+        .map_err(|error| format!("could not write {}: {error}", output_path.display()))?;
+    Ok(())
+}
+
+fn write_source(output_path: &Path, source: &str) -> Result<(), String> {
+    let parent = output_path
+        .parent()
+        .filter(|candidate| !candidate.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    if !parent.is_dir() {
+        return Err(format!(
+            "output directory {} does not exist",
+            parent.display()
+        ));
+    }
+    fs::write(output_path, source)
         .map_err(|error| format!("could not write {}: {error}", output_path.display()))?;
     Ok(())
 }
@@ -123,6 +166,29 @@ fn run() -> Result<(), String> {
                 return Err("check accepts exactly one source file".to_owned());
             }
             check(Path::new(&source))
+        }
+        "structure" => {
+            let source = next_argument(&mut arguments, "source file")?;
+            if arguments.next().is_some() {
+                return Err("structure accepts exactly one source file".to_owned());
+            }
+            structure(Path::new(&source))
+        }
+        "apply-edit" => {
+            let source = next_argument(&mut arguments, "source file")?;
+            let edit = next_argument(&mut arguments, "edit file")?;
+            let output_flag = next_argument(&mut arguments, "--output flag")?;
+            if output_flag != "--output" {
+                return Err("apply-edit requires --output <source-file>".to_owned());
+            }
+            let output = next_argument(&mut arguments, "source output file")?;
+            if arguments.next().is_some() {
+                return Err(
+                    "apply-edit accepts one source file, one edit file, and --output <source-file>"
+                        .to_owned(),
+                );
+            }
+            apply_edit(Path::new(&source), Path::new(&edit), Path::new(&output))
         }
         "compile" => {
             let source = next_argument(&mut arguments, "source file")?;
@@ -251,6 +317,43 @@ mod tests {
         let generated = fs::read(&output_path).expect("forge artifact should be readable");
         assert_eq!(generated, target);
         verify_bytecode(&generated).expect("forge output must verify");
+    }
+
+    #[test]
+    fn apply_edit_writes_only_canonical_seed_validated_source() {
+        let temporary = TemporaryDirectory::create();
+        let source_path = temporary.path.join("input.ae");
+        let edit_path = temporary.path.join("edit.json");
+        let output_path = temporary.path.join("output.ae");
+        let source = "world cli\n\nweave main [] -> Whole:\n  yield 0\n";
+        let edit = r#"{
+  "protocol": "aether.edit/v1",
+  "schema": "aether.ast/v1",
+  "baseSource": "world cli\n\nweave main [] -> Whole:\n  yield 0\n",
+  "operations": [{
+    "op": "replace",
+    "target": "weave:main",
+    "declaration": {
+      "kind": "Weave",
+      "name": "main",
+      "parameters": [],
+      "result": "Whole",
+      "body": [{
+        "kind": "Yield",
+        "value": {"kind": "Atom", "atom": {"kind": "Whole", "value": 9}}
+      }]
+    }
+  }]
+}"#;
+        fs::write(&source_path, source).expect("source fixture should write");
+        fs::write(&edit_path, edit).expect("edit fixture should write");
+
+        apply_edit(&source_path, &edit_path, &output_path)
+            .expect("validated structural edit should write");
+
+        let written = fs::read_to_string(&output_path).expect("edited source should be readable");
+        assert_eq!(written, "world cli\n\nweave main [] -> Whole:\n  yield 9\n");
+        compile_with_seed(&written).expect("written source must remain seed compilable");
     }
 
     fn hex_encode(bytes: &[u8]) -> String {

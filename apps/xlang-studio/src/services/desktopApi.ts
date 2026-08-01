@@ -21,6 +21,24 @@ export interface ReviewResponse {
   content: string;
 }
 
+export interface AuthoringDiagnostic {
+  schema: string;
+  code: string;
+  span: {
+    line: number;
+    column: number;
+  };
+  message: string;
+}
+
+export interface StructuralAuthoringResponse {
+  success: boolean;
+  source: string | null;
+  document: string | null;
+  operationCount: number | null;
+  diagnostic: AuthoringDiagnostic | null;
+}
+
 export const isDesktopRuntime =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -33,6 +51,19 @@ function requireDesktopRuntime(): void {
 export async function compileSource(source: string): Promise<CompileResponse> {
   requireDesktopRuntime();
   return invoke<CompileResponse>("compile_source", { source });
+}
+
+export async function inspectStructure(source: string): Promise<StructuralAuthoringResponse> {
+  requireDesktopRuntime();
+  return invoke<StructuralAuthoringResponse>("inspect_structure", { source });
+}
+
+export async function applyStructuralEdit(
+  source: string,
+  edit: string
+): Promise<StructuralAuthoringResponse> {
+  requireDesktopRuntime();
+  return invoke<StructuralAuthoringResponse>("apply_structural_edit", { source, edit });
 }
 
 export async function getOllamaStatus(): Promise<OllamaStatus> {

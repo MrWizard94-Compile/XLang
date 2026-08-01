@@ -16,10 +16,13 @@ import {
 } from "lucide-react";
 import { DEFAULT_MODEL, chooseModel } from "./lib/models";
 import {
+  applyStructuralEdit,
   compileSource,
   getOllamaStatus,
+  inspectStructure,
   isDesktopRuntime,
   reviewSource,
+  type AuthoringDiagnostic,
   type CompileResponse,
   type OllamaStatus,
   type ReviewResponse
@@ -47,15 +50,27 @@ function runtimeSummary(result: CompileResponse | null): string {
   return stdout + "\n\nExit code: " + String(result.exitCode);
 }
 
+function authoringDiagnosticMessage(diagnostic: AuthoringDiagnostic | null): string {
+  if (!diagnostic) {
+    return "The structural authoring request did not return a diagnostic.";
+  }
+
+  return `${diagnostic.code} at line ${diagnostic.span.line}, column ${diagnostic.span.column}: ${diagnostic.message}`;
+}
+
 function App() {
   const [source, setSource] = useState(loadSource);
   const [selectedModel, setSelectedModel] = useState(loadModel);
   const [ollama, setOllama] = useState<OllamaStatus>(initialStatus);
   const [compileResult, setCompileResult] = useState<CompileResponse | null>(null);
   const [review, setReview] = useState<ReviewResponse | null>(null);
+  const [structure, setStructure] = useState<string | null>(null);
+  const [structuralEdit, setStructuralEdit] = useState("");
   const [operationError, setOperationError] = useState<string | null>(null);
   const [compiling, setCompiling] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [inspectingStructure, setInspectingStructure] = useState(false);
+  const [applyingStructuralEdit, setApplyingStructuralEdit] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const refreshOllama = useCallback(async () => {
@@ -133,10 +148,51 @@ function App() {
     }
   }
 
+  async function runStructureInspection() {
+    setInspectingStructure(true);
+    setOperationError(null);
+    try {
+      const response = await inspectStructure(source);
+      if (response.success && response.document) {
+        setStructure(response.document);
+      } else {
+        setStructure(null);
+        setOperationError(authoringDiagnosticMessage(response.diagnostic));
+      }
+    } catch (error) {
+      setStructure(null);
+      setOperationError(errorMessage(error));
+    } finally {
+      setInspectingStructure(false);
+    }
+  }
+
+  async function runStructuralEdit() {
+    setApplyingStructuralEdit(true);
+    setOperationError(null);
+    try {
+      const response = await applyStructuralEdit(source, structuralEdit);
+      if (response.success && response.source && response.document) {
+        setSource(response.source);
+        setStructure(response.document);
+        setCompileResult(null);
+        setReview(null);
+      } else {
+        setOperationError(authoringDiagnosticMessage(response.diagnostic));
+      }
+    } catch (error) {
+      setOperationError(errorMessage(error));
+    } finally {
+      setApplyingStructuralEdit(false);
+    }
+  }
+
   function restoreExample() {
     setSource(loadSource());
     setCompileResult(null);
     setReview(null);
+    setStructure(null);
+    setStructuralEdit("");
     setOperationError(null);
   }
 
@@ -196,6 +252,15 @@ function App() {
             <span>Review</span>
           </button>
           <button
+            className="command-button structure-button"
+            type="button"
+            onClick={() => void runStructureInspection()}
+            disabled={!isDesktopRuntime || inspectingStructure}
+          >
+            {inspectingStructure ? <LoaderCircle className="spin" size={17} /> : <Braces size={17} />}
+            <span>Structure</span>
+          </button>
+          <button
             className="command-button compile-button"
             type="button"
             onClick={() => void runCompile()}
@@ -238,7 +303,10 @@ function App() {
             aria-label="Aether source"
             spellCheck="false"
             value={source}
-            onChange={(event) => setSource(event.target.value)}
+            onChange={(event) => {
+              setSource(event.target.value);
+              setStructure(null);
+            }}
           />
         </section>
 
@@ -277,6 +345,39 @@ function App() {
               <Play size={17} />
             </div>
             <pre className="output-content runtime-output">{runtimeSummary(compileResult)}</pre>
+          </section>
+
+          <section className="output-section">
+            <div className="pane-heading">
+              <span>Semantic Structure</span>
+              <Braces size={17} />
+            </div>
+            <pre className="output-content ast-output">
+              {structure ?? "Inspect the source to produce its local aether.ast/v1 document."}
+            </pre>
+          </section>
+
+          <section className="output-section structural-edit-section">
+            <div className="pane-heading">
+              <span>Structural Edit</span>
+              <button
+                className="command-button structure-apply-button"
+                type="button"
+                onClick={() => void runStructuralEdit()}
+                disabled={!isDesktopRuntime || applyingStructuralEdit || !structuralEdit.trim()}
+              >
+                {applyingStructuralEdit ? <LoaderCircle className="spin" size={16} /> : <CheckCircle2 size={16} />}
+                <span>Apply</span>
+              </button>
+            </div>
+            <textarea
+              className="structural-edit-input"
+              aria-label="Aether structural edit JSON"
+              spellCheck="false"
+              value={structuralEdit}
+              onChange={(event) => setStructuralEdit(event.target.value)}
+              placeholder="Paste an aether.edit/v1 JSON request. It must match the current canonical source."
+            />
           </section>
 
           <section className="output-section review-section">

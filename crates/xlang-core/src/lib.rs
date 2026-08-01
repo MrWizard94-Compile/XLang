@@ -9,6 +9,14 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
+mod authoring;
+
+pub use authoring::{
+    apply_structural_edit, diagnostic_json, structural_document_json, StructuralEditError,
+    StructuralEditResult, DIAGNOSTIC_SCHEMA_VERSION, STRUCTURAL_AST_SCHEMA_VERSION,
+    STRUCTURAL_EDIT_PROTOCOL_VERSION,
+};
+
 pub const LANGUAGE_NAME: &str = "Aether";
 pub const LANGUAGE_VERSION: &str = "0.6.0";
 
@@ -114,12 +122,75 @@ pub struct CompilerError {
     pub message: String,
 }
 
+/// A stable, machine-readable envelope for a compiler or authoring diagnostic.
+/// The code identifies a documented category; the message retains the precise
+/// human-facing explanation for the current source construct.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Diagnostic {
+    pub code: &'static str,
+    pub span: Span,
+    pub message: String,
+}
+
 impl CompilerError {
     fn new(span: Span, message: impl Into<String>) -> Self {
         Self {
             span,
             message: message.into(),
         }
+    }
+
+    #[must_use]
+    pub fn diagnostic(&self) -> Diagnostic {
+        Diagnostic {
+            code: diagnostic_code(&self.message),
+            span: self.span,
+            message: self.message.clone(),
+        }
+    }
+}
+
+fn diagnostic_code(message: &str) -> &'static str {
+    let normalized = message.to_ascii_lowercase();
+    if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
+        "AE-SOURCE-001"
+    } else if normalized.contains("arena")
+        || normalized.contains("buffer")
+        || normalized.contains("resource outcome")
+        || normalized.contains("resource operation")
+    {
+        "AE-RESOURCE-001"
+    } else if normalized.contains("moved")
+        || normalized.contains("borrow")
+        || normalized.contains("access")
+        || normalized.contains("mutable")
+        || normalized.contains("revise")
+    {
+        "AE-OWNERSHIP-001"
+    } else if normalized.contains("duplicate")
+        || normalized.contains("unknown name")
+        || normalized.contains("undefined")
+        || normalized.contains("name must")
+    {
+        "AE-NAME-001"
+    } else if normalized.contains("type")
+        || normalized.contains("whole")
+        || normalized.contains("truth")
+        || normalized.contains("text")
+        || normalized.contains("bytes")
+    {
+        "AE-TYPE-001"
+    } else if normalized.contains("indent")
+        || normalized.contains("line")
+        || normalized.contains("expected")
+        || normalized.contains("trailing whitespace")
+        || normalized.contains("tab")
+        || normalized.contains("syntax")
+        || normalized.contains("literal")
+    {
+        "AE-SYNTAX-001"
+    } else {
+        "AE-SEMANTIC-001"
     }
 }
 

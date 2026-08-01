@@ -61,8 +61,10 @@ collection of scoped, reproducible claims instead of a blanket assertion.
 
 This adds documentation and review obligations before large semantic work. It
 also deliberately leaves several material choices open: the exact resource
-model, allocator form, effect system, structural-edit protocol, generic/layout
-semantics, concurrency model, and any foreign-interface scope.
+model, allocator form, effect system, generic/layout semantics, concurrency
+model, and any foreign-interface scope. The bounded structural-authoring choice
+is now decided by [ADR-005](ADR-005-structural-authoring-contract.md); its
+fine-grained edit vocabulary remains future work.
 
 ## Alternatives considered
 

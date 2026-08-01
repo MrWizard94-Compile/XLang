@@ -82,10 +82,12 @@ The current 0.6 implementation covers a deliberately small portion of this:
 canonical source formatting, bounded value semantics, a bootstrap canonical-AST
 path, AETH v4/v5 compatibility and v6 verification, seed-hosted product
 compilation, a narrow forge ABI, a capability-free VM, and one explicit bounded
-arena with closed Whole/Truth buffer outcomes. It does **not** yet provide typed
-effects, structured concurrency, generic shape folding, SoA lowering, C-header
-ingestion, a structural-edit protocol, a native backend, first-class resource
-outcomes, or Buffer weave results.
+arena with closed Whole/Truth buffer outcomes. M3 now adds local `aether.ast/v1`
+structure, diagnostic codes/spans, and bounded top-level `aether.edit/v1`
+operations; see [AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md).
+It does **not** yet provide typed effects, structured concurrency, generic shape
+folding, SoA lowering, C-header ingestion, a native backend, first-class
+resource outcomes, Buffer weave results, or fine-grained arbitrary-node edits.
 
 ## Explicit non-goals and constraints
 

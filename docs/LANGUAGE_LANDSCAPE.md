@@ -37,8 +37,9 @@ evidence plan are [research/](research/).
    and Buffer weave results are future directions or research hypotheses — not
    current syntax or runtime claims. Their evidence and stop conditions are in
    [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
-3. Canonical formatting and a bootstrap canonical-AST path exist today. A
-   versioned structural AI-edit protocol does not yet exist.
+3. Canonical formatting, a bootstrap canonical-AST path, and the bounded,
+   versioned M3 structural authoring contract exist today. See
+   [AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md).
 4. The executable target remains AETH plus the Aether VM. No host-language or
    LLVM backend is part of the current language contract.
 5. Immutable nominal records remain the first aggregate value: primitive fields

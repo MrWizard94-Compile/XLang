@@ -1,6 +1,6 @@
 # Aether Language Development Roadmap
 
-**Status:** M2 implementation record and forward plan
+**Status:** M3 implementation record and forward plan
 **Date:** 2026-07-31
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
@@ -8,13 +8,16 @@ constitution gate.
 
 ## Current baseline
 
-Stage 7 is complete: Aether 0.6 has a seed-hosted product compile path,
+Stage 7 and M3 are complete: Aether 0.6 has a seed-hosted product compile path,
 deterministic verified AETH v6 output while retaining verified AETH v4/v5
 compatibility, bounded value/byte behavior, immutable nominal records, and one
-explicit bounded arena with Whole/Truth buffers. Its exact executable scope is
-[MANIFEST.md](../MANIFEST.md) and [AETHER_0.6.md](AETHER_0.6.md). The
-long-range direction is [NORTH_STAR.md](NORTH_STAR.md); it must not be
-mistaken for current behavior.
+explicit bounded arena with Whole/Truth buffers. M3 adds `aether.ast/v1`,
+`aether.edit/v1`, and `aether.diagnostic/v1` as local tooling contracts without
+changing source grammar or AETH. Its exact executable scope is
+[MANIFEST.md](../MANIFEST.md), [AETHER_0.6.md](AETHER_0.6.md), and
+[AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md). The
+long-range direction is [NORTH_STAR.md](NORTH_STAR.md); it must not be mistaken
+for current behavior.
 
 ## Ordering principles
 
@@ -36,7 +39,7 @@ mistaken for current behavior.
 | M0 | Research, design foundation, and evidence register | None | Reference study, component matrix, north star, claims, ADR, and this roadmap. | Cross-links/claims are consistent, source-backed, and current-vs-future boundaries are explicit. | Complete |
 | M1 | Value and resource semantic specification | M0 | A precise ownership, borrow, move, mutation, escape, dynamic-aggregate, and destruction design; typed semantic-IR proposal. | Rules have counterexamples, negative compile cases, verifier consequences, seed feasibility plan, and human approval of the chosen model. | **Accepted direction; ADR-003** |
 | M2 | Explicit allocation and bounded dynamic aggregates | M1 | Allocator/arena capability API plus one representative dynamic collection. | No ambient allocation in the language API; deterministic OOM/cleanup behavior; ownership/escape tests; seed/bootstrap parity; docs/ADR synchronized. | **Implemented in Aether 0.6: closed one-arena Whole/Truth Buffer core** |
-| M3 | Versioned structural authoring contract | M1 | Machine-readable semantic AST schema, diagnostic code/span contract, and a small validated edit protocol. | Round-trip corpus, stale/malformed-edit rejection, canonical formatting, local-only storage behavior, and CLI/Studio contract tests. | Planned |
+| M3 | Versioned structural authoring contract | M1 | Machine-readable semantic AST schema, diagnostic code/span contract, and a small validated edit protocol. | Round-trip corpus, stale/malformed-edit rejection, canonical formatting, local-only storage behavior, and CLI/Studio contract tests. | **Implemented: `aether.ast/v1` / `aether.edit/v1` / `aether.diagnostic/v1`** |
 | M4 | Typed errors and effects | M1 | Error/effect semantics with one bounded handled/forwarded/rejected capability. | The type/effect checker, diagnostics, ownership interactions, verifier representation, and seed proof agree; no hidden exception route. | Research-gated |
 | M5 | Deterministic compile-time execution | M1 and M4 design decision | A pure, resource-bounded compile-time subset using ordinary Aether forms. | Determinism, limits, no host I/O, diagnostics, and artifact provenance are tested; no macro/text expansion bypass exists. | Research-gated |
 | M6 | Generic shapes and data-layout experiment | M1 and M2 | Explicit-layout collection plus a constrained shape-analysis prototype. | Layout/ABI rules, semantic-equivalence tests, and reproducible performance methodology demonstrate a scoped benefit. | Research-gated |
@@ -74,7 +77,7 @@ The accepted rules are:
 implicit allocation, an ambiguous destruction rule, host capability leakage, or
 a model the seed cannot represent/prove.
 
-### M2 and M3 — completed bounded resource core and next authoring foundation
+### M2 and M3 — completed bounded resource core and authoring foundation
 
 M2 validates resource behavior with a real, small dynamic collection. Aether
 0.6 completes the one-arena Whole/Truth Buffer core: a typed semantic plan,
@@ -83,9 +86,13 @@ and synchronized documentation. First-class outcome propagation, Buffer results,
 and resource-owner `revise` remain deliberately out of scope and cannot be
 added without their own specification and proof.
 
-M3 is next: it gives AI/human tools a stable machine-readable semantic AST,
-diagnostic code/span contract, and validated edit protocol. It must consume the
-current 0.6 contract rather than bypassing source validation or AETH
+M3 now gives AI/human tools a stable machine-readable semantic AST, diagnostic
+code/span contract, and validated edit protocol. Its exact-base stale guard,
+strict typed JSON payloads, canonical reparse, seed compile before CLI/Studio
+persistence, and local-only Studio state are documented in
+[AETHER_AUTHORING_PROTOCOL_v1.md](AETHER_AUTHORING_PROTOCOL_v1.md). The v1
+operation surface is intentionally limited to top-level record/weave
+insert/replace/delete; it does not bypass source validation or AETH
 verification.
 
 ### M4 through M8 — controlled experiments, not feature pile-on
@@ -102,7 +109,7 @@ No milestone advances merely because its happy path works.
 | --- | --- | --- |
 | Exact mutable-value / borrowing / copying vocabulary | It determines source compatibility, diagnostics, IR, and every future ownership guarantee. | M1 |
 | Allocator capability form and OOM contract | It governs every dynamic collection, FFI boundary, and resource cleanup. | M1/M2 |
-| Semantic AST schema/versioning and edit authorization model | It determines whether AI edits are safe, portable, and auditable. | M3 |
+| Fine-grained structural-edit vocabulary beyond top-level declarations | It must preserve transparent ownership/resource invariants without turning JSON paths into a second unsafe language. | Post-M3 |
 | Error/effect representation and inference boundary | It affects function types, handlers, cancellation, and compile-time rules. | M4 |
 | Compile-time evaluator limits | It affects determinism, denial-of-service resistance, and host authority. | M5 |
 | Generic shape and layout semantics | It affects ABI, correctness, performance claims, and debuggability. | M6 |
@@ -139,8 +146,9 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Begin the M3 design package: a versioned semantic-AST schema, stable diagnostic
-codes/spans, and a constrained local structural-edit protocol for AI-generated
-source. Any expansion of M2 must first specify first-class outcome propagation
-and cross-weave resource ownership without weakening the Aether 0.6 verifier or
-seed proof boundary.
+Begin the M4 research/design package: one bounded typed error/effect capability
+with handled, forwarded, and rejected paths. It must specify interactions with
+current ownership/resource behavior and M3 diagnostics before new source syntax
+or seed emission is attempted. Any expansion of M2 still must first specify
+first-class outcome propagation and cross-weave resource ownership without
+weakening the Aether 0.6 verifier or seed proof boundary.

@@ -184,6 +184,12 @@ select:disabled {
   background: #65d6b8;
 }
 
+.structure-button {
+  border-color: #486f9a;
+  color: #c5dcf2;
+  background: #1d2c3b;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 205px minmax(360px, 1fr) minmax(295px, 30%);
@@ -277,7 +283,13 @@ select:disabled {
 
 .inspector {
   display: grid;
-  grid-template-rows: minmax(125px, 0.8fr) minmax(180px, 1.45fr) minmax(125px, 0.85fr);
+  grid-template-rows:
+    minmax(94px, 0.7fr)
+    minmax(175px, 1.3fr)
+    minmax(94px, 0.7fr)
+    minmax(145px, 1.05fr)
+    minmax(145px, 1.05fr)
+    minmax(125px, 0.9fr);
   border-left: 1px solid #26302d;
   background: #151d1b;
 }
@@ -326,6 +338,41 @@ select:disabled {
 .review-output p {
   margin: 7px 0 0;
   white-space: pre-wrap;
+}
+
+.structural-edit-section {
+  grid-template-rows: 40px minmax(0, 1fr);
+}
+
+.structural-edit-input {
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  outline: 0;
+  padding: 12px 14px;
+  color: #c5dcf2;
+  background: #10191f;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.structural-edit-input:focus {
+  box-shadow: inset 3px 0 0 #78aeda;
+}
+
+.structural-edit-input::placeholder {
+  color: #6e8597;
+}
+
+.structure-apply-button {
+  min-height: 26px;
+  padding: 0 8px;
+  border-color: #486f9a;
+  color: #c5dcf2;
+  background: #1d2c3b;
+  font-size: 11px;
 }
 
 .success-icon {
@@ -445,10 +492,6 @@ select:disabled {
 
 .runtime-output {
   color: #b5cee6;
-}
-
-.inspector {
-  grid-template-rows: minmax(94px, 0.75fr) minmax(175px, 1.5fr) minmax(94px, 0.7fr) minmax(125px, 0.9fr);
 }
 
 @media (max-width: 900px) {

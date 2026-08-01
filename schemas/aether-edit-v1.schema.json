@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.local/schemas/aether-edit-v1.schema.json",
+  "title": "Aether structural edit protocol v1",
+  "description": "A bounded local structural edit request for a matching aether.ast/v1 document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "schema", "baseSource", "operations"],
+  "properties": {
+    "protocol": { "const": "aether.edit/v1" },
+    "schema": { "const": "aether.ast/v1" },
+    "baseSource": { "type": "string", "maxLength": 1000000 },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/operation" }
+    }
+  },
+  "$defs": {
+    "target": {
+      "oneOf": [
+        { "const": "world" },
+        { "type": "string", "pattern": "^(record|weave):[a-z][a-z0-9_]*$" }
+      ]
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "target", "declaration"],
+          "properties": {
+            "op": { "const": "replace" },
+            "target": { "$ref": "#/$defs/target" },
+            "declaration": { "$ref": "aether-ast-v1.schema.json#/$defs/editableDeclaration" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "target", "declaration"],
+          "properties": {
+            "op": { "const": "insertAfter" },
+            "target": { "$ref": "#/$defs/target" },
+            "declaration": { "$ref": "aether-ast-v1.schema.json#/$defs/editableDeclaration" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "target"],
+          "properties": {
+            "op": { "const": "delete" },
+            "target": { "$ref": "#/$defs/target" }
+          }
+        }
+      ]
+    }
+  }
+}
