@@ -2,7 +2,6 @@
 members = [
     "crates/xlang-core",
     "apps/xlang-cli",
-    "apps/xlang-studio/src-tauri",
 ]
 resolver = "2"
 

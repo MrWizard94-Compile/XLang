@@ -2,7 +2,7 @@
 
 **Status:** Active validation matrix — Aether 0.6 delivers the bounded M2
 subset; broader proposed rows remain future obligations
-**Date:** 2026-07-28; implementation record updated 2026-07-31
+**Date:** 2026-07-28; implementation record updated 2026-08-01
 **Scope:** Intended-behavior and hostile-artifact obligations for resource
 work. The exact implemented subset is [AETHER_0.6.md](AETHER_0.6.md) and
 [ADR-004](ADR-004-aeth-v6-bounded-resources.md).
@@ -191,10 +191,6 @@ cargo run -p aether-cli -- compile <canonical-m2-source> --output <seed-artifact
 cargo run -p aether-cli -- run <seed-artifact>
 cargo run -p aether-cli -- forge <rebuilt-seed> .\seed\aether_seed.ae --output <forged-seed>
 
-Set-Location C:\WPAI\Software\XLang\apps\xlang-studio
-npm run lint
-npm test
-npm run build
 ```
 
 The actual delivery report must record exact test counts, failed-test absence,

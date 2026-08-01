@@ -4,8 +4,8 @@
 
 Aether **0.6.0** accepts Aether source, returns a canonical AST from the Rust
 bootstrap for tooling, and **emits AETH v6 bytecode primarily through the
-Aether-written seed compiler** (forge ABI). The CLI and desktop app use the same
-seed-hosted compile path. Verified AETH v4/v5 artifacts remain accepted
+Aether-written seed compiler** (forge ABI). The `aether` CLI is the product
+interface for that seed-hosted compile path. Verified AETH v4/v5 artifacts remain accepted
 compatibility inputs. Source is never translated to an existing language.
 
 ## Scope Boundary
@@ -65,8 +65,8 @@ earlier and unknown versions are rejected.
 formatter canonicalization. `aether.edit/v1` accepts only a matching complete
 canonical `baseSource` and bounded typed top-level Record/Weave
 `replace`/`insertAfter`/`delete` operations. The bootstrap revalidates the
-formatter-owned result; CLI and Studio seed-compile it before writing or
-persisting source. It cannot execute code, write a file by itself, contact an
+formatter-owned result; the CLI seed-compiles it before writing source to the
+requested output path. It cannot execute code, write a file by itself, contact an
 AI/model service, change artifact bytes, or grant a guest capability.
 
 Stable `aether.diagnostic/v1` code/span envelopes make source and edit failures
@@ -77,7 +77,7 @@ compatibility policy are in [docs/AETHER_AUTHORING_PROTOCOL_v1.md](docs/AETHER_A
 
 | Path | Role |
 |------|------|
-| **Seed (default)** | `compile_with_seed` / CLI `compile` / Studio build — Aether-written compiler |
+| **Seed (default)** | `compile_with_seed` / CLI `compile` / CLI `apply-edit` validation — Aether-written compiler |
 | **Bootstrap** | `compile_to_bytecode` / CLI `compile --bootstrap` / `check` AST — rebuild seed, diagnostics |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |
 
@@ -112,13 +112,17 @@ surface, self-hosting of the seed, and seed-hosted compilation of the shipped
 example corpus. It is **not** a claim of full invalid-source diagnostic parity or of parity for future language
 features without the same proof.
 
-## AI Boundary
+## Product Interface Boundary
 
-Ollama is optional, loopback-only, user-triggered review. It never receives a
-structural edit automatically and is never compiler authority.
+The CLI is the only active product interface. Aether has no active desktop,
+WebView, model, or network integration. Its AI-first design is expressed through
+the versioned structural contracts and deterministic diagnostics, not by giving
+an AI service compilation or persistence authority. The retired workbench is
+recorded in [docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-studio.md).
 
 ## Quality Gate
 
-Rust fmt, Clippy `-D warnings`, core/CLI/seed tests, Studio lint/tests/build,
-CLI seed-compile of examples, forge self-host hash check. Release also requires
-Tauri bundle, optional live Ollama check, and package inspection.
+Rust format, Clippy `-D warnings`, core/CLI/seed tests, CLI seed-compile of
+examples, and forge self-host hash check are required. A release also requires
+`cargo build --release -p aether-cli`, forge contract verification, inspection
+of the release binary, and a successful launch on the target Windows system.

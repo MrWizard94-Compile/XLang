@@ -3,7 +3,7 @@ name: aether-gate-runner
 description: >
   Bound by AGENTS Constitution (pack law). Executes Aether quality gates and reports results without product feature
   coding. Use after implementations to run fmt, clippy, core/CLI tests, seed
-  self-host, Studio lint/test/build, example compile/run, and forge hash checks.
+  self-host, example compile/run, and forge hash checks.
   Prefer execute-only discipline: fix nothing unless asked — report failures with logs.
 prompt_mode: full
 model: inherit
@@ -37,12 +37,12 @@ Map every command result to pack gate / Done rules. Never report overall PASS if
 
 | Your command family | Rule IDs |
 |---------------------|----------|
-| `cargo fmt` / Clippy / eslint | `ENG-WARN-001`, gate item 3, `CONST-DONE-001` |
-| `cargo test` / vitest / seed_self_host | `TEST-BEHAVIOR-001`, gate item 4 |
+| `cargo fmt` / Clippy | `ENG-WARN-001`, gate item 3, `CONST-DONE-001` |
+| `cargo test` / seed_self_host | `TEST-BEHAVIOR-001`, gate item 4 |
 | Doc claim checks (grep stale versions) | `DOC-SYNC-001`, gate item 5 |
 | Forge hash / determinism | gate item 11, product seed honesty |
 | Pack `verify-pack.ps1` | `GOV-INT-001` |
-| Secrets / loopback AI surface | `SEC-INPUT-001`, gate item 6 |
+| Secrets / local file-I/O surface | `SEC-INPUT-001`, gate item 6 |
 
 End every report with a **Section 0 mini-audit**: which of the 15 items were executed, PASS/FAIL/N/A (N/A only when truly inapplicable, with reason).
 
@@ -79,15 +79,6 @@ cargo run -p aether-cli -- compile (Resolve-Path .\examples\welcome.ae) --output
 cargo run -p aether-cli -- run .\target\welcome.aeth
 ```
 
-### Studio
-
-```powershell
-Set-Location .\apps\xlang-studio
-npm run lint
-npm test
-npm run build
-```
-
 ### Pack law (when governance touched)
 
 ```powershell
@@ -96,9 +87,8 @@ pwsh -File "..\..\AGENTS Constitution\tools\verify-pack.ps1"
 
 ### Release-only (only if user asks)
 
-- Tauri bundle build
-- Live Docker Ollama status
-- Installer launch inspection
+- `cargo build --release -p aether-cli`
+- Release binary inspection and launch
 
 ## Output format
 

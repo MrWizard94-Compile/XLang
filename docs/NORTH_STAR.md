@@ -1,14 +1,14 @@
 # Aether North Star
 
 **Status:** Human-approved product direction; not a language-version contract
-**Date:** 2026-07-31
+**Date:** 2026-08-01 (CLI product-boundary update)
 **Current executable contract:** [MANIFEST.md](../MANIFEST.md) and
 [AETHER_0.6.md](AETHER_0.6.md)
 
 ## Vision
 
-Aether is intended to become a local-first systems language and integrated
-workbench designed for code that is primarily generated, transformed, and
+Aether is intended to become a local-first systems language and toolchain
+designed for code that is primarily generated, transformed, and
 audited by AI while remaining understandable and controllable by people.
 
 The goal is not to make an unprovable claim that one language is universally
@@ -36,7 +36,7 @@ gate all agree.
 | AI coding agent | Generate and revise code without fragile line-oriented patches or hidden authority. | Read a versioned project/AST contract → submit validated edits → receive deterministic diagnostics → compile only through the verifier boundary. |
 | Human director or engineer | Review an agent's intent, resource effects, and artifact provenance quickly. | Inspect canonical source/structure → see explicit ownership, allocation, effects, and capabilities → reproduce a build locally. |
 | Systems programmer | Control resources and layout without sacrificing understandable semantics. | Choose ownership/allocator/layout policy explicitly → prove behavior with tests and benchmarks → package a verified artifact. |
-| Local-first team | Keep source, model choices, and build authority on controlled machines. | Use the compiler without cloud authority → optionally request loopback-only model review → retain deterministic local artifacts. |
+| Local-first team | Keep source and build authority on controlled machines. | Use the compiler without cloud authority → retain deterministic local artifacts. |
 
 ## Design principles
 
@@ -50,8 +50,9 @@ gate all agree.
    can run or be written by forge. Future features strengthen, rather than
    bypass, this boundary.
 4. **Capabilities over ambient authority.** Code receives only the host
-   authority that an explicit, typed boundary grants. A local model can advise;
-   it never becomes parser, compiler, verifier, or execution authority.
+   authority that an explicit, typed boundary grants. Any future model adviser
+   is outside the compiler trust boundary; it never becomes parser, compiler,
+   verifier, or execution authority.
 5. **Data-oriented performance must be proved.** Layout control and any
    shape-based specialization must preserve semantics and demonstrate benefits
    on published workloads, not merely promise optimizer magic.

@@ -34,10 +34,9 @@ when spawning generic types that still need pack discipline.
 
 | Agent | Mode | Use when |
 |-------|------|----------|
-| `aether-explorer` | read-only | Map compiler, seed, Studio, docs, or opcodes |
+| `aether-explorer` | read-only | Map compiler, seed, CLI, docs, or opcodes |
 | `aether-core-engineer` | full | Change Rust bootstrap (`crates/xlang-core`, CLI) |
 | `aether-seed-engineer` | full | Edit `seed/aether_seed.ae`, self-host proof, AETH emit |
-| `aether-studio-engineer` | full | Tauri/React Studio (`apps/xlang-studio`) |
 | `aether-spec-writer` | full | Specs, MANIFEST, honest Stage/self-host claims |
 | `aether-gate-runner` | execute | Run fmt/clippy/tests/seed forge; Section 0 mapping |
 | `aether-reviewer` | read-only | Review diffs vs Rule IDs + Aether invariants |

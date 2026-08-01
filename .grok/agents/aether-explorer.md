@@ -2,7 +2,7 @@
 name: aether-explorer
 description: >
   Bound by AGENTS Constitution (pack law). Read-only Aether/XLang explorer. Use to map the bootstrap compiler, AETH
-  verifier/VM, forge ABI, seed compiler, Studio app, examples, or docs before
+  verifier/VM, forge ABI, seed compiler, CLI, examples, or docs before
   changing code. Prefer this over generic explore when the question is about
   Aether language stages, opcodes, Seed Profile limits, or package layout.
 prompt_mode: full
@@ -39,8 +39,6 @@ except under `target/` if unavoidable for inspection — prefer not to.
 |------|------|
 | Bootstrap compiler / VM | `crates/xlang-core/src/lib.rs` |
 | CLI (`aether`) | `apps/xlang-cli/src/main.rs` |
-| Studio UI | `apps/xlang-studio/src/` |
-| Studio host | `apps/xlang-studio/src-tauri/src/main.rs` |
 | Seed compiler (Aether) | `seed/aether_seed.ae` |
 | Seed artifact | `seed/aether_seed.aeth` |
 | Self-host tests | `crates/xlang-core/tests/seed_self_host.rs` |
@@ -60,12 +58,12 @@ except under `target/` if unavoidable for inspection — prefer not to.
 - Self-hosting covers the documented canonical Aether 0.5 surface with
   byte-identical multi-generation, shipped-example, and regression-corpus proof;
   full invalid-source diagnostic parity is not claimed.
-- Ollama is optional review only — never compiler authority.
+- The active toolchain has no desktop, model, or network integration.
 - DigiChar is a separate product; do not mix paths or remotes.
 
 ## Method
 
-1. Clarify the question (compiler, seed, Studio, docs, release gate).
+1. Clarify the question (compiler, seed, CLI, docs, release gate).
 2. Search with ${{ tools.by_kind.search }} / ${{ tools.by_kind.list }}, then ${{ tools.by_kind.read }}.
 3. Cite absolute paths and short snippets.
 4. Distinguish bootstrap (Rust) vs seed (Aether-written) vs host forge bridge.

@@ -2,14 +2,14 @@
 
 **Status:** Accepted design direction; Aether 0.6 implements the bounded M2
 subset recorded in [ADR-004](ADR-004-aeth-v6-bounded-resources.md)
-**Date:** 2026-07-28; implementation record updated 2026-07-31
+**Date:** 2026-07-28; implementation record updated 2026-08-01
 **Decision scope:** This remains the design foundation for future Aether
 resource work. Aether 0.6 adds a deliberately narrower executable M2 subset;
 its exact source and artifact contract is [AETHER_0.6.md](AETHER_0.6.md).
 **Related:** [ADR-003](ADR-003-value-resource-semantics.md),
 [M1 validation matrix](M1-VALIDATION-MATRIX.md),
 [resource-model research](research/04-value-resource-models.md),
-[roadmap](ROADMAP.md), and [current 0.5 specification](AETHER_0.5.md).
+[roadmap](ROADMAP.md), and [current 0.6 specification](AETHER_0.6.md).
 
 ## Accepted direction
 
@@ -418,7 +418,7 @@ dynamic value visibly names the arena capability that must still be valid.
 | VM | Pre-admit fixed backing storage, execute deterministic capacity checks, preserve failure atomicity, and logically destroy safely. | No ambient allocator fallback, panic path, user destructor, or host capability. |
 | Forge / invoke ABI | Keep primitive-only boundary. | No Arena/Buffer/outcome crossing or new host I/O authority. |
 | Seed compiler | Parse/lower/emit canonical M2 source byte-identically with bootstrap. | Do not claim invalid-source diagnostic parity; bootstrap remains diagnostic authority. |
-| Studio / structural tooling | Surface capability and outcome states as explicit semantics once M3 contract exists. | Keep source/model data local; no model becomes compiler authority. |
+| CLI / structural tooling | Surface capability and outcome states as explicit semantics once M3 contract exists. | Keep structural I/O explicit and local; no model becomes compiler authority. |
 
 The new artifact version number and byte encoding are not chosen in M1. They
 must be assigned in the M2 format ADR after a complete compatibility inventory.
@@ -530,7 +530,7 @@ the implementation must deliver all of the following as one complete increment:
 1. an accepted M2 syntax/format ADR and synchronized language/architecture/
    manifest documentation;
 2. source checker, typed semantic IR, new-version encoder/decoder, verifier,
-   VM, forge boundary review, seed compiler, and Studio contract updates where
+   VM, forge boundary review, seed compiler, and structural-tooling contract updates where
    applicable;
 3. the complete test matrix in
    [M1-VALIDATION-MATRIX.md](M1-VALIDATION-MATRIX.md), including source and

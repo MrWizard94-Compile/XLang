@@ -2,10 +2,8 @@
 
 ~~~mermaid
 flowchart LR
-    Editor["Aether Studio editor"] -->|"Tauri command"| SeedPath["compile_with_seed"]
-    CLI["aether compile"] --> SeedPath
-    Editor -->|"Structure / Apply edit"| Authoring["aether.ast/v1 + aether.edit/v1"]
-    CLI -->|"structure / apply-edit"| Authoring
+    CLI["aether CLI"] -->|"compile"| SeedPath["compile_with_seed"]
+    CLI -->|"structure / apply-edit"| Authoring["aether.ast/v1 + aether.edit/v1"]
     Authoring -->|"canonical validated source"| SeedPath
     SeedPath --> SeedArt["embedded seed AETH v6 compiler"]
     SeedArt --> Artifact["Verified AETH v4, v5, or v6 artifact"]
@@ -16,10 +14,6 @@ flowchart LR
     Forge["aether forge"] -->|"verify + invoke"| SeedArt
     SeedArt --> Candidate["candidate AETH Bytes"]
     Candidate -->|"verify before write"| Forge
-    Editor -->|"optional review request"| Guard["loopback and model validation"]
-    Guard --> Ollama["Docker Ollama :11434"]
-    Ollama --> Review["review text"]
-    Review --> Editor
 ~~~
 
 ## Scope and Future-Design Boundary
@@ -113,7 +107,7 @@ Stage 7 keeps the Aether-written seed as the **default product compiler** and
 extends its proven surface with bounded arenas and Copy-element buffers:
 
 - `compile_with_seed` embeds `SEED_COMPILER_ARTIFACT` and forges user source.
-- CLI `aether compile` and Studio use that path.
+- CLI `aether compile` uses that path.
 - CLI `compile --bootstrap` and `check` still use the Rust bootstrap for seed
   rebuild and AST diagnostics.
 
@@ -143,30 +137,20 @@ record type references are reindexed by nominal name when records move, so a
 record insertion cannot silently retarget a weave signature.
 
 The core edit operation is pure: it formats and bootstrap-validates candidate
-source but does not persist, execute, or invoke a model. CLI and Studio then
-seed-compile the returned canonical source, which verifies the AETH artifact,
-before writing or persisting it. The protocol is not a guest capability, does
-not modify Forge, and cannot become compiler authority for an AI model.
+source but does not persist, execute, or invoke a model. The CLI then
+seed-compiles the returned canonical source, which verifies the AETH artifact,
+before writing it to the caller-selected output path. The protocol is not a
+guest capability, does not modify Forge, and cannot become compiler authority
+for an AI model.
 
-## Desktop Boundary
+## CLI Authority Boundary
 
-Studio is a Tauri 2 desktop app. The React renderer owns the active document.
-The native command layer **seed-compiles** the document, runs only verified AETH
-output, and returns bounded artifact metadata plus VM output. Source persistence
-uses `aether.source` and model persistence uses `aether.model` in local WebView
-storage. M3 Structure returns a renderer-local semantic document; Apply edit
-replaces that local source only after the native seed-validation command accepts
-it, after which the existing `aether.source` persistence path stores the
-canonical text locally.
-
-## Local Model Selection
-
-The compiler requires no AI. The optional reviewer queries Docker-hosted Ollama
-at a credential-free loopback HTTP base URL only. The status command reads
-`/api/tags`, fills the selector with installed models, and a review request uses
-`/api/chat` with streaming disabled and a bounded source payload. The reviewer
-receives source only after the user explicitly invokes it and never participates
-in compilation, forge invocation, or execution.
+The CLI owns caller-selected local file I/O. `structure` writes only the
+semantic document to stdout. `compile`, `forge`, and `apply-edit` write only to
+their explicit output paths; `compile` and `forge` verify AETH before writing,
+and `apply-edit` seed-compiles before writing canonical source. No active
+desktop, WebView, model, or network integration exists. The retired workbench
+is recorded in [ADR-006](ADR-006-retire-aether-studio.md).
 
 ## Bootstrap Boundary
 

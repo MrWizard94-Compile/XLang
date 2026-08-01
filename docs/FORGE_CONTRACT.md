@@ -8,7 +8,7 @@ capabilities to artifacts.
 
     aether forge <compiler-artifact> <source-file> --output <artifact-file>
 
-All paths are local filesystem paths. The command does not call Ollama, network
+All paths are local filesystem paths. The command does not call model or network
 services, a shell, or another compiler.
 
 ## Required Compiler Artifact
@@ -40,8 +40,8 @@ invocation. It only transports source Text in and verified artifact Bytes out.
 
 ## Capabilities
 
-The invoked Aether artifact has no direct file, process, network, cloud AI,
-Ollama, shell, or artifact-writing capability. Its observable effect is only
+The invoked Aether artifact has no direct file, process, network, model,
+shell, or artifact-writing capability. Its observable effect is only
 stdout and its typed yield value. The host owns input reading and final artifact
 writing after verification.
 

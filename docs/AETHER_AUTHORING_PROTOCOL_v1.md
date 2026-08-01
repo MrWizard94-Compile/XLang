@@ -13,14 +13,14 @@ Aether syntax, change AETH, replace the formatter, execute code, write files by
 itself, or grant any network/model/host authority.
 
 The Rust bootstrap parses and validates source, then produces canonical text
-and the `aether.ast/v1` document. The CLI and Studio validate an accepted edit
-again on the seed-hosted product compiler before writing or persisting its
-canonical source. Artifact verification therefore remains unchanged.
+and the `aether.ast/v1` document. The CLI validates an accepted edit again on
+the seed-hosted product compiler before writing canonical source to the
+caller-supplied output path. Artifact verification therefore remains unchanged.
 
-All data stays local. Studio keeps the active source in local WebView storage;
-the structural document and proposed edit are renderer-local unless a user
-chooses to save or copy them. Optional Ollama review has no access to this
-protocol unless the user separately sends source to the existing review action.
+All protocol input and output stays local to the CLI invocation. `structure`
+emits a document to stdout; `apply-edit` reads explicitly named local files and
+writes only its explicit output path after validation. The protocol has no
+model, network, or application persistence integration.
 
 ## AST document
 
@@ -153,15 +153,15 @@ source shape on the existing parser/type/ownership/resource validator.
 3. Resolve each allowed top-level target and construct typed AST payloads.
 4. Render formatter-owned canonical Aether source.
 5. Reparse and validate it with the bootstrap compiler.
-6. In the CLI and Studio, seed-compile it and verify the returned AETH artifact
-   before the canonical source is written or persisted.
+6. In the CLI, seed-compile it and verify the returned AETH artifact before the
+   canonical source is written to the requested output path.
 7. Return the new canonical source and regenerated `aether.ast/v1` document.
 
 Steps 1–5 are a pure core operation: they neither persist nor execute code.
 Steps 6–7 are the user-facing authority boundary. A failed request leaves the
 caller's document unchanged.
 
-## Local commands and Studio surface
+## Local CLI commands
 
 ```powershell
 # Emit the canonical semantic document to stdout.
@@ -171,11 +171,9 @@ cargo run -p aether-cli -- structure (Resolve-Path .\examples\welcome.ae)
 cargo run -p aether-cli -- apply-edit (Resolve-Path .\examples\welcome.ae) .\edit.json --output .\target\welcome.edited.ae
 ```
 
-Studio exposes the same core contracts through local Tauri commands. Its
-Structure action returns `aether.ast/v1`; its Apply edit action accepts only
-`aether.edit/v1`, replaces the in-memory source only after the seed product
-path accepts it, and lets the existing local persistence effect store the new
-canonical text.
+No active desktop application is part of this protocol. A future interface must
+call these versioned core/CLI contracts and receive its own explicit design and
+security decision before it becomes a product surface.
 
 ## Compatibility policy
 

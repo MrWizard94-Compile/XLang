@@ -98,8 +98,8 @@ pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
 /// Apply one bounded `aether.edit/v1` document to matching source.
 ///
 /// The function does not write files, invoke a model, execute code, or compile
-/// an artifact. It is intentionally pure apart from memory allocation. CLI and
-/// Studio callers seed-compile the returned source before they persist it.
+/// an artifact. It is intentionally pure apart from memory allocation. The CLI
+/// seed-compiles returned source before writing it to its requested output path.
 pub fn apply_structural_edit(
     source: &str,
     edit_json: &str,

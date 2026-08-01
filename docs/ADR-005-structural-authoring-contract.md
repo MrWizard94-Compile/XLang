@@ -42,8 +42,8 @@ human reviewer.
 
 After applying operations in order, the implementation renders canonical text
 from the AST and reparses it through the ordinary bootstrap validator. The CLI
-and Studio additionally invoke `compile_with_seed` before they write or persist
-the accepted edit, so accepted user-facing edits remain on the seed-hosted,
+additionally invokes `compile_with_seed` before it writes the accepted edit to
+the requested output path, so user-facing edits remain on the seed-hosted,
 verified AETH product path. The protocol never writes a file itself, executes
 source, contacts a model, or grants an artifact any capability.
 
@@ -90,4 +90,5 @@ the identity of its predecessor.
 
 * Related ADRs: [ADR-002](ADR-002-ai-first-design-foundation.md), [ADR-003](ADR-003-value-resource-semantics.md), [ADR-004](ADR-004-aeth-v6-bounded-resources.md).
 * Related direction: [NORTH_STAR.md](NORTH_STAR.md), [CORE_CLAIMS.md](CORE_CLAIMS.md), [ROADMAP.md](ROADMAP.md).
-* Related implementation: `crates/xlang-core/src/authoring.rs`, `apps/xlang-cli/src/main.rs`, `apps/xlang-studio/src-tauri/src/main.rs`.
+* Related implementation: `crates/xlang-core/src/authoring.rs`, `apps/xlang-cli/src/main.rs`.
+* Related product decision: [ADR-006: Retire Aether Studio](ADR-006-retire-aether-studio.md).

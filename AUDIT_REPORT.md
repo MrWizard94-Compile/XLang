@@ -1,6 +1,6 @@
 # Aether Migration Audit
 
-Date: 2026-07-31 (Stage 7 bounded-resource and M3 authoring-contract update)
+Date: 2026-08-01 (Stage 7 bounded-resource and M3 authoring-contract baseline; active Studio retirement)
 
 ## Legacy Intake
 
@@ -9,14 +9,13 @@ Date: 2026-07-31 (Stage 7 bounded-resource and M3 authoring-contract update)
 | `legacy/xlang-v1-prototype` | Experimental Rust implementations with known compile failures. | Preserve source spans, diagnostic discipline, and failure cases as reference; do not compile or emit its syntax. |
 | `legacy/xlang-v2-snapshot` | A former parser and type checker with a focused frontend test suite. | Preserve parser, semantic-check, and test-design lessons; do not promote its grammar or token stream. |
 | `legacy/aether-genesis-ai-studio` | Historical AI Studio material with stale cloud metadata and JavaScript evaluation behavior. | Preserve as historical material; do not evaluate generated JavaScript or use cloud AI. |
-| Docker Ollama | Local loopback AI runtime. | Keep it optional and limited to user-requested source review. |
 
 ## Production Boundary
 
 The production bootstrap compiler accepts Aether 0.6.0 source. It produces a
 canonical AST and deterministic AETH v6 bytecode artifact, verifies that
 artifact, and runs it in the Aether VM. Verified AETH v4/v5 remain compatibility
-inputs. The command line and desktop app call the same compiler core.
+inputs. The command line is the sole active product interface.
 
 Stage 7 completes canonical Aether 0.6 source-emission parity in the
 Aether-written seed compiler. It preserves every prior statement and shallow
@@ -34,8 +33,8 @@ target language.
 M3 adds local `aether.ast/v1`, `aether.edit/v1`, and
 `aether.diagnostic/v1` tooling contracts. They are not another Aether grammar
 or artifact format: every accepted edit is formatter-canonicalized and
-bootstrap-validated, and the CLI/Studio seed-compile it before source is written
-or persisted. The protocol accepts only typed top-level record/weave
+bootstrap-validated, and the CLI seed-compiles it before source is written to
+the caller-supplied output path. The protocol accepts only typed top-level record/weave
 insert/replace/delete operations against an exact canonical base source.
 
 `aether forge` verifies a compiler artifact, requires
@@ -67,29 +66,30 @@ This is canonical Aether 0.6 source-emission self-hosting. Rust remains the
 bootstrap and invalid-source diagnostic authority; full diagnostic parity is not
 claimed. Scope: [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
-## Desktop and Data Boundary
+## Retired Application Boundary
 
-Aether Studio runs compilation locally in its Tauri process. Ollama is a
-separate optional reviewer, reachable only through a validated loopback HTTP
-endpoint. It cannot alter bytecode, execute code, become a compiler authority,
-or participate in forge invocation. Source and model choices remain in local
-WebView storage. M3's structural document and edit request stay in the local
-renderer; accepted canonical source returns through a local Tauri command and
-uses the existing local source persistence path.
+The active `apps/xlang-studio` Tauri/React workbench, its loopback model-review
+integration, and its generated Windows installers were removed. They are not a
+production build input or release requirement. The CLI keeps the same
+seed-hosted compiler and structural-edit safety boundary without an application
+or model authority. The decision and reversibility rationale are in
+[docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-studio.md).
+
+The historical `legacy/aether-genesis-ai-studio` material remains reference
+only under the existing legacy rule; it is not active application source.
 
 ## Release Gate
 
-A release requires passing Aether core, CLI, and desktop tests (including the
-seed self-host proof), Clippy with warnings denied, frontend linting, frontend
-tests, production frontend build, Windows Tauri bundle build, command-line
-compile/forge/run checks, and a live Docker Ollama status check when claiming AI
-integration. A successful package must be inspected and launched before it is
-reported as delivered.
+A release requires passing Aether core and CLI tests (including the seed
+self-host proof), Clippy with warnings denied, command-line compile/forge/run
+checks, and a release CLI build. A successful package must have its binary
+inspected and launched before it is reported as delivered. There is no frontend,
+Tauri bundle, installer, or model-status requirement.
 
 
 ## Stage 7 Seed-Hosted Compile
 
-Default CLI/Studio compilation uses the Aether-written seed artifact. Bootstrap
+Default CLI compilation uses the Aether-written seed artifact. Bootstrap
 remains for seed rebuild, `check` AST, invalid-source diagnostics, and
 dual-compare proofs. All shipped examples and the complete canonical-surface
 corpus, including the record surface, match bootstrap byte-for-byte under seed
@@ -100,8 +100,8 @@ compile.
 The bootstrap exports semantic structure only after canonical formatting, so
 line/column spans and node IDs refer to one local source revision. Strict JSON
 validation rejects duplicate keys, unknown fields, unsupported versions,
-malformed payloads, stale base source, and bounded-input violations. The CLI and
-Studio contract tests prove a valid edit round-trip plus seed validation, while
+malformed payloads, stale base source, and bounded-input violations. Core and
+CLI contract tests prove a valid edit round-trip plus seed validation, while
 malformed/stale requests return deterministic machine-readable diagnostics and
 do not replace source. The full v1 contract is
 [docs/AETHER_AUTHORING_PROTOCOL_v1.md](docs/AETHER_AUTHORING_PROTOCOL_v1.md).

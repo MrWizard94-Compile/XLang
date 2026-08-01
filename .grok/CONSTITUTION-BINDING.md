@@ -92,8 +92,8 @@ These **tighten** application of constitution law; they do not replace it:
 - No transpile to C/Rust/JS/LLVM — AETH only  
 - Verify before run/write; forge host owns I/O after verify  
 - Self-host claims: **Seed Profile only** with multi-generation byte proof + distinct variant  
-- Ollama: loopback optional review only — never compiler authority  
-- Zero-warning Rust/TS gates as in project `AGENTS.md`  
+- No active desktop, model, or network integration; future integration requires an explicit product decision
+- Zero-warning Rust gates as in project `AGENTS.md`
 - Do not mix DigiChar product tree/remotes into this repo  
 
 ---
@@ -102,7 +102,7 @@ These **tighten** application of constitution law; they do not replace it:
 
 | Agent class | Must enforce |
 |-------------|--------------|
-| Implementers (core, seed, studio, spec-writer) | Full always-load + Section 0 before “done” + tests/docs/security as applicable |
+| Implementers (core, seed, spec-writer) | Full always-load + Section 0 before “done” + tests/docs/security as applicable |
 | Gate-runner | Execute machine checks for Done/gate items; honest PASS/FAIL; no fake green |
 | Reviewer | Review against Rule IDs + Section 0 + product invariants; block on stop-ship |
 | Explorer | Accurate map; flag constitution/product mismatches; no edit advice that skips gates |

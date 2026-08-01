@@ -1,6 +1,6 @@
 # Aether in XLang
 
-This repository hosts Aether, a new local-first language and desktop workbench.
+This repository hosts Aether, a new local-first language and CLI toolchain.
 Aether **0.6.0** parses only Aether source, emits deterministic AETH v6
 bytecode, verifies every artifact, and runs it in the Aether VM. It never
 translates source to Rust, C, JavaScript, LLVM, or another language. Verified
@@ -11,7 +11,7 @@ v6.
 
 **Default compilation is no longer bootstrap-hosted for user programs.**
 
-- `aether compile` and Aether Studio invoke the **Aether-written seed compiler**
+- `aether compile` invokes the **Aether-written seed compiler**
   (`seed/aether_seed.aeth`, embedded as `SEED_COMPILER_ARTIFACT`) through the
   forge ABI.
 - The Rust core remains the **bootstrap**: rebuild the seed (`compile --bootstrap`),
@@ -33,8 +33,8 @@ Aether 0.6 tooling now exposes a local, machine-readable `aether.ast/v1`
 document and accepts bounded `aether.edit/v1` structural edits. The protocol
 uses exact canonical source revisions to reject stale requests, supports typed
 top-level record/weave insert, replace, and delete operations, reparses the
-formatter-owned result, and seed-compiles it before the CLI or Studio writes or
-persists source. See [docs/AETHER_AUTHORING_PROTOCOL_v1.md](docs/AETHER_AUTHORING_PROTOCOL_v1.md)
+formatter-owned result, and seed-compiles it before the CLI writes source to an
+explicit output path. See [docs/AETHER_AUTHORING_PROTOCOL_v1.md](docs/AETHER_AUTHORING_PROTOCOL_v1.md)
 and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-authoring-contract.md).
 
 ### Still honest limits
@@ -83,7 +83,6 @@ fine-grained structural edits, or a native backend exist in 0.6.
 - `crates/xlang-core` — bootstrap parser, typed resource semantic plan,
   emitter/verifier/VM, forge API, seed path
 - `apps/xlang-cli` — `aether` CLI (seed compile by default)
-- `apps/xlang-studio` — Tauri workbench (seed-hosted compile)
 - `seed/` — Aether-written compiler source + checked-in artifact
 - `examples/` — programs proven seed-identical to bootstrap, including M2 cases
 - `AGENTS.md` — Level 4 entry → AGENTS Constitution pack
@@ -106,17 +105,13 @@ Copy-Item .\target\aether_seed.bootstrap.aeth .\seed\aether_seed.aeth
 cargo build -p aether-cli
 ```
 
-## Desktop Studio
+## Product interface
 
-```powershell
-Set-Location C:\WPAI\Software\XLang\apps\xlang-studio
-npm install
-npm run desktop:dev
-```
-
-Studio compiles with the seed path. Ollama remains optional, loopback-only review.
-Its Structure and Apply edit controls use the same local M3 contract and never
-make an AI model compiler authority.
+The CLI is the shipped Aether product interface. It exposes canonical structure
+and validated structural edits locally without introducing an application, model,
+or network authority. The former Studio workbench was retired in
+[docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-studio.md);
+historical material remains under `legacy/` as reference only.
 
 ## Governance
 

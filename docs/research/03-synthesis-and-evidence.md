@@ -1,7 +1,7 @@
 # Aether Synthesis and Evidence Plan
 
 **Status:** SOP phases 3 and 4 design synthesis
-**Date:** 2026-07-28; current-contract update: 2026-07-31
+**Date:** 2026-07-28; current-contract update: 2026-08-01
 **Inputs:** [reference systems](01-reference-systems.md) and
 [component decomposition](02-component-decomposition.md)
 
@@ -21,7 +21,7 @@ claim. Every statement in the design set uses one of these labels:
 
 | Proposition | Status | Evidence and reason | Required boundary |
 | --- | --- | --- | --- |
-| Verified, local-first artifacts are the product foundation. | **Implemented** | AETH is verified before run/write; forge verifies compiler output; optional model review has no compiler authority. | Preserve this below every future source feature and backend discussion. |
+| Verified, local-first artifacts are the product foundation. | **Implemented** | AETH is verified before run/write; forge verifies compiler output; the active toolchain has no model authority or network integration. | Preserve this below every future source feature and backend discussion. |
 | Values should make ownership and resource transfer locally visible. | **Implemented, bounded M2 scope** | Rust, Swift, Hylo, and Zig provide contrasting evidence that memory/resource behavior should be explicit. Aether 0.6 adds closed arena/Buffer owner behavior. | Preserve the verified closed outcome boundary before adding cross-weave results or effects. |
 | Allocation should be explicit and capability-oriented. | **Implemented, bounded M2 scope** | Zig and Odin demonstrate allocator-visible APIs; Aether 0.6 provides one named bounded arena with no ambient allocator. | Specify outcome propagation, extended lifetime, and ABI behavior before expansion. |
 | Macro-free compile-time execution should use ordinary, type-checked Aether forms. | **Research hypothesis** | Zig demonstrates compile-time execution; the original brief identifies macro/tooling opacity as a risk. | Design a constrained, deterministic evaluation model and resource limits before adding a `comptime`/`forge` source surface. |
@@ -66,9 +66,9 @@ properties testable:
    construct and stable source span, with machine-readable error codes.
 5. **Capability transparency:** generated code makes ownership, allocation,
    effects, and external authority visible in the typed representation.
-6. **Offline authority:** a local model may advise only; parsing, formatting,
-   type-checking, compilation, verification, and execution remain deterministic
-   compiler/VM decisions.
+6. **Offline authority:** any future local model may advise only; parsing,
+   formatting, type-checking, compilation, verification, and execution remain
+   deterministic compiler/VM decisions.
 
 The first partial foundations existed in 0.5 (canonical formatting and a
 canonical AST output). M3 now completes the bounded schema, edit protocol,

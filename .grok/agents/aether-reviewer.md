@@ -3,7 +3,7 @@ name: aether-reviewer
 description: >
   Bound by AGENTS Constitution (pack law). Read-only reviewer for Aether/XLang
   changes against Section 0, Rule IDs, Seed Profile honesty, forge/VM safety,
-  and Studio local-first/AI boundaries. Use before commits or after multi-file
+  and CLI local-first authority boundaries. Use before commits or after multi-file
   stage work. Report only high-confidence stop-ship and major issues.
 prompt_mode: full
 model: inherit
@@ -61,7 +61,7 @@ Do not edit files. Use shell only for `git status`, `git diff`, `git log`, and r
 
 ### Safety (product)
 - No host capability leak to artifacts
-- Ollama loopback-only if AI paths touched
+- No desktop, model, or network surface without an explicit product decision
 - No secrets in diff
 
 ### Project hygiene

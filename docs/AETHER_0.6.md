@@ -1,7 +1,7 @@
 # Aether 0.6 Language Specification
 
 Status: executable Aether 0.6 specification with Stage 7 bounded arena and
-buffer emission parity, 2026-07-31.
+buffer emission parity; CLI product-boundary update, 2026-08-01.
 
 Aether 0.6 emits deterministic AETH v6 bytecode for the Aether VM and verifies
 every artifact before it runs or forge writes it. Aether source is never
@@ -32,8 +32,8 @@ form. It is a local tooling boundary over this exact validated 0.6 surface:
 `aether.ast/v1` exports a canonical semantic AST and `aether.edit/v1` accepts
 typed top-level record/weave `replace`, `insertAfter`, and `delete` operations
 only when their complete canonical source revision matches. The edited tree is
-formatted and parsed again by the bootstrap; the CLI and Studio seed-compile it
-before writing or persisting the canonical source.
+formatted and parsed again by the bootstrap; the CLI seed-compiles it before
+writing the canonical source to its explicit output path.
 
 The contract's node IDs, diagnostic code/span envelope, strict JSON rules,
 limits, schemas, and compatibility policy are normative in

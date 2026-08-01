@@ -4,7 +4,7 @@ description: >
   Bound by AGENTS Constitution (pack law). Implements changes in the Rust Aether bootstrap: parser, semantics, AETH v4
   emitter/verifier/VM, forge invoke API, and aether CLI. Use for language
   primitives, opcodes, diagnostics, CLI commands, and core unit tests. Do not
-  use for pure seed.ae edits (prefer aether-seed-engineer) or Studio UI-only work.
+  use for pure seed.ae edits (prefer aether-seed-engineer).
 prompt_mode: full
 model: inherit
 permission_mode: default
@@ -36,7 +36,6 @@ Primary:
 
 Out of scope unless required for integration:
 - `seed/aether_seed.ae` (hand off to seed engineer after host primitives land)
-- Studio React styling (hand off to studio engineer)
 
 ## Product invariants (tighten pack law; never replace it)
 
@@ -68,4 +67,4 @@ If you change artifact version, opcodes, or forge behavior, also recompile examp
 
 ## Output
 
-Summarize: files changed, opcode/ABI impact, tests run, residual risks, whether seed/Studio/docs need follow-up agents.
+Summarize: files changed, opcode/ABI impact, tests run, residual risks, whether seed/docs need follow-up agents.
