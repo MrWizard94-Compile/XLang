@@ -122,6 +122,8 @@ set in this order:
    and approved dependency order for future language work.
 8. [docs/DESIGN-M6-SHAPE-LAYOUT-EXPERIMENT.md](docs/DESIGN-M6-SHAPE-LAYOUT-EXPERIMENT.md)
    — the current research-gated proposal for the next bounded M6 experiment.
+9. [docs/M6-VALIDATION-MATRIX.md](docs/M6-VALIDATION-MATRIX.md)
+   — the evidence checklist for the M6 research spike.
 
 These documents do not claim general effects, concurrency, SoA lowering, C
 interop, fine-grained structural edits, or a native backend exist in 0.8.
