@@ -13,7 +13,10 @@ Here, *canonical* means the Aether 0.8 grammar and formatting constraints in
 [AETHER_0.8.md](AETHER_0.8.md): shallow prefix expressions, exact indentation,
 root-only bindings, bounded immutable records, closed bounded-resource forms,
 and bounded terminal effect forms. The profile does not expand that language
-surface.
+surface. The implemented M5 profile and the dependency-ordered next milestones
+are documented in [ROADMAP.md](ROADMAP.md); any future language expansion must
+add the same proof and documentation discipline before it enters the product
+compile path.
 
 ## Claim
 

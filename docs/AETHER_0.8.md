@@ -17,7 +17,11 @@ does not translate source into Rust, C, JavaScript, LLVM, or another language.
 This version preserves Aether 0.7's scalar, byte, record, bounded-resource,
 and bounded `Error[Whole]` effect contracts, then adds one explicit and
 resource-bounded compile-time evaluation form. It is deliberately not a macro
-system, a build-scripting system, or general compile-time execution.
+system, a build-scripting system, or general compile-time execution. The
+implemented M5 slice and the dependency-ordered next milestones are documented
+in [ROADMAP.md](ROADMAP.md); future extensions beyond this bounded surface must
+follow that roadmap and the constitution gates before they enter the product
+contract.
 
 ## New M5 statement
 

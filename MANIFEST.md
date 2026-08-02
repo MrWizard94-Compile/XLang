@@ -16,6 +16,9 @@ does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
 [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
+The current M2/M3/M4/M5 scope and the next research-gated milestones are
+tracked there so that any extension beyond the bounded 0.8 surface must earn
+its own proof and documentation before it enters the product contract.
 The accepted M1 direction is
 [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md).
 The bounded executable M2 decision is

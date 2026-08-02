@@ -7,6 +7,10 @@ it in the Aether VM. It never translates source to Rust, C, JavaScript, LLVM,
 or another language. Verified AETH v4/v5/v6/v7 artifacts remain compatible
 inputs with their original meanings; new compilation emits v8.
 
+The implemented M2/M3/M4/M5 surface and the dependency-ordered next milestones
+are tracked in [docs/ROADMAP.md](docs/ROADMAP.md). Any future extension beyond
+this bounded contract must follow that roadmap and the AGENTS Constitution gates.
+
 ## Seed-hosted compile path, M2 resources, M4 errors, and M5 comptime
 
 **Default compilation is no longer bootstrap-hosted for user programs.**

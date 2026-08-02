@@ -22,7 +22,10 @@ seed-compiles and verifies it, and only then lets the CLI write to the caller's
 explicit output path.
 
 The protocol does not execute code, write files by itself, contact a model or
-network, bypass source validation, or replace AETH verification.
+network, bypass source validation, or replace AETH verification. This bounded
+M3/M4/M5 authoring surface is the current contract; any expansion beyond
+validated top-level record/weave edits remains research-gated in
+[ROADMAP.md](../docs/ROADMAP.md) and the AGENTS Constitution.
 
 ## Version 3 addition: explicit binding stage
 
