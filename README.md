@@ -120,6 +120,8 @@ set in this order:
    M4 design, executable semantic kernel, and proof matrix.
 7. [docs/ROADMAP.md](docs/ROADMAP.md) — completed M2/M3/M4/M5 scope,
    and approved dependency order for future language work.
+8. [docs/DESIGN-M6-SHAPE-LAYOUT-EXPERIMENT.md](docs/DESIGN-M6-SHAPE-LAYOUT-EXPERIMENT.md)
+   — the current research-gated proposal for the next bounded M6 experiment.
 
 These documents do not claim general effects, concurrency, SoA lowering, C
 interop, fine-grained structural edits, or a native backend exist in 0.8.
