@@ -7,9 +7,10 @@
 RND-DOC-001, IP-INVENTION-001, DOC-SYNC-001
 
 **Implementation update (2026-08-01):** The 0.5 boundary described below is
-the historical decision context. The current executable contract is Aether 0.7,
+the historical decision context. The current executable contract is Aether 0.8,
 including the bounded resource core in [ADR-004](ADR-004-aeth-v6-bounded-resources.md)
-and the bounded `Error[Whole]` effect in [ADR-007](ADR-007-m4-typed-error-effect.md).
+the bounded `Error[Whole]` effect in [ADR-007](ADR-007-m4-typed-error-effect.md),
+and the bounded deterministic M5 evaluator in [ADR-008](ADR-008-m5-deterministic-comptime.md).
 
 ## Context
 
@@ -21,8 +22,10 @@ had a smaller, strong Aether 0.5 boundary: seed-hosted compilation, verified
 AETH v4/v5 artifacts, a capability-free VM, and bounded value semantics.
 Aether 0.6 extended that foundation with verified AETH v6 bounded arenas and
 buffers; Aether 0.7 adds verified AETH v7 effect metadata and a bounded
-`Error[Whole]` route; see [ADR-004](ADR-004-aeth-v6-bounded-resources.md) and
-[ADR-007](ADR-007-m4-typed-error-effect.md).
+`Error[Whole]` route; Aether 0.8 adds v8 `COMPTIME_WHOLE` provenance for one
+fixed-budget literal evaluator. See [ADR-004](ADR-004-aeth-v6-bounded-resources.md),
+[ADR-007](ADR-007-m4-typed-error-effect.md), and
+[ADR-008](ADR-008-m5-deterministic-comptime.md).
 
 The repository lacked an Aether-specific SOP research set that decomposed the
 reference systems, recorded current-vs-future truth, defined measurable claims,

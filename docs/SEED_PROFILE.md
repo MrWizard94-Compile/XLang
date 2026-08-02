@@ -1,16 +1,16 @@
 # Aether Seed Profile
 
-Status: normative Stage 7/M4 Seed Profile (complete canonical 0.7 source
+Status: normative Stage 7/M4/M5 Seed Profile (complete canonical 0.8 source
 surface + product compile path), 2026-08-01.
 
 This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
-It covers the complete documented canonical Aether 0.7 source surface. Product
+It covers the complete documented canonical Aether 0.8 source surface. Product
 `compile` uses this profile via the seed artifact. Rust bootstrap remains for
 seed rebuild, `check` AST, and dual-compare proofs. A Seed Profile claim is not
 a claim of full bootstrap diagnostic parity for invalid input.
 
-Here, *canonical* means the Aether 0.7 grammar and formatting constraints in
-[AETHER_0.7.md](AETHER_0.7.md): shallow prefix expressions, exact indentation,
+Here, *canonical* means the Aether 0.8 grammar and formatting constraints in
+[AETHER_0.8.md](AETHER_0.8.md): shallow prefix expressions, exact indentation,
 root-only bindings, bounded immutable records, closed bounded-resource forms,
 and bounded terminal effect forms. The profile does not expand that language
 surface.
@@ -19,9 +19,9 @@ surface.
 
 `seed/aether_seed.ae` is an Aether-written compiler that:
 
-1. Accepts complete canonical Aether 0.7 source as `Text`.
+1. Accepts complete canonical Aether 0.8 source as `Text`.
 2. Parses statements and expressions itself (no host parser callback).
-3. Emits a complete AETH **v7** artifact with a resource-capacity header,
+3. Emits a complete AETH **v8** artifact with a resource-capacity header,
    optional record table, and function effect metadata through ordinary `Bytes`
    operations.
 4. Exposes the forge ABI `weave compile [borrow source: Text] -> Bytes`.
@@ -36,11 +36,16 @@ surface.
 9. Parses bounded immutable record declarations, constructors, and explicit
    borrowed field projections, plus `arena`, Whole/Truth `buffer`, `access`,
    `count`, and closed allocation/append/lookup outcomes; it matches bootstrap
-   v7 output byte-for-byte for the documented canonical corpus.
+   v8 output byte-for-byte for the documented canonical corpus.
 10. Parses `raises Whole`, terminal `raise`, `forward call`, and one-line
     terminal `handle call ... into success otherwise error into code`; it emits
     v7 `RAISE` (53), `FORWARD_CALL` (54), and `HANDLE_CALL` (55) byte-for-byte
     like the bootstrap.
+11. Parses root-only immutable `comptime bind` with one `sum`, `difference`,
+    `product`, `quotient`, or `remainder` operation over literal `Whole`
+    operands, evaluates it
+    with checked Aether arithmetic, and emits v8 `COMPTIME_WHOLE` (56)
+    byte-for-byte like the bootstrap.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
@@ -79,11 +84,13 @@ compiled from source, including `main`.
 - Result types are `Text`, `Whole`, `Truth`, `Bytes`, or a declared record name.
   `Arena`, access loans, `BufferWhole`, and `BufferTruth` are not result types.
 - Nested blocks may `revise` existing locals but must not introduce bindings.
-- `bind` / `bind mutable` establish locals; `revise` replaces a live local.
+- `bind` / `bind mutable` establish runtime locals; `revise` replaces a live
+  local. `comptime bind` establishes one immutable literal-evaluated `Whole`
+  local under the fixed M5 directive budget.
 - Hex `bytes "ff…"` literals decode to raw bytes. Text literals decode the five
   defined escapes (`\\`, `\"`, `\n`, `\r`, `\t`) and record **byte** length of
   UTF-8 content after decoding (not scalar count).
-- `arena N` appears only in `main` and becomes the one v6/v7 resource-plan
+- `arena N` appears only in `main` and becomes the one v6/v7/v8 resource-plan
   capacity. `buffer Whole` and `buffer Truth` establish unallocated owner
   placeholders. Resource owner replacement uses only closed outcomes, never
   `revise`.
@@ -96,6 +103,7 @@ Supported forms:
 | --- | --- |
 | `bind name <- expression` | Immutable local |
 | `bind mutable name <- expression` | Mutable local |
+| `comptime bind name <- op whole whole` | Root-only immutable literal `Whole` result; `op` is `sum`, `difference`, `product`, `quotient`, or `remainder` |
 | `revise name <- expression` | Same-type replacement |
 | `speak expression` | Expression must be `Text` |
 | `yield expression` | Root-only; result type must match the weave |
@@ -134,12 +142,16 @@ Supported operations (by seed emitter opcode mapping):
 - Resources: `allocate access arena move buffer count into buffer`,
   `append move buffer value into buffer`, and `at borrow buffer index into
   target`. Each is emitted only from a terminal resource `choose`, has an
-  explicit `otherwise` branch, and lowers to direct v6/v7 replacement/update
+  explicit `otherwise` branch, and lowers to direct v6/v7/v8 replacement/update
   instructions.
 - Effects: `raise whole`, `forward call weave args...`, and `handle call weave
   args... into success otherwise error into code`. The seed emits direct v7
   two-exit metadata and branch targets; M4's source/type/ownership restrictions
   are verified by the product artifact before output is accepted.
+- Comptime: `comptime bind name <- op left right` accepts exactly one literal
+  signed-`Whole` binary operation. It has no names, calls, loops, text, bytes,
+  effects, resources, or source-configurable fuel; at most 1,024 directives
+  occur in one source program.
 
 ## Multi-weave emission
 
@@ -153,16 +165,17 @@ at end of source it flushes the previous weave record:
 - local count, then `(type, mutable)` pairs (parameters occupy the leading slots)
 - code length and instruction bytes
 
-The final artifact is `AETH` + version `7` + arena capacity (`u32` little
+The final artifact is `AETH` + version `8` + arena capacity (`u32` little
 endian) + bounded record schema table + function table. Record type descriptors
-retain tag `5` plus a record identifier; v6/v7 use Arena/Buffer type tags,
+retain tag `5` plus a record identifier; v6/v7/v8 use Arena/Buffer type tags,
 access parameter mode, and the closed resource instruction payloads; v7 adds
-the effect tag and three explicit effect instructions. This
+the effect tag and three explicit effect instructions; v8 adds
+`COMPTIME_WHOLE`. This
 replaces the Stage 3 fixed two-weave (`compile` + synthetic `main`) emitter.
 
 ## Explicit non-goals
 
-Seed parity does not expand Aether 0.7 language rules. In particular, nested
+Seed parity does not expand Aether 0.8 language rules. In particular, nested
 expression trees, nested binding introduction, nested record fields, record
 mutation, host record invocation, first-class resource outcomes, Buffer weave
 results, and resource-owner `revise` remain outside the language grammar rather
@@ -172,7 +185,7 @@ support for:
 - Host I/O, networking, or model access
 - Full Aether diagnostic fidelity (invalid Seed Profile input may fail late or
   produce a rejectable artifact; the bootstrap compiler remains the complete
-  diagnostic authority for invalid Aether 0.7 input)
+  diagnostic authority for invalid Aether 0.8 input)
 - Future Aether language extensions until they meet the same byte-identity proof
 
 ## Reproducibility procedure
@@ -199,10 +212,11 @@ All three SHA-256 digests must match. The regression tests also forge:
    allocation exhaustion, append full, lookup fallback, Truth elements, and an
    access-bound helper weave.
 7. The M4 error and normal-exit fixtures, including `examples/error-effect.ae`.
+8. The M5 literal comptime fixture, including `examples/comptime.ae`.
 
 ## Authority
 
-- Full language: [AETHER_0.7.md](AETHER_0.7.md)
+- Full language: [AETHER_0.8.md](AETHER_0.8.md)
 - Host forge ABI: [FORGE_CONTRACT.md](FORGE_CONTRACT.md)
 - Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Product gate: [../MANIFEST.md](../MANIFEST.md)
