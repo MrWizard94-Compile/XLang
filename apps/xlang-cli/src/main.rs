@@ -12,7 +12,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default.\nstructure emits aether.ast/v3 JSON. apply-edit accepts aether.edit/v3, validates canonical source, then seed-compiles before writing.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default.\nstructure emits aether.ast/v4 JSON. apply-edit accepts aether.edit/v4, validates canonical source, then seed-compiles before writing.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -327,8 +327,8 @@ mod tests {
         let output_path = temporary.path.join("output.ae");
         let source = "world cli\n\nweave main [] -> Whole:\n  yield 0\n";
         let edit = r#"{
-  "protocol": "aether.edit/v3",
-  "schema": "aether.ast/v3",
+  "protocol": "aether.edit/v4",
+  "schema": "aether.ast/v4",
   "baseSource": "world cli\n\nweave main [] -> Whole:\n  yield 0\n",
   "operations": [{
     "op": "replace",

@@ -1,7 +1,8 @@
 # Aether 0.8 Language Contract
 
-**Status:** Current executable product contract — M5 deterministic bounded
-compile-time evaluation
+**Status:** Historical Aether 0.8 specification. It records the M5 contract that
+emitted deterministic AETH v8. The current product contract is
+[AETHER_0.9.md](AETHER_0.9.md).
 
 **Artifact output:** AETH v8
 

@@ -29,6 +29,7 @@ const FORWARD_CALL_SOURCE: &str = concat!(
 
 const M4_ERROR_EFFECT_SOURCE: &str = include_str!("../../../examples/error-effect.ae");
 const M5_COMPTIME_SOURCE: &str = include_str!("../../../examples/comptime.ae");
+const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae");
 
 const M4_NORMAL_EFFECT_SOURCE: &str = concat!(
     "world normal_effect\n",
@@ -70,7 +71,7 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
 
     let variant = SEED_SOURCE.replacen(
         "  bind mutable v65 <- 0\n",
-        "  bind mutable v65 <- 0\n  bind mutable v99 <- 0\n",
+        "  bind mutable v65 <- 0\n  bind mutable v100 <- 0\n",
         1,
     );
     assert_ne!(
@@ -220,6 +221,32 @@ fn seed_profile_compiler_forges_bounded_m5_comptime_byte_identically() {
 }
 
 #[test]
+fn seed_profile_compiler_forges_bounded_m6_layout_tables_byte_identically() {
+    let bootstrap_seed = compile_to_bytecode(SEED_SOURCE)
+        .expect("the checked-in Aether seed source must bootstrap")
+        .bytecode;
+    let bootstrap = compile_to_bytecode(M6_LAYOUT_SOURCE)
+        .expect("the M6 layout fixture must bootstrap")
+        .bytecode;
+    let forged = bytes(
+        forge_bytecode(&bootstrap_seed, M6_LAYOUT_SOURCE)
+            .expect("the M6 layout fixture must forge through the seed"),
+    );
+    verify_bytecode(&forged).expect("the M6 seed-produced artifact must verify");
+    assert_eq!(
+        forged, bootstrap,
+        "the M6 layout fixture must match bootstrap byte-for-byte"
+    );
+    assert_eq!(
+        run_bytecode(&forged)
+            .expect("the M6 seed-produced artifact must run")
+            .exit_code,
+        10,
+        "the M6 layout fixture should preserve its defined outcome"
+    );
+}
+
+#[test]
 fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
     assert_eq!(
         SEED_COMPILER_ARTIFACT,
@@ -298,6 +325,7 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
             Some(17),
         ),
         ("comptime", M5_COMPTIME_SOURCE, Some(150)),
+        ("layout-table", M6_LAYOUT_SOURCE, Some(10)),
     ];
     for (name, source, expected_exit_code) in examples {
         let bootstrap = compile_to_bytecode(source)

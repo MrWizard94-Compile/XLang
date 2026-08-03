@@ -1,0 +1,23 @@
+world layout_demo
+
+shape particle:
+  mass Whole
+  charge Whole
+
+weave main [] -> Whole:
+  bind memory <- arena 4096
+  bind mutable parts <- table particle layout columns
+  bind mutable sample <- 0
+  choose allocate access memory move parts 2 into parts:
+    choose store move parts 0 mass 10 into parts:
+      choose store move parts 0 charge 3 into parts:
+        choose load borrow parts 0 mass into sample:
+          yield sample
+        otherwise:
+          yield -4
+      otherwise:
+        yield -3
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1

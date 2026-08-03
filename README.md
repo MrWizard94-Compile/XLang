@@ -1,13 +1,13 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and CLI toolchain for
-deterministic, AI-primary authorship. Aether **0.8.0** parses only Aether
-source, emits deterministic AETH v8 bytecode, verifies every artifact, and runs
+deterministic, AI-primary authorship. Aether **0.9.0** parses only Aether
+source, emits deterministic AETH v9 bytecode, verifies every artifact, and runs
 it in the Aether VM. It never translates source to Rust, C, JavaScript, LLVM,
-or another language. Verified AETH v4/v5/v6/v7 artifacts remain compatible
-inputs with their original meanings; new compilation emits v8.
+or another language. Verified AETH v4/v5/v6/v7/v8 artifacts remain compatible
+inputs with their original meanings; new compilation emits v9.
 
-## Seed-hosted compile path, M2 resources, M4 errors, and M5 comptime
+## Seed-hosted compile path, resources, effects, comptime, and layout
 
 **Default compilation is no longer bootstrap-hosted for user programs.**
 
@@ -19,14 +19,14 @@ inputs with their original meanings; new compilation emits v8.
 - The seed self-hosts, and the shipped examples plus a complete canonical-surface
   regression corpus produce bytecode **byte-identical** to the Rust bootstrap.
 
-Seed Profile emits the complete prior canonical surface plus Aether 0.8's
-documented M2 resource and M4 error corpora: named locals/parameters, every
-statement and shallow expression family, `borrow`/`move`/`access`, multi-weave
-calls, immutable records, closed `arena` / Whole-or-Truth-buffer outcomes, and
-the explicit `raises Whole`, `raise`, `forward call`, and terminal `handle call`
-forms. It also emits M5's root-only literal `comptime bind` as AETH v8
-`COMPTIME_WHOLE` provenance. New compilation emits verified AETH v8. See
-[docs/AETHER_0.8.md](docs/AETHER_0.8.md) and
+Seed Profile emits the complete prior canonical surface plus Aether 0.9's
+documented M2 resource, M4 error, M5 comptime, and M6 layout corpora: named
+locals/parameters, every statement and shallow expression family,
+`borrow`/`move`/`access`, multi-weave calls, immutable records, closed `arena` /
+Whole-or-Truth-buffer outcomes, dual-layout Whole tables, the explicit
+`raises Whole`, `raise`, `forward call`, and terminal `handle call` forms, and
+root-only literal `comptime bind`. New compilation emits verified AETH v9. See
+[docs/AETHER_0.9.md](docs/AETHER_0.9.md) and
 [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether
@@ -57,16 +57,33 @@ It accepts exactly five checked literal `Whole` operations, has a fixed
 or host authority surface. See
 [docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md](docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md).
 
+M6 adds author-visible layout for multi-field tables:
+
+```aether
+shape particle:
+  mass Whole
+  charge Whole
+
+weave main [] -> Whole:
+  bind memory <- arena 4096
+  bind mutable parts <- table particle layout columns
+  ...
+```
+
+`layout rows` and `layout columns` store the same logical cells with different
+physical order. See
+[docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md](docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md).
+
 ## Versioned structural authoring contract
 
-Aether 0.8 tooling exposes a local, machine-readable `aether.ast/v3` document
-and accepts bounded `aether.edit/v3` structural edits. The protocol
+Aether 0.9 tooling exposes a local, machine-readable `aether.ast/v4` document
+and accepts bounded `aether.edit/v4` structural edits. The protocol
 uses exact canonical source revisions to reject stale requests, supports typed
-top-level record/weave insert, replace, and delete operations, reparses the
+top-level record/shape/weave insert, replace, and delete operations, reparses the
 formatter-owned result, and seed-compiles it before the CLI writes source to an
-explicit output path. It exposes effect annotations, M4 statement nodes, and a
-required `Bind.stage` (`runtime` or `comptime`) without reinterpreting v1/v2.
-See [docs/AETHER_AUTHORING_PROTOCOL_v3.md](docs/AETHER_AUTHORING_PROTOCOL_v3.md)
+explicit output path. It exposes effect annotations, M4/M5/M6 nodes, and a
+required `Bind.stage` (`runtime` or `comptime`) without reinterpreting v1–v3.
+See [docs/AETHER_AUTHORING_PROTOCOL_v4.md](docs/AETHER_AUTHORING_PROTOCOL_v4.md)
 and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-authoring-contract.md).
 
 ### Still honest limits

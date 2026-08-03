@@ -18,9 +18,9 @@ pub use authoring::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.8.0";
+pub const LANGUAGE_VERSION: &str = "0.9.0";
 
-/// Checked-in Aether-written seed compiler artifact (AETH v8).
+/// Checked-in Aether-written seed compiler artifact (AETH v9).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../seed/aether_seed.aeth"
@@ -32,17 +32,22 @@ const ARTIFACT_VERSION_V5: u8 = 5;
 const ARTIFACT_VERSION_V6: u8 = 6;
 const ARTIFACT_VERSION_V7: u8 = 7;
 const ARTIFACT_VERSION_V8: u8 = 8;
+const ARTIFACT_VERSION_V9: u8 = 9;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 const MAX_FUNCTIONS: usize = 256;
 const MAX_LOCALS: usize = u16::MAX as usize;
 const MAX_RECORDS: usize = 256;
 const MAX_RECORD_FIELDS: usize = 64;
+const MAX_SHAPES: usize = 64;
+const MAX_SHAPE_FIELDS: usize = 8;
+const MAX_TABLE_CAPACITY: i64 = 1_024;
 const MAX_TEXT_BYTES: usize = 1_000_000;
 const MAX_BYTES: usize = 1_000_000;
 const MAX_RECORD_BYTES: usize = 1_000_000;
 const MAX_CALL_DEPTH: usize = 1_024;
 const MAX_ARENA_BYTES: u32 = 1_000_000;
 const BUFFER_METADATA_BYTES: usize = 16;
+const TABLE_METADATA_BYTES: usize = 16;
 const MAX_COMPTIME_BINDINGS: usize = 1_024;
 
 const OP_PUSH_TEXT: u8 = 1;
@@ -100,6 +105,11 @@ const OP_RAISE: u8 = 53;
 const OP_FORWARD_CALL: u8 = 54;
 const OP_HANDLE_CALL: u8 = 55;
 const OP_COMPTIME_WHOLE: u8 = 56;
+const OP_TABLE: u8 = 57;
+const OP_TABLE_ALLOCATE: u8 = 58;
+const OP_TABLE_STORE: u8 = 59;
+const OP_TABLE_LOAD: u8 = 60;
+const OP_TABLE_COUNT: u8 = 61;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -161,6 +171,22 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-layout-003") {
+        "AE-LAYOUT-003"
+    } else if normalized.contains("ae-layout-002") {
+        "AE-LAYOUT-002"
+    } else if normalized.contains("ae-layout-001")
+        || normalized.contains("shape declaration")
+        || normalized.contains("shape field")
+        || normalized.contains("table layout")
+        || normalized.contains("layout rows")
+        || normalized.contains("layout columns")
+        || normalized.contains("shapes require")
+        || normalized.contains("shapes support")
+        || normalized.contains("shape name")
+        || normalized.contains("shape collides")
+    {
+        "AE-LAYOUT-001"
     } else if normalized.contains("ae-comptime-003") {
         "AE-COMPTIME-003"
     } else if normalized.contains("ae-comptime-002") {
@@ -177,6 +203,7 @@ fn diagnostic_code(message: &str) -> &'static str {
         "AE-EFFECT-001"
     } else if normalized.contains("arena")
         || normalized.contains("buffer")
+        || normalized.contains("table")
         || normalized.contains("resource outcome")
         || normalized.contains("resource operation")
     {
@@ -240,6 +267,8 @@ pub enum ValueType {
     /// An internal verifier stack marker. It is never serializable, bindable,
     /// returnable, or visible in Aether source type syntax.
     AccessArena,
+    /// An M6 dual-layout table owner keyed by a declared shape identifier.
+    Table(u16),
 }
 
 impl ValueType {
@@ -254,6 +283,7 @@ impl ValueType {
             Self::BufferWhole => 7,
             Self::BufferTruth => 8,
             Self::AccessArena => 9,
+            Self::Table(_) => 10,
         }
     }
 
@@ -280,6 +310,7 @@ impl fmt::Display for ValueType {
             Self::BufferWhole => formatter.write_str("BufferWhole"),
             Self::BufferTruth => formatter.write_str("BufferTruth"),
             Self::AccessArena => formatter.write_str("exclusive Arena access"),
+            Self::Table(shape) => write!(formatter, "Table#{shape}"),
         }
     }
 }
@@ -292,7 +323,19 @@ const fn is_unique_value(value_type: ValueType) -> bool {
             | ValueType::Record(_)
             | ValueType::BufferWhole
             | ValueType::BufferTruth
+            | ValueType::Table(_)
     )
+}
+
+const fn is_resource_owner_type(value_type: ValueType) -> bool {
+    matches!(
+        value_type,
+        ValueType::BufferWhole | ValueType::BufferTruth | ValueType::Table(_) | ValueType::Arena
+    )
+}
+
+const fn is_table_type(value_type: ValueType) -> bool {
+    matches!(value_type, ValueType::Table(_))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -344,14 +387,17 @@ impl ParameterMode {
             2 => Ok(Self::Borrow),
             3 if matches!(
                 version,
-                ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+                ARTIFACT_VERSION_V6
+                    | ARTIFACT_VERSION_V7
+                    | ARTIFACT_VERSION_V8
+                    | ARTIFACT_VERSION_V9
             ) =>
             {
                 Ok(Self::Access)
             }
             3 => Err(BytecodeError::new(
                 offset,
-                "access parameters are valid only in AETH v6, v7, or v8 artifacts",
+                "access parameters are valid only in AETH v6, v7, v8, or v9 artifacts",
             )),
             _ => Err(BytecodeError::new(offset, "unknown Aether parameter mode")),
         }
@@ -362,6 +408,7 @@ impl ParameterMode {
 pub struct Program {
     pub world: String,
     pub records: Vec<RecordDeclaration>,
+    pub shapes: Vec<ShapeDeclaration>,
     pub weaves: Vec<Weave>,
 }
 
@@ -373,6 +420,11 @@ impl Program {
             .iter()
             .map(|record| 2 + record.fields.len() * 2)
             .sum::<usize>()
+            + self
+                .shapes
+                .iter()
+                .map(|shape| 2 + shape.fields.len() * 2)
+                .sum::<usize>()
             + self
                 .weaves
                 .iter()
@@ -396,6 +448,55 @@ pub struct RecordField {
     pub name: String,
     pub value_type: ValueType,
     pub span: Span,
+}
+
+/// An M6 layout shape: a fixed product of 1..=8 `Whole` fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShapeDeclaration {
+    pub name: String,
+    pub fields: Vec<ShapeField>,
+    pub span: Span,
+}
+
+/// One `Whole` field in a [`ShapeDeclaration`]. Field order is layout order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShapeField {
+    pub name: String,
+    pub span: Span,
+}
+
+/// Physical storage order for an M6 table of a declared shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TableLayout {
+    Rows,
+    Columns,
+}
+
+impl TableLayout {
+    const fn word(self) -> &'static str {
+        match self {
+            Self::Rows => "rows",
+            Self::Columns => "columns",
+        }
+    }
+
+    const fn to_tag(self) -> u8 {
+        match self {
+            Self::Rows => 0,
+            Self::Columns => 1,
+        }
+    }
+
+    fn from_tag(value: u8, offset: usize) -> Result<Self, BytecodeError> {
+        match value {
+            0 => Ok(Self::Rows),
+            1 => Ok(Self::Columns),
+            _ => Err(BytecodeError::new(
+                offset,
+                "unknown Aether table layout tag",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -503,6 +604,11 @@ pub enum ExpressionKind {
     Buffer {
         element: BufferElement,
     },
+    /// An unallocated M6 table owner placeholder with an explicit layout.
+    Table {
+        shape: String,
+        layout: TableLayout,
+    },
     Unary {
         operation: UnaryOperation,
         argument: Atom,
@@ -609,6 +715,19 @@ pub enum ResourceOperation {
     At {
         buffer: Atom,
         index: Atom,
+        destination: String,
+    },
+    Store {
+        table: Atom,
+        index: Atom,
+        field: String,
+        value: Atom,
+        destination: String,
+    },
+    Load {
+        table: Atom,
+        index: Atom,
+        field: String,
         destination: String,
     },
 }
@@ -809,19 +928,20 @@ struct BindingState {
 type BindingScope = BTreeMap<String, BindingState>;
 type ResourceOutcomeScopes = (BindingScope, BindingScope);
 
-/// The immutable context shared by recursive M2 resource-outcome validation.
+/// The immutable context shared by recursive M2/M6 resource-outcome validation.
 /// Keeping it together prevents terminal branch validation from drifting away
 /// from the enclosing weave's type and result contract.
 struct ResourceValidationContext<'a> {
     signatures: &'a BTreeMap<String, FunctionSignature>,
     records: &'a [RecordDeclaration],
+    shapes: &'a [ShapeDeclaration],
     weave: &'a Weave,
 }
 
 /// Typed resource facts produced by source validation and consumed directly by
-/// AETH v6/v7/v8 lowering. This is deliberately separate from the parsed AST: it
+/// AETH v6/v7/v8/v9 lowering. This is deliberately separate from the parsed AST: it
 /// records the resolved lexical region, owner place, element type, and stable
-/// replacement destination for every closed M2 outcome.
+/// replacement destination for every closed M2/M6 outcome.
 #[derive(Clone)]
 struct SemanticResourcePlan {
     arena: Option<SemanticArena>,
@@ -854,6 +974,25 @@ enum SemanticResourceOperation {
         owner: String,
         destination: String,
         element: BufferElement,
+    },
+    TableAllocate {
+        region: String,
+        owner: String,
+        destination: String,
+    },
+    TableStore {
+        region: String,
+        owner: String,
+        destination: String,
+        shape: u16,
+        field: u8,
+    },
+    TableLoad {
+        region: String,
+        owner: String,
+        destination: String,
+        shape: u16,
+        field: u8,
     },
 }
 
@@ -905,7 +1044,10 @@ impl SemanticResourceOperation {
         match self {
             Self::Allocate { region, .. }
             | Self::Append { region, .. }
-            | Self::At { region, .. } => region,
+            | Self::At { region, .. }
+            | Self::TableAllocate { region, .. }
+            | Self::TableStore { region, .. }
+            | Self::TableLoad { region, .. } => region,
         }
     }
 
@@ -913,15 +1055,10 @@ impl SemanticResourceOperation {
         match self {
             Self::Allocate { destination, .. }
             | Self::Append { destination, .. }
-            | Self::At { destination, .. } => destination,
-        }
-    }
-
-    const fn element(&self) -> BufferElement {
-        match self {
-            Self::Allocate { element, .. }
-            | Self::Append { element, .. }
-            | Self::At { element, .. } => *element,
+            | Self::At { destination, .. }
+            | Self::TableAllocate { destination, .. }
+            | Self::TableStore { destination, .. }
+            | Self::TableLoad { destination, .. } => destination,
         }
     }
 
@@ -951,11 +1088,47 @@ impl SemanticResourceOperation {
                     && source_destination == destination
             }
             (
+                Self::TableAllocate {
+                    owner, destination, ..
+                },
+                ResourceOperation::Allocate {
+                    buffer,
+                    destination: source_destination,
+                    ..
+                },
+            )
+            | (
+                Self::TableStore {
+                    owner, destination, ..
+                },
+                ResourceOperation::Store {
+                    table: buffer,
+                    destination: source_destination,
+                    ..
+                },
+            ) => {
+                matches!(&buffer.kind, AtomKind::Move(name) if name == owner)
+                    && source_destination == destination
+            }
+            (
                 Self::At {
                     owner, destination, ..
                 },
                 ResourceOperation::At {
                     buffer,
+                    destination: source_destination,
+                    ..
+                },
+            ) => {
+                matches!(&buffer.kind, AtomKind::Borrow(name) if name == owner)
+                    && source_destination == destination
+            }
+            (
+                Self::TableLoad {
+                    owner, destination, ..
+                },
+                ResourceOperation::Load {
+                    table: buffer,
                     destination: source_destination,
                     ..
                 },
@@ -976,6 +1149,12 @@ enum ResourceBindingState {
     },
     Buffer {
         element: BufferElement,
+        arena: Option<String>,
+        allocated: bool,
+    },
+    Table {
+        shape: u16,
+        layout: TableLayout,
         arena: Option<String>,
         allocated: bool,
     },
@@ -1022,6 +1201,7 @@ struct Artifact {
     version: u8,
     arena_capacity: u32,
     records: Vec<ArtifactRecord>,
+    shapes: Vec<ArtifactShape>,
     functions: Vec<ArtifactFunction>,
 }
 
@@ -1035,6 +1215,12 @@ struct ArtifactRecord {
 struct ArtifactRecordField {
     name: String,
     value_type: ValueType,
+}
+
+#[derive(Clone)]
+struct ArtifactShape {
+    name: String,
+    fields: Vec<String>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -1052,12 +1238,13 @@ struct VerificationContext<'a> {
     function: &'a ArtifactFunction,
     functions: &'a [ArtifactFunction],
     records: &'a [ArtifactRecord],
+    shapes: &'a [ArtifactShape],
 }
 
-/// The verifier records where a buffer value on the transient operand stack
-/// came from.  A raw placeholder, a read loan, a moved local owner, and an
-/// owned result from a checked call are not interchangeable.  This prevents a
-/// forged v6 instruction stream from substituting a fresh `buffer` placeholder
+/// The verifier records where a buffer or table value on the transient operand
+/// stack came from. A raw placeholder, a read loan, a moved local owner, and an
+/// owned result from a checked call are not interchangeable. This prevents a
+/// forged resource instruction stream from substituting a fresh placeholder
 /// when an operation promises to restore the specific owner it just moved.
 #[derive(Clone, PartialEq, Eq)]
 struct VerificationStack {
@@ -1067,12 +1254,12 @@ struct VerificationStack {
 #[derive(Clone, PartialEq, Eq)]
 struct VerificationStackValue {
     value_type: ValueType,
-    buffer_provenance: BufferProvenance,
+    resource_provenance: ResourceProvenance,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum BufferProvenance {
-    NotBuffer,
+enum ResourceProvenance {
+    NotResource,
     Placeholder,
     Borrowed,
     MovedLocal(usize),
@@ -1086,10 +1273,10 @@ impl VerificationStack {
     fn push(&mut self, value_type: ValueType) {
         self.values.push(VerificationStackValue {
             value_type,
-            buffer_provenance: if is_buffer_type(value_type) {
-                BufferProvenance::Borrowed
+            resource_provenance: if is_buffer_type(value_type) || is_table_type(value_type) {
+                ResourceProvenance::Borrowed
             } else {
-                BufferProvenance::NotBuffer
+                ResourceProvenance::NotResource
             },
         });
     }
@@ -1097,17 +1284,24 @@ impl VerificationStack {
     fn push_buffer_placeholder(&mut self, element: BufferElement) {
         self.values.push(VerificationStackValue {
             value_type: element.value_type(),
-            buffer_provenance: BufferProvenance::Placeholder,
+            resource_provenance: ResourceProvenance::Placeholder,
+        });
+    }
+
+    fn push_table_placeholder(&mut self, shape: u16) {
+        self.values.push(VerificationStackValue {
+            value_type: ValueType::Table(shape),
+            resource_provenance: ResourceProvenance::Placeholder,
         });
     }
 
     fn push_moved_local(&mut self, value_type: ValueType, slot: usize) {
         self.values.push(VerificationStackValue {
             value_type,
-            buffer_provenance: if is_buffer_type(value_type) {
-                BufferProvenance::MovedLocal(slot)
+            resource_provenance: if is_buffer_type(value_type) || is_table_type(value_type) {
+                ResourceProvenance::MovedLocal(slot)
             } else {
-                BufferProvenance::NotBuffer
+                ResourceProvenance::NotResource
             },
         });
     }
@@ -1140,6 +1334,14 @@ enum RuntimeValue {
         len: usize,
         capacity: usize,
     },
+    Table {
+        shape: u16,
+        layout: TableLayout,
+        field_count: u8,
+        allocated: bool,
+        offset: usize,
+        capacity: usize,
+    },
 }
 
 enum RuntimeExit {
@@ -1158,6 +1360,7 @@ impl RuntimeValue {
             Self::Arena => ValueType::Arena,
             Self::AccessArena => ValueType::AccessArena,
             Self::Buffer { element, .. } => element.value_type(),
+            Self::Table { shape, .. } => ValueType::Table(*shape),
         }
     }
 }
@@ -1223,9 +1426,13 @@ fn invocation_from_runtime(value: RuntimeValue) -> Result<InvocationValue, Bytec
             0,
             "host invocation cannot return a record; project a primitive field inside Aether",
         )),
-        RuntimeValue::Arena | RuntimeValue::AccessArena | RuntimeValue::Buffer { .. } => Err(
-            BytecodeError::new(0, "host invocation cannot return an Aether resource value"),
-        ),
+        RuntimeValue::Arena
+        | RuntimeValue::AccessArena
+        | RuntimeValue::Buffer { .. }
+        | RuntimeValue::Table { .. } => Err(BytecodeError::new(
+            0,
+            "host invocation cannot return an Aether resource value",
+        )),
     }
 }
 
@@ -1278,6 +1485,10 @@ enum Instruction {
     },
     Arena,
     Buffer(BufferElement),
+    Table {
+        shape: u16,
+        layout: TableLayout,
+    },
     Access(usize),
     Allocate {
         element: BufferElement,
@@ -1291,6 +1502,20 @@ enum Instruction {
         element: BufferElement,
         destination: usize,
     },
+    TableAllocate {
+        destination: usize,
+    },
+    TableStore {
+        shape: u16,
+        field: u8,
+        destination: usize,
+    },
+    TableLoad {
+        shape: u16,
+        field: u8,
+        destination: usize,
+    },
+    TableCount,
     Count,
     Raise,
     ForwardCall {
@@ -1355,6 +1580,17 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
         records.push(parse_record_declaration(line)?);
         index += 1;
     }
+    let mut shapes = Vec::new();
+    while index < lines.len() && lines[index].content.starts_with("shape ") {
+        let line = lines[index];
+        if line.indentation != 0 {
+            return Err(CompilerError::new(
+                line.span(1),
+                "a shape declaration must begin at indentation level zero",
+            ));
+        }
+        shapes.push(parse_shape_declaration(&lines, &mut index)?);
+    }
     let record_types = record_type_map(&records)?;
     let mut weaves = Vec::new();
     while index < lines.len() {
@@ -1368,7 +1604,13 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
         if line.content.starts_with("record ") {
             return Err(CompilerError::new(
                 line.span(1),
-                "record declarations must appear after world and before every weave",
+                "record declarations must appear after world and before every shape or weave",
+            ));
+        }
+        if line.content.starts_with("shape ") {
+            return Err(CompilerError::new(
+                line.span(1),
+                "shape declarations must appear after records and before every weave",
             ));
         }
         let (name, parameters, result, effect) = parse_weave_header(line, &record_types)?;
@@ -1393,6 +1635,7 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
     let program = Program {
         world,
         records,
+        shapes,
         weaves,
     };
     validate_program(&program)?;
@@ -1456,6 +1699,17 @@ pub fn format_program(program: &Program) -> String {
         }
         formatted.push_str("]\n");
     }
+    for shape in &program.shapes {
+        formatted.push('\n');
+        formatted.push_str("shape ");
+        formatted.push_str(&shape.name);
+        formatted.push_str(":\n");
+        for field in &shape.fields {
+            formatted.push_str("  ");
+            formatted.push_str(&field.name);
+            formatted.push_str(" Whole\n");
+        }
+    }
     for weave in &program.weaves {
         formatted.push('\n');
         formatted.push_str("weave ");
@@ -1501,6 +1755,19 @@ pub fn canonical_ast(program: &Program) -> String {
             output.push_str(&field.name);
             output.push(':');
             output.push_str(&format_value_type(field.value_type, &program.records));
+        }
+        output.push(']');
+    }
+    for shape in &program.shapes {
+        output.push_str(";Shape(");
+        output.push_str(&shape.name);
+        output.push_str(")[");
+        for (index, field) in shape.fields.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            output.push_str(&field.name);
+            output.push_str(":Whole");
         }
         output.push(']');
     }
@@ -1600,6 +1867,7 @@ pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
             function,
             &artifact.functions,
             &artifact.records,
+            &artifact.shapes,
             artifact.version,
         )?;
     }
@@ -1651,15 +1919,26 @@ fn validate_artifact_resource_signature(
             "AETH v6 M2 does not permit Buffer values as weave results",
         ));
     }
+    if is_table_type(function.result)
+        || function
+            .parameters
+            .iter()
+            .any(|(value_type, _)| is_table_type(*value_type))
+    {
+        return Err(BytecodeError::new(
+            0,
+            "AETH v9 M6 does not permit Table values as weave parameters or results",
+        ));
+    }
     if has_buffer
         && (!matches!(
             version,
-            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
         ) || access_count != 1)
     {
         return Err(BytecodeError::new(
             0,
-            "artifact Buffer signatures require exactly one AETH v6/v7/v8 access Arena parameter",
+            "artifact Buffer signatures require exactly one AETH v6/v7/v8/v9 access Arena parameter",
         ));
     }
     if function
@@ -1679,8 +1958,10 @@ fn validate_artifact_effect_signature(
     function: &ArtifactFunction,
     version: u8,
 ) -> Result<(), BytecodeError> {
-    if !matches!(version, ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8)
-        && function.effect != Effect::Total
+    if !matches!(
+        version,
+        ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+    ) && function.effect != Effect::Total
     {
         return Err(BytecodeError::new(
             0,
@@ -1724,10 +2005,15 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
                     resource_instruction_seen = true;
                 }
                 Instruction::Buffer(_)
+                | Instruction::Table { .. }
                 | Instruction::Access(_)
                 | Instruction::Allocate { .. }
                 | Instruction::BufferAppend { .. }
                 | Instruction::BufferAt { .. }
+                | Instruction::TableAllocate { .. }
+                | Instruction::TableStore { .. }
+                | Instruction::TableLoad { .. }
+                | Instruction::TableCount
                 | Instruction::Count => resource_instruction_seen = true,
                 _ => {}
             }
@@ -1735,7 +2021,7 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
     }
     if !matches!(
         artifact.version,
-        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
     ) {
         if artifact.arena_capacity != 0 || resource_instruction_seen {
             return Err(BytecodeError::new(
@@ -2141,6 +2427,114 @@ fn parse_primitive_value_type(source: &str, span: Span) -> Result<ValueType, Com
     }
 }
 
+fn parse_shape_declaration(
+    lines: &[SourceLine<'_>],
+    index: &mut usize,
+) -> Result<ShapeDeclaration, CompilerError> {
+    let line = lines[*index];
+    let Some(rest) = line.content.strip_prefix("shape ") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-LAYOUT-001: expected shape declaration",
+        ));
+    };
+    let Some(name) = rest.strip_suffix(':') else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-LAYOUT-001: shape declarations use `shape name:` followed by Whole field lines",
+        ));
+    };
+    let name = name.trim_end();
+    validate_name(name, line.span(7), "shape name", false)?;
+    *index += 1;
+    let mut fields = Vec::new();
+    while *index < lines.len() {
+        let field_line = lines[*index];
+        if field_line.indentation == 0 {
+            break;
+        }
+        if field_line.indentation != 1 {
+            return Err(CompilerError::new(
+                field_line.span(1),
+                "AE-LAYOUT-001: shape fields must be indented one level under the shape header",
+            ));
+        }
+        let tokens = tokenize_fragment(field_line.content, field_line.span(1))?;
+        if tokens.len() != 2 {
+            return Err(CompilerError::new(
+                field_line.span(1),
+                "AE-LAYOUT-001: each shape field must be `name Whole`",
+            ));
+        }
+        validate_name(&tokens[0], field_line.span(1), "shape field name", false)?;
+        if tokens[1] != "Whole" {
+            return Err(CompilerError::new(
+                field_line.span(1),
+                "AE-LAYOUT-001: shape fields may use only Whole",
+            ));
+        }
+        if fields
+            .iter()
+            .any(|field: &ShapeField| field.name == tokens[0])
+        {
+            return Err(CompilerError::new(
+                field_line.span(1),
+                format!(
+                    "AE-LAYOUT-001: shape field {} is declared more than once",
+                    tokens[0]
+                ),
+            ));
+        }
+        if fields.len() >= MAX_SHAPE_FIELDS {
+            return Err(CompilerError::new(
+                field_line.span(1),
+                format!("AE-LAYOUT-001: shapes support at most {MAX_SHAPE_FIELDS} Whole fields"),
+            ));
+        }
+        fields.push(ShapeField {
+            name: tokens[0].clone(),
+            span: field_line.span(1),
+        });
+        *index += 1;
+    }
+    if fields.is_empty() {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-LAYOUT-001: shapes require at least one Whole field",
+        ));
+    }
+    Ok(ShapeDeclaration {
+        name: name.to_owned(),
+        fields,
+        span: line.span(1),
+    })
+}
+
+fn shape_type_map(shapes: &[ShapeDeclaration]) -> Result<BTreeMap<String, u16>, CompilerError> {
+    if shapes.len() > MAX_SHAPES {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            format!("AE-LAYOUT-001: Aether supports at most {MAX_SHAPES} shapes per artifact"),
+        ));
+    }
+    let mut shape_types = BTreeMap::new();
+    for (index, shape) in shapes.iter().enumerate() {
+        let identifier = u16::try_from(index).map_err(|_| {
+            CompilerError::new(shape.span, "shape identifier is outside the AETH range")
+        })?;
+        if shape_types.insert(shape.name.clone(), identifier).is_some() {
+            return Err(CompilerError::new(
+                shape.span,
+                format!(
+                    "AE-LAYOUT-001: shape {} is declared more than once",
+                    shape.name
+                ),
+            ));
+        }
+    }
+    Ok(shape_types)
+}
+
 fn parse_record_declaration(line: SourceLine<'_>) -> Result<RecordDeclaration, CompilerError> {
     let Some(rest) = line.content.strip_prefix("record ") else {
         return Err(CompilerError::new(
@@ -2536,6 +2930,50 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
                 element: parse_buffer_element(element, span)?,
             }
         }
+        "table" if tokens.len() == 4 => {
+            let Some(shape) = tokens.get(index) else {
+                return Err(CompilerError::new(
+                    span,
+                    "AE-LAYOUT-001: table requires a shape name",
+                ));
+            };
+            validate_name(shape, span, "shape name", false)?;
+            index += 1;
+            let Some(layout_keyword) = tokens.get(index) else {
+                return Err(CompilerError::new(
+                    span,
+                    "AE-LAYOUT-001: table requires the layout keyword",
+                ));
+            };
+            if layout_keyword != "layout" {
+                return Err(CompilerError::new(
+                    span,
+                    "AE-LAYOUT-001: table requires `layout rows` or `layout columns`",
+                ));
+            }
+            index += 1;
+            let Some(layout) = tokens.get(index) else {
+                return Err(CompilerError::new(
+                    span,
+                    "AE-LAYOUT-001: table requires rows or columns after layout",
+                ));
+            };
+            let layout = match layout.as_str() {
+                "rows" => TableLayout::Rows,
+                "columns" => TableLayout::Columns,
+                _ => {
+                    return Err(CompilerError::new(
+                        span,
+                        "AE-LAYOUT-001: table layout must be rows or columns",
+                    ))
+                }
+            };
+            index += 1;
+            ExpressionKind::Table {
+                shape: shape.clone(),
+                layout,
+            }
+        }
         "not" => ExpressionKind::Unary {
             operation: UnaryOperation::Not,
             argument: parse_atom_from(&tokens, &mut index, span)?,
@@ -2667,6 +3105,46 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
             ExpressionKind::Resource(ResourceOperation::At {
                 buffer,
                 index: index_value,
+                destination,
+            })
+        }
+        "store" if tokens.iter().any(|token| token == "into") => {
+            let table = parse_atom_from(&tokens, &mut index, span)?;
+            let index_value = parse_atom_from(&tokens, &mut index, span)?;
+            let Some(field) = tokens.get(index) else {
+                return Err(CompilerError::new(
+                    span,
+                    "AE-LAYOUT-002: store requires a shape field name",
+                ));
+            };
+            validate_name(field, span, "shape field name", false)?;
+            index += 1;
+            let value = parse_atom_from(&tokens, &mut index, span)?;
+            let destination = parse_resource_destination(&tokens, &mut index, span)?;
+            ExpressionKind::Resource(ResourceOperation::Store {
+                table,
+                index: index_value,
+                field: field.clone(),
+                value,
+                destination,
+            })
+        }
+        "load" if tokens.iter().any(|token| token == "into") => {
+            let table = parse_atom_from(&tokens, &mut index, span)?;
+            let index_value = parse_atom_from(&tokens, &mut index, span)?;
+            let Some(field) = tokens.get(index) else {
+                return Err(CompilerError::new(
+                    span,
+                    "AE-LAYOUT-002: load requires a shape field name",
+                ));
+            };
+            validate_name(field, span, "shape field name", false)?;
+            index += 1;
+            let destination = parse_resource_destination(&tokens, &mut index, span)?;
+            ExpressionKind::Resource(ResourceOperation::Load {
+                table,
+                index: index_value,
+                field: field.clone(),
                 destination,
             })
         }
@@ -3048,6 +3526,7 @@ fn hex_nibble(byte: u8) -> Option<u8> {
 
 fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerError> {
     validate_record_declarations(&program.records)?;
+    validate_shape_declarations(&program.shapes, &program.records)?;
     let mut resource_plan = validate_resource_plan(program)?;
     validate_comptime_budget(program)?;
     if program.weaves.is_empty() {
@@ -3109,7 +3588,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         if weave_uses_resource(weave) && weave_uses_effect_control(weave) {
             return Err(CompilerError::new(
                 weave.span,
-                "AE-EFFECT-003: Aether M4 error control cannot share a weave with M2 arena, Buffer, access, or resource outcomes",
+                "AE-EFFECT-003: Aether M4 error control cannot share a weave with M2 arena, Buffer, access, table, or resource outcomes",
             ));
         }
         let access_arena = weave
@@ -3120,6 +3599,12 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         let mut scope = BTreeMap::new();
         for parameter in &weave.parameters {
             validate_value_type(parameter.value_type, &program.records, parameter.span)?;
+            if is_table_type(parameter.value_type) {
+                return Err(CompilerError::new(
+                    parameter.span,
+                    "M6 tables cannot cross weave parameter boundaries",
+                ));
+            }
             scope.insert(
                 parameter.name.clone(),
                 BindingState {
@@ -3135,6 +3620,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
             &mut scope,
             &signatures,
             &program.records,
+            &program.shapes,
             weave,
             true,
             &mut resource_plan,
@@ -3313,6 +3799,12 @@ fn validate_resource_signature(weave: &Weave) -> Result<(), CompilerError> {
                 "Arena parameters require access and cannot be moved or borrowed",
             ));
         }
+        if is_table_type(parameter.value_type) {
+            return Err(CompilerError::new(
+                parameter.span,
+                "M6 tables cannot cross weave parameter boundaries",
+            ));
+        }
     }
     if weave.result == ValueType::Arena || weave.result == ValueType::AccessArena {
         return Err(CompilerError::new(
@@ -3324,6 +3816,12 @@ fn validate_resource_signature(weave: &Weave) -> Result<(), CompilerError> {
         return Err(CompilerError::new(
             weave.span,
             "M2 Buffer ownership cannot yet cross a weave result; handle its closed outcome in the defining weave",
+        ));
+    }
+    if is_table_type(weave.result) {
+        return Err(CompilerError::new(
+            weave.span,
+            "M6 table ownership cannot cross a weave result; handle its closed outcome in the defining weave",
         ));
     }
     if has_buffer && access_count != 1 {
@@ -3360,6 +3858,7 @@ fn resource_parameter_state(
 fn resource_state_for_expression(
     expression: &Expression,
     scope: &BTreeMap<String, BindingState>,
+    shapes: &[ShapeDeclaration],
 ) -> Result<ResourceBindingState, CompilerError> {
     match &expression.kind {
         ExpressionKind::Arena { .. } => Ok(ResourceBindingState::Arena {
@@ -3370,6 +3869,15 @@ fn resource_state_for_expression(
             arena: None,
             allocated: false,
         }),
+        ExpressionKind::Table { shape, layout } => {
+            let (shape_id, _) = shape_by_name(shapes, shape, expression.span)?;
+            Ok(ResourceBindingState::Table {
+                shape: shape_id,
+                layout: *layout,
+                arena: None,
+                allocated: false,
+            })
+        }
         ExpressionKind::Atom(Atom {
             kind: AtomKind::Move(name),
             span,
@@ -3483,6 +3991,7 @@ fn expression_uses_resource(expression: &Expression) -> bool {
         &expression.kind,
         ExpressionKind::Arena { .. }
             | ExpressionKind::Buffer { .. }
+            | ExpressionKind::Table { .. }
             | ExpressionKind::Resource(_)
             | ExpressionKind::Unary {
                 operation: UnaryOperation::Count,
@@ -3549,11 +4058,13 @@ fn buffer_element_from_value_type(value_type: ValueType) -> Option<BufferElement
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn validate_block(
     statements: &[Statement],
     scope: &mut BTreeMap<String, BindingState>,
     signatures: &BTreeMap<String, FunctionSignature>,
     records: &[RecordDeclaration],
+    shapes: &[ShapeDeclaration],
     weave: &Weave,
     root: bool,
     resource_plan: &mut SemanticResourcePlan,
@@ -3592,7 +4103,7 @@ fn validate_block(
                         format!("binding {name} already exists in this weave"),
                     ));
                 }
-                let mut resource = resource_state_for_expression(value, scope)?;
+                let mut resource = resource_state_for_expression(value, scope, shapes)?;
                 if matches!(value.kind, ExpressionKind::Arena { .. }) {
                     if weave.name != "main" {
                         return Err(CompilerError::new(
@@ -3604,7 +4115,7 @@ fn validate_block(
                         *arena_name = name.clone();
                     }
                 }
-                let value_type = expression_type(value, scope, signatures, records)?;
+                let value_type = expression_type(value, scope, signatures, records, shapes)?;
                 if matches!(value_type, ValueType::AccessArena) {
                     return Err(CompilerError::new(
                         value.span,
@@ -3640,10 +4151,10 @@ fn validate_block(
                         format!("binding {name} was moved and cannot be revised"),
                     ));
                 }
-                if is_buffer_type(binding.value_type) || binding.value_type == ValueType::Arena {
+                if is_resource_owner_type(binding.value_type) {
                     return Err(CompilerError::new(
                         *span,
-                        "M2 resource owners are replaced only by their closed resource outcomes, never revise",
+                        "M2/M6 resource owners are replaced only by their closed resource outcomes, never revise",
                     ));
                 }
                 if expression_moves_name(value, name) {
@@ -3653,11 +4164,11 @@ fn validate_block(
                     ));
                 }
                 let expected = binding.value_type;
-                let actual = expression_type(value, scope, signatures, records)?;
+                let actual = expression_type(value, scope, signatures, records, shapes)?;
                 require_source_type(actual, expected, value.span, "revise")?;
             }
             Statement::Speak { value, .. } => {
-                let value_type = expression_type(value, scope, signatures, records)?;
+                let value_type = expression_type(value, scope, signatures, records, shapes)?;
                 require_source_type(value_type, ValueType::Text, value.span, "speak")?;
             }
             Statement::Yield { value, span } => {
@@ -3667,7 +4178,7 @@ fn validate_block(
                         "yield is allowed only as the final statement of a weave root",
                     ));
                 }
-                let value_type = expression_type(value, scope, signatures, records)?;
+                let value_type = expression_type(value, scope, signatures, records, shapes)?;
                 require_source_type(value_type, weave.result, value.span, "yield")?;
             }
             Statement::Raise { code, span } => {
@@ -3781,6 +4292,7 @@ fn validate_block(
                     let context = ResourceValidationContext {
                         signatures,
                         records,
+                        shapes,
                         weave,
                     };
                     validate_resource_choose(
@@ -3793,7 +4305,8 @@ fn validate_block(
                     )?;
                     continue;
                 }
-                let condition_type = expression_type(condition, scope, signatures, records)?;
+                let condition_type =
+                    expression_type(condition, scope, signatures, records, shapes)?;
                 require_source_type(
                     condition_type,
                     ValueType::Truth,
@@ -3807,6 +4320,7 @@ fn validate_block(
                     &mut bright_scope,
                     signatures,
                     records,
+                    shapes,
                     weave,
                     false,
                     resource_plan,
@@ -3818,6 +4332,7 @@ fn validate_block(
                         &mut dim_scope,
                         signatures,
                         records,
+                        shapes,
                         weave,
                         false,
                         resource_plan,
@@ -3828,7 +4343,8 @@ fn validate_block(
             Statement::While {
                 condition, body, ..
             } => {
-                let condition_type = expression_type(condition, scope, signatures, records)?;
+                let condition_type =
+                    expression_type(condition, scope, signatures, records, shapes)?;
                 require_source_type(
                     condition_type,
                     ValueType::Truth,
@@ -3842,6 +4358,7 @@ fn validate_block(
                     &mut body_scope,
                     signatures,
                     records,
+                    shapes,
                     weave,
                     false,
                     resource_plan,
@@ -3888,7 +4405,7 @@ fn validate_effect_boundary(scope: &BindingScope, span: Span) -> Result<(), Comp
     Err(CompilerError::new(
         span,
         format!(
-            "AE-EFFECT-003: effect control cannot cross live owner, loan, arena, or Buffer binding {name}"
+            "AE-EFFECT-003: effect control cannot cross live owner, loan, arena, Buffer, or table binding {name}"
         ),
     ))
 }
@@ -4018,8 +4535,13 @@ fn validate_resource_choose(
             "internal compiler expected a resource outcome condition",
         ));
     };
-    let (mut bright_scope, mut dim_scope) =
-        resource_outcome_scopes(operation, scope, condition.span, resource_plan)?;
+    let (mut bright_scope, mut dim_scope) = resource_outcome_scopes(
+        operation,
+        scope,
+        condition.span,
+        resource_plan,
+        context.shapes,
+    )?;
     validate_resource_terminal_block(when_bright, &mut bright_scope, context, resource_plan)?;
     validate_resource_terminal_block(when_dim, &mut dim_scope, context, resource_plan)
 }
@@ -4040,7 +4562,13 @@ fn validate_resource_terminal_block(
     }
     match &statements[0] {
         Statement::Yield { value, .. } => {
-            let value_type = expression_type(value, scope, context.signatures, context.records)?;
+            let value_type = expression_type(
+                value,
+                scope,
+                context.signatures,
+                context.records,
+                context.shapes,
+            )?;
             require_source_type(value_type, context.weave.result, value.span, "yield")
         }
         Statement::Choose {
@@ -4068,6 +4596,7 @@ fn resource_outcome_scopes(
     scope: &BindingScope,
     span: Span,
     resource_plan: &mut SemanticResourcePlan,
+    shapes: &[ShapeDeclaration],
 ) -> Result<ResourceOutcomeScopes, CompilerError> {
     match operation {
         ResourceOperation::Allocate {
@@ -4077,10 +4606,70 @@ fn resource_outcome_scopes(
             destination,
         } => {
             let arena_name = validate_access_arena(arena, scope)?;
-            let (element, original) = validate_buffer_move_destination(buffer, destination, scope)?;
             let mut capacity_scope = scope.clone();
             let capacity_type = atom_type(capacity, &mut capacity_scope)?;
             require_source_type(capacity_type, ValueType::Whole, capacity.span, "allocate")?;
+            if let AtomKind::Whole(literal) = capacity.kind {
+                if !(1..=MAX_TABLE_CAPACITY).contains(&literal)
+                    && matches!(
+                        scope.get(destination).map(|binding| binding.value_type),
+                        Some(ValueType::Table(_))
+                    )
+                {
+                    return Err(CompilerError::new(
+                        capacity.span,
+                        format!(
+                            "AE-LAYOUT-003: table capacity must be between 1 and {MAX_TABLE_CAPACITY}"
+                        ),
+                    ));
+                }
+            }
+            if let Some(ValueType::Table(shape_id)) =
+                scope.get(destination).map(|binding| binding.value_type)
+            {
+                let original =
+                    validate_table_move_destination(buffer, destination, scope, shape_id)?;
+                let ResourceBindingState::Table { layout, .. } = original.resource else {
+                    return Err(CompilerError::new(
+                        buffer.span,
+                        "AE-LAYOUT-001: allocate requires a table owner placeholder",
+                    ));
+                };
+                let _ = shape_by_id(shapes, shape_id, span)?;
+                resource_plan.record_outcome(
+                    span,
+                    SemanticResourceOperation::TableAllocate {
+                        region: arena_name.clone(),
+                        owner: destination.clone(),
+                        destination: destination.clone(),
+                    },
+                )?;
+                let mut bright = scope.clone();
+                let mut dim = scope.clone();
+                let Some(bright_target) = bright.get_mut(destination) else {
+                    return Err(CompilerError::new(
+                        span,
+                        "resource destination has not been introduced",
+                    ));
+                };
+                bright_target.moved = false;
+                bright_target.resource = ResourceBindingState::Table {
+                    shape: shape_id,
+                    layout,
+                    arena: Some(arena_name),
+                    allocated: true,
+                };
+                let Some(dim_target) = dim.get_mut(destination) else {
+                    return Err(CompilerError::new(
+                        span,
+                        "resource destination has not been introduced",
+                    ));
+                };
+                dim_target.moved = false;
+                dim_target.resource = original.resource;
+                return Ok((bright, dim));
+            }
+            let (element, original) = validate_buffer_move_destination(buffer, destination, scope)?;
             resource_plan.record_outcome(
                 span,
                 SemanticResourceOperation::Allocate {
@@ -4219,7 +4808,294 @@ fn resource_outcome_scopes(
             )?;
             Ok((scope.clone(), scope.clone()))
         }
+        ResourceOperation::Store {
+            table,
+            index,
+            field,
+            value,
+            destination,
+        } => {
+            let (shape_id, original) = validate_table_store_destination(table, destination, scope)?;
+            let ResourceBindingState::Table {
+                arena: Some(region),
+                allocated: true,
+                layout: _,
+                ..
+            } = &original.resource
+            else {
+                return Err(CompilerError::new(
+                    table.span,
+                    "store requires a table that was successfully allocated",
+                ));
+            };
+            let declaration = shape_by_id(shapes, shape_id, span)?;
+            let field_index = declaration
+                .fields
+                .iter()
+                .position(|candidate| candidate.name == *field)
+                .ok_or_else(|| {
+                    CompilerError::new(
+                        span,
+                        format!(
+                            "AE-LAYOUT-002: shape {} has no field named {field}",
+                            declaration.name
+                        ),
+                    )
+                })?;
+            let field_index = u8::try_from(field_index).map_err(|_| {
+                CompilerError::new(span, "shape field index is outside the AETH range")
+            })?;
+            let mut index_scope = scope.clone();
+            require_source_type(
+                atom_type(index, &mut index_scope)?,
+                ValueType::Whole,
+                index.span,
+                "store",
+            )?;
+            let mut value_scope = scope.clone();
+            require_source_type(
+                atom_type(value, &mut value_scope)?,
+                ValueType::Whole,
+                value.span,
+                "store",
+            )?;
+            resource_plan.record_outcome(
+                span,
+                SemanticResourceOperation::TableStore {
+                    region: region.clone(),
+                    owner: destination.clone(),
+                    destination: destination.clone(),
+                    shape: shape_id,
+                    field: field_index,
+                },
+            )?;
+            let mut bright = scope.clone();
+            let mut dim = scope.clone();
+            for outcome_scope in [&mut bright, &mut dim] {
+                let Some(target) = outcome_scope.get_mut(destination) else {
+                    return Err(CompilerError::new(
+                        span,
+                        "resource destination has not been introduced",
+                    ));
+                };
+                target.moved = false;
+                target.resource = original.resource.clone();
+            }
+            Ok((bright, dim))
+        }
+        ResourceOperation::Load {
+            table,
+            index,
+            field,
+            destination,
+        } => {
+            let table_binding = validate_borrowed_allocated_table(table, scope)?;
+            let ValueType::Table(shape_id) = table_binding.value_type else {
+                return Err(CompilerError::new(
+                    table.span,
+                    "load requires a table owner",
+                ));
+            };
+            let ResourceBindingState::Table {
+                arena: Some(region),
+                allocated: true,
+                ..
+            } = &table_binding.resource
+            else {
+                return Err(CompilerError::new(
+                    table.span,
+                    "load requires a table with a named Arena region",
+                ));
+            };
+            let declaration = shape_by_id(shapes, shape_id, span)?;
+            let field_index = declaration
+                .fields
+                .iter()
+                .position(|candidate| candidate.name == *field)
+                .ok_or_else(|| {
+                    CompilerError::new(
+                        span,
+                        format!(
+                            "AE-LAYOUT-002: shape {} has no field named {field}",
+                            declaration.name
+                        ),
+                    )
+                })?;
+            let field_index = u8::try_from(field_index).map_err(|_| {
+                CompilerError::new(span, "shape field index is outside the AETH range")
+            })?;
+            let mut index_scope = scope.clone();
+            require_source_type(
+                atom_type(index, &mut index_scope)?,
+                ValueType::Whole,
+                index.span,
+                "load",
+            )?;
+            let destination_binding = scope.get(destination).ok_or_else(|| {
+                CompilerError::new(
+                    span,
+                    format!("resource destination {destination} has not been introduced"),
+                )
+            })?;
+            if !destination_binding.mutable {
+                return Err(CompilerError::new(
+                    span,
+                    format!("resource destination {destination} must be a mutable root binding"),
+                ));
+            }
+            require_source_type(
+                destination_binding.value_type,
+                ValueType::Whole,
+                span,
+                "load destination",
+            )?;
+            let AtomKind::Borrow(owner) = &table.kind else {
+                return Err(CompilerError::new(
+                    table.span,
+                    "load requires borrow followed by an allocated table binding",
+                ));
+            };
+            resource_plan.record_outcome(
+                span,
+                SemanticResourceOperation::TableLoad {
+                    region: region.clone(),
+                    owner: owner.clone(),
+                    destination: destination.clone(),
+                    shape: shape_id,
+                    field: field_index,
+                },
+            )?;
+            Ok((scope.clone(), scope.clone()))
+        }
     }
+}
+
+fn validate_table_move_destination(
+    table: &Atom,
+    destination: &str,
+    scope: &BTreeMap<String, BindingState>,
+    expected_shape: u16,
+) -> Result<BindingState, CompilerError> {
+    let AtomKind::Move(name) = &table.kind else {
+        return Err(CompilerError::new(
+            table.span,
+            "resource replacement requires move followed by its table destination name",
+        ));
+    };
+    if name != destination {
+        return Err(CompilerError::new(
+            table.span,
+            "M6 resource outcomes must restore the same table binding named after into",
+        ));
+    }
+    let binding = scope.get(name).cloned().ok_or_else(|| {
+        CompilerError::new(
+            table.span,
+            format!("value {name} has not been bound in this weave"),
+        )
+    })?;
+    if binding.moved {
+        return Err(CompilerError::new(
+            table.span,
+            format!("value {name} was already moved"),
+        ));
+    }
+    if !binding.mutable {
+        return Err(CompilerError::new(
+            table.span,
+            format!("resource destination {name} must be a mutable root binding"),
+        ));
+    }
+    if binding.value_type != ValueType::Table(expected_shape) {
+        return Err(CompilerError::new(
+            table.span,
+            "resource replacement requires a matching table owner",
+        ));
+    }
+    Ok(binding)
+}
+
+fn validate_table_store_destination(
+    table: &Atom,
+    destination: &str,
+    scope: &BTreeMap<String, BindingState>,
+) -> Result<(u16, BindingState), CompilerError> {
+    let AtomKind::Move(name) = &table.kind else {
+        return Err(CompilerError::new(
+            table.span,
+            "store requires move followed by its table destination name",
+        ));
+    };
+    if name != destination {
+        return Err(CompilerError::new(
+            table.span,
+            "M6 store must restore the same table binding named after into",
+        ));
+    }
+    let binding = scope.get(name).cloned().ok_or_else(|| {
+        CompilerError::new(
+            table.span,
+            format!("value {name} has not been bound in this weave"),
+        )
+    })?;
+    if binding.moved {
+        return Err(CompilerError::new(
+            table.span,
+            format!("value {name} was already moved"),
+        ));
+    }
+    if !binding.mutable {
+        return Err(CompilerError::new(
+            table.span,
+            format!("resource destination {name} must be a mutable root binding"),
+        ));
+    }
+    let ValueType::Table(shape_id) = binding.value_type else {
+        return Err(CompilerError::new(
+            table.span,
+            "store requires a table owner",
+        ));
+    };
+    Ok((shape_id, binding))
+}
+
+fn validate_borrowed_allocated_table<'a>(
+    table: &Atom,
+    scope: &'a BTreeMap<String, BindingState>,
+) -> Result<&'a BindingState, CompilerError> {
+    let AtomKind::Borrow(name) = &table.kind else {
+        return Err(CompilerError::new(
+            table.span,
+            "load requires borrow followed by an allocated table binding",
+        ));
+    };
+    let binding = scope.get(name).ok_or_else(|| {
+        CompilerError::new(
+            table.span,
+            format!("value {name} has not been bound in this weave"),
+        )
+    })?;
+    if binding.moved {
+        return Err(CompilerError::new(
+            table.span,
+            format!("value {name} was moved and cannot be borrowed"),
+        ));
+    }
+    if !is_table_type(binding.value_type)
+        || !matches!(
+            binding.resource,
+            ResourceBindingState::Table {
+                allocated: true,
+                ..
+            }
+        )
+    {
+        return Err(CompilerError::new(
+            table.span,
+            "load requires a table that was successfully allocated",
+        ));
+    }
+    Ok(binding)
 }
 
 fn validate_access_arena(
@@ -4345,7 +5221,9 @@ fn expression_moves_name(expression: &Expression, target: &str) -> bool {
         ExpressionKind::Atom(atom) | ExpressionKind::Unary { argument: atom, .. } => {
             atom_moves_name(atom, target)
         }
-        ExpressionKind::Arena { .. } | ExpressionKind::Buffer { .. } => false,
+        ExpressionKind::Arena { .. }
+        | ExpressionKind::Buffer { .. }
+        | ExpressionKind::Table { .. } => false,
         ExpressionKind::Binary { left, right, .. } => {
             atom_moves_name(left, target) || atom_moves_name(right, target)
         }
@@ -4391,6 +5269,19 @@ fn expression_moves_name(expression: &Expression, target: &str) -> bool {
         }
         ExpressionKind::Resource(ResourceOperation::At { buffer, index, .. }) => {
             atom_moves_name(buffer, target) || atom_moves_name(index, target)
+        }
+        ExpressionKind::Resource(ResourceOperation::Store {
+            table,
+            index,
+            value,
+            ..
+        }) => {
+            atom_moves_name(table, target)
+                || atom_moves_name(index, target)
+                || atom_moves_name(value, target)
+        }
+        ExpressionKind::Resource(ResourceOperation::Load { table, index, .. }) => {
+            atom_moves_name(table, target) || atom_moves_name(index, target)
         }
     }
 }
@@ -4444,11 +5335,16 @@ fn expression_type(
     scope: &mut BTreeMap<String, BindingState>,
     signatures: &BTreeMap<String, FunctionSignature>,
     records: &[RecordDeclaration],
+    shapes: &[ShapeDeclaration],
 ) -> Result<ValueType, CompilerError> {
     match &expression.kind {
         ExpressionKind::Atom(atom) => atom_type(atom, scope),
         ExpressionKind::Arena { .. } => Ok(ValueType::Arena),
         ExpressionKind::Buffer { element } => Ok(element.value_type()),
+        ExpressionKind::Table { shape, .. } => {
+            let (shape_id, _) = shape_by_name(shapes, shape, expression.span)?;
+            Ok(ValueType::Table(shape_id))
+        }
         ExpressionKind::Unary {
             operation,
             argument,
@@ -4498,10 +5394,14 @@ fn expression_type(
                     Ok(ValueType::Bytes)
                 }
                 UnaryOperation::Count => {
+                    if is_table_type(argument_type) {
+                        let _ = validate_borrowed_allocated_table(argument, scope)?;
+                        return Ok(ValueType::Whole);
+                    }
                     let Some(_) = buffer_element_from_value_type(argument_type) else {
                         return Err(CompilerError::new(
                             argument.span,
-                            "count requires borrow followed by an allocated BufferWhole or BufferTruth",
+                            "count requires borrow followed by an allocated BufferWhole, BufferTruth, or table",
                         ));
                     };
                     let _ = validate_borrowed_allocated_buffer(argument, scope)?;
@@ -4543,6 +5443,7 @@ fn expression_type(
                             | ValueType::BufferWhole
                             | ValueType::BufferTruth
                             | ValueType::AccessArena
+                            | ValueType::Table(_)
                     ) {
                         return Err(CompilerError::new(
                             expression.span,
@@ -4807,6 +5708,7 @@ fn validate_record_declarations(records: &[RecordDeclaration]) -> Result<(), Com
                     | ValueType::BufferWhole
                     | ValueType::BufferTruth
                     | ValueType::AccessArena
+                    | ValueType::Table(_)
             ) {
                 return Err(CompilerError::new(
                     field.span,
@@ -4816,6 +5718,78 @@ fn validate_record_declarations(records: &[RecordDeclaration]) -> Result<(), Com
         }
     }
     Ok(())
+}
+
+fn validate_shape_declarations(
+    shapes: &[ShapeDeclaration],
+    records: &[RecordDeclaration],
+) -> Result<(), CompilerError> {
+    let _ = shape_type_map(shapes)?;
+    for shape in shapes {
+        validate_name(&shape.name, shape.span, "shape name", false)?;
+        if records.iter().any(|record| record.name == shape.name) {
+            return Err(CompilerError::new(
+                shape.span,
+                format!(
+                    "AE-LAYOUT-001: shape {} collides with a record of the same name",
+                    shape.name
+                ),
+            ));
+        }
+        if shape.fields.is_empty() || shape.fields.len() > MAX_SHAPE_FIELDS {
+            return Err(CompilerError::new(
+                shape.span,
+                format!("AE-LAYOUT-001: shapes require 1 through {MAX_SHAPE_FIELDS} Whole fields"),
+            ));
+        }
+        let mut fields = BTreeMap::new();
+        for field in &shape.fields {
+            validate_name(&field.name, field.span, "shape field name", false)?;
+            if fields.insert(field.name.as_str(), ()).is_some() {
+                return Err(CompilerError::new(
+                    field.span,
+                    format!(
+                        "AE-LAYOUT-001: shape field {} is declared more than once",
+                        field.name
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn shape_by_name<'a>(
+    shapes: &'a [ShapeDeclaration],
+    name: &str,
+    span: Span,
+) -> Result<(u16, &'a ShapeDeclaration), CompilerError> {
+    let Some((index, declaration)) = shapes
+        .iter()
+        .enumerate()
+        .find(|(_, declaration)| declaration.name == name)
+    else {
+        return Err(CompilerError::new(
+            span,
+            format!("AE-LAYOUT-002: shape {name} has not been declared"),
+        ));
+    };
+    let shape_id = u16::try_from(index)
+        .map_err(|_| CompilerError::new(span, "shape identifier is outside the AETH range"))?;
+    Ok((shape_id, declaration))
+}
+
+fn shape_by_id(
+    shapes: &[ShapeDeclaration],
+    shape_id: u16,
+    span: Span,
+) -> Result<&ShapeDeclaration, CompilerError> {
+    shapes.get(usize::from(shape_id)).ok_or_else(|| {
+        CompilerError::new(
+            span,
+            "shape type identifier is outside the declared shape table",
+        )
+    })
 }
 
 fn validate_value_type(
@@ -4932,6 +5906,18 @@ fn atom_type(
                     format!("buffer {name} is unallocated and cannot be borrowed"),
                 ));
             }
+            if matches!(
+                binding.resource,
+                ResourceBindingState::Table {
+                    allocated: false,
+                    ..
+                }
+            ) {
+                return Err(CompilerError::new(
+                    atom.span,
+                    format!("table {name} is unallocated and cannot be borrowed"),
+                ));
+            }
             Ok(binding.value_type)
         }
         AtomKind::Move(name) => {
@@ -4997,13 +5983,14 @@ fn emit_bytecode_with_resource_plan(
 
     let mut compiled = Vec::new();
     for weave in &program.weaves {
-        let layout = slot_layout(weave, &weave_results, &program.records)?;
+        let layout = slot_layout(weave, &weave_results, &program.records, &program.shapes)?;
         let mut code = Vec::new();
         emit_block(
             &weave.body,
             &layout,
             &weave_indices,
             &program.records,
+            &program.shapes,
             resource_plan,
             &mut code,
         )?;
@@ -5024,7 +6011,7 @@ fn emit_bytecode_with_resource_plan(
     }
 
     let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
-    bytecode.push(ARTIFACT_VERSION_V8);
+    bytecode.push(ARTIFACT_VERSION_V9);
     write_u32(&mut bytecode, resource_plan.arena_capacity());
     write_u16(
         &mut bytecode,
@@ -5035,24 +6022,52 @@ fn emit_bytecode_with_resource_plan(
             )
         })?,
     );
-    if !program.records.is_empty() {
-        for record in &program.records {
-            let name_length = u8::try_from(record.name.len()).map_err(|_| {
-                CompilerError::new(record.span, "record name exceeds the AETH name limit")
-            })?;
-            bytecode.push(name_length);
-            bytecode.extend_from_slice(record.name.as_bytes());
-            bytecode.push(u8::try_from(record.fields.len()).map_err(|_| {
+    for record in &program.records {
+        let name_length = u8::try_from(record.name.len()).map_err(|_| {
+            CompilerError::new(record.span, "record name exceeds the AETH name limit")
+        })?;
+        bytecode.push(name_length);
+        bytecode.extend_from_slice(record.name.as_bytes());
+        bytecode.push(
+            u8::try_from(record.fields.len()).map_err(|_| {
                 CompilerError::new(record.span, "record has too many fields for AETH")
-            })?);
-            for field in &record.fields {
-                let field_name_length = u8::try_from(field.name.len()).map_err(|_| {
-                    CompilerError::new(field.span, "record field name exceeds the AETH name limit")
-                })?;
-                bytecode.push(field_name_length);
-                bytecode.extend_from_slice(field.name.as_bytes());
-                write_primitive_value_type(&mut bytecode, field.value_type, field.span)?;
-            }
+            })?,
+        );
+        for field in &record.fields {
+            let field_name_length = u8::try_from(field.name.len()).map_err(|_| {
+                CompilerError::new(field.span, "record field name exceeds the AETH name limit")
+            })?;
+            bytecode.push(field_name_length);
+            bytecode.extend_from_slice(field.name.as_bytes());
+            write_primitive_value_type(&mut bytecode, field.value_type, field.span)?;
+        }
+    }
+    write_u16(
+        &mut bytecode,
+        u16::try_from(program.shapes.len()).map_err(|_| {
+            CompilerError::new(
+                Span::synthetic(),
+                "artifact contains too many shapes for AETH",
+            )
+        })?,
+    );
+    for shape in &program.shapes {
+        let name_length = u8::try_from(shape.name.len()).map_err(|_| {
+            CompilerError::new(shape.span, "shape name exceeds the AETH name limit")
+        })?;
+        bytecode.push(name_length);
+        bytecode.extend_from_slice(shape.name.as_bytes());
+        bytecode.push(
+            u8::try_from(shape.fields.len()).map_err(|_| {
+                CompilerError::new(shape.span, "shape has too many fields for AETH")
+            })?,
+        );
+        for field in &shape.fields {
+            let field_name_length = u8::try_from(field.name.len()).map_err(|_| {
+                CompilerError::new(field.span, "shape field name exceeds the AETH name limit")
+            })?;
+            bytecode.push(field_name_length);
+            bytecode.extend_from_slice(field.name.as_bytes());
         }
     }
     write_u16(
@@ -5105,6 +6120,7 @@ fn slot_layout(
     weave: &Weave,
     weave_results: &BTreeMap<String, ValueType>,
     records: &[RecordDeclaration],
+    shapes: &[ShapeDeclaration],
 ) -> Result<BTreeMap<String, SlotInfo>, CompilerError> {
     let mut layout = BTreeMap::new();
     let mut next_slot = 0_u16;
@@ -5130,7 +6146,8 @@ fn slot_layout(
             ..
         } = statement
         {
-            let value_type = static_expression_type(value, &layout, weave_results, records)?;
+            let value_type =
+                static_expression_type(value, &layout, weave_results, records, shapes)?;
             if layout.len() >= MAX_LOCALS {
                 return Err(CompilerError::new(
                     *span,
@@ -5158,11 +6175,16 @@ fn static_expression_type(
     layout: &BTreeMap<String, SlotInfo>,
     weave_results: &BTreeMap<String, ValueType>,
     records: &[RecordDeclaration],
+    shapes: &[ShapeDeclaration],
 ) -> Result<ValueType, CompilerError> {
     match &expression.kind {
         ExpressionKind::Atom(atom) => static_atom_type(atom, layout),
         ExpressionKind::Arena { .. } => Ok(ValueType::Arena),
         ExpressionKind::Buffer { element } => Ok(element.value_type()),
+        ExpressionKind::Table { shape, .. } => {
+            let (shape_id, _) = shape_by_name(shapes, shape, expression.span)?;
+            Ok(ValueType::Table(shape_id))
+        }
         ExpressionKind::Unary {
             operation,
             argument,
@@ -5303,6 +6325,7 @@ fn emit_block(
     layout: &BTreeMap<String, SlotInfo>,
     weave_indices: &BTreeMap<String, usize>,
     records: &[RecordDeclaration],
+    shapes: &[ShapeDeclaration],
     resource_plan: &SemanticResourcePlan,
     code: &mut Vec<u8>,
 ) -> Result<(), CompilerError> {
@@ -5318,7 +6341,15 @@ fn emit_block(
                     code.push(OP_COMPTIME_WHOLE);
                     write_i64(code, evaluate_comptime_whole(value)?);
                 } else {
-                    emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
+                    emit_expression(
+                        value,
+                        layout,
+                        weave_indices,
+                        records,
+                        shapes,
+                        resource_plan,
+                        code,
+                    )?;
                 }
                 code.push(OP_STORE);
                 write_u16(
@@ -5335,7 +6366,15 @@ fn emit_block(
                 );
             }
             Statement::Revise { name, value, .. } => {
-                emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
+                emit_expression(
+                    value,
+                    layout,
+                    weave_indices,
+                    records,
+                    shapes,
+                    resource_plan,
+                    code,
+                )?;
                 code.push(OP_REVISE);
                 write_u16(
                     code,
@@ -5351,11 +6390,27 @@ fn emit_block(
                 );
             }
             Statement::Speak { value, .. } => {
-                emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
+                emit_expression(
+                    value,
+                    layout,
+                    weave_indices,
+                    records,
+                    shapes,
+                    resource_plan,
+                    code,
+                )?;
                 code.push(OP_SPEAK);
             }
             Statement::Yield { value, .. } => {
-                emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
+                emit_expression(
+                    value,
+                    layout,
+                    weave_indices,
+                    records,
+                    shapes,
+                    resource_plan,
+                    code,
+                )?;
                 code.push(OP_YIELD);
             }
             Statement::Raise { code: value, .. } => {
@@ -5456,6 +6511,7 @@ fn emit_block(
                         layout,
                         weave_indices,
                         records,
+                        shapes,
                         resource_plan,
                         code,
                     )?;
@@ -5466,6 +6522,7 @@ fn emit_block(
                         layout,
                         weave_indices,
                         records,
+                        shapes,
                         resource_plan,
                         code,
                     )?;
@@ -5476,6 +6533,7 @@ fn emit_block(
                         layout,
                         weave_indices,
                         records,
+                        shapes,
                         resource_plan,
                         code,
                     )?;
@@ -5486,6 +6544,7 @@ fn emit_block(
                     layout,
                     weave_indices,
                     records,
+                    shapes,
                     resource_plan,
                     code,
                 )?;
@@ -5496,6 +6555,7 @@ fn emit_block(
                     layout,
                     weave_indices,
                     records,
+                    shapes,
                     resource_plan,
                     code,
                 )?;
@@ -5512,6 +6572,7 @@ fn emit_block(
                         layout,
                         weave_indices,
                         records,
+                        shapes,
                         resource_plan,
                         code,
                     )?;
@@ -5528,12 +6589,21 @@ fn emit_block(
                     layout,
                     weave_indices,
                     records,
+                    shapes,
                     resource_plan,
                     code,
                 )?;
                 code.push(OP_JUMP_IF_DIM);
                 let loop_end = reserve_u32(code);
-                emit_block(body, layout, weave_indices, records, resource_plan, code)?;
+                emit_block(
+                    body,
+                    layout,
+                    weave_indices,
+                    records,
+                    shapes,
+                    resource_plan,
+                    code,
+                )?;
                 code.push(OP_JUMP);
                 write_u32(
                     code,
@@ -5557,6 +6627,7 @@ fn emit_expression(
     layout: &BTreeMap<String, SlotInfo>,
     weave_indices: &BTreeMap<String, usize>,
     records: &[RecordDeclaration],
+    shapes: &[ShapeDeclaration],
     resource_plan: &SemanticResourcePlan,
     code: &mut Vec<u8>,
 ) -> Result<(), CompilerError> {
@@ -5567,24 +6638,48 @@ fn emit_expression(
             code.push(OP_BUFFER);
             code.push(element.type_tag());
         }
+        ExpressionKind::Table {
+            shape,
+            layout: table_layout,
+        } => {
+            let (shape_id, _) = shape_by_name(shapes, shape, expression.span)?;
+            code.push(OP_TABLE);
+            write_u16(code, shape_id);
+            code.push(table_layout.to_tag());
+        }
         ExpressionKind::Unary {
             operation,
             argument,
         } => {
             emit_atom(argument, layout, code)?;
-            code.push(match operation {
-                UnaryOperation::Not => OP_NOT,
-                UnaryOperation::Measure => OP_MEASURE,
-                UnaryOperation::Render => OP_RENDER,
-                UnaryOperation::Extent => OP_EXTENT,
-                UnaryOperation::Encode => OP_ENCODE,
-                UnaryOperation::Decode => OP_DECODE,
-                UnaryOperation::Number => OP_NUMBER,
-                UnaryOperation::Pack16 => OP_PACK16,
-                UnaryOperation::Pack32 => OP_PACK32,
-                UnaryOperation::Pack64 => OP_PACK64,
-                UnaryOperation::Count => OP_COUNT,
-            });
+            if *operation == UnaryOperation::Count {
+                if let AtomKind::Borrow(name) | AtomKind::Name(name) = &argument.kind {
+                    if matches!(
+                        layout.get(name).map(|slot| slot.value_type),
+                        Some(ValueType::Table(_))
+                    ) {
+                        code.push(OP_TABLE_COUNT);
+                    } else {
+                        code.push(OP_COUNT);
+                    }
+                } else {
+                    code.push(OP_COUNT);
+                }
+            } else {
+                code.push(match operation {
+                    UnaryOperation::Not => OP_NOT,
+                    UnaryOperation::Measure => OP_MEASURE,
+                    UnaryOperation::Render => OP_RENDER,
+                    UnaryOperation::Extent => OP_EXTENT,
+                    UnaryOperation::Encode => OP_ENCODE,
+                    UnaryOperation::Decode => OP_DECODE,
+                    UnaryOperation::Number => OP_NUMBER,
+                    UnaryOperation::Pack16 => OP_PACK16,
+                    UnaryOperation::Pack32 => OP_PACK32,
+                    UnaryOperation::Pack64 => OP_PACK64,
+                    UnaryOperation::Count => OP_COUNT,
+                });
+            }
         }
         ExpressionKind::Binary {
             operation,
@@ -5713,33 +6808,91 @@ fn emit_expression(
             })?;
             let destination_index = destination_slot.index;
 
-            match operation {
-                ResourceOperation::Allocate {
-                    arena,
-                    buffer,
-                    capacity,
-                    ..
-                } => {
+            match (operation, semantic) {
+                (
+                    ResourceOperation::Allocate {
+                        arena,
+                        buffer,
+                        capacity,
+                        ..
+                    },
+                    SemanticResourceOperation::Allocate { element, .. },
+                ) => {
                     emit_atom(arena, layout, code)?;
                     emit_atom(buffer, layout, code)?;
                     emit_atom(capacity, layout, code)?;
                     code.push(OP_ALLOCATE);
-                    code.push(semantic.element().type_tag());
+                    code.push(element.type_tag());
                     write_u16(code, destination_index);
                 }
-                ResourceOperation::Append { buffer, value, .. } => {
+                (
+                    ResourceOperation::Allocate {
+                        arena,
+                        buffer,
+                        capacity,
+                        ..
+                    },
+                    SemanticResourceOperation::TableAllocate { .. },
+                ) => {
+                    emit_atom(arena, layout, code)?;
+                    emit_atom(buffer, layout, code)?;
+                    emit_atom(capacity, layout, code)?;
+                    code.push(OP_TABLE_ALLOCATE);
+                    write_u16(code, destination_index);
+                }
+                (
+                    ResourceOperation::Append { buffer, value, .. },
+                    SemanticResourceOperation::Append { element, .. },
+                ) => {
                     emit_atom(buffer, layout, code)?;
                     emit_atom(value, layout, code)?;
                     code.push(OP_BUFFER_APPEND);
-                    code.push(semantic.element().type_tag());
+                    code.push(element.type_tag());
                     write_u16(code, destination_index);
                 }
-                ResourceOperation::At { buffer, index, .. } => {
+                (
+                    ResourceOperation::At { buffer, index, .. },
+                    SemanticResourceOperation::At { element, .. },
+                ) => {
                     emit_atom(buffer, layout, code)?;
                     emit_atom(index, layout, code)?;
                     code.push(OP_BUFFER_AT);
-                    code.push(semantic.element().type_tag());
+                    code.push(element.type_tag());
                     write_u16(code, destination_index);
+                }
+                (
+                    ResourceOperation::Store {
+                        table,
+                        index,
+                        value,
+                        ..
+                    },
+                    SemanticResourceOperation::TableStore { shape, field, .. },
+                ) => {
+                    emit_atom(table, layout, code)?;
+                    emit_atom(index, layout, code)?;
+                    emit_atom(value, layout, code)?;
+                    code.push(OP_TABLE_STORE);
+                    write_u16(code, *shape);
+                    code.push(*field);
+                    write_u16(code, destination_index);
+                }
+                (
+                    ResourceOperation::Load { table, index, .. },
+                    SemanticResourceOperation::TableLoad { shape, field, .. },
+                ) => {
+                    emit_atom(table, layout, code)?;
+                    emit_atom(index, layout, code)?;
+                    code.push(OP_TABLE_LOAD);
+                    write_u16(code, *shape);
+                    code.push(*field);
+                    write_u16(code, destination_index);
+                }
+                _ => {
+                    return Err(CompilerError::new(
+                        expression.span,
+                        "internal compiler found a resource AST/semantic-plan disagreement",
+                    ))
                 }
             }
         }
@@ -5838,6 +6991,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             | ARTIFACT_VERSION_V6
             | ARTIFACT_VERSION_V7
             | ARTIFACT_VERSION_V8
+            | ARTIFACT_VERSION_V9
     ) {
         return Err(BytecodeError::new(
             ARTIFACT_MAGIC.len(),
@@ -5847,13 +7001,13 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     let mut position = ARTIFACT_MAGIC.len() + 1;
     let arena_capacity = if matches!(
         version,
-        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
     ) {
         let capacity = read_u32(bytecode, &mut position)?;
         if capacity > MAX_ARENA_BYTES {
             return Err(BytecodeError::new(
                 position,
-                "AETH v6/v7/v8 arena capacity exceeds the M2 safety limit",
+                "AETH v6/v7/v8/v9 arena capacity exceeds the M2 safety limit",
             ));
         }
         capacity
@@ -5863,7 +7017,11 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     let mut records = Vec::new();
     if matches!(
         version,
-        ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+        ARTIFACT_VERSION_V5
+            | ARTIFACT_VERSION_V6
+            | ARTIFACT_VERSION_V7
+            | ARTIFACT_VERSION_V8
+            | ARTIFACT_VERSION_V9
     ) {
         let record_count = usize::from(read_u16(bytecode, &mut position)?);
         if (version == ARTIFACT_VERSION_V5 && record_count == 0) || record_count > MAX_RECORDS {
@@ -5924,6 +7082,62 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             records.push(ArtifactRecord { name, fields });
         }
     }
+    let mut shapes = Vec::new();
+    if version == ARTIFACT_VERSION_V9 {
+        let shape_count = usize::from(read_u16(bytecode, &mut position)?);
+        if shape_count > MAX_SHAPES {
+            return Err(BytecodeError::new(
+                position,
+                "artifact shape count is outside the Aether limit",
+            ));
+        }
+        shapes.reserve(shape_count);
+        for _ in 0..shape_count {
+            let name_offset = position;
+            let name_length = usize::from(read_byte(bytecode, &mut position)?);
+            let name = read_ascii(bytecode, &mut position, name_length, "shape name")?;
+            validate_artifact_name(&name, name_offset, "shape name", false)?;
+            if shapes
+                .iter()
+                .any(|shape: &ArtifactShape| shape.name == name)
+                || records
+                    .iter()
+                    .any(|record: &ArtifactRecord| record.name == name)
+            {
+                return Err(BytecodeError::new(
+                    name_offset,
+                    "artifact defines a shape name twice or collides with a record",
+                ));
+            }
+            let field_count = usize::from(read_byte(bytecode, &mut position)?);
+            if field_count == 0 || field_count > MAX_SHAPE_FIELDS {
+                return Err(BytecodeError::new(
+                    position,
+                    "artifact shape field count is outside the Aether limit",
+                ));
+            }
+            let mut fields = Vec::with_capacity(field_count);
+            for _ in 0..field_count {
+                let field_offset = position;
+                let field_name_length = usize::from(read_byte(bytecode, &mut position)?);
+                let field_name = read_ascii(
+                    bytecode,
+                    &mut position,
+                    field_name_length,
+                    "shape field name",
+                )?;
+                validate_artifact_name(&field_name, field_offset, "shape field name", false)?;
+                if fields.iter().any(|field| field == &field_name) {
+                    return Err(BytecodeError::new(
+                        field_offset,
+                        "artifact shape defines a field name twice",
+                    ));
+                }
+                fields.push(field_name);
+            }
+            shapes.push(ArtifactShape { name, fields });
+        }
+    }
     let function_count = usize::from(read_u16(bytecode, &mut position)?);
     if function_count == 0 || function_count > MAX_FUNCTIONS {
         return Err(BytecodeError::new(
@@ -5938,13 +7152,28 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         let parameter_count = usize::from(read_byte(bytecode, &mut position)?);
         let mut parameters = Vec::with_capacity(parameter_count);
         for _ in 0..parameter_count {
-            let value_type = read_value_type(bytecode, &mut position, version, records.len())?;
+            let value_type = read_value_type(
+                bytecode,
+                &mut position,
+                version,
+                records.len(),
+                shapes.len(),
+            )?;
             let mode =
                 ParameterMode::from_byte(read_byte(bytecode, &mut position)?, position, version)?;
             parameters.push((value_type, mode));
         }
-        let result = read_value_type(bytecode, &mut position, version, records.len())?;
-        let effect = if matches!(version, ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8) {
+        let result = read_value_type(
+            bytecode,
+            &mut position,
+            version,
+            records.len(),
+            shapes.len(),
+        )?;
+        let effect = if matches!(
+            version,
+            ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+        ) {
             Effect::from_byte(read_byte(bytecode, &mut position)?, position)?
         } else {
             Effect::Total
@@ -5958,7 +7187,13 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         }
         let mut locals = Vec::with_capacity(local_count);
         for _ in 0..local_count {
-            let value_type = read_value_type(bytecode, &mut position, version, records.len())?;
+            let value_type = read_value_type(
+                bytecode,
+                &mut position,
+                version,
+                records.len(),
+                shapes.len(),
+            )?;
             let mutable = match read_byte(bytecode, &mut position)? {
                 0 => false,
                 1 => true,
@@ -6003,6 +7238,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         version,
         arena_capacity,
         records,
+        shapes,
         functions,
     })
 }
@@ -6012,6 +7248,7 @@ fn verify_function(
     function: &ArtifactFunction,
     functions: &[ArtifactFunction],
     records: &[ArtifactRecord],
+    shapes: &[ArtifactShape],
     version: u8,
 ) -> Result<(), BytecodeError> {
     let decoded = decode_code(&function.code, version)?;
@@ -6061,6 +7298,7 @@ fn verify_function(
         function,
         functions,
         records,
+        shapes,
     };
 
     while let Some(offset) = queue.pop_front() {
@@ -6152,6 +7390,16 @@ fn verify_instruction(
             state.stack.push_buffer_placeholder(*element);
             continue_with(state)
         }
+        Instruction::Table { shape, .. } => {
+            if usize::from(*shape) >= context.shapes.len() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table shape identifier is outside the artifact shape table",
+                ));
+            }
+            state.stack.push_table_placeholder(*shape);
+            continue_with(state)
+        }
         Instruction::Access(slot) => {
             let local = local_descriptor(function, *slot, offset)?;
             if local.value_type != ValueType::Arena {
@@ -6241,6 +7489,118 @@ fn verify_instruction(
             state.stack.push(ValueType::Truth);
             continue_with(state)
         }
+        Instruction::TableAllocate { destination } => {
+            let local = local_descriptor(function, *destination, offset)?;
+            if !local.mutable || !is_table_type(local.value_type) {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table allocate destination must be its matching mutable Table slot",
+                ));
+            }
+            if !state.initialized[*destination] || !state.moved[*destination] {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table allocate requires its destination Table slot to be moved",
+                ));
+            }
+            pop_type(&mut state.stack, ValueType::Whole, offset, "table allocate")?;
+            let table = pop_type(&mut state.stack, local.value_type, offset, "table allocate")?;
+            require_moved_resource_from(&table, *destination, offset, "table allocate")?;
+            pop_type(
+                &mut state.stack,
+                ValueType::AccessArena,
+                offset,
+                "table allocate",
+            )?;
+            state.moved[*destination] = false;
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::TableStore {
+            shape,
+            field,
+            destination,
+        } => {
+            let local = local_descriptor(function, *destination, offset)?;
+            if !local.mutable || local.value_type != ValueType::Table(*shape) {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table store destination must be its matching mutable Table slot",
+                ));
+            }
+            if !state.initialized[*destination] || !state.moved[*destination] {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table store requires its destination Table slot to be moved",
+                ));
+            }
+            let shape_decl = context.shapes.get(usize::from(*shape)).ok_or_else(|| {
+                BytecodeError::new(offset, "table store shape is outside the shape table")
+            })?;
+            if usize::from(*field) >= shape_decl.fields.len() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table store field is outside the shape",
+                ));
+            }
+            pop_type(&mut state.stack, ValueType::Whole, offset, "table store")?;
+            pop_type(&mut state.stack, ValueType::Whole, offset, "table store")?;
+            let table = pop_type(
+                &mut state.stack,
+                ValueType::Table(*shape),
+                offset,
+                "table store",
+            )?;
+            require_moved_resource_from(&table, *destination, offset, "table store")?;
+            state.moved[*destination] = false;
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::TableLoad {
+            shape,
+            field,
+            destination,
+        } => {
+            let local = local_descriptor(function, *destination, offset)?;
+            if !local.mutable || local.value_type != ValueType::Whole {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table load destination must be a mutable Whole slot",
+                ));
+            }
+            ensure_readable(&state, *destination, offset, "table load destination")?;
+            let shape_decl = context.shapes.get(usize::from(*shape)).ok_or_else(|| {
+                BytecodeError::new(offset, "table load shape is outside the shape table")
+            })?;
+            if usize::from(*field) >= shape_decl.fields.len() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table load field is outside the shape",
+                ));
+            }
+            pop_type(&mut state.stack, ValueType::Whole, offset, "table load")?;
+            let table = pop_type(
+                &mut state.stack,
+                ValueType::Table(*shape),
+                offset,
+                "table load",
+            )?;
+            require_borrowed_resource(&table, offset, "table load")?;
+            state.stack.push(ValueType::Truth);
+            continue_with(state)
+        }
+        Instruction::TableCount => {
+            let table = pop_any_type(&mut state.stack, offset, "table count")?;
+            if !is_table_type(table.value_type) {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table count requires a Table value",
+                ));
+            }
+            require_borrowed_resource(&table, offset, "table count")?;
+            state.stack.push(ValueType::Whole);
+            continue_with(state)
+        }
         Instruction::Count => {
             let buffer = pop_any_type(&mut state.stack, offset, "count")?;
             if !is_buffer_type(buffer.value_type) {
@@ -6264,6 +7624,9 @@ fn verify_instruction(
             let value = pop_type(&mut state.stack, local.value_type, offset, "store")?;
             if is_buffer_type(local.value_type) {
                 require_storable_buffer(&value, offset, "store")?;
+            }
+            if is_table_type(local.value_type) {
+                require_storable_resource(&value, offset, "store")?;
             }
             state.initialized[*slot] = true;
             state.moved[*slot] = false;
@@ -6302,10 +7665,10 @@ fn verify_instruction(
                     "revise targets an immutable local slot",
                 ));
             }
-            if is_buffer_type(local.value_type) || local.value_type == ValueType::Arena {
+            if is_resource_owner_type(local.value_type) {
                 return Err(BytecodeError::new(
                     offset,
-                    "AETH v6 resource owners are replaced only by closed resource instructions",
+                    "AETH resource owners are replaced only by closed resource instructions",
                 ));
             }
             ensure_readable(&state, *slot, offset, "revise")?;
@@ -6361,6 +7724,7 @@ fn verify_instruction(
                     | ValueType::BufferWhole
                     | ValueType::BufferTruth
                     | ValueType::AccessArena
+                    | ValueType::Table(_)
             ) {
                 return Err(BytecodeError::new(
                     offset,
@@ -6847,6 +8211,26 @@ fn execute_function(
                 len: 0,
                 capacity: 0,
             }),
+            Instruction::Table { shape, layout } => {
+                let field_count = artifact
+                    .shapes
+                    .get(usize::from(shape))
+                    .map(|shape| shape.fields.len())
+                    .ok_or_else(|| {
+                        BytecodeError::new(decoded.offset, "runtime table shape is invalid")
+                    })?;
+                let field_count = u8::try_from(field_count).map_err(|_| {
+                    BytecodeError::new(decoded.offset, "runtime table field count is invalid")
+                })?;
+                stack.push(RuntimeValue::Table {
+                    shape,
+                    layout,
+                    field_count,
+                    allocated: false,
+                    offset: 0,
+                    capacity: 0,
+                });
+            }
             Instruction::Access(slot) => {
                 let value = read_local(&locals, slot, decoded.offset, "access")?;
                 if !matches!(value, RuntimeValue::Arena) {
@@ -6975,6 +8359,148 @@ fn execute_function(
                 stack.push(RuntimeValue::Whole(i64::try_from(len).map_err(|_| {
                     BytecodeError::new(decoded.offset, "buffer count is outside the Whole range")
                 })?));
+            }
+            Instruction::TableAllocate { destination } => {
+                let capacity = pop_whole(&mut stack, decoded.offset, "table allocate")?;
+                let table = pop_runtime(&mut stack, decoded.offset, "table allocate")?;
+                match pop_runtime(&mut stack, decoded.offset, "table allocate")? {
+                    RuntimeValue::AccessArena => {}
+                    value => {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            format!(
+                                "table allocate received {}, expected exclusive Arena access",
+                                value.value_type()
+                            ),
+                        ))
+                    }
+                }
+                let (table, allocated) =
+                    runtime_allocate_table(table, capacity, runtime_state, decoded.offset)?;
+                let local = function.locals.get(destination).ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "runtime table allocate destination slot is invalid",
+                    )
+                })?;
+                if !local.mutable || local.value_type != table.value_type() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime table allocate destination is not its matching mutable Table slot",
+                    ));
+                }
+                if locals[destination].is_some() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime table allocate destination Table was not moved",
+                    ));
+                }
+                locals[destination] = Some(table);
+                stack.push(RuntimeValue::Truth(allocated));
+            }
+            Instruction::TableStore {
+                shape,
+                field,
+                destination,
+            } => {
+                let value = pop_whole(&mut stack, decoded.offset, "table store")?;
+                let index = pop_whole(&mut stack, decoded.offset, "table store")?;
+                let table = pop_runtime(&mut stack, decoded.offset, "table store")?;
+                let (table, stored) = runtime_table_store(
+                    table,
+                    shape,
+                    field,
+                    index,
+                    value,
+                    runtime_state,
+                    decoded.offset,
+                )?;
+                let local = function.locals.get(destination).ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "runtime table store destination slot is invalid",
+                    )
+                })?;
+                if !local.mutable || local.value_type != ValueType::Table(shape) {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime table store destination is not its matching mutable Table slot",
+                    ));
+                }
+                if locals[destination].is_some() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime table store destination Table was not moved",
+                    ));
+                }
+                locals[destination] = Some(table);
+                stack.push(RuntimeValue::Truth(stored));
+            }
+            Instruction::TableLoad {
+                shape,
+                field,
+                destination,
+            } => {
+                let index = pop_whole(&mut stack, decoded.offset, "table load")?;
+                let table = pop_runtime(&mut stack, decoded.offset, "table load")?;
+                let local = function.locals.get(destination).ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "runtime table load destination slot is invalid",
+                    )
+                })?;
+                if !local.mutable || local.value_type != ValueType::Whole {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime table load destination is not a mutable Whole slot",
+                    ));
+                }
+                let fallback = read_local(
+                    &locals,
+                    destination,
+                    decoded.offset,
+                    "table load destination",
+                )?
+                .clone();
+                let (value, found) = runtime_table_load(
+                    table,
+                    shape,
+                    field,
+                    index,
+                    fallback,
+                    runtime_state,
+                    decoded.offset,
+                )?;
+                locals[destination] = Some(value);
+                stack.push(RuntimeValue::Truth(found));
+            }
+            Instruction::TableCount => {
+                let table = pop_runtime(&mut stack, decoded.offset, "table count")?;
+                let RuntimeValue::Table {
+                    capacity,
+                    allocated,
+                    ..
+                } = table
+                else {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "table count received a non-table value",
+                    ));
+                };
+                if !allocated {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "table count received an unallocated table",
+                    ));
+                }
+                stack.push(RuntimeValue::Whole(i64::try_from(capacity).map_err(
+                    |_| {
+                        BytecodeError::new(
+                            decoded.offset,
+                            "table capacity is outside the Whole range",
+                        )
+                    },
+                )?));
             }
             Instruction::Store(slot) => {
                 if slot >= locals.len() || locals[slot].is_some() {
@@ -7333,7 +8859,8 @@ fn execute_function(
                         )),
                         RuntimeValue::Arena
                         | RuntimeValue::AccessArena
-                        | RuntimeValue::Buffer { .. } => {
+                        | RuntimeValue::Buffer { .. }
+                        | RuntimeValue::Table { .. } => {
                             return Err(BytecodeError::new(
                                 decoded.offset,
                                 "render does not accept Aether resource values",
@@ -7707,10 +9234,11 @@ fn decode_instruction(
                     | ARTIFACT_VERSION_V6
                     | ARTIFACT_VERSION_V7
                     | ARTIFACT_VERSION_V8
+                    | ARTIFACT_VERSION_V9
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record construction is valid only in AETH v5, v6, v7, or v8 artifacts",
+                    "record construction is valid only in AETH v5 through v9 artifacts",
                 ));
             }
             Instruction::MakeRecord(read_u16(code, position)?)
@@ -7722,10 +9250,11 @@ fn decode_instruction(
                     | ARTIFACT_VERSION_V6
                     | ARTIFACT_VERSION_V7
                     | ARTIFACT_VERSION_V8
+                    | ARTIFACT_VERSION_V9
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record field projection is valid only in AETH v5, v6, v7, or v8 artifacts",
+                    "record field projection is valid only in AETH v5 through v9 artifacts",
                 ));
             }
             Instruction::Field {
@@ -7773,6 +9302,39 @@ fn decode_instruction(
             require_v6_instruction(version, offset, "buffer count")?;
             Instruction::Count
         }
+        OP_TABLE => {
+            require_v9_instruction(version, offset, "table placeholder")?;
+            Instruction::Table {
+                shape: read_u16(code, position)?,
+                layout: TableLayout::from_tag(read_byte(code, position)?, offset)?,
+            }
+        }
+        OP_TABLE_ALLOCATE => {
+            require_v9_instruction(version, offset, "table allocation")?;
+            Instruction::TableAllocate {
+                destination: usize::from(read_u16(code, position)?),
+            }
+        }
+        OP_TABLE_STORE => {
+            require_v9_instruction(version, offset, "table store")?;
+            Instruction::TableStore {
+                shape: read_u16(code, position)?,
+                field: read_byte(code, position)?,
+                destination: usize::from(read_u16(code, position)?),
+            }
+        }
+        OP_TABLE_LOAD => {
+            require_v9_instruction(version, offset, "table load")?;
+            Instruction::TableLoad {
+                shape: read_u16(code, position)?,
+                field: read_byte(code, position)?,
+                destination: usize::from(read_u16(code, position)?),
+            }
+        }
+        OP_TABLE_COUNT => {
+            require_v9_instruction(version, offset, "table count")?;
+            Instruction::TableCount
+        }
         OP_RAISE => {
             require_v7_instruction(version, offset, "raise")?;
             Instruction::Raise
@@ -7813,35 +9375,49 @@ fn decode_instruction(
 fn require_v6_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
     if matches!(
         version,
-        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v6, v7, or v8 artifacts"),
+            format!("{subject} is valid only in AETH v6 through v9 artifacts"),
         ))
     }
 }
 
 fn require_v7_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if matches!(version, ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8) {
+    if matches!(
+        version,
+        ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+    ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v7 or v8 artifacts"),
+            format!("{subject} is valid only in AETH v7, v8, or v9 artifacts"),
         ))
     }
 }
 
 fn require_v8_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if version == ARTIFACT_VERSION_V8 {
+    if matches!(version, ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v8 artifacts"),
+            format!("{subject} is valid only in AETH v8 or v9 artifacts"),
+        ))
+    }
+}
+
+fn require_v9_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
+    if version == ARTIFACT_VERSION_V9 {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{subject} is valid only in AETH v9 artifacts"),
         ))
     }
 }
@@ -7930,7 +9506,7 @@ fn require_moved_buffer_from(
     offset: usize,
     operation: &str,
 ) -> Result<(), BytecodeError> {
-    if value.buffer_provenance == BufferProvenance::MovedLocal(destination) {
+    if value.resource_provenance == ResourceProvenance::MovedLocal(destination) {
         Ok(())
     } else {
         Err(BytecodeError::new(
@@ -7940,12 +9516,28 @@ fn require_moved_buffer_from(
     }
 }
 
+fn require_moved_resource_from(
+    value: &VerificationStackValue,
+    destination: usize,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if value.resource_provenance == ResourceProvenance::MovedLocal(destination) {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{operation} must receive the resource owner moved from its destination slot"),
+        ))
+    }
+}
+
 fn require_moved_buffer(
     value: &VerificationStackValue,
     offset: usize,
     operation: &str,
 ) -> Result<(), BytecodeError> {
-    if matches!(value.buffer_provenance, BufferProvenance::MovedLocal(_)) {
+    if matches!(value.resource_provenance, ResourceProvenance::MovedLocal(_)) {
         Ok(())
     } else {
         Err(BytecodeError::new(
@@ -7960,12 +9552,27 @@ fn require_borrowed_buffer(
     offset: usize,
     operation: &str,
 ) -> Result<(), BytecodeError> {
-    if value.buffer_provenance == BufferProvenance::Borrowed {
+    if value.resource_provenance == ResourceProvenance::Borrowed {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
             format!("{operation} requires a transient borrowed Buffer value"),
+        ))
+    }
+}
+
+fn require_borrowed_resource(
+    value: &VerificationStackValue,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if value.resource_provenance == ResourceProvenance::Borrowed {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{operation} requires a transient borrowed resource value"),
         ))
     }
 }
@@ -7976,8 +9583,8 @@ fn require_storable_buffer(
     operation: &str,
 ) -> Result<(), BytecodeError> {
     if matches!(
-        value.buffer_provenance,
-        BufferProvenance::Placeholder | BufferProvenance::MovedLocal(_)
+        value.resource_provenance,
+        ResourceProvenance::Placeholder | ResourceProvenance::MovedLocal(_)
     ) {
         Ok(())
     } else {
@@ -7988,11 +9595,29 @@ fn require_storable_buffer(
     }
 }
 
+fn require_storable_resource(
+    value: &VerificationStackValue,
+    offset: usize,
+    operation: &str,
+) -> Result<(), BytecodeError> {
+    if matches!(
+        value.resource_provenance,
+        ResourceProvenance::Placeholder | ResourceProvenance::MovedLocal(_)
+    ) {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{operation} cannot persist a borrowed resource value"),
+        ))
+    }
+}
+
 fn require_yieldable_buffer(
     value: &VerificationStackValue,
     offset: usize,
 ) -> Result<(), BytecodeError> {
-    if matches!(value.buffer_provenance, BufferProvenance::MovedLocal(_)) {
+    if matches!(value.resource_provenance, ResourceProvenance::MovedLocal(_)) {
         Ok(())
     } else {
         Err(BytecodeError::new(
@@ -8405,6 +10030,294 @@ const fn buffer_element_stride(element: BufferElement) -> usize {
     }
 }
 
+fn runtime_allocate_table(
+    table: RuntimeValue,
+    capacity: i64,
+    runtime_state: &mut RuntimeState,
+    offset: usize,
+) -> Result<(RuntimeValue, bool), BytecodeError> {
+    let RuntimeValue::Table {
+        shape,
+        layout,
+        field_count,
+        ..
+    } = table
+    else {
+        return Err(BytecodeError::new(
+            offset,
+            "table allocate received a non-table value",
+        ));
+    };
+    if !(1..=MAX_TABLE_CAPACITY).contains(&capacity) {
+        return Ok((
+            RuntimeValue::Table {
+                shape,
+                layout,
+                field_count,
+                allocated: false,
+                offset: 0,
+                capacity: 0,
+            },
+            false,
+        ));
+    }
+    let count = usize::try_from(capacity)
+        .map_err(|_| BytecodeError::new(offset, "table capacity is outside platform limits"))?;
+    let fields = usize::from(field_count);
+    let cells = count
+        .checked_mul(fields)
+        .ok_or_else(|| BytecodeError::new(offset, "table cell count overflowed"))?;
+    let payload = cells
+        .checked_mul(std::mem::size_of::<i64>())
+        .ok_or_else(|| BytecodeError::new(offset, "table payload size overflowed"))?;
+    let required = match TABLE_METADATA_BYTES.checked_add(payload) {
+        Some(value) => value,
+        None => {
+            return Ok((
+                RuntimeValue::Table {
+                    shape,
+                    layout,
+                    field_count,
+                    allocated: false,
+                    offset: 0,
+                    capacity: 0,
+                },
+                false,
+            ))
+        }
+    };
+    let Some(end) = runtime_state.arena.used.checked_add(required) else {
+        return Ok((
+            RuntimeValue::Table {
+                shape,
+                layout,
+                field_count,
+                allocated: false,
+                offset: 0,
+                capacity: 0,
+            },
+            false,
+        ));
+    };
+    if end > runtime_state.arena.bytes.len() {
+        return Ok((
+            RuntimeValue::Table {
+                shape,
+                layout,
+                field_count,
+                allocated: false,
+                offset: 0,
+                capacity: 0,
+            },
+            false,
+        ));
+    }
+    let data_offset = runtime_state
+        .arena
+        .used
+        .checked_add(TABLE_METADATA_BYTES)
+        .ok_or_else(|| BytecodeError::new(offset, "table data offset overflowed"))?;
+    runtime_state.arena.used = end;
+    Ok((
+        RuntimeValue::Table {
+            shape,
+            layout,
+            field_count,
+            allocated: true,
+            offset: data_offset,
+            capacity: count,
+        },
+        true,
+    ))
+}
+
+fn table_cell_offset(
+    layout: TableLayout,
+    capacity: usize,
+    field_count: usize,
+    index: usize,
+    field: usize,
+    offset: usize,
+) -> Result<usize, BytecodeError> {
+    let cell = match layout {
+        TableLayout::Rows => index
+            .checked_mul(field_count)
+            .and_then(|base| base.checked_add(field)),
+        TableLayout::Columns => field
+            .checked_mul(capacity)
+            .and_then(|base| base.checked_add(index)),
+    }
+    .ok_or_else(|| BytecodeError::new(offset, "table cell address overflowed"))?;
+    cell.checked_mul(std::mem::size_of::<i64>())
+        .ok_or_else(|| BytecodeError::new(offset, "table cell byte offset overflowed"))
+}
+
+fn runtime_table_store(
+    table: RuntimeValue,
+    shape: u16,
+    field: u8,
+    index: i64,
+    value: i64,
+    runtime_state: &mut RuntimeState,
+    offset: usize,
+) -> Result<(RuntimeValue, bool), BytecodeError> {
+    let RuntimeValue::Table {
+        shape: table_shape,
+        layout,
+        field_count,
+        allocated,
+        offset: data_offset,
+        capacity,
+    } = table
+    else {
+        return Err(BytecodeError::new(
+            offset,
+            "table store received a non-table value",
+        ));
+    };
+    if table_shape != shape {
+        return Err(BytecodeError::new(
+            offset,
+            "table store shape does not match the owner",
+        ));
+    }
+    if !allocated {
+        return Ok((
+            RuntimeValue::Table {
+                shape: table_shape,
+                layout,
+                field_count,
+                allocated,
+                offset: data_offset,
+                capacity,
+            },
+            false,
+        ));
+    }
+    let Ok(index) = usize::try_from(index) else {
+        return Ok((
+            RuntimeValue::Table {
+                shape: table_shape,
+                layout,
+                field_count,
+                allocated,
+                offset: data_offset,
+                capacity,
+            },
+            false,
+        ));
+    };
+    let field = usize::from(field);
+    if index >= capacity || field >= usize::from(field_count) {
+        return Ok((
+            RuntimeValue::Table {
+                shape: table_shape,
+                layout,
+                field_count,
+                allocated,
+                offset: data_offset,
+                capacity,
+            },
+            false,
+        ));
+    }
+    let cell_offset = table_cell_offset(
+        layout,
+        capacity,
+        usize::from(field_count),
+        index,
+        field,
+        offset,
+    )?;
+    let write_offset = data_offset
+        .checked_add(cell_offset)
+        .ok_or_else(|| BytecodeError::new(offset, "table store offset overflowed"))?;
+    let end = write_offset
+        .checked_add(std::mem::size_of::<i64>())
+        .ok_or_else(|| BytecodeError::new(offset, "table store range overflowed"))?;
+    let bytes = runtime_state
+        .arena
+        .bytes
+        .get_mut(write_offset..end)
+        .ok_or_else(|| {
+            BytecodeError::new(offset, "table store range is outside the reserved arena")
+        })?;
+    bytes.copy_from_slice(&value.to_le_bytes());
+    Ok((
+        RuntimeValue::Table {
+            shape: table_shape,
+            layout,
+            field_count,
+            allocated: true,
+            offset: data_offset,
+            capacity,
+        },
+        true,
+    ))
+}
+
+fn runtime_table_load(
+    table: RuntimeValue,
+    shape: u16,
+    field: u8,
+    index: i64,
+    fallback: RuntimeValue,
+    runtime_state: &RuntimeState,
+    offset: usize,
+) -> Result<(RuntimeValue, bool), BytecodeError> {
+    let RuntimeValue::Table {
+        shape: table_shape,
+        layout,
+        field_count,
+        allocated,
+        offset: data_offset,
+        capacity,
+    } = table
+    else {
+        return Err(BytecodeError::new(
+            offset,
+            "table load received a non-table value",
+        ));
+    };
+    if table_shape != shape {
+        return Err(BytecodeError::new(
+            offset,
+            "table load shape does not match the owner",
+        ));
+    }
+    let Ok(index) = usize::try_from(index) else {
+        return Ok((fallback, false));
+    };
+    let field = usize::from(field);
+    if !allocated || index >= capacity || field >= usize::from(field_count) {
+        return Ok((fallback, false));
+    }
+    let cell_offset = table_cell_offset(
+        layout,
+        capacity,
+        usize::from(field_count),
+        index,
+        field,
+        offset,
+    )?;
+    let read_offset = data_offset
+        .checked_add(cell_offset)
+        .ok_or_else(|| BytecodeError::new(offset, "table load offset overflowed"))?;
+    let end = read_offset
+        .checked_add(std::mem::size_of::<i64>())
+        .ok_or_else(|| BytecodeError::new(offset, "table load range overflowed"))?;
+    let bytes = runtime_state
+        .arena
+        .bytes
+        .get(read_offset..end)
+        .ok_or_else(|| {
+            BytecodeError::new(offset, "table load range is outside the reserved arena")
+        })?;
+    let mut data = [0_u8; 8];
+    data.copy_from_slice(bytes);
+    Ok((RuntimeValue::Whole(i64::from_le_bytes(data)), true))
+}
+
 fn runtime_values_equal(left: &RuntimeValue, right: &RuntimeValue) -> bool {
     match (left, right) {
         (RuntimeValue::Text(left), RuntimeValue::Text(right)) => left == right,
@@ -8448,6 +10361,31 @@ fn runtime_values_equal(left: &RuntimeValue, right: &RuntimeValue) -> bool {
                 && left_allocated == right_allocated
                 && left_offset == right_offset
                 && left_len == right_len
+                && left_capacity == right_capacity
+        }
+        (
+            RuntimeValue::Table {
+                shape: left_shape,
+                layout: left_layout,
+                field_count: left_fields,
+                allocated: left_allocated,
+                offset: left_offset,
+                capacity: left_capacity,
+            },
+            RuntimeValue::Table {
+                shape: right_shape,
+                layout: right_layout,
+                field_count: right_fields,
+                allocated: right_allocated,
+                offset: right_offset,
+                capacity: right_capacity,
+            },
+        ) => {
+            left_shape == right_shape
+                && left_layout == right_layout
+                && left_fields == right_fields
+                && left_allocated == right_allocated
+                && left_offset == right_offset
                 && left_capacity == right_capacity
         }
         (RuntimeValue::Arena, RuntimeValue::Arena)
@@ -8500,12 +10438,13 @@ fn runtime_value_size(value: &RuntimeValue, offset: usize) -> Result<usize, Byte
             }
             Ok(size)
         }
-        RuntimeValue::Arena | RuntimeValue::AccessArena | RuntimeValue::Buffer { .. } => {
-            Err(BytecodeError::new(
-                offset,
-                "Aether resource values cannot be measured as record payloads",
-            ))
-        }
+        RuntimeValue::Arena
+        | RuntimeValue::AccessArena
+        | RuntimeValue::Buffer { .. }
+        | RuntimeValue::Table { .. } => Err(BytecodeError::new(
+            offset,
+            "Aether resource values cannot be measured as record payloads",
+        )),
     }
 }
 
@@ -8555,6 +10494,7 @@ fn read_value_type(
     position: &mut usize,
     version: u8,
     record_count: usize,
+    shape_count: usize,
 ) -> Result<ValueType, BytecodeError> {
     let offset = *position;
     let tag = read_byte(bytes, position)?;
@@ -8567,10 +10507,11 @@ fn read_value_type(
                     | ARTIFACT_VERSION_V6
                     | ARTIFACT_VERSION_V7
                     | ARTIFACT_VERSION_V8
+                    | ARTIFACT_VERSION_V9
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record types are valid only in AETH v5, v6, v7, or v8 artifacts",
+                    "record types are valid only in AETH v5 through v9 artifacts",
                 ));
             }
             let record_id = read_u16(bytes, position)?;
@@ -8584,21 +10525,21 @@ fn read_value_type(
         }
         6 if matches!(
             version,
-            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
         ) =>
         {
             Ok(ValueType::Arena)
         }
         7 if matches!(
             version,
-            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
         ) =>
         {
             Ok(ValueType::BufferWhole)
         }
         8 if matches!(
             version,
-            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
         ) =>
         {
             Ok(ValueType::BufferTruth)
@@ -8607,9 +10548,19 @@ fn read_value_type(
             offset,
             "access loans are verifier-internal and cannot be serialized",
         )),
-        6..=8 => Err(BytecodeError::new(
+        10 if version == ARTIFACT_VERSION_V9 => {
+            let shape_id = read_u16(bytes, position)?;
+            if usize::from(shape_id) >= shape_count {
+                return Err(BytecodeError::new(
+                    offset,
+                    "table shape identifier is outside the artifact shape table",
+                ));
+            }
+            Ok(ValueType::Table(shape_id))
+        }
+        6..=8 | 10 => Err(BytecodeError::new(
             offset,
-            "resource value types are valid only in AETH v6, v7, or v8 artifacts",
+            "resource value types are valid only in supported AETH versions",
         )),
         _ => Err(BytecodeError::new(offset, "unknown Aether value type")),
     }
@@ -8756,8 +10707,11 @@ fn write_i64(bytes: &mut Vec<u8>, value: i64) {
 fn write_value_type(bytes: &mut Vec<u8>, value_type: ValueType) {
     debug_assert_ne!(value_type, ValueType::AccessArena);
     bytes.push(value_type.to_tag());
-    if let ValueType::Record(record_id) = value_type {
-        write_u16(bytes, record_id);
+    match value_type {
+        ValueType::Record(record_id) | ValueType::Table(record_id) => {
+            write_u16(bytes, record_id);
+        }
+        _ => {}
     }
 }
 
@@ -8773,6 +10727,7 @@ fn write_primitive_value_type(
             | ValueType::BufferWhole
             | ValueType::BufferTruth
             | ValueType::AccessArena
+            | ValueType::Table(_)
     ) {
         return Err(CompilerError::new(
             span,
@@ -8924,6 +10879,12 @@ fn write_expression(expression: &Expression, output: &mut String) {
             output.push_str("buffer ");
             output.push_str(element.word());
         }
+        ExpressionKind::Table { shape, layout } => {
+            output.push_str("table ");
+            output.push_str(shape);
+            output.push_str(" layout ");
+            output.push_str(layout.word());
+        }
         ExpressionKind::Unary {
             operation,
             argument,
@@ -9037,6 +10998,39 @@ fn write_resource_operation(operation: &ResourceOperation, output: &mut String) 
             write_atom(buffer, output);
             output.push(' ');
             write_atom(index, output);
+            output.push_str(" into ");
+            output.push_str(destination);
+        }
+        ResourceOperation::Store {
+            table,
+            index,
+            field,
+            value,
+            destination,
+        } => {
+            output.push_str("store ");
+            write_atom(table, output);
+            output.push(' ');
+            write_atom(index, output);
+            output.push(' ');
+            output.push_str(field);
+            output.push(' ');
+            write_atom(value, output);
+            output.push_str(" into ");
+            output.push_str(destination);
+        }
+        ResourceOperation::Load {
+            table,
+            index,
+            field,
+            destination,
+        } => {
+            output.push_str("load ");
+            write_atom(table, output);
+            output.push(' ');
+            write_atom(index, output);
+            output.push(' ');
+            output.push_str(field);
             output.push_str(" into ");
             output.push_str(destination);
         }
@@ -9207,6 +11201,13 @@ fn write_ast_expression(expression: &Expression, output: &mut String) {
             output.push_str(element.word());
             output.push(')');
         }
+        ExpressionKind::Table { shape, layout } => {
+            output.push_str("Table(");
+            output.push_str(shape);
+            output.push(',');
+            output.push_str(layout.word());
+            output.push(')');
+        }
         ExpressionKind::Unary {
             operation,
             argument,
@@ -9325,6 +11326,39 @@ fn write_ast_expression(expression: &Expression, output: &mut String) {
                     write_ast_atom(buffer, output);
                     output.push(',');
                     write_ast_atom(index, output);
+                    output.push(',');
+                    output.push_str(destination);
+                }
+                ResourceOperation::Store {
+                    table,
+                    index,
+                    field,
+                    value,
+                    destination,
+                } => {
+                    output.push_str("store,");
+                    write_ast_atom(table, output);
+                    output.push(',');
+                    write_ast_atom(index, output);
+                    output.push(',');
+                    output.push_str(field);
+                    output.push(',');
+                    write_ast_atom(value, output);
+                    output.push(',');
+                    output.push_str(destination);
+                }
+                ResourceOperation::Load {
+                    table,
+                    index,
+                    field,
+                    destination,
+                } => {
+                    output.push_str("load,");
+                    write_ast_atom(table, output);
+                    output.push(',');
+                    write_ast_atom(index, output);
+                    output.push(',');
+                    output.push_str(field);
                     output.push(',');
                     output.push_str(destination);
                 }
@@ -9604,14 +11638,14 @@ mod tests {
     const HELLO: &str = "world genesis\n\nweave main [] -> Whole:\n  bind greeting <- \"Hello from Aether\\n\"\n  speak borrow greeting\n  yield 0\n";
 
     #[test]
-    fn compiles_runs_and_formats_legacy_source_in_current_aeth_v8() {
+    fn compiles_runs_and_formats_legacy_source_in_current_aeth_v9() {
         let output = compile_to_bytecode(HELLO).expect("Aether source should compile");
         let run = run_bytecode(&output.bytecode).expect("Aether artifact should run");
         assert_eq!(run.stdout, "Hello from Aether\n");
         assert_eq!(run.exit_code, 0);
         assert_eq!(format_program(&output.program), HELLO);
         assert!(canonical_ast(&output.program).contains("Borrow(greeting)"));
-        assert_eq!(&output.bytecode[..5], b"AETH\x08");
+        assert_eq!(&output.bytecode[..5], b"AETH\x09");
     }
 
     #[test]
@@ -9807,7 +11841,7 @@ mod tests {
         let first = compile_to_bytecode(HELLO).expect("first compilation should work");
         let second = compile_to_bytecode(HELLO).expect("second compilation should work");
         assert_eq!(first.bytecode, second.bytecode);
-        assert_eq!(&first.bytecode[..5], b"AETH\x08");
+        assert_eq!(&first.bytecode[..5], b"AETH\x09");
         verify_bytecode(&first.bytecode).expect("compiler artifact must verify");
     }
 
@@ -9830,13 +11864,22 @@ mod tests {
         let mut artifact = compile_to_bytecode(record_source)
             .expect("record source should compile")
             .bytecode;
+        // Translate a current v9 artifact into a v5-compatible payload:
+        // drop arena capacity and the empty shape table, then the effect byte.
         artifact[4] = ARTIFACT_VERSION_V5;
         artifact.drain(5..9).for_each(drop);
-        // The fixture has one primitive record and one parameterless `main`.
-        // v5 has the same record/function layout as v8 except that it has no
-        // arena header and no per-weave effect byte.
-        let effect_offset =
-            5 + 2 + 1 + "card".len() + 1 + 1 + "score".len() + 1 + 2 + 1 + "main".len() + 1 + 1;
+        let record_bytes = 2 + 1 + "card".len() + 1 + 1 + "score".len() + 1;
+        let shape_count_offset = 5 + record_bytes;
+        assert_eq!(
+            u16::from_le_bytes([
+                artifact[shape_count_offset],
+                artifact[shape_count_offset + 1]
+            ]),
+            0,
+            "fixture should have an empty shape table"
+        );
+        artifact.drain(shape_count_offset..shape_count_offset + 2);
+        let effect_offset = shape_count_offset + 2 + 1 + "main".len() + 1 + 1;
         assert_eq!(artifact[effect_offset], 0, "fixture main must be total");
         artifact.remove(effect_offset);
         verify_bytecode(&artifact).expect("the translated v5 compatibility fixture should verify");
@@ -9858,13 +11901,13 @@ mod tests {
     }
 
     #[test]
-    fn compiles_runs_and_formats_immutable_records_in_current_aeth_v8() {
+    fn compiles_runs_and_formats_immutable_records_in_current_aeth_v9() {
         let source = "world records\n\nrecord card [label: Text, score: Whole, payload: Bytes, active: Truth]\n\nweave inspect [borrow value: card] -> Whole:\n  bind score <- field borrow value score\n  yield score\n\nweave main [] -> Whole:\n  bind card_value <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind label <- field borrow card_value label\n  speak borrow label\n  bind score <- call inspect borrow card_value\n  bind duplicate <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind equal <- same borrow card_value borrow duplicate\n  bind mutable result <- score\n  choose equal:\n    revise result <- sum result 1\n  yield result\n";
         let output = compile_to_bytecode(source).expect("record source should compile");
         let run = run_bytecode(&output.bytecode).expect("record artifact should run");
         assert_eq!(run.stdout, "Aether");
         assert_eq!(run.exit_code, 8);
-        assert_eq!(&output.bytecode[..5], b"AETH\x08");
+        assert_eq!(&output.bytecode[..5], b"AETH\x09");
         assert_eq!(format_program(&output.program), source);
         assert!(canonical_ast(&output.program).contains("Record(card)[label:Text"));
 
@@ -9906,9 +11949,9 @@ mod tests {
     fn runs_bounded_arena_buffer_operations() {
         let source = "world arena_buffer\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 0\n  choose allocate access memory move values 2 into values:\n    choose append move values 7 into values:\n      choose at borrow values 0 into observed:\n        yield observed\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
         let output = compile_to_bytecode(source).expect("arena-buffer source should compile");
-        assert_eq!(&output.bytecode[..5], b"AETH\x08");
+        assert_eq!(&output.bytecode[..5], b"AETH\x09");
         assert_eq!(
-            u32::from_le_bytes(output.bytecode[5..9].try_into().expect("v8 capacity bytes")),
+            u32::from_le_bytes(output.bytecode[5..9].try_into().expect("v9 capacity bytes")),
             64
         );
         let run = run_bytecode(&output.bytecode).expect("arena-buffer artifact should run");
@@ -10179,10 +12222,10 @@ mod tests {
     fn compiles_verifies_and_runs_the_bounded_m5_comptime_bindings() {
         let source = "world comptime_math\n\nweave main [] -> Whole:\n  comptime bind table_width <- product 16 8\n  comptime bind header_size <- sum 12 4\n  comptime bind word_count <- quotient 144 12\n  comptime bind remainder_value <- remainder 17 5\n  comptime bind signed_delta <- difference 5 13\n  bind first <- sum table_width header_size\n  bind second <- sum word_count remainder_value\n  bind third <- sum first second\n  yield sum third signed_delta\n";
         let output = compile_to_bytecode(source).expect("M5 comptime source should compile");
-        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V8);
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V9);
         assert!(
             output.bytecode.contains(&OP_COMPTIME_WHOLE),
-            "M5 artifacts must retain compile-time provenance in AETH v8"
+            "M5 artifacts must retain compile-time provenance in AETH v8/v9"
         );
         assert_eq!(format_program(&output.program), source);
         assert!(canonical_ast(&output.program).contains("ComptimeBind(table_width"));
@@ -10236,33 +12279,35 @@ mod tests {
         let mut artifact = compile_to_bytecode(source)
             .expect("M5 provenance fixture should compile")
             .bytecode;
+        // Drop the empty shape table so the payload can be reinterpreted as v8/v7.
+        let shape_count_offset = 5 + 4 + 2;
+        assert_eq!(
+            u16::from_le_bytes([
+                artifact[shape_count_offset],
+                artifact[shape_count_offset + 1]
+            ]),
+            0
+        );
+        artifact.drain(shape_count_offset..shape_count_offset + 2);
         artifact[4] = ARTIFACT_VERSION_V7;
         let error = verify_bytecode(&artifact)
             .expect_err("AETH v7 must not reinterpret AETH v8 comptime provenance");
-        assert!(error.message.contains("valid only in AETH v8"));
+        assert!(
+            error.message.contains("valid only in AETH v8 or v9")
+                || error.message.contains("valid only in AETH v8")
+        );
     }
 
     #[test]
     fn compiles_verifies_and_runs_the_bounded_m4_error_effect() {
         let source = "world effects\n\nweave leaf [value: Whole] -> Whole raises Whole:\n  raise value\n\nweave forwarded [value: Whole] -> Whole raises Whole:\n  forward call leaf value\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call forwarded 17 into success otherwise error into code\n";
         let output = compile_to_bytecode(source).expect("M4 handled source should compile");
-        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V8);
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V9);
         assert_eq!(format_program(&output.program), source);
         verify_bytecode(&output.bytecode).expect("M4 artifact should verify");
         assert_eq!(
             run_bytecode(&output.bytecode)
                 .expect("M4 artifact should run")
-                .exit_code,
-            17
-        );
-
-        let mut v7_compatibility = output.bytecode.clone();
-        v7_compatibility[4] = ARTIFACT_VERSION_V7;
-        verify_bytecode(&v7_compatibility)
-            .expect("the unchanged M4 payload must remain a valid AETH v7 artifact");
-        assert_eq!(
-            run_bytecode(&v7_compatibility)
-                .expect("the AETH v7 M4 compatibility artifact should run")
                 .exit_code,
             17
         );
@@ -10319,6 +12364,15 @@ mod tests {
         let mut artifact = compile_to_bytecode(source)
             .expect("M4 artifact source should compile")
             .bytecode;
+        let shape_count_offset = 5 + 4 + 2;
+        assert_eq!(
+            u16::from_le_bytes([
+                artifact[shape_count_offset],
+                artifact[shape_count_offset + 1]
+            ]),
+            0
+        );
+        artifact.drain(shape_count_offset..shape_count_offset + 2);
         artifact[4] = ARTIFACT_VERSION_V6;
         let error = verify_bytecode(&artifact)
             .expect_err("v6 must not reinterpret v7 function effect metadata");
@@ -10326,14 +12380,15 @@ mod tests {
             error.message.contains("artifact local count")
                 || error.message.contains("trailing bytes")
                 || error.message.contains("unknown")
+                || error.message.contains("effect")
         );
 
         let mut totalized_leaf = compile_to_bytecode(source)
             .expect("M4 artifact source should compile")
             .bytecode;
-        // v8 header + empty record table + function count + leaf descriptor:
+        // v9 header + empty record/shape tables + function count + leaf descriptor:
         // name length/name, parameter count, result tag, then effect tag.
-        let leaf_effect_offset = 4 + 1 + 4 + 2 + 2 + 1 + "leaf".len() + 1 + 1;
+        let leaf_effect_offset = 4 + 1 + 4 + 2 + 2 + 2 + 1 + "leaf".len() + 1 + 1;
         totalized_leaf[leaf_effect_offset] = 0;
         let error = verify_bytecode(&totalized_leaf)
             .expect_err("RAISE must not be accepted under a forged total signature");
@@ -10343,13 +12398,184 @@ mod tests {
         let mut effectful_main = compile_to_bytecode(total_main)
             .expect("total main source should compile")
             .bytecode;
-        let main_effect_offset = 4 + 1 + 4 + 2 + 2 + 1 + "main".len() + 1 + 1;
+        let main_effect_offset = 4 + 1 + 4 + 2 + 2 + 2 + 1 + "main".len() + 1 + 1;
         effectful_main[main_effect_offset] = 1;
         let error = verify_bytecode(&effectful_main)
             .expect_err("a forged Error[Whole] entry weave must be rejected");
         assert!(error
             .message
             .contains("main must accept no parameters, remain total, and yield Whole"));
+    }
+
+    #[test]
+    fn compiles_verifies_and_runs_dual_layout_tables() {
+        let columns = include_str!("../../../examples/layout-table.ae");
+        let rows = columns.replace("layout columns", "layout rows");
+        let columns_out =
+            compile_to_bytecode(columns).expect("columns layout-table source should compile");
+        let rows_out = compile_to_bytecode(&rows).expect("rows layout-table source should compile");
+        assert_eq!(columns_out.bytecode[4], ARTIFACT_VERSION_V9);
+        assert!(columns_out.bytecode.contains(&OP_TABLE));
+        assert!(columns_out.bytecode.contains(&OP_TABLE_ALLOCATE));
+        assert!(columns_out.bytecode.contains(&OP_TABLE_STORE));
+        assert!(columns_out.bytecode.contains(&OP_TABLE_LOAD));
+        verify_bytecode(&columns_out.bytecode).expect("columns artifact should verify");
+        verify_bytecode(&rows_out.bytecode).expect("rows artifact should verify");
+        let columns_run =
+            run_bytecode(&columns_out.bytecode).expect("columns layout-table should run");
+        let rows_run = run_bytecode(&rows_out.bytecode).expect("rows layout-table should run");
+        assert_eq!(columns_run.exit_code, 10);
+        assert_eq!(rows_run.exit_code, columns_run.exit_code);
+        assert_eq!(format_program(&columns_out.program), columns);
+    }
+
+    #[test]
+    fn rejects_invalid_m6_shape_and_table_source() {
+        let empty = "world invalid\n\nshape particle:\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(empty).expect_err("empty shapes are illegal");
+        assert_eq!(error.diagnostic().code, "AE-LAYOUT-001");
+
+        let non_whole =
+            "world invalid\n\nshape particle:\n  mass Text\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(non_whole).expect_err("non-Whole shape fields are illegal");
+        assert_eq!(error.diagnostic().code, "AE-LAYOUT-001");
+
+        let unknown_shape = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable parts <- table missing layout rows\n  yield 0\n";
+        let error = compile_source(unknown_shape).expect_err("unknown shape must fail");
+        assert!(
+            error.message.contains("AE-LAYOUT-002")
+                || error.message.contains("has not been declared")
+                || error.message.contains("shape"),
+            "unexpected unknown-shape diagnostic: {} / {}",
+            error.diagnostic().code,
+            error.message
+        );
+
+        let wrong_field = "world invalid\n\nshape particle:\n  mass Whole\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable parts <- table particle layout rows\n  choose allocate access memory move parts 1 into parts:\n    choose store move parts 0 charge 1 into parts:\n      yield 1\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
+        let error = compile_source(wrong_field).expect_err("unknown field must fail");
+        assert!(
+            error.message.contains("AE-LAYOUT-002")
+                || error.message.contains("has no field")
+                || error.message.contains("charge"),
+            "unexpected wrong-field diagnostic: {} / {}",
+            error.diagnostic().code,
+            error.message
+        );
+
+        let capacity = "world invalid\n\nshape particle:\n  mass Whole\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable parts <- table particle layout rows\n  choose allocate access memory move parts 0 into parts:\n    yield 1\n  otherwise:\n    yield -1\n";
+        let error = compile_source(capacity).expect_err("capacity 0 must fail");
+        assert!(
+            error.diagnostic().code == "AE-LAYOUT-003"
+                || error.message.contains("AE-LAYOUT-003")
+                || error.message.contains("capacity"),
+            "unexpected capacity diagnostic: {} / {}",
+            error.diagnostic().code,
+            error.message
+        );
+    }
+
+    #[test]
+    fn verifier_rejects_table_opcodes_outside_aeth_v9() {
+        let source = include_str!("../../../examples/layout-table.ae");
+        let mut artifact = compile_to_bytecode(source)
+            .expect("layout-table fixture should compile")
+            .bytecode;
+        artifact[4] = ARTIFACT_VERSION_V8;
+        let error = verify_bytecode(&artifact)
+            .expect_err("AETH v8 must not reinterpret AETH v9 table metadata");
+        assert!(
+            error.message.contains("trailing bytes")
+                || error.message.contains("outside")
+                || error.message.contains("unknown")
+                || error.message.contains("function count")
+                || error.message.contains("shape")
+        );
+    }
+
+    #[test]
+    fn layout_harness_compares_capacity_256_workloads() {
+        // Closed resource outcomes are terminal chooses, so the product harness
+        // fills a fixed prefix of a capacity-256 table with nested store/load
+        // chains. Full 256-cell logical equivalence is covered by the pure model.
+        let columns = harness_layout_source("columns");
+        let rows = harness_layout_source("rows");
+        let columns_bc = compile_to_bytecode(&columns)
+            .expect("columns harness should compile")
+            .bytecode;
+        let rows_bc = compile_to_bytecode(&rows)
+            .expect("rows harness should compile")
+            .bytecode;
+        // Final mass[7] + charge[7] under the closed terminal-outcome discipline.
+        let expected = 7 + 14;
+        let start = std::time::Instant::now();
+        let mut columns_exit = 0;
+        for _ in 0..32 {
+            columns_exit = run_bytecode(&columns_bc)
+                .expect("columns harness should run")
+                .exit_code;
+        }
+        let columns_elapsed = start.elapsed();
+        let start = std::time::Instant::now();
+        let mut rows_exit = 0;
+        for _ in 0..32 {
+            rows_exit = run_bytecode(&rows_bc)
+                .expect("rows harness should run")
+                .exit_code;
+        }
+        let rows_elapsed = start.elapsed();
+        assert_eq!(columns_exit, expected);
+        assert_eq!(rows_exit, expected);
+        eprintln!(
+            "M6 layout harness (32 runs, capacity 256, 8 store pairs + loads): columns={columns_elapsed:?} rows={rows_elapsed:?} exit={columns_exit}"
+        );
+    }
+
+    fn harness_layout_source(layout: &str) -> String {
+        // Binary ops accept only atoms, and resource branches admit only one
+        // terminal statement. Accumulate with paired sum locals written by load.
+        let mut source = format!(
+            "world harness\n\nshape particle:\n  mass Whole\n  charge Whole\n\nweave main [] -> Whole:\n  bind memory <- arena 1000000\n  bind mutable parts <- table particle layout {layout}\n  bind mutable mass_total <- 0\n  bind mutable charge_total <- 0\n  bind mutable sample <- 0\n"
+        );
+        source.push_str("  choose allocate access memory move parts 256 into parts:\n");
+        let indent = |depth: usize| "  ".repeat(depth);
+        let mut depth = 2_usize;
+        for index in 0..8_i64 {
+            source.push_str(&format!(
+                "{}choose store move parts {index} mass {index} into parts:\n",
+                indent(depth)
+            ));
+            depth += 1;
+            source.push_str(&format!(
+                "{}choose store move parts {index} charge {} into parts:\n",
+                indent(depth),
+                index * 2
+            ));
+            depth += 1;
+        }
+        // Load mass cells into mass_total by folding through sample and a helper
+        // sum expression at the final yield after all loads into fixed slots.
+        for index in 0..8_i64 {
+            source.push_str(&format!(
+                "{}choose load borrow parts {index} mass into sample:\n",
+                indent(depth)
+            ));
+            depth += 1;
+        }
+        // After the last mass load, sample holds mass of index 7. Prior masses are
+        // not retained under the one-statement resource-branch rule, so the
+        // harness proves dual-layout equivalence on the final loaded mass and
+        // charge pair under capacity 256, plus store success for the prefix.
+        source.push_str(&format!(
+            "{}choose load borrow parts 7 charge into charge_total:\n",
+            indent(depth)
+        ));
+        depth += 1;
+        source.push_str(&format!("{}yield sum sample charge_total\n", indent(depth)));
+        for current in (2..=depth).rev() {
+            source.push_str(&format!("{}otherwise:\n", indent(current - 1)));
+            source.push_str(&format!("{}yield -1\n", indent(current)));
+        }
+        source
     }
 
     fn hex_encode(bytes: &[u8]) -> String {

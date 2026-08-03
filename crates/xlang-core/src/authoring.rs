@@ -15,16 +15,17 @@ use serde_json::{json, Map, Number, Value};
 use crate::{
     compile_source, format_program, Atom, AtomKind, BinaryOperation, BufferElement, CompilerError,
     Diagnostic, Effect, Expression, ExpressionKind, Parameter, ParameterMode, Program,
-    RecordDeclaration, RecordField, ResourceOperation, Span, Statement, TernaryOperation,
-    UnaryOperation, ValueType, Weave, LANGUAGE_NAME, LANGUAGE_VERSION,
+    RecordDeclaration, RecordField, ResourceOperation, ShapeDeclaration, Span, Statement,
+    TableLayout, TernaryOperation, UnaryOperation, ValueType, Weave, LANGUAGE_NAME,
+    LANGUAGE_VERSION,
 };
 
 /// The JSON schema identifier emitted for a validated semantic document.
-pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v3";
+pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v4";
 /// The JSON protocol identifier accepted for a structural edit request.
-pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v3";
+pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v4";
 /// The JSON schema identifier used for machine-readable diagnostic envelopes.
-pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v3";
+pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v4";
 
 const MAX_STRUCTURAL_EDIT_BYTES: usize = 4_000_000;
 const MAX_STRUCTURAL_EDIT_OPERATIONS: usize = 32;
@@ -75,14 +76,14 @@ impl From<CompilerError> for StructuralEditError {
     }
 }
 
-/// Return deterministic, pretty-printed `aether.ast/v3` JSON for valid source.
+/// Return deterministic, pretty-printed `aether.ast/v4` JSON for valid source.
 /// Source spans always refer to the returned document's canonical LF source.
 pub fn structural_document_json(source: &str) -> Result<String, CompilerError> {
     let (program, canonical_source) = canonicalize_source(source)?;
     serialize_document(&canonical_source, &program).map_err(serialization_error)
 }
 
-/// Serialize a stable `aether.diagnostic/v3` envelope for any compiler or
+/// Serialize a stable `aether.diagnostic/v4` envelope for any compiler or
 /// structural-authoring diagnostic.
 #[must_use]
 pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
@@ -95,7 +96,7 @@ pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
     .to_string()
 }
 
-/// Apply one bounded `aether.edit/v3` document to matching source.
+/// Apply one bounded `aether.edit/v4` document to matching source.
 ///
 /// The function does not write files, invoke a model, execute code, or compile
 /// an artifact. It is intentionally pure apart from memory allocation. The CLI
@@ -171,10 +172,11 @@ fn program_value(program: &Program) -> Value {
         .iter()
         .map(|record| record_value(record, &program.records))
         .collect::<Vec<_>>();
+    let shapes = program.shapes.iter().map(shape_value).collect::<Vec<_>>();
     let weaves = program
         .weaves
         .iter()
-        .map(|weave| weave_value(weave, &program.records))
+        .map(|weave| weave_value(weave, &program.records, &program.shapes))
         .collect::<Vec<_>>();
     json!({
         "id": "program",
@@ -186,7 +188,32 @@ fn program_value(program: &Program) -> Value {
             "name": &program.world,
         },
         "records": records,
+        "shapes": shapes,
         "weaves": weaves,
+    })
+}
+
+fn shape_value(shape: &ShapeDeclaration) -> Value {
+    let shape_id = format!("shape:{}", shape.name);
+    let fields = shape
+        .fields
+        .iter()
+        .map(|field| {
+            json!({
+                "id": format!("{shape_id}/field:{}", field.name),
+                "kind": "ShapeField",
+                "span": span_value(field.span),
+                "name": &field.name,
+                "type": "Whole",
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "id": shape_id,
+        "kind": "Shape",
+        "span": span_value(shape.span),
+        "name": &shape.name,
+        "fields": fields,
     })
 }
 
@@ -201,7 +228,7 @@ fn record_value(record: &RecordDeclaration, records: &[RecordDeclaration]) -> Va
                 "kind": "RecordField",
                 "span": span_value(field.span),
                 "name": &field.name,
-                "type": value_type_name(field.value_type, records),
+                "type": value_type_name(field.value_type, records, &[]),
             })
         })
         .collect::<Vec<_>>();
@@ -214,7 +241,7 @@ fn record_value(record: &RecordDeclaration, records: &[RecordDeclaration]) -> Va
     })
 }
 
-fn weave_value(weave: &Weave, records: &[RecordDeclaration]) -> Value {
+fn weave_value(weave: &Weave, records: &[RecordDeclaration], shapes: &[ShapeDeclaration]) -> Value {
     let weave_id = format!("weave:{}", weave.name);
     let parameters = weave
         .parameters
@@ -226,7 +253,7 @@ fn weave_value(weave: &Weave, records: &[RecordDeclaration]) -> Value {
                 "span": span_value(parameter.span),
                 "name": &parameter.name,
                 "mode": parameter_mode_name(parameter.mode),
-                "type": value_type_name(parameter.value_type, records),
+                "type": value_type_name(parameter.value_type, records, shapes),
             })
         })
         .collect::<Vec<_>>();
@@ -242,7 +269,7 @@ fn weave_value(weave: &Weave, records: &[RecordDeclaration]) -> Value {
         "span": span_value(weave.span),
         "name": &weave.name,
         "parameters": parameters,
-        "result": value_type_name(weave.result, records),
+        "result": value_type_name(weave.result, records, shapes),
         "effect": effect_name(weave.effect),
         "body": body,
     })
@@ -374,6 +401,13 @@ fn expression_value(expression: &Expression, id: &str) -> Value {
             "span": span,
             "element": buffer_element_name(*element),
         }),
+        ExpressionKind::Table { shape, layout } => json!({
+            "id": id,
+            "kind": "Table",
+            "span": span,
+            "shape": shape,
+            "layout": table_layout_name(*layout),
+        }),
         ExpressionKind::Unary {
             operation,
             argument,
@@ -498,6 +532,38 @@ fn resource_value(operation: &ResourceOperation, id: &str, span: Value) -> Value
             "index": atom_value(index, &format!("{id}/index")),
             "destination": destination,
         }),
+        ResourceOperation::Store {
+            table,
+            index,
+            field,
+            value,
+            destination,
+        } => json!({
+            "id": id,
+            "kind": "Resource",
+            "span": span,
+            "operation": "store",
+            "table": atom_value(table, &format!("{id}/table")),
+            "index": atom_value(index, &format!("{id}/index")),
+            "field": field,
+            "value": atom_value(value, &format!("{id}/value")),
+            "destination": destination,
+        }),
+        ResourceOperation::Load {
+            table,
+            index,
+            field,
+            destination,
+        } => json!({
+            "id": id,
+            "kind": "Resource",
+            "span": span,
+            "operation": "load",
+            "table": atom_value(table, &format!("{id}/table")),
+            "index": atom_value(index, &format!("{id}/index")),
+            "field": field,
+            "destination": destination,
+        }),
     }
 }
 
@@ -528,7 +594,11 @@ fn span_value(span: Span) -> Value {
     json!({ "line": span.line, "column": span.column })
 }
 
-fn value_type_name(value_type: ValueType, records: &[RecordDeclaration]) -> String {
+fn value_type_name(
+    value_type: ValueType,
+    records: &[RecordDeclaration],
+    shapes: &[ShapeDeclaration],
+) -> String {
     match value_type {
         ValueType::Text => "Text".to_owned(),
         ValueType::Whole => "Whole".to_owned(),
@@ -542,6 +612,17 @@ fn value_type_name(value_type: ValueType, records: &[RecordDeclaration]) -> Stri
         ValueType::BufferWhole => "BufferWhole".to_owned(),
         ValueType::BufferTruth => "BufferTruth".to_owned(),
         ValueType::AccessArena => "AccessArena".to_owned(),
+        ValueType::Table(index) => shapes
+            .get(usize::from(index))
+            .map(|shape| format!("Table[{}]", shape.name))
+            .unwrap_or_else(|| format!("Table#{index}")),
+    }
+}
+
+fn table_layout_name(layout: TableLayout) -> &'static str {
+    match layout {
+        TableLayout::Rows => "rows",
+        TableLayout::Columns => "columns",
     }
 }
 
@@ -848,7 +929,7 @@ fn apply_replace(
         }
         (EditTarget::World, _) => Err(protocol_error(
             "AE-EDIT-004",
-            "the world node cannot be replaced by structural edit v3",
+            "the world node cannot be replaced by structural edit v4",
         )),
         (EditTarget::Record(_), EditableDeclaration::Weave(_))
         | (EditTarget::Weave(_), EditableDeclaration::Record(_)) => Err(protocol_error(
@@ -911,7 +992,7 @@ fn apply_delete(program: &mut Program, target: &EditTarget) -> Result<(), Struct
         }
         EditTarget::World => Err(protocol_error(
             "AE-EDIT-004",
-            "the world node cannot be deleted by structural edit v3",
+            "the world node cannot be deleted by structural edit v4",
         )),
     }
 }
@@ -2058,8 +2139,8 @@ mod tests {
     fn replacement_edit(base_source: &str, value: i64) -> String {
         format!(
             r#"{{
-  "protocol": "aether.edit/v3",
-  "schema": "aether.ast/v3",
+  "protocol": "aether.edit/v4",
+  "schema": "aether.ast/v4",
   "baseSource": {},
   "operations": [{{
     "op": "replace",
@@ -2232,7 +2313,7 @@ mod tests {
         }))
         .expect("missing-stage edit should serialize");
         let error = apply_structural_edit(source, &missing_stage)
-            .expect_err("v3 edits must require every binding stage");
+            .expect_err("v4 edits must require every binding stage");
         assert_eq!(error.diagnostic().code, "AE-EDIT-001");
 
         let mut unknown_declaration = document["program"]["weaves"][0].clone();
@@ -2250,7 +2331,7 @@ mod tests {
         }))
         .expect("unknown-stage edit should serialize");
         let error = apply_structural_edit(source, &unknown_stage)
-            .expect_err("v3 edits must reject unknown binding stages");
+            .expect_err("v4 edits must reject unknown binding stages");
         assert_eq!(error.diagnostic().code, "AE-EDIT-001");
     }
 
@@ -2426,12 +2507,12 @@ mod tests {
 
     #[test]
     fn malformed_and_duplicate_edit_fields_are_rejected() {
-        let malformed = r#"{"protocol":"aether.edit/v3","schema":"aether.ast/v3","baseSource":"x","operations":[],"extra":true}"#;
+        let malformed = r#"{"protocol":"aether.edit/v4","schema":"aether.ast/v4","baseSource":"x","operations":[],"extra":true}"#;
         let malformed_error =
             apply_structural_edit(BASE_SOURCE, malformed).expect_err("unknown field must fail");
         assert_eq!(malformed_error.diagnostic().code, "AE-EDIT-001");
 
-        let duplicate = r#"{"protocol":"aether.edit/v3","protocol":"aether.edit/v3","schema":"aether.ast/v3","baseSource":"x","operations":[]}"#;
+        let duplicate = r#"{"protocol":"aether.edit/v4","protocol":"aether.edit/v4","schema":"aether.ast/v4","baseSource":"x","operations":[]}"#;
         let duplicate_error = apply_structural_edit(BASE_SOURCE, duplicate)
             .expect_err("duplicate JSON key must fail");
         assert_eq!(duplicate_error.diagnostic().code, "AE-EDIT-001");
@@ -2442,8 +2523,8 @@ mod tests {
     fn insert_and_delete_are_structural_top_level_operations() {
         let insert = format!(
             r#"{{
-  "protocol": "aether.edit/v3",
-  "schema": "aether.ast/v3",
+  "protocol": "aether.edit/v4",
+  "schema": "aether.ast/v4",
   "baseSource": {},
   "operations": [{{
     "op": "insertAfter",
@@ -2464,7 +2545,7 @@ mod tests {
         assert!(inserted.source.contains("weave helper [] -> Whole:"));
 
         let delete = format!(
-            r#"{{"protocol":"aether.edit/v3","schema":"aether.ast/v3","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
+            r#"{{"protocol":"aether.edit/v4","schema":"aether.ast/v4","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
             serde_json::to_string(&inserted.source).expect("source string must serialize")
         );
         let deleted =
@@ -2476,7 +2557,7 @@ mod tests {
     fn inserting_a_record_reindexes_existing_record_type_references_by_name() {
         let source = include_str!("../../../examples/records.ae");
         let insert = format!(
-            r#"{{"protocol":"aether.edit/v3","schema":"aether.ast/v3","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
+            r#"{{"protocol":"aether.edit/v4","schema":"aether.ast/v4","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
             serde_json::to_string(&format_program(
                 &compile_source(source).expect("record source should parse")
             ))
