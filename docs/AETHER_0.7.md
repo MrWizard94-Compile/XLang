@@ -1,8 +1,9 @@
 # Aether 0.7 Language Specification
 
-**Status:** Executable Aether 0.7 specification. Aether 0.7 emits
-deterministic AETH v7, verifies every artifact before run or forge write, and
-uses the Aether-written seed compiler by default.
+**Status:** Historical Aether 0.7 specification. It records the M4 contract
+that emitted deterministic AETH v7, verified every artifact before run or forge
+write, and used the Aether-written seed compiler by default. The current
+contract is [AETHER_0.8.md](AETHER_0.8.md).
 
 **Date:** 2026-08-01
 
@@ -10,8 +11,8 @@ Aether source is never translated to Rust, C, JavaScript, LLVM, or another
 language. Source is parsed as Aether, lowered to AETH, verified, and executed
 only by the Aether VM.
 
-This document supersedes [AETHER_0.6.md](AETHER_0.6.md) as the current language
-contract. Aether 0.4, 0.5, and 0.6 documents remain historical compatibility
+This document superseded [AETHER_0.6.md](AETHER_0.6.md) as the then-current
+language contract. Aether 0.4, 0.5, and 0.6 documents remain historical compatibility
 references. Verified AETH v4/v5/v6 artifacts keep their original byte meanings
 and remain accepted; new source compilation emits v7.
 

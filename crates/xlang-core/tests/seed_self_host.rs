@@ -28,6 +28,7 @@ const FORWARD_CALL_SOURCE: &str = concat!(
 );
 
 const M4_ERROR_EFFECT_SOURCE: &str = include_str!("../../../examples/error-effect.ae");
+const M5_COMPTIME_SOURCE: &str = include_str!("../../../examples/comptime.ae");
 
 const M4_NORMAL_EFFECT_SOURCE: &str = concat!(
     "world normal_effect\n",
@@ -193,6 +194,32 @@ fn seed_profile_compiler_forges_bounded_m4_error_effects_byte_identically() {
 }
 
 #[test]
+fn seed_profile_compiler_forges_bounded_m5_comptime_byte_identically() {
+    let bootstrap_seed = compile_to_bytecode(SEED_SOURCE)
+        .expect("the checked-in Aether seed source must bootstrap")
+        .bytecode;
+    let bootstrap = compile_to_bytecode(M5_COMPTIME_SOURCE)
+        .expect("the M5 comptime fixture must bootstrap")
+        .bytecode;
+    let forged = bytes(
+        forge_bytecode(&bootstrap_seed, M5_COMPTIME_SOURCE)
+            .expect("the M5 comptime fixture must forge through the seed"),
+    );
+    verify_bytecode(&forged).expect("the M5 seed-produced artifact must verify");
+    assert_eq!(
+        forged, bootstrap,
+        "the M5 comptime fixture must match bootstrap byte-for-byte"
+    );
+    assert_eq!(
+        run_bytecode(&forged)
+            .expect("the M5 seed-produced artifact must run")
+            .exit_code,
+        150,
+        "the M5 comptime fixture should preserve its defined outcome"
+    );
+}
+
+#[test]
 fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
     assert_eq!(
         SEED_COMPILER_ARTIFACT,
@@ -270,6 +297,7 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
             include_str!("../../../examples/error-effect.ae"),
             Some(17),
         ),
+        ("comptime", M5_COMPTIME_SOURCE, Some(150)),
     ];
     for (name, source, expected_exit_code) in examples {
         let bootstrap = compile_to_bytecode(source)

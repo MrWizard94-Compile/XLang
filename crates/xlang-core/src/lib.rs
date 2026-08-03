@@ -18,9 +18,9 @@ pub use authoring::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.7.0";
+pub const LANGUAGE_VERSION: &str = "0.8.0";
 
-/// Checked-in Aether-written seed compiler artifact (AETH v7).
+/// Checked-in Aether-written seed compiler artifact (AETH v8).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../seed/aether_seed.aeth"
@@ -31,6 +31,7 @@ const ARTIFACT_VERSION_V4: u8 = 4;
 const ARTIFACT_VERSION_V5: u8 = 5;
 const ARTIFACT_VERSION_V6: u8 = 6;
 const ARTIFACT_VERSION_V7: u8 = 7;
+const ARTIFACT_VERSION_V8: u8 = 8;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 const MAX_FUNCTIONS: usize = 256;
 const MAX_LOCALS: usize = u16::MAX as usize;
@@ -42,6 +43,7 @@ const MAX_RECORD_BYTES: usize = 1_000_000;
 const MAX_CALL_DEPTH: usize = 1_024;
 const MAX_ARENA_BYTES: u32 = 1_000_000;
 const BUFFER_METADATA_BYTES: usize = 16;
+const MAX_COMPTIME_BINDINGS: usize = 1_024;
 
 const OP_PUSH_TEXT: u8 = 1;
 const OP_PUSH_WHOLE: u8 = 2;
@@ -97,6 +99,7 @@ const OP_COUNT: u8 = 52;
 const OP_RAISE: u8 = 53;
 const OP_FORWARD_CALL: u8 = 54;
 const OP_HANDLE_CALL: u8 = 55;
+const OP_COMPTIME_WHOLE: u8 = 56;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -158,6 +161,12 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-comptime-003") {
+        "AE-COMPTIME-003"
+    } else if normalized.contains("ae-comptime-002") {
+        "AE-COMPTIME-002"
+    } else if normalized.contains("ae-comptime-001") || normalized.contains("comptime") {
+        "AE-COMPTIME-001"
     } else if normalized.contains("ae-effect-004") {
         "AE-EFFECT-004"
     } else if normalized.contains("ae-effect-003") {
@@ -295,7 +304,7 @@ pub enum ParameterMode {
 
 /// The bounded, statically declared control behavior of a weave.
 ///
-/// Aether 0.7 admits only a total weave or the abortive `Error[Whole]` effect.
+/// Aether admits only a total weave or the abortive `Error[Whole]` effect.
 /// It deliberately has no inferred row, ambient handler, or resumption.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Effect {
@@ -333,10 +342,16 @@ impl ParameterMode {
         match value {
             1 => Ok(Self::Own),
             2 => Ok(Self::Borrow),
-            3 if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) => Ok(Self::Access),
+            3 if matches!(
+                version,
+                ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+            ) =>
+            {
+                Ok(Self::Access)
+            }
             3 => Err(BytecodeError::new(
                 offset,
-                "access parameters are valid only in AETH v6 or v7 artifacts",
+                "access parameters are valid only in AETH v6, v7, or v8 artifacts",
             )),
             _ => Err(BytecodeError::new(offset, "unknown Aether parameter mode")),
         }
@@ -406,6 +421,7 @@ pub enum Statement {
     Bind {
         name: String,
         mutable: bool,
+        comptime: bool,
         value: Expression,
         span: Span,
     },
@@ -477,7 +493,7 @@ pub struct Expression {
 pub enum ExpressionKind {
     Atom(Atom),
     /// The one VM-private, named capability declaration permitted per
-    /// invocation. The capacity is copied into the AETH v6/v7 resource plan.
+    /// invocation. The capacity is copied into the AETH v6/v7/v8 resource plan.
     Arena {
         capacity: u32,
     },
@@ -803,7 +819,7 @@ struct ResourceValidationContext<'a> {
 }
 
 /// Typed resource facts produced by source validation and consumed directly by
-/// AETH v6/v7 lowering. This is deliberately separate from the parsed AST: it
+/// AETH v6/v7/v8 lowering. This is deliberately separate from the parsed AST: it
 /// records the resolved lexical region, owner place, element type, and stable
 /// replacement destination for every closed M2 outcome.
 #[derive(Clone)]
@@ -1218,6 +1234,7 @@ enum Instruction {
     PushText(String),
     PushBytes(Vec<u8>),
     PushWhole(i64),
+    ComptimeWhole(i64),
     PushTruth(bool),
     Store(usize),
     Load(usize),
@@ -1635,11 +1652,14 @@ fn validate_artifact_resource_signature(
         ));
     }
     if has_buffer
-        && (!matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) || access_count != 1)
+        && (!matches!(
+            version,
+            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+        ) || access_count != 1)
     {
         return Err(BytecodeError::new(
             0,
-            "artifact Buffer signatures require exactly one AETH v6/v7 access Arena parameter",
+            "artifact Buffer signatures require exactly one AETH v6/v7/v8 access Arena parameter",
         ));
     }
     if function
@@ -1659,7 +1679,9 @@ fn validate_artifact_effect_signature(
     function: &ArtifactFunction,
     version: u8,
 ) -> Result<(), BytecodeError> {
-    if version != ARTIFACT_VERSION_V7 && function.effect != Effect::Total {
+    if !matches!(version, ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8)
+        && function.effect != Effect::Total
+    {
         return Err(BytecodeError::new(
             0,
             "pre-v7 artifacts cannot declare an Aether error effect",
@@ -1711,7 +1733,10 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
             }
         }
     }
-    if !matches!(artifact.version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) {
+    if !matches!(
+        artifact.version,
+        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+    ) {
         if artifact.arena_capacity != 0 || resource_instruction_seen {
             return Err(BytecodeError::new(
                 0,
@@ -1723,19 +1748,19 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
     if artifact.arena_capacity == 0 && resource_instruction_seen {
         return Err(BytecodeError::new(
             0,
-            "AETH v6/v7 resource instructions require a nonzero arena resource plan",
+            "AETH v6/v7/v8 resource instructions require a nonzero arena resource plan",
         ));
     }
     if artifact.arena_capacity > 0 && arena_declarations != 1 {
         return Err(BytecodeError::new(
             0,
-            "AETH v6/v7 nonzero arena plan requires exactly one main arena declaration",
+            "AETH v6/v7/v8 nonzero arena plan requires exactly one main arena declaration",
         ));
     }
     if artifact.arena_capacity == 0 && arena_declarations != 0 {
         return Err(BytecodeError::new(
             0,
-            "AETH v6/v7 zero arena plan cannot declare an Arena capability",
+            "AETH v6/v7/v8 zero arena plan cannot declare an Arena capability",
         ));
     }
     Ok(())
@@ -2316,25 +2341,11 @@ fn parse_block(
 
 fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerError> {
     let span = line.span(line.indentation * 2 + 1);
+    if let Some(rest) = line.content.strip_prefix("comptime bind ") {
+        return parse_bind_statement(rest, span, true);
+    }
     if let Some(rest) = line.content.strip_prefix("bind ") {
-        let (mutable, rest) = if let Some(remainder) = rest.strip_prefix("mutable ") {
-            (true, remainder)
-        } else {
-            (false, rest)
-        };
-        let Some((name, expression)) = rest.split_once(" <- ") else {
-            return Err(CompilerError::new(
-                span,
-                "bind requires a name, the <- binder, and one value",
-            ));
-        };
-        validate_name(name, span, "binding name", false)?;
-        return Ok(Statement::Bind {
-            name: name.to_owned(),
-            mutable,
-            value: parse_expression(expression, span)?,
-            span,
-        });
+        return parse_bind_statement(rest, span, false);
     }
     if let Some(rest) = line.content.strip_prefix("revise ") {
         let Some((name, expression)) = rest.split_once(" <- ") else {
@@ -2389,8 +2400,38 @@ fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerErro
     }
     Err(CompilerError::new(
         span,
-        "unknown Aether statement; use bind, revise, speak, yield, raise, forward, choose, while, or handle",
+        "unknown Aether statement; use comptime bind, bind, revise, speak, yield, raise, forward, choose, while, or handle",
     ))
+}
+
+fn parse_bind_statement(
+    source: &str,
+    span: Span,
+    comptime: bool,
+) -> Result<Statement, CompilerError> {
+    let (mutable, source) = if let Some(remainder) = source.strip_prefix("mutable ") {
+        (true, remainder)
+    } else {
+        (false, source)
+    };
+    let Some((name, expression)) = source.split_once(" <- ") else {
+        return Err(CompilerError::new(
+            span,
+            if comptime {
+                "AE-COMPTIME-001: comptime bind requires a name, the <- binder, and one literal Whole arithmetic expression"
+            } else {
+                "bind requires a name, the <- binder, and one value"
+            },
+        ));
+    };
+    validate_name(name, span, "binding name", false)?;
+    Ok(Statement::Bind {
+        name: name.to_owned(),
+        mutable,
+        comptime,
+        value: parse_expression(expression, span)?,
+        span,
+    })
 }
 
 fn parse_single_atom(source: &str, span: Span, operation: &str) -> Result<Atom, CompilerError> {
@@ -3008,6 +3049,7 @@ fn hex_nibble(byte: u8) -> Option<u8> {
 fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerError> {
     validate_record_declarations(&program.records)?;
     let mut resource_plan = validate_resource_plan(program)?;
+    validate_comptime_budget(program)?;
     if program.weaves.is_empty() {
         return Err(CompilerError::new(
             Span::synthetic(),
@@ -3099,6 +3141,123 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         )?;
     }
     Ok(resource_plan)
+}
+
+fn validate_comptime_budget(program: &Program) -> Result<(), CompilerError> {
+    fn count(statements: &[Statement]) -> usize {
+        statements
+            .iter()
+            .map(|statement| match statement {
+                Statement::Bind { comptime, .. } => usize::from(*comptime),
+                Statement::Choose {
+                    when_bright,
+                    when_dim,
+                    ..
+                } => count(when_bright) + count(when_dim),
+                Statement::While { body, .. } => count(body),
+                Statement::Revise { .. }
+                | Statement::Speak { .. }
+                | Statement::Yield { .. }
+                | Statement::Raise { .. }
+                | Statement::Forward { .. }
+                | Statement::Handle { .. } => 0,
+            })
+            .sum()
+    }
+
+    let mut total = 0_usize;
+    for weave in &program.weaves {
+        total = total.checked_add(count(&weave.body)).ok_or_else(|| {
+            CompilerError::new(
+                weave.span,
+                "AE-COMPTIME-003: compile-time directive count overflowed the fixed evaluation budget",
+            )
+        })?;
+        if total > MAX_COMPTIME_BINDINGS {
+            return Err(CompilerError::new(
+                weave.span,
+                format!(
+                    "AE-COMPTIME-003: Aether permits at most {MAX_COMPTIME_BINDINGS} comptime bind directives per source program"
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn evaluate_comptime_whole(expression: &Expression) -> Result<i64, CompilerError> {
+    let ExpressionKind::Binary {
+        operation,
+        left,
+        right,
+    } = &expression.kind
+    else {
+        return Err(CompilerError::new(
+            expression.span,
+            "AE-COMPTIME-001: comptime bind requires exactly one literal Whole sum, difference, product, quotient, or remainder expression",
+        ));
+    };
+    let (AtomKind::Whole(left), AtomKind::Whole(right)) = (&left.kind, &right.kind) else {
+        return Err(CompilerError::new(
+            expression.span,
+            "AE-COMPTIME-001: comptime bind accepts only signed Whole literals, never names, owners, or other value shapes",
+        ));
+    };
+    match operation {
+        BinaryOperation::Sum => left.checked_add(*right).ok_or_else(|| {
+            CompilerError::new(
+                expression.span,
+                "AE-COMPTIME-002: comptime sum overflowed Whole",
+            )
+        }),
+        BinaryOperation::Difference => left.checked_sub(*right).ok_or_else(|| {
+            CompilerError::new(
+                expression.span,
+                "AE-COMPTIME-002: comptime difference overflowed Whole",
+            )
+        }),
+        BinaryOperation::Product => left.checked_mul(*right).ok_or_else(|| {
+            CompilerError::new(
+                expression.span,
+                "AE-COMPTIME-002: comptime product overflowed Whole",
+            )
+        }),
+        BinaryOperation::Quotient => {
+            if *right == 0 {
+                return Err(CompilerError::new(
+                    expression.span,
+                    "AE-COMPTIME-002: comptime quotient cannot divide by zero",
+                ));
+            }
+            left.checked_div(*right).ok_or_else(|| {
+                CompilerError::new(
+                    expression.span,
+                    "AE-COMPTIME-002: comptime quotient overflowed Whole",
+                )
+            })
+        }
+        BinaryOperation::Remainder => {
+            if *right == 0 {
+                return Err(CompilerError::new(
+                    expression.span,
+                    "AE-COMPTIME-002: comptime remainder cannot divide by zero",
+                ));
+            }
+            left.checked_rem(*right).ok_or_else(|| {
+                CompilerError::new(
+                    expression.span,
+                    "AE-COMPTIME-002: comptime remainder overflowed Whole",
+                )
+            })
+        }
+        _ => Err(CompilerError::new(
+            expression.span,
+            format!(
+                "AE-COMPTIME-001: comptime bind does not admit {} in the bounded M5 evaluator",
+                operation.word()
+            ),
+        )),
+    }
 }
 
 fn validate_effect_signature(weave: &Weave) -> Result<(), CompilerError> {
@@ -3404,14 +3563,28 @@ fn validate_block(
             Statement::Bind {
                 name,
                 mutable,
+                comptime,
                 value,
                 span,
             } => {
                 if !root {
                     return Err(CompilerError::new(
                         *span,
-                        "bind is only allowed in a weave root; use a mutable root binding with revise inside blocks",
+                        if *comptime {
+                            "AE-COMPTIME-001: comptime bind is allowed only in a weave root"
+                        } else {
+                            "bind is only allowed in a weave root; use a mutable root binding with revise inside blocks"
+                        },
                     ));
+                }
+                if *comptime {
+                    if *mutable {
+                        return Err(CompilerError::new(
+                            *span,
+                            "AE-COMPTIME-001: comptime bind must be immutable",
+                        ));
+                    }
+                    let _ = evaluate_comptime_whole(value)?;
                 }
                 if scope.contains_key(name) {
                     return Err(CompilerError::new(
@@ -4851,7 +5024,7 @@ fn emit_bytecode_with_resource_plan(
     }
 
     let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
-    bytecode.push(ARTIFACT_VERSION_V7);
+    bytecode.push(ARTIFACT_VERSION_V8);
     write_u32(&mut bytecode, resource_plan.arena_capacity());
     write_u16(
         &mut bytecode,
@@ -4954,6 +5127,7 @@ fn slot_layout(
             mutable,
             value,
             span,
+            ..
         } = statement
         {
             let value_type = static_expression_type(value, &layout, weave_results, records)?;
@@ -5134,8 +5308,18 @@ fn emit_block(
 ) -> Result<(), CompilerError> {
     for statement in statements {
         match statement {
-            Statement::Bind { name, value, .. } => {
-                emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
+            Statement::Bind {
+                name,
+                comptime,
+                value,
+                ..
+            } => {
+                if *comptime {
+                    code.push(OP_COMPTIME_WHOLE);
+                    write_i64(code, evaluate_comptime_whole(value)?);
+                } else {
+                    emit_expression(value, layout, weave_indices, records, resource_plan, code)?;
+                }
                 code.push(OP_STORE);
                 write_u16(
                     code,
@@ -5649,7 +5833,11 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     let version = bytecode[ARTIFACT_MAGIC.len()];
     if !matches!(
         version,
-        ARTIFACT_VERSION_V4 | ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
+        ARTIFACT_VERSION_V4
+            | ARTIFACT_VERSION_V5
+            | ARTIFACT_VERSION_V6
+            | ARTIFACT_VERSION_V7
+            | ARTIFACT_VERSION_V8
     ) {
         return Err(BytecodeError::new(
             ARTIFACT_MAGIC.len(),
@@ -5657,12 +5845,15 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         ));
     }
     let mut position = ARTIFACT_MAGIC.len() + 1;
-    let arena_capacity = if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) {
+    let arena_capacity = if matches!(
+        version,
+        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+    ) {
         let capacity = read_u32(bytecode, &mut position)?;
         if capacity > MAX_ARENA_BYTES {
             return Err(BytecodeError::new(
                 position,
-                "AETH v6/v7 arena capacity exceeds the M2 safety limit",
+                "AETH v6/v7/v8 arena capacity exceeds the M2 safety limit",
             ));
         }
         capacity
@@ -5672,7 +5863,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     let mut records = Vec::new();
     if matches!(
         version,
-        ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
+        ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
     ) {
         let record_count = usize::from(read_u16(bytecode, &mut position)?);
         if (version == ARTIFACT_VERSION_V5 && record_count == 0) || record_count > MAX_RECORDS {
@@ -5753,7 +5944,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             parameters.push((value_type, mode));
         }
         let result = read_value_type(bytecode, &mut position, version, records.len())?;
-        let effect = if version == ARTIFACT_VERSION_V7 {
+        let effect = if matches!(version, ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8) {
             Effect::from_byte(read_byte(bytecode, &mut position)?, position)?
         } else {
             Effect::Total
@@ -5945,7 +6136,7 @@ fn verify_instruction(
             state.stack.push(ValueType::Bytes);
             continue_with(state)
         }
-        Instruction::PushWhole(_) => {
+        Instruction::PushWhole(_) | Instruction::ComptimeWhole(_) => {
             state.stack.push(ValueType::Whole);
             continue_with(state)
         }
@@ -6644,7 +6835,9 @@ fn execute_function(
         match decoded.instruction {
             Instruction::PushText(value) => stack.push(RuntimeValue::Text(value)),
             Instruction::PushBytes(value) => stack.push(RuntimeValue::Bytes(value)),
-            Instruction::PushWhole(value) => stack.push(RuntimeValue::Whole(value)),
+            Instruction::PushWhole(value) | Instruction::ComptimeWhole(value) => {
+                stack.push(RuntimeValue::Whole(value));
+            }
             Instruction::PushTruth(value) => stack.push(RuntimeValue::Truth(value)),
             Instruction::Arena => stack.push(RuntimeValue::Arena),
             Instruction::Buffer(element) => stack.push(RuntimeValue::Buffer {
@@ -7463,6 +7656,10 @@ fn decode_instruction(
             Instruction::PushBytes(read_raw_bytes(code, position, length, "bytes constant")?)
         }
         OP_PUSH_WHOLE => Instruction::PushWhole(read_i64(code, position)?),
+        OP_COMPTIME_WHOLE => {
+            require_v8_instruction(version, offset, "compile-time Whole provenance")?;
+            Instruction::ComptimeWhole(read_i64(code, position)?)
+        }
         OP_PUSH_TRUTH => match read_byte(code, position)? {
             0 => Instruction::PushTruth(false),
             1 => Instruction::PushTruth(true),
@@ -7506,11 +7703,14 @@ fn decode_instruction(
         OP_MAKE_RECORD => {
             if !matches!(
                 version,
-                ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
+                ARTIFACT_VERSION_V5
+                    | ARTIFACT_VERSION_V6
+                    | ARTIFACT_VERSION_V7
+                    | ARTIFACT_VERSION_V8
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record construction is valid only in AETH v5, v6, or v7 artifacts",
+                    "record construction is valid only in AETH v5, v6, v7, or v8 artifacts",
                 ));
             }
             Instruction::MakeRecord(read_u16(code, position)?)
@@ -7518,11 +7718,14 @@ fn decode_instruction(
         OP_FIELD => {
             if !matches!(
                 version,
-                ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
+                ARTIFACT_VERSION_V5
+                    | ARTIFACT_VERSION_V6
+                    | ARTIFACT_VERSION_V7
+                    | ARTIFACT_VERSION_V8
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record field projection is valid only in AETH v5, v6, or v7 artifacts",
+                    "record field projection is valid only in AETH v5, v6, v7, or v8 artifacts",
                 ));
             }
             Instruction::Field {
@@ -7608,23 +7811,37 @@ fn decode_instruction(
 }
 
 fn require_v6_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) {
+    if matches!(
+        version,
+        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+    ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v6 or v7 artifacts"),
+            format!("{subject} is valid only in AETH v6, v7, or v8 artifacts"),
         ))
     }
 }
 
 fn require_v7_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if version == ARTIFACT_VERSION_V7 {
+    if matches!(version, ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v7 artifacts"),
+            format!("{subject} is valid only in AETH v7 or v8 artifacts"),
+        ))
+    }
+}
+
+fn require_v8_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
+    if version == ARTIFACT_VERSION_V8 {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{subject} is valid only in AETH v8 artifacts"),
         ))
     }
 }
@@ -8346,11 +8563,14 @@ fn read_value_type(
         5 => {
             if !matches!(
                 version,
-                ARTIFACT_VERSION_V5 | ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7
+                ARTIFACT_VERSION_V5
+                    | ARTIFACT_VERSION_V6
+                    | ARTIFACT_VERSION_V7
+                    | ARTIFACT_VERSION_V8
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record types are valid only in AETH v5, v6, or v7 artifacts",
+                    "record types are valid only in AETH v5, v6, v7, or v8 artifacts",
                 ));
             }
             let record_id = read_u16(bytes, position)?;
@@ -8362,11 +8582,25 @@ fn read_value_type(
             }
             Ok(ValueType::Record(record_id))
         }
-        6 if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) => Ok(ValueType::Arena),
-        7 if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) => {
+        6 if matches!(
+            version,
+            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+        ) =>
+        {
+            Ok(ValueType::Arena)
+        }
+        7 if matches!(
+            version,
+            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+        ) =>
+        {
             Ok(ValueType::BufferWhole)
         }
-        8 if matches!(version, ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7) => {
+        8 if matches!(
+            version,
+            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8
+        ) =>
+        {
             Ok(ValueType::BufferTruth)
         }
         9 => Err(BytecodeError::new(
@@ -8375,7 +8609,7 @@ fn read_value_type(
         )),
         6..=8 => Err(BytecodeError::new(
             offset,
-            "resource value types are valid only in AETH v6 or v7 artifacts",
+            "resource value types are valid only in AETH v6, v7, or v8 artifacts",
         )),
         _ => Err(BytecodeError::new(offset, "unknown Aether value type")),
     }
@@ -8515,6 +8749,10 @@ fn write_u16(bytes: &mut Vec<u8>, value: u16) {
     bytes.extend_from_slice(&value.to_le_bytes());
 }
 
+fn write_i64(bytes: &mut Vec<u8>, value: i64) {
+    bytes.extend_from_slice(&value.to_le_bytes());
+}
+
 fn write_value_type(bytes: &mut Vec<u8>, value_type: ValueType) {
     debug_assert_ne!(value_type, ValueType::AccessArena);
     bytes.push(value_type.to_tag());
@@ -8578,10 +8816,15 @@ fn write_block(statements: &[Statement], indentation: usize, output: &mut String
             Statement::Bind {
                 name,
                 mutable,
+                comptime,
                 value,
                 ..
             } => {
-                output.push_str("bind ");
+                if *comptime {
+                    output.push_str("comptime bind ");
+                } else {
+                    output.push_str("bind ");
+                }
                 if *mutable {
                     output.push_str("mutable ");
                 }
@@ -8858,10 +9101,17 @@ fn write_ast_block(statements: &[Statement], output: &mut String) {
             Statement::Bind {
                 name,
                 mutable,
+                comptime,
                 value,
                 ..
             } => {
-                output.push_str(if *mutable { "BindMutable(" } else { "Bind(" });
+                output.push_str(if *comptime {
+                    "ComptimeBind("
+                } else if *mutable {
+                    "BindMutable("
+                } else {
+                    "Bind("
+                });
                 output.push_str(name);
                 output.push(',');
                 write_ast_expression(value, output);
@@ -9354,14 +9604,14 @@ mod tests {
     const HELLO: &str = "world genesis\n\nweave main [] -> Whole:\n  bind greeting <- \"Hello from Aether\\n\"\n  speak borrow greeting\n  yield 0\n";
 
     #[test]
-    fn compiles_runs_and_formats_legacy_source_in_current_aeth_v7() {
+    fn compiles_runs_and_formats_legacy_source_in_current_aeth_v8() {
         let output = compile_to_bytecode(HELLO).expect("Aether source should compile");
         let run = run_bytecode(&output.bytecode).expect("Aether artifact should run");
         assert_eq!(run.stdout, "Hello from Aether\n");
         assert_eq!(run.exit_code, 0);
         assert_eq!(format_program(&output.program), HELLO);
         assert!(canonical_ast(&output.program).contains("Borrow(greeting)"));
-        assert_eq!(&output.bytecode[..5], b"AETH\x07");
+        assert_eq!(&output.bytecode[..5], b"AETH\x08");
     }
 
     #[test]
@@ -9557,7 +9807,7 @@ mod tests {
         let first = compile_to_bytecode(HELLO).expect("first compilation should work");
         let second = compile_to_bytecode(HELLO).expect("second compilation should work");
         assert_eq!(first.bytecode, second.bytecode);
-        assert_eq!(&first.bytecode[..5], b"AETH\x07");
+        assert_eq!(&first.bytecode[..5], b"AETH\x08");
         verify_bytecode(&first.bytecode).expect("compiler artifact must verify");
     }
 
@@ -9583,7 +9833,7 @@ mod tests {
         artifact[4] = ARTIFACT_VERSION_V5;
         artifact.drain(5..9).for_each(drop);
         // The fixture has one primitive record and one parameterless `main`.
-        // v5 has the same record/function layout as v7 except that it has no
+        // v5 has the same record/function layout as v8 except that it has no
         // arena header and no per-weave effect byte.
         let effect_offset =
             5 + 2 + 1 + "card".len() + 1 + 1 + "score".len() + 1 + 2 + 1 + "main".len() + 1 + 1;
@@ -9608,13 +9858,13 @@ mod tests {
     }
 
     #[test]
-    fn compiles_runs_and_formats_immutable_records_in_current_aeth_v7() {
+    fn compiles_runs_and_formats_immutable_records_in_current_aeth_v8() {
         let source = "world records\n\nrecord card [label: Text, score: Whole, payload: Bytes, active: Truth]\n\nweave inspect [borrow value: card] -> Whole:\n  bind score <- field borrow value score\n  yield score\n\nweave main [] -> Whole:\n  bind card_value <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind label <- field borrow card_value label\n  speak borrow label\n  bind score <- call inspect borrow card_value\n  bind duplicate <- make card \"Aether\" 7 bytes \"0102\" bright\n  bind equal <- same borrow card_value borrow duplicate\n  bind mutable result <- score\n  choose equal:\n    revise result <- sum result 1\n  yield result\n";
         let output = compile_to_bytecode(source).expect("record source should compile");
         let run = run_bytecode(&output.bytecode).expect("record artifact should run");
         assert_eq!(run.stdout, "Aether");
         assert_eq!(run.exit_code, 8);
-        assert_eq!(&output.bytecode[..5], b"AETH\x07");
+        assert_eq!(&output.bytecode[..5], b"AETH\x08");
         assert_eq!(format_program(&output.program), source);
         assert!(canonical_ast(&output.program).contains("Record(card)[label:Text"));
 
@@ -9656,9 +9906,9 @@ mod tests {
     fn runs_bounded_arena_buffer_operations() {
         let source = "world arena_buffer\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 0\n  choose allocate access memory move values 2 into values:\n    choose append move values 7 into values:\n      choose at borrow values 0 into observed:\n        yield observed\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
         let output = compile_to_bytecode(source).expect("arena-buffer source should compile");
-        assert_eq!(&output.bytecode[..5], b"AETH\x07");
+        assert_eq!(&output.bytecode[..5], b"AETH\x08");
         assert_eq!(
-            u32::from_le_bytes(output.bytecode[5..9].try_into().expect("v7 capacity bytes")),
+            u32::from_le_bytes(output.bytecode[5..9].try_into().expect("v8 capacity bytes")),
             64
         );
         let run = run_bytecode(&output.bytecode).expect("arena-buffer artifact should run");
@@ -9926,15 +10176,93 @@ mod tests {
     }
 
     #[test]
+    fn compiles_verifies_and_runs_the_bounded_m5_comptime_bindings() {
+        let source = "world comptime_math\n\nweave main [] -> Whole:\n  comptime bind table_width <- product 16 8\n  comptime bind header_size <- sum 12 4\n  comptime bind word_count <- quotient 144 12\n  comptime bind remainder_value <- remainder 17 5\n  comptime bind signed_delta <- difference 5 13\n  bind first <- sum table_width header_size\n  bind second <- sum word_count remainder_value\n  bind third <- sum first second\n  yield sum third signed_delta\n";
+        let output = compile_to_bytecode(source).expect("M5 comptime source should compile");
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V8);
+        assert!(
+            output.bytecode.contains(&OP_COMPTIME_WHOLE),
+            "M5 artifacts must retain compile-time provenance in AETH v8"
+        );
+        assert_eq!(format_program(&output.program), source);
+        assert!(canonical_ast(&output.program).contains("ComptimeBind(table_width"));
+        verify_bytecode(&output.bytecode).expect("M5 artifact should verify");
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("M5 artifact should run")
+                .exit_code,
+            150
+        );
+    }
+
+    #[test]
+    fn rejects_nonconstant_or_unbounded_m5_comptime_shapes() {
+        let mutable = "world invalid\n\nweave main [] -> Whole:\n  comptime bind mutable value <- sum 1 2\n  yield value\n";
+        let error = compile_source(mutable).expect_err("comptime bindings must remain immutable");
+        assert_eq!(error.diagnostic().code, "AE-COMPTIME-001");
+
+        let nonliteral = "world invalid\n\nweave main [] -> Whole:\n  bind source <- 1\n  comptime bind value <- sum source 2\n  yield value\n";
+        let error = compile_source(nonliteral)
+            .expect_err("comptime bindings must not read runtime bindings");
+        assert_eq!(error.diagnostic().code, "AE-COMPTIME-001");
+
+        let nested = "world invalid\n\nweave main [] -> Whole:\n  choose bright:\n    comptime bind value <- sum 1 2\n  otherwise:\n    yield 0\n  yield 1\n";
+        let error = compile_source(nested).expect_err("comptime bindings must be root-only");
+        assert_eq!(error.diagnostic().code, "AE-COMPTIME-001");
+
+        let divide_by_zero = "world invalid\n\nweave main [] -> Whole:\n  comptime bind value <- quotient 1 0\n  yield value\n";
+        let error = compile_source(divide_by_zero)
+            .expect_err("compile-time division by zero must be rejected deterministically");
+        assert_eq!(error.diagnostic().code, "AE-COMPTIME-002");
+
+        let overflow = "world invalid\n\nweave main [] -> Whole:\n  comptime bind value <- sum 9223372036854775807 1\n  yield value\n";
+        let error = compile_source(overflow)
+            .expect_err("compile-time Whole overflow must be rejected deterministically");
+        assert_eq!(error.diagnostic().code, "AE-COMPTIME-002");
+
+        let mut over_budget = String::from("world budget\n\nweave main [] -> Whole:\n");
+        for index in 0..=MAX_COMPTIME_BINDINGS {
+            over_budget.push_str(&format!("  comptime bind value_{index} <- sum 1 1\n"));
+        }
+        over_budget.push_str("  yield value_0\n");
+        let error = compile_source(&over_budget)
+            .expect_err("the fixed M5 directive budget must reject excess work");
+        assert_eq!(error.diagnostic().code, "AE-COMPTIME-003");
+    }
+
+    #[test]
+    fn verifier_rejects_comptime_provenance_outside_aeth_v8() {
+        let source = "world provenance\n\nweave main [] -> Whole:\n  comptime bind value <- sum 1 2\n  yield value\n";
+        let mut artifact = compile_to_bytecode(source)
+            .expect("M5 provenance fixture should compile")
+            .bytecode;
+        artifact[4] = ARTIFACT_VERSION_V7;
+        let error = verify_bytecode(&artifact)
+            .expect_err("AETH v7 must not reinterpret AETH v8 comptime provenance");
+        assert!(error.message.contains("valid only in AETH v8"));
+    }
+
+    #[test]
     fn compiles_verifies_and_runs_the_bounded_m4_error_effect() {
         let source = "world effects\n\nweave leaf [value: Whole] -> Whole raises Whole:\n  raise value\n\nweave forwarded [value: Whole] -> Whole raises Whole:\n  forward call leaf value\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call forwarded 17 into success otherwise error into code\n";
         let output = compile_to_bytecode(source).expect("M4 handled source should compile");
-        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V7);
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V8);
         assert_eq!(format_program(&output.program), source);
         verify_bytecode(&output.bytecode).expect("M4 artifact should verify");
         assert_eq!(
             run_bytecode(&output.bytecode)
                 .expect("M4 artifact should run")
+                .exit_code,
+            17
+        );
+
+        let mut v7_compatibility = output.bytecode.clone();
+        v7_compatibility[4] = ARTIFACT_VERSION_V7;
+        verify_bytecode(&v7_compatibility)
+            .expect("the unchanged M4 payload must remain a valid AETH v7 artifact");
+        assert_eq!(
+            run_bytecode(&v7_compatibility)
+                .expect("the AETH v7 M4 compatibility artifact should run")
                 .exit_code,
             17
         );
@@ -9986,7 +10314,7 @@ mod tests {
     }
 
     #[test]
-    fn verifier_rejects_effect_opcodes_or_metadata_outside_v7() {
+    fn verifier_rejects_effect_opcodes_or_metadata_outside_v7_or_v8() {
         let source = "world effects\n\nweave leaf [] -> Whole raises Whole:\n  raise 1\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call leaf into success otherwise error into code\n";
         let mut artifact = compile_to_bytecode(source)
             .expect("M4 artifact source should compile")
@@ -10003,7 +10331,7 @@ mod tests {
         let mut totalized_leaf = compile_to_bytecode(source)
             .expect("M4 artifact source should compile")
             .bytecode;
-        // v7 header + empty record table + function count + leaf descriptor:
+        // v8 header + empty record table + function count + leaf descriptor:
         // name length/name, parameter count, result tag, then effect tag.
         let leaf_effect_offset = 4 + 1 + 4 + 2 + 2 + 1 + "leaf".len() + 1 + 1;
         totalized_leaf[leaf_effect_offset] = 0;

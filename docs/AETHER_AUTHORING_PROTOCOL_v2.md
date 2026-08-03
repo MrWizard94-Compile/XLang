@@ -1,6 +1,7 @@
 # Aether structural authoring protocol v2
 
-**Status:** Implemented Aether 0.7 / M4 contract
+**Status:** Historical Aether 0.7 / M4 contract; the current authoring
+contract is [AETHER_AUTHORING_PROTOCOL_v3.md](AETHER_AUTHORING_PROTOCOL_v3.md).
 **Protocol version:** `aether.edit/v2`
 **AST schema version:** `aether.ast/v2`
 **Diagnostic version:** `aether.diagnostic/v2`

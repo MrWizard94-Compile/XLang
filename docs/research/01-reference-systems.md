@@ -4,8 +4,9 @@
 **Date:** 2026-07-28; current-contract update: 2026-08-01
 **Decision boundary:** This study informs Aether's future design. It does not
 change the historical Aether 0.5 contract or authorize a new backend. The
-current executable contract is Aether 0.7; its bounded resource and M4 effect
-implementations do not alter this research record's backend boundary.
+current executable contract is Aether 0.8; its bounded resource, M4 effect,
+and M5 literal-comptime implementations do not alter this research record's
+backend boundary.
 
 ## Purpose and method
 

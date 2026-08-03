@@ -1,9 +1,9 @@
 # Aether North Star
 
 **Status:** Human-approved product direction; not a language-version contract
-**Date:** 2026-08-01 (CLI product-boundary update)
+**Date:** 2026-08-01 (Aether 0.8 M5 update)
 **Current executable contract:** [MANIFEST.md](../MANIFEST.md) and
-[AETHER_0.6.md](AETHER_0.6.md)
+[AETHER_0.8.md](AETHER_0.8.md)
 
 ## Vision
 
@@ -21,10 +21,10 @@ execution, and capability-constrained integration.
 
 | Level | What it means | Authoritative documents |
 | --- | --- | --- |
-| **Implemented Aether 0.7** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.7.md](AETHER_0.7.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md) |
+| **Implemented Aether 0.8** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.8.md](AETHER_0.8.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md) |
 | **North-star direction** | A planned design hypothesis and ordered research program. It is not an implementation claim or syntax promise. | This document, [CORE_CLAIMS.md](CORE_CLAIMS.md), [ROADMAP.md](ROADMAP.md), and [research/](research/) |
 
-No future-facing paragraph in this document changes Aether 0.7 behavior. A
+No future-facing paragraph in this document changes Aether 0.8 behavior. A
 feature becomes part of the product only when its specification, ADR where
 material, implementation, seed proof, tests, documentation, and constitution
 gate all agree.
@@ -56,9 +56,9 @@ gate all agree.
 5. **Data-oriented performance must be proved.** Layout control and any
    shape-based specialization must preserve semantics and demonstrate benefits
    on published workloads, not merely promise optimizer magic.
-6. **Normal code for compile-time work.** If compile-time execution is adopted,
-   it uses constrained, typed Aether semantics rather than unconstrained text
-   macros or host evaluation.
+6. **Normal code for compile-time work.** M5 uses constrained, typed Aether
+   semantics rather than unconstrained text macros or host evaluation; any
+   expansion must preserve that authority boundary.
 7. **Design for change without ambiguity.** Artifact versions, AST schemas,
    interfaces, package identities, and diagnostics must have explicit version
    and compatibility rules.
@@ -79,15 +79,16 @@ flowchart LR
     Semantic -. future, separately approved .-> Interop["Narrow foreign/host interfaces"]
 ~~~
 
-The current 0.7 implementation covers a deliberately small portion of this:
+The current 0.8 implementation covers a deliberately small portion of this:
 canonical source formatting, bounded value semantics, a bootstrap canonical-AST
-path, AETH v4/v5/v6 compatibility and v7 verification, seed-hosted product
+path, AETH v4/v5/v6/v7 compatibility and v8 verification, seed-hosted product
 compilation, a narrow forge ABI, a capability-free VM, and one explicit bounded
-arena with closed Whole/Truth buffer outcomes. M3/M4 add local `aether.ast/v2`
-structure, diagnostic codes/spans, bounded top-level `aether.edit/v2`
-operations, and one abortive, terminal `Error[Whole]` route; see
-[AETHER_AUTHORING_PROTOCOL_v2.md](AETHER_AUTHORING_PROTOCOL_v2.md) and
-[AETHER_0.7.md](AETHER_0.7.md). It does **not** yet provide general typed
+arena with closed Whole/Truth buffer outcomes. M3/M4/M5 add local
+`aether.ast/v3` structure, diagnostic codes/spans, bounded top-level
+`aether.edit/v3` operations, one abortive terminal `Error[Whole]` route, and
+one fixed-budget literal `comptime bind` evaluator with v8 provenance; see
+[AETHER_AUTHORING_PROTOCOL_v3.md](AETHER_AUTHORING_PROTOCOL_v3.md) and
+[AETHER_0.8.md](AETHER_0.8.md). It does **not** yet provide general typed
 effects or resumptions, structured concurrency, generic shape
 folding, SoA lowering, C-header ingestion, a native backend, first-class
 resource outcomes, Buffer weave results, or fine-grained arbitrary-node edits.

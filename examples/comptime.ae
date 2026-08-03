@@ -1,0 +1,12 @@
+world comptime_math
+
+weave main [] -> Whole:
+  comptime bind table_width <- product 16 8
+  comptime bind header_size <- sum 12 4
+  comptime bind word_count <- quotient 144 12
+  comptime bind remainder_value <- remainder 17 5
+  comptime bind signed_delta <- difference 5 13
+  bind first <- sum table_width header_size
+  bind second <- sum word_count remainder_value
+  bind third <- sum first second
+  yield sum third signed_delta

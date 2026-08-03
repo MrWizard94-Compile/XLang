@@ -51,14 +51,16 @@ Aether parses only Aether source, emits **AETH** bytecode, verifies every
 artifact, and runs it in the Aether VM. It never transpiles source to Rust, C,
 JavaScript, LLVM, or another language.
 
-**Stage status:** Stage 7 (bounded arenas and Copy-element buffers) and M4
-(the bounded `Error[Whole]` effect) are implemented on the seed-hosted product
-compile path in Aether 0.7 / AETH v7.
+**Stage status:** Stage 7 (bounded arenas and Copy-element buffers), M4
+(the bounded `Error[Whole]` effect), and M5 (literal deterministic
+`comptime bind`) are implemented on the seed-hosted product compile path in
+Aether 0.8 / AETH v8.
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
 proof dual-compare. Seed Profile self-host, all shipped examples, the complete
-prior canonical surface (including records), and the documented M2
-arena/buffer corpus match bootstrap byte-for-byte.
+prior canonical surface (including records), the documented M2 arena/buffer
+corpus, the M4 error-effect corpus, and the M5 comptime corpus match bootstrap
+byte-for-byte.
 Full diagnostic parity is not claimed for the seed.
 
 ### Product docs (Level 4)
@@ -68,11 +70,11 @@ Full diagnostic parity is not claimed for the seed.
 | Overview | [README.md](README.md) |
 | Contract / release gate | [MANIFEST.md](MANIFEST.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Language (0.7 current / 0.6, 0.5, and 0.4 historical) | [docs/AETHER_0.7.md](docs/AETHER_0.7.md), [docs/AETHER_0.6.md](docs/AETHER_0.6.md), [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
+| Language (0.8 current / 0.7, 0.6, 0.5, and 0.4 historical) | [docs/AETHER_0.8.md](docs/AETHER_0.8.md), [docs/AETHER_0.7.md](docs/AETHER_0.7.md), [docs/AETHER_0.6.md](docs/AETHER_0.6.md), [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
 | Record decision | [docs/ADR-001-records-and-aeth-v5.md](docs/ADR-001-records-and-aeth-v5.md) |
 | AI-first design foundation | [docs/NORTH_STAR.md](docs/NORTH_STAR.md), [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), [docs/ADR-002-ai-first-design-foundation.md](docs/ADR-002-ai-first-design-foundation.md) |
 | M1/M2 resource decisions | [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md), [docs/ADR-003-value-resource-semantics.md](docs/ADR-003-value-resource-semantics.md), [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md), [docs/M1-VALIDATION-MATRIX.md](docs/M1-VALIDATION-MATRIX.md) |
-| M3/M4 authoring and error effect | [docs/AETHER_AUTHORING_PROTOCOL_v2.md](docs/AETHER_AUTHORING_PROTOCOL_v2.md), [docs/ADR-007-m4-typed-error-effect.md](docs/ADR-007-m4-typed-error-effect.md), [docs/M4-VALIDATION-MATRIX.md](docs/M4-VALIDATION-MATRIX.md) |
+| M3/M4/M5 authoring, error effect, and comptime | [docs/AETHER_AUTHORING_PROTOCOL_v3.md](docs/AETHER_AUTHORING_PROTOCOL_v3.md), [docs/ADR-007-m4-typed-error-effect.md](docs/ADR-007-m4-typed-error-effect.md), [docs/ADR-008-m5-deterministic-comptime.md](docs/ADR-008-m5-deterministic-comptime.md), [docs/M4-VALIDATION-MATRIX.md](docs/M4-VALIDATION-MATRIX.md), [docs/M5-VALIDATION-MATRIX.md](docs/M5-VALIDATION-MATRIX.md) |
 | Research and roadmap | [docs/research/](docs/research/), [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Seed Profile | [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) |
 | Forge ABI | [docs/FORGE_CONTRACT.md](docs/FORGE_CONTRACT.md) |
@@ -85,9 +87,9 @@ Full diagnostic parity is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.7.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.7.0) |
-| Artifact format | AETH **v4/v5/v6** compatibility input + deterministic **v7** output with bounded arena and effect metadata (earlier/unknown versions rejected) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.8.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.8.0) |
+| Artifact format | AETH **v4/v5/v6/v7** compatibility input + deterministic **v8** output with bounded arena, effect metadata, and `COMPTIME_WHOLE` provenance (earlier/unknown versions rejected) |
 | Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |
 | Seed compiler | `seed/aether_seed.ae` + checked-in `seed/aether_seed.aeth` |
@@ -97,7 +99,7 @@ Full diagnostic parity is not claimed for the seed.
 1. **Seed-hosted product compile** — CLI default compile uses the Aether-written seed; bootstrap is not the product compiler path.
 2. **Verify before run / write** — VM and forge only accept verified supported AETH v4, v5, v6, or v7.
 3. **No host capability leak** — invoked artifacts have no file, process, network, or shell authority; forge host owns I/O after verification.
-4. **Honest self-host claims** — Seed Profile, shipped examples, the complete documented prior canonical surface (including immutable records), and the documented M2 arena/buffer and M4 error-effect corpora match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
+4. **Honest self-host claims** — Seed Profile, shipped examples, the complete documented prior canonical surface (including immutable records), and the documented M2 arena/buffer, M4 error-effect, and M5 comptime corpora match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
 5. **CLI authority boundary** — the CLI reads only caller-selected local files and writes source or artifacts only to an explicit output path after the required validation/seed-compile path; it has no model or network integration.
 6. **Legacy is reference only** — `legacy/` is never a production build input.
 7. **Zero-warning gate** — workspace Clippy `all = "deny"`; `unsafe_code = "forbid"`.

@@ -2,16 +2,16 @@
 
 ## Contract
 
-Aether **0.7.0** accepts Aether source, returns a canonical AST from the Rust
-bootstrap for tooling, and **emits AETH v7 bytecode primarily through the
+Aether **0.8.0** accepts Aether source, returns a canonical AST from the Rust
+bootstrap for tooling, and **emits AETH v8 bytecode primarily through the
 Aether-written seed compiler** (forge ABI). The `aether` CLI is the product
-interface for that seed-hosted compile path. Verified AETH v4/v5/v6 artifacts
+interface for that seed-hosted compile path. Verified AETH v4/v5/v6/v7 artifacts
 remain accepted compatibility inputs with their original meanings. Source is
 never translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.7 product contract. It intentionally
+This manifest is the executable Aether 0.8 product contract. It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -21,16 +21,19 @@ The accepted M1 direction is
 The bounded executable M2 decision is
 [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md).
 Structured concurrency, generic shape/layout work, C interop, and a native
-backend are not Aether 0.7 surface area. M4 implements the bounded,
+backend are not Aether 0.8 surface area. M4 implements the bounded,
 testable `Error[Whole]` capability in
 [docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md](docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md)
-and [docs/AETHER_0.7.md](docs/AETHER_0.7.md). M3/M4 structural authoring is
+and [docs/AETHER_0.7.md](docs/AETHER_0.7.md). M5 implements bounded explicit
+literal compile-time `Whole` evaluation in
+[docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md](docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md)
+and [docs/AETHER_0.8.md](docs/AETHER_0.8.md). M3/M4/M5 structural authoring is
 implemented local tooling metadata, not a host-capability expansion; its current
-contract is [docs/AETHER_AUTHORING_PROTOCOL_v2.md](docs/AETHER_AUTHORING_PROTOCOL_v2.md).
+contract is [docs/AETHER_AUTHORING_PROTOCOL_v3.md](docs/AETHER_AUTHORING_PROTOCOL_v3.md).
 
 ## Implemented Language Boundary
 
-Aether 0.7.0 includes the 0.4/0.5 scalar and byte surface plus immutable nominal
+Aether 0.8.0 includes the 0.4/0.5 scalar and byte surface plus immutable nominal
 records declared after `world` and before weaves. Record fields are bounded to
 the primitive `Text`, `Whole`, `Truth`, and `Bytes` types; records cannot nest.
 `make` constructs in declaration order and `field borrow` projects a cloned
@@ -64,27 +67,40 @@ forms. The handler writes and yields its selected distinct mutable root `Whole`
 destination. An ordinary call cannot invoke an erroring weave; M4 control cannot
 cross live owners, loans, arenas, buffers, or M2 outcomes.
 
-Every 0.7 compilation emits AETH v7 with an arena-capacity header field, a
-possibly empty bounded record table, and a function `effect_tag`. v7 preserves
+M5 adds root-only immutable `comptime bind` for exactly one `sum`,
+`difference`, `product`, `quotient`, or `remainder` operation over literal
+`Whole` operands. Every
+directive has checked signed-64-bit arithmetic and one fixed evaluation unit;
+one source program may contain at most 1,024 directives. M5 accepts no names,
+calls, loops, text, bytes, records, resources, effects, macros, generated
+source, host I/O, or user-adjustable budget. Its result remains an ordinary
+immutable `Whole` local.
+
+Every 0.8 compilation emits AETH v8 with an arena-capacity header field, a
+possibly empty bounded record table, and a function `effect_tag`. v8 preserves
 the verified `MAKE_RECORD` / `FIELD`, `ARENA`, `BUFFER`, `ACCESS`, `ALLOCATE`,
 `BUFFER_APPEND`, `BUFFER_AT`, and `COUNT` forms, and adds `RAISE`,
-`FORWARD_CALL`, and `HANDLE_CALL`. AETH v4/v5/v6 remain accepted with their
+`FORWARD_CALL`, and `HANDLE_CALL`, then adds `COMPTIME_WHOLE` (opcode 56) as a
+v8-only checked `Whole` provenance push. AETH v4/v5/v6/v7 remain accepted with
+their
 original bytes and meanings; earlier and unknown versions are rejected.
 
 ## Structural authoring boundary
 
-`aether.ast/v2` describes successfully parsed Aether 0.7 source after
-formatter canonicalization. `aether.edit/v2` accepts only a matching complete
+`aether.ast/v3` describes successfully parsed Aether 0.8 source after
+formatter canonicalization. `aether.edit/v3` accepts only a matching complete
 canonical `baseSource` and bounded typed top-level Record/Weave
 `replace`/`insertAfter`/`delete` operations. The bootstrap revalidates the
 formatter-owned result; the CLI seed-compiles it before writing source to the
 requested output path. It cannot execute code, write a file by itself, contact an
 AI/model service, change artifact bytes, or grant a guest capability.
 
-Stable `aether.diagnostic/v2` code/span envelopes make source and edit failures
-machine-readable, including `AE-EFFECT-001` through `AE-EFFECT-004`. The exact
-schemas, limits, operation vocabulary, and compatibility policy are in
-[docs/AETHER_AUTHORING_PROTOCOL_v2.md](docs/AETHER_AUTHORING_PROTOCOL_v2.md).
+Stable `aether.diagnostic/v3` code/span envelopes make source and edit failures
+machine-readable, including `AE-EFFECT-001` through `AE-EFFECT-004` and
+`AE-COMPTIME-001` through `AE-COMPTIME-003`. Every `Bind` node must state
+`stage: "runtime"` or `stage: "comptime"`. The exact schemas, limits, operation
+vocabulary, and compatibility policy are in
+[docs/AETHER_AUTHORING_PROTOCOL_v3.md](docs/AETHER_AUTHORING_PROTOCOL_v3.md).
 
 ## Compile Path Boundary
 
@@ -99,14 +115,15 @@ The seed artifact is checked in at `seed/aether_seed.aeth` and embedded as
 
 ## Seed-Profile Self Hosting
 
-`seed/aether_seed.ae` parses the complete documented canonical Aether 0.7
+`seed/aether_seed.ae` parses the complete documented canonical Aether 0.8
 surface: all statement and shallow expression forms, named locals/params,
 `borrow`/`move`/`access`, multi-weave `call` including forward callees, hex bytes
 literals, UTF-8 text constants with the five defined escapes, and LF/CRLF input
 with or without a final line terminator. It also emits the bounded immutable
 record declaration, constructor, and projection surface plus `arena`,
-Whole/Truth buffers, closed resource outcomes, the v7 resource header, and the
-bounded M4 effect metadata/instructions through ordinary `Bytes` operations
+Whole/Truth buffers, closed resource outcomes, the v8 resource header, the
+bounded M4 effect metadata/instructions, and M5 literal `comptime bind` /
+`COMPTIME_WHOLE` emission through ordinary `Bytes` operations
 with no host parser callback.
 
 Proofs in `crates/xlang-core/tests/seed_self_host.rs`:
@@ -122,8 +139,10 @@ Proofs in `crates/xlang-core/tests/seed_self_host.rs`:
    verify, and run with their expected outcomes
 7. The handled-error and normal-erroring M4 fixtures match bootstrap byte-for-
    byte, verify, and run with their expected outcomes
+8. The shipped M5 comptime fixture matches bootstrap byte-for-byte, verifies,
+   and runs with its expected outcome
 
-This is full canonical Aether 0.7 source-emission parity for the documented
+This is full canonical Aether 0.8 source-emission parity for the documented
 surface, self-hosting of the seed, and seed-hosted compilation of the shipped
 example corpus. It is **not** a claim of full invalid-source diagnostic parity or of parity for future language
 features without the same proof.
