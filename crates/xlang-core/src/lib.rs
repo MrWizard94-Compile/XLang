@@ -20,7 +20,8 @@ pub use authoring::{
     STRUCTURAL_EDIT_PROTOCOL_VERSION,
 };
 pub use modules::{
-    compile_project_modules, elaborate_project_modules, mangle_weave, multi_module_authority_note,
+    compile_project_modules, compile_project_modules_with_packages, elaborate_project_modules,
+    elaborate_project_modules_with_packages, mangle_weave, multi_module_authority_note,
     source_requires_project_modules, validate_lib_module_source,
 };
 pub use project::{
@@ -30,13 +31,14 @@ pub use project::{
     ProjectUnitReport, ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
 };
 pub use workspace::{
-    parse_workspace_document, resolve_package_path, topological_package_order, verify_workspace,
-    WorkspaceDocument, WorkspaceError, WorkspacePackage, WorkspacePackageReport,
-    WorkspaceVerifyReport, WORKSPACE_PROJECT_FILE, WORKSPACE_SCHEMA_VERSION,
+    compile_workspace_package, parse_workspace_document, resolve_package_path,
+    topological_package_order, verify_workspace, WorkspaceDocument, WorkspaceError,
+    WorkspacePackage, WorkspacePackageReport, WorkspaceVerifyReport, WORKSPACE_PROJECT_FILE,
+    WORKSPACE_SCHEMA_VERSION,
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.23.0";
+pub const LANGUAGE_VERSION: &str = "0.24.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(

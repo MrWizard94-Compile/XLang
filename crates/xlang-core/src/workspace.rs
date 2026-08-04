@@ -1,9 +1,8 @@
-//! Offline multi-package workspaces (`aether.workspace/v1`) — M18 / ADR-022.
+//! Offline multi-package workspaces (`aether.workspace/v1`) — M18 / M22.
 //!
 //! A workspace lists local package directories, each containing
-//! `aether.project.json`. Optional `depends_on` edges form an acyclic graph
-//! used only for verification order. There is no network and no cross-package
-//! language linking.
+//! `aether.project.json`. Optional `depends_on` edges form an acyclic graph for
+//! verification order and authorize M22 `import unit … from package`.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
@@ -12,10 +11,11 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::modules::compile_project_modules_with_packages;
 use crate::project::{
     parse_project_document, verify_project, ProjectError, ProjectVerifyReport,
 };
-use crate::{LANGUAGE_NAME, LANGUAGE_VERSION};
+use crate::{CompileOutput, LANGUAGE_NAME, LANGUAGE_VERSION};
 
 pub const WORKSPACE_SCHEMA_VERSION: &str = "aether.workspace/v1";
 pub const WORKSPACE_PROJECT_FILE: &str = "aether.project.json";
@@ -368,6 +368,66 @@ pub fn verify_workspace(
         version: document.version.clone(),
         packages,
     })
+}
+
+/// Build one workspace package (main cone) with M22 cross-package imports.
+pub fn compile_workspace_package(
+    workspace_root: &Path,
+    document: &WorkspaceDocument,
+    package_name: &str,
+) -> Result<CompileOutput, WorkspaceError> {
+    validate_workspace_document(document)?;
+    let package = document
+        .packages
+        .iter()
+        .find(|package| package.name == package_name)
+        .ok_or_else(|| {
+            WorkspaceError::new(
+                "AE-WORKSPACE-003",
+                format!("workspace has no package named {package_name}"),
+            )
+        })?;
+    let package_root = resolve_package_path(workspace_root, &package.path)?;
+    let project_file = package_root.join(WORKSPACE_PROJECT_FILE);
+    let json = fs::read_to_string(&project_file).map_err(|error| {
+        WorkspaceError::new(
+            "AE-WORKSPACE-004",
+            format!(
+                "could not read {} for package {}: {error}",
+                project_file.display(),
+                package.name
+            ),
+        )
+    })?;
+    let project = parse_project_document(&json)?;
+
+    let mut package_roots = BTreeMap::new();
+    let mut allowed = BTreeSet::new();
+    for dep in &package.depends_on {
+        allowed.insert(dep.clone());
+        let dep_pkg = document
+            .packages
+            .iter()
+            .find(|candidate| candidate.name == *dep)
+            .expect("depends_on validated");
+        let root = resolve_package_path(workspace_root, &dep_pkg.path)?;
+        package_roots.insert(dep.clone(), root);
+    }
+    // Allow importing from self by package name as well.
+    allowed.insert(package.name.clone());
+    package_roots.insert(package.name.clone(), package_root.clone());
+
+    compile_project_modules_with_packages(&package_root, &project, &package_roots, &allowed).map_err(
+        |error| {
+            WorkspaceError::new(
+                "AE-WORKSPACE-004",
+                format!(
+                    "workspace package {package_name} build failed [{}]: {}",
+                    error.code, error.message
+                ),
+            )
+        },
+    )
 }
 
 fn verify_one_package(

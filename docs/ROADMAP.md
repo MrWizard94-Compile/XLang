@@ -1,6 +1,6 @@
 # Aether Language Development Roadmap
 
-**Status:** M0–M18 complete (language 0.11; package through 0.23 workspace);
+**Status:** M0–M18, M20, M22 product; M19/M21 designed only; package **0.24**;
 TP-1/TP-2 delivered; portfolio ADR-014
 **Date:** 2026-08-04
 **Scope:** This orders language design and engineering work. Each future
@@ -83,6 +83,10 @@ invalid-source diagnostic parity.
 | M16 | Resource ↔ handle (T-RX) | M2, M4 | Total weave may own arena/buffer/table and terminal-`handle` pure Error[Whole]; abortive raise/forward and nurseries stay resource-free. | Matrix green; seed dual-compare mix example; access cannot span handle. | **Implemented in package 0.21 (ADR-020)** |
 | M17 | Offline test runner (T-TEST) | M9, seed compile | `aether test` discovers `*_test.ae`, seed-compiles, pure-runs; pass = exit 0. | Matrix green; empty discovery fails closed; examples/tests pass. | **Implemented in package 0.22 (ADR-021)** |
 | M18 | Offline workspace (T-PKG) | M9–M11 | `aether.workspace/v1` multi-package path graph + `workspace verify`; acyclic `depends_on`; nested project verify. | Matrix green; cycle/escape negatives; no registry/linking claim. | **Implemented in package 0.23 (ADR-022)** |
+| M19 | Deeper T-RX | M16 | Destruction model before abortive+resource / nursery+resource. | Design only. | **Designed (ADR-023); deferred** |
+| M20 | Stdlib layer 0 | M11 | Pure Whole helper modules under `stdlib/`. | Project build + tests. | **Implemented in package 0.24 (ADR-024)** |
+| M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Threat+design only. | **Designed (ADR-025); implementation blocked** |
+| M22 | Cross-package import | M11, M18 | `import unit "…" from package name as alias` + `workspace build --package`. | Matrix green; depends_on jail. | **Implemented in package 0.24 (ADR-026)** |
 
 ## Milestone detail
 
@@ -244,11 +248,9 @@ Post-M10 growth is governed by [ADR-014](ADR-014-post-m10-track-portfolio.md).
 Mainstream multi-epoch plan:
 [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next design:** deeper T-RX, stdlib layer, or T-FFI — each needs a new
-ADR. M11–M18 are implemented (including offline workspace T-PKG).
+**Default next:** M19 foundation (`release`/destruction) if pursuing T-RX; or
+stdlib expansion; FFI only after human authorize ADR-025 threat residual.
 
-Ordered backlog remaining: deeper T-RX → C/FFI → optional stdlib expansion per
-maturity roadmap. Further T-CT slices (calls, control) need new ADRs.
 Native/LLVM and network registries remain blocked without law change.
 
 Each track begins with the falsifiable spike discipline in

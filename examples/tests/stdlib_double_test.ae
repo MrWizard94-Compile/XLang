@@ -1,0 +1,13 @@
+world stdlib_double_test
+
+weave double [value: Whole] -> Whole:
+  yield product value 2
+
+weave main [] -> Whole:
+  bind result <- call double 21
+  bind mutable code <- 1
+  choose same result 42:
+    revise code <- 0
+  otherwise:
+    revise code <- 1
+  yield code

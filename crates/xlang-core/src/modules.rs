@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::project::{
     resolve_unit_path, validate_unit_path, ProjectDocument, ProjectError, ProjectUnitRole,
@@ -17,8 +17,20 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ModuleImport {
+    /// Unit path within the resolved package/project (project-relative grammar).
     path: String,
+    /// When set, resolve under that workspace package root (M22).
+    package: Option<String>,
     alias: String,
+}
+
+impl ModuleImport {
+    fn graph_key(&self) -> String {
+        match &self.package {
+            Some(package) => format!("{package}::{}", self.path),
+            None => self.path.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,12 +55,16 @@ fn module_error(code: &'static str, message: impl Into<String>) -> ProjectError 
 }
 
 /// Stable mangled weave name for a unit path + weave.
+///
+/// Accepts ordinary unit paths (`lib/math.ae`) and M22 package keys
+/// (`util::whole.ae`). Output uses only lowercase letters, digits, and `_`.
 #[must_use]
 pub fn mangle_weave(unit_path: &str, weave: &str) -> String {
     let stem = unit_path
         .strip_suffix(".ae")
         .unwrap_or(unit_path)
-        .replace('/', "_");
+        .replace(['/', ':', '.'], "_")
+        .to_ascii_lowercase();
     format!("m_{stem}_{weave}")
 }
 
@@ -194,6 +210,7 @@ fn parse_module_source(
 
 fn parse_import_line(content: &str, module_path: &str) -> Result<ModuleImport, ProjectError> {
     // import unit "path" as alias
+    // import unit "path" from package name as alias  (M22)
     let rest = content
         .strip_prefix("import unit ")
         .ok_or_else(|| module_error("AE-MOD-001", "expected import unit"))?;
@@ -218,14 +235,54 @@ fn parse_import_line(content: &str, module_path: &str) -> Result<ModuleImport, P
             format!("import path in {module_path}: {}", error.message),
         )
     })?;
-    let tail = after[end + 1..].trim_start();
+    let mut tail = after[end + 1..].trim_start();
+    let mut package = None;
+    if let Some(pkg_rest) = tail.strip_prefix("from package ") {
+        let pkg_rest = pkg_rest.trim_start();
+        let Some((pkg_name, after_pkg)) = pkg_rest.split_once(" as ") else {
+            return Err(module_error(
+                "AE-MOD-001",
+                format!(
+                    "import unit in {module_path} with from package requires `as <alias>`"
+                ),
+            ));
+        };
+        let pkg_name = pkg_name.trim();
+        if pkg_name.is_empty()
+            || !pkg_name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic())
+            || !pkg_name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Err(module_error(
+                "AE-MOD-001",
+                format!("package name in import of {module_path} is invalid"),
+            ));
+        }
+        package = Some(pkg_name.to_owned());
+        tail = after_pkg.trim_start();
+        // alias is the remainder after " as " already split
+        let alias = tail.trim();
+        return finish_import(path, package, alias, module_path);
+    }
     let Some(alias_part) = tail.strip_prefix("as ") else {
         return Err(module_error(
             "AE-MOD-001",
             format!("import unit in {module_path} requires `as <alias>`"),
         ));
     };
-    let alias = alias_part.trim();
+    finish_import(path, package, alias_part.trim(), module_path)
+}
+
+fn finish_import(
+    path: String,
+    package: Option<String>,
+    alias: &str,
+    module_path: &str,
+) -> Result<ModuleImport, ProjectError> {
     if alias.is_empty()
         || !alias.chars().next().is_some_and(|c| c.is_ascii_lowercase())
         || !alias
@@ -245,6 +302,7 @@ fn parse_import_line(content: &str, module_path: &str) -> Result<ModuleImport, P
     }
     Ok(ModuleImport {
         path,
+        package,
         alias: alias.to_owned(),
     })
 }
@@ -307,8 +365,10 @@ pub fn source_requires_project_modules(source: &str) -> bool {
 fn load_graph(
     project_root: &Path,
     document: &ProjectDocument,
+    package_roots: &BTreeMap<String, PathBuf>,
+    allowed_packages: &BTreeSet<String>,
 ) -> Result<BTreeMap<String, ParsedModule>, ProjectError> {
-    let mut by_path = BTreeMap::new();
+    let mut by_key = BTreeMap::new();
     for unit in &document.units {
         let resolved = resolve_unit_path(project_root, &unit.path)?;
         let bytes = fs::read(&resolved).map_err(|error| {
@@ -324,9 +384,104 @@ fn load_graph(
             )
         })?;
         let parsed = parse_module_source(&unit.path, &source, unit.role)?;
-        by_path.insert(unit.path.clone(), parsed);
+        by_key.insert(unit.path.clone(), parsed);
     }
-    Ok(by_path)
+
+    // Load foreign package units referenced by imports (M22), fixed-point.
+    loop {
+        let pending: Vec<ModuleImport> = by_key
+            .values()
+            .flat_map(|module| module.imports.clone())
+            .filter(|import| {
+                import.package.is_some() && !by_key.contains_key(&import.graph_key())
+            })
+            .collect();
+        if pending.is_empty() {
+            break;
+        }
+        for import in pending {
+            let package_name = import.package.as_ref().expect("foreign import");
+            if !allowed_packages.contains(package_name) {
+                return Err(module_error(
+                    "AE-MOD-002",
+                    format!(
+                        "import from package {package_name} is not allowed (missing workspace depends_on)"
+                    ),
+                ));
+            }
+            let key = import.graph_key();
+            if by_key.contains_key(&key) {
+                continue;
+            }
+            let package_root = package_roots.get(package_name).ok_or_else(|| {
+                module_error(
+                    "AE-MOD-002",
+                    format!("workspace package {package_name} is not available"),
+                )
+            })?;
+            let foreign = load_foreign_package_unit(package_root, package_name, &import.path)?;
+            by_key.insert(key, foreign);
+        }
+    }
+    Ok(by_key)
+}
+
+fn load_foreign_package_unit(
+    package_root: &Path,
+    package_name: &str,
+    unit_path: &str,
+) -> Result<ParsedModule, ProjectError> {
+    use crate::project::{parse_project_document, PROJECT_SCHEMA_VERSION};
+    let project_file = package_root.join("aether.project.json");
+    let json = fs::read_to_string(&project_file).map_err(|error| {
+        module_error(
+            "AE-MOD-002",
+            format!(
+                "package {package_name} missing aether.project.json: {error}"
+            ),
+        )
+    })?;
+    let document = parse_project_document(&json)?;
+    if document.schema != PROJECT_SCHEMA_VERSION {
+        return Err(module_error(
+            "AE-MOD-002",
+            format!("package {package_name} has unsupported project schema"),
+        ));
+    }
+    let unit = document
+        .units
+        .iter()
+        .find(|unit| unit.path == unit_path)
+        .ok_or_else(|| {
+            module_error(
+                "AE-MOD-002",
+                format!("package {package_name} has no unit {unit_path}"),
+            )
+        })?;
+    if unit.role != ProjectUnitRole::Lib {
+        return Err(module_error(
+            "AE-MOD-002",
+            format!("package {package_name} unit {unit_path} must be role lib for cross-package import"),
+        ));
+    }
+    let resolved = resolve_unit_path(package_root, unit_path)?;
+    let bytes = fs::read(&resolved).map_err(|error| {
+        module_error(
+            "AE-PROJECT-002",
+            format!("could not read package {package_name} unit {unit_path}: {error}"),
+        )
+    })?;
+    let source = String::from_utf8(bytes).map_err(|_| {
+        module_error(
+            "AE-PROJECT-004",
+            format!("package {package_name} unit {unit_path} is not valid UTF-8"),
+        )
+    })?;
+    let key = format!("{package_name}::{unit_path}");
+    let mut parsed = parse_module_source(&key, &source, ProjectUnitRole::Lib)?;
+    // Graph identity uses package::path; keep path field as key for mangling.
+    parsed.path = key;
+    Ok(parsed)
 }
 
 fn closed_cone(
@@ -360,23 +515,24 @@ fn closed_cone(
             )
         })?;
         for import in &module.imports {
-            if !modules.contains_key(&import.path) {
+            let target_key = import.graph_key();
+            if !modules.contains_key(&target_key) {
                 return Err(module_error(
                     "AE-MOD-002",
                     format!(
-                        "module {} imports {}, which is not listed in the project",
-                        path, import.path
+                        "module {} imports {}, which is not listed in the project or workspace package graph",
+                        path, target_key
                     ),
                 ));
             }
-            let target = &modules[&import.path];
+            let target = &modules[&target_key];
             if target.role == ProjectUnitRole::Main {
                 return Err(module_error(
                     "AE-MOD-002",
-                    format!("module {path} cannot import the main unit {}", import.path),
+                    format!("module {path} cannot import the main unit {target_key}"),
                 ));
             }
-            dfs(&import.path, modules, visiting, visited, order)?;
+            dfs(&target_key, modules, visiting, visited, order)?;
         }
         visiting.remove(path);
         visited.insert(path.to_owned());
@@ -526,7 +682,22 @@ pub fn elaborate_project_modules(
     project_root: &Path,
     document: &ProjectDocument,
 ) -> Result<String, ProjectError> {
-    let modules = load_graph(project_root, document)?;
+    elaborate_project_modules_with_packages(
+        project_root,
+        document,
+        &BTreeMap::new(),
+        &BTreeSet::new(),
+    )
+}
+
+/// Elaborate with optional workspace package roots for M22 cross-package imports.
+pub fn elaborate_project_modules_with_packages(
+    project_root: &Path,
+    document: &ProjectDocument,
+    package_roots: &BTreeMap<String, PathBuf>,
+    allowed_packages: &BTreeSet<String>,
+) -> Result<String, ProjectError> {
+    let modules = load_graph(project_root, document, package_roots, allowed_packages)?;
     let entry = document
         .units
         .iter()
@@ -581,10 +752,11 @@ pub fn elaborate_project_modules(
                     format!("module {path} reuses import alias {}", import.alias),
                 ));
             }
-            let exports = export_tables.get(&import.path).ok_or_else(|| {
+            let target_key = import.graph_key();
+            let exports = export_tables.get(&target_key).ok_or_else(|| {
                 module_error(
                     "AE-MOD-002",
-                    format!("import {} missing export table", import.path),
+                    format!("import {target_key} missing export table"),
                 )
             })?;
             for (weave, mangled) in exports {
@@ -599,7 +771,8 @@ pub fn elaborate_project_modules(
     for path in &order {
         let module = &modules[path];
         for import in &module.imports {
-            let exports = &export_tables[&import.path];
+            let target_key = import.graph_key();
+            let exports = &export_tables[&target_key];
             let needle = format!("call {}.", import.alias);
             for line in module.body_source.lines() {
                 if let Some(pos) = line.find(&needle) {
@@ -653,7 +826,27 @@ pub fn compile_project_modules(
     project_root: &Path,
     document: &ProjectDocument,
 ) -> Result<CompileOutput, ProjectError> {
-    let source = elaborate_project_modules(project_root, document)?;
+    compile_project_modules_with_packages(
+        project_root,
+        document,
+        &BTreeMap::new(),
+        &BTreeSet::new(),
+    )
+}
+
+/// Like [`compile_project_modules`] with workspace package roots (M22).
+pub fn compile_project_modules_with_packages(
+    project_root: &Path,
+    document: &ProjectDocument,
+    package_roots: &BTreeMap<String, PathBuf>,
+    allowed_packages: &BTreeSet<String>,
+) -> Result<CompileOutput, ProjectError> {
+    let source = elaborate_project_modules_with_packages(
+        project_root,
+        document,
+        package_roots,
+        allowed_packages,
+    )?;
     let bootstrap = compile_to_bytecode(&source).map_err(|error| {
         module_error(
             "AE-PROJECT-004",

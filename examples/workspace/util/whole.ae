@@ -1,0 +1,4 @@
+world util_whole
+
+export weave double [value: Whole] -> Whole:
+  yield product value 2

@@ -10,15 +10,15 @@ mod test_runner;
 use aether_core::{
     apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
     compile_to_bytecode, compile_with_seed, forge_bytecode, format_project, format_source,
-    multi_module_authority_note, parse_project_document, parse_workspace_document, run_bytecode,
-    run_bytecode_with_grants, structural_document_json, unit_artifact_file_name, verify_bytecode,
-    verify_project, verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME,
-    LANGUAGE_VERSION,
+    compile_workspace_package, multi_module_authority_note, parse_project_document,
+    parse_workspace_document, run_bytecode, run_bytecode_with_grants, structural_document_json,
+    unit_artifact_file_name, verify_bytecode, verify_project, verify_workspace, HostGrantConfig,
+    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether workspace verify <workspace-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18; no cross-package language linking).\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -268,6 +268,26 @@ fn workspace_verify(workspace_path: &Path) -> Result<(), String> {
             package.project.units.len()
         );
     }
+    Ok(())
+}
+
+fn workspace_build(
+    workspace_path: &Path,
+    package_name: &str,
+    output_path: &Path,
+) -> Result<(), String> {
+    let json = read_source(workspace_path)?;
+    let document = parse_workspace_document(&json).map_err(|error| error.to_string())?;
+    let root = project_root_for(workspace_path);
+    let compiled = compile_workspace_package(root, &document, package_name)
+        .map_err(|error| error.to_string())?;
+    write_artifact(output_path, compiled.bytecode)?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} workspace {} package {} built {} (seed multi-module via elaboration; M22)",
+        document.name,
+        package_name,
+        output_path.display()
+    );
     Ok(())
 }
 
@@ -547,7 +567,36 @@ fn run() -> Result<(), String> {
                     }
                     workspace_verify(Path::new(&workspace))
                 }
-                _ => Err("workspace accepts the verify subcommand".to_owned()),
+                "build" => {
+                    let workspace = next_argument(&mut arguments, "workspace file")?;
+                    let package_flag = next_argument(&mut arguments, "--package flag")?;
+                    if package_flag != "--package" {
+                        return Err(
+                            "workspace build requires --package <name> --output <artifact-file>"
+                                .to_owned(),
+                        );
+                    }
+                    let package = next_argument(&mut arguments, "package name")?;
+                    let output_flag = next_argument(&mut arguments, "--output flag")?;
+                    if output_flag != "--output" {
+                        return Err(
+                            "workspace build requires --package <name> --output <artifact-file>"
+                                .to_owned(),
+                        );
+                    }
+                    let output = next_argument(&mut arguments, "artifact output file")?;
+                    if arguments.next().is_some() {
+                        return Err(
+                            "workspace build accepts one workspace file, --package, and --output"
+                                .to_owned(),
+                        );
+                    }
+                    let package = package
+                        .into_string()
+                        .map_err(|_| "package name must be valid UTF-8".to_owned())?;
+                    workspace_build(Path::new(&workspace), &package, Path::new(&output))
+                }
+                _ => Err("workspace accepts verify or build subcommands".to_owned()),
             }
         }
         "version" => {
@@ -781,5 +830,18 @@ mod tests {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../examples/workspace/aether.workspace.json");
         workspace_verify(&workspace).expect("examples/workspace should verify");
+    }
+
+    #[test]
+    fn shipped_workspace_build_app_imports_util() {
+        let temporary = TemporaryDirectory::create();
+        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/workspace/aether.workspace.json");
+        let output = temporary.path.join("app.aeth");
+        workspace_build(&workspace, "app", &output).expect("workspace build app");
+        let artifact = fs::read(&output).expect("artifact");
+        verify_bytecode(&artifact).expect("verify");
+        let run = run_bytecode(&artifact).expect("run");
+        assert_eq!(run.exit_code, 42);
     }
 }

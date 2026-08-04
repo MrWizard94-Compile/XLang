@@ -1,0 +1,6 @@
+world stdlib_entry
+
+import unit "whole.ae" as wh
+
+weave main [] -> Whole:
+  yield call wh.double 21

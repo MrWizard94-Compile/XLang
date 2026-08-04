@@ -941,7 +941,9 @@ Accepted by:
 5. **M16 resource↔handle implemented** (package 0.21; ADR-020 T-RX first slice).  
 6. **M17 offline `aether test` implemented** (package 0.22; ADR-021).  
 7. **M18 offline workspace implemented** (package 0.23; ADR-022 T-PKG).  
-8. **Next:** deeper T-RX, stdlib, or T-FFI — each needs its ADR.  
+8. **M20 stdlib layer 0 + M22 cross-package import** (package 0.24).  
+9. **M19/M21 design-only** (deeper T-RX deferred; FFI blocked on threat).  
+10. **Next:** destruction model (M19 foundation) or human-authorized FFI.  
 4. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table (can wait).
 
 ---

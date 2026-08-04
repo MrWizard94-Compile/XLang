@@ -56,7 +56,7 @@ JavaScript, LLVM, or another language.
 M6 (explicit layout shapes and dual-layout tables), M7 (structured nurseries),
 and M8 (capability-closed pure host ABI pilot) are implemented on the
 seed-hosted product compile path in Aether 0.11 / AETH v11. Toolchain package
-0.12 added offline project verify and format (M9); package **0.13** adds multi-unit nested project integrity (M10); package **0.18** completes modules (M11), fine-grained edits (M12), and bounded offline LSP M13a+M13b (`aether lsp [--project …]`); package **0.19** adds grant-backed host I/O (M14); package **0.20** adds comptime Whole name chaining (M15); package **0.21** allows terminal handle over live resources (M16); package **0.22** adds offline `aether test` (M17); package **0.23** adds offline multi-package workspaces (M18).
+0.12 added offline project verify and format (M9); package **0.13** adds multi-unit nested project integrity (M10); package **0.18** completes modules (M11), fine-grained edits (M12), and bounded offline LSP M13a+M13b (`aether lsp [--project …]`); package **0.19** adds grant-backed host I/O (M14); package **0.20** adds comptime Whole name chaining (M15); package **0.21** allows terminal handle over live resources (M16); package **0.22** adds offline `aether test` (M17); package **0.23** adds offline multi-package workspaces (M18); package **0.24** adds stdlib layer 0 (M20) and cross-package imports (M22).
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
 proof dual-compare. Seed Profile self-host, all shipped examples, the complete
@@ -91,6 +91,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | M16 resource↔handle (implemented 0.21) | [docs/AETHER_0.21.md](docs/AETHER_0.21.md), [docs/DESIGN-M16-RESOURCE-EFFECT.md](docs/DESIGN-M16-RESOURCE-EFFECT.md), [docs/ADR-020-m16-resource-effect.md](docs/ADR-020-m16-resource-effect.md), [docs/M16-VALIDATION-MATRIX.md](docs/M16-VALIDATION-MATRIX.md) |
 | M17 offline test runner (implemented 0.22) | [docs/AETHER_0.22.md](docs/AETHER_0.22.md), [docs/DESIGN-M17-OFFLINE-TEST-RUNNER.md](docs/DESIGN-M17-OFFLINE-TEST-RUNNER.md), [docs/ADR-021-m17-offline-test-runner.md](docs/ADR-021-m17-offline-test-runner.md), [docs/M17-VALIDATION-MATRIX.md](docs/M17-VALIDATION-MATRIX.md) |
 | M18 offline workspace (implemented 0.23) | [docs/AETHER_0.23.md](docs/AETHER_0.23.md), [docs/DESIGN-M18-OFFLINE-WORKSPACE.md](docs/DESIGN-M18-OFFLINE-WORKSPACE.md), [docs/ADR-022-m18-offline-workspace.md](docs/ADR-022-m18-offline-workspace.md), [docs/M18-VALIDATION-MATRIX.md](docs/M18-VALIDATION-MATRIX.md) |
+| M19–M22 portfolio continuation | [docs/AETHER_0.24.md](docs/AETHER_0.24.md); M19 [ADR-023](docs/ADR-023-m19-deeper-resource-effect.md); M20 [ADR-024](docs/ADR-024-m20-stdlib-layer0.md); M21 [ADR-025](docs/ADR-025-m21-foreign-abi-pilot.md) + [threat v3](docs/THREAT_MODEL-v3-FOREIGN-ABI.md); M22 [ADR-026](docs/ADR-026-m22-cross-package-import.md) |
 | Technical preview notes | [docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md](docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md) |
 | M10 multi-unit projects | [docs/AETHER_0.13.md](docs/AETHER_0.13.md), [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md), [docs/ADR-013-m10-multi-unit-projects.md](docs/ADR-013-m10-multi-unit-projects.md), [docs/M10-VALIDATION-MATRIX.md](docs/M10-VALIDATION-MATRIX.md) |
 | Post-M10 track portfolio | [docs/ADR-014-post-m10-track-portfolio.md](docs/ADR-014-post-m10-track-portfolio.md), [docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md](docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md) |
@@ -105,8 +106,8 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.23.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.23.0) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.24.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.24.0) |
 | Artifact format | AETH **v4–v10** compatibility input + deterministic **v11** output with shape table, dual-layout tables, structured nurseries, effect metadata, host function kind, `HOST_CALL`, and `COMPTIME_WHOLE` provenance (earlier/unknown versions rejected) |
 | Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |

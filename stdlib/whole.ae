@@ -1,0 +1,10 @@
+world whole_lib
+
+export weave double [value: Whole] -> Whole:
+  yield product value 2
+
+export weave inc [value: Whole] -> Whole:
+  yield sum value 1
+
+export weave is_zero [value: Whole] -> Truth:
+  yield same value 0

@@ -2,24 +2,23 @@
 
 ## Contract
 
-Aether **0.23.0** (base language **0.11** plus M11–M18 tooling and semantics,
-AETH **v11**) accepts Aether source, returns a canonical AST from the Rust
-bootstrap for tooling, and **emits AETH v11 bytecode primarily through the
+Aether **0.24.0** (base language **0.11** plus M11–M18, M20, M22 tooling and
+semantics, AETH **v11**) accepts Aether source, returns a canonical AST from the
+Rust bootstrap for tooling, and **emits AETH v11 bytecode primarily through the
 Aether-written seed compiler** (forge ABI). Single-file `compile` is seed-hosted.
 Multi-module `project build` elaborates the import DAG, dual-compares
-bootstrap≡seed, and writes seed artifacts. Authoring uses `aether.ast/v7` and
-`aether.edit/v7`. The CLI provides offline project verify/format,
-`aether workspace verify` (M18 multi-package path graphs),
-`aether lsp [--project …]`, `aether run` with optional `--grant-*` (M14), and
-`aether test` (M17). `comptime bind` may chain prior comptime Whole names (M15).
-Total weaves may own arenas/buffers/tables and terminal-`handle` pure
-`Error[Whole]` callees (M16). Verified AETH v4–v10 remain compatibility inputs.
-Source is never translated to an existing language.
+bootstrap≡seed, and writes seed artifacts. `workspace build --package` elaborates
+cross-package imports (M22). Authoring uses `aether.ast/v7` and `aether.edit/v7`.
+The CLI provides offline project/workspace verify, `aether test` (M17),
+`aether lsp`, and `aether run` with optional `--grant-*` (M14). Stdlib layer 0
+lives under `stdlib/` (M20). Verified AETH v4–v10 remain compatibility inputs.
+Source is never translated to an existing language. Foreign/C ABI is **not**
+product surface (M21 design-only).
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.23 product contract (0.11 core language,
-M9–M18 tooling including offline workspaces). It intentionally
+This manifest is the executable Aether 0.24 product contract (0.11 core language,
+M9–M18/M20/M22 tooling). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -135,7 +134,13 @@ grants, pass when `main` yields Whole **0**. Empty discovery fails closed.
 M18 (package 0.23) adds offline `aether.workspace/v1` multi-package graphs:
 named local package directories under the workspace root, optional acyclic
 `depends_on`, and `aether workspace verify` that nested-verifies each
-`aether.project.json`. No network registry and no cross-package language import.
+`aether.project.json`. No network registry.
+
+M20 (package 0.24) ships stdlib layer 0 under `stdlib/` (pure Whole helpers).
+
+M22 (package 0.24) adds `import unit "path" from package name as alias` and
+`aether workspace build --package` for depends_on-authorized cross-package lib
+imports.
 
 Every 0.11 compilation emits AETH v11 with an arena-capacity header field, a
 possibly empty bounded record table, a shape table, a function `effect_tag`, and

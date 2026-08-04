@@ -1,4 +1,6 @@
 world app_pkg
 
+import unit "whole.ae" from package util as wh
+
 weave main [] -> Whole:
-  yield 1
+  yield call wh.double 21

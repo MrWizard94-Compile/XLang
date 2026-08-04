@@ -1,6 +1,6 @@
 {
   "schema": "aether.project/v1",
-  "name": "util_pkg",
+  "name": "aether_stdlib_layer0",
   "version": "0.1.0",
   "units": [
     { "path": "main.ae", "role": "main" },
