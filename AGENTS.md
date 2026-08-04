@@ -56,7 +56,7 @@ JavaScript, LLVM, or another language.
 M6 (explicit layout shapes and dual-layout tables), M7 (structured nurseries),
 and M8 (capability-closed pure host ABI pilot) are implemented on the
 seed-hosted product compile path in Aether 0.11 / AETH v11. Toolchain package
-0.12 added offline project verify and format (M9); package **0.13** adds multi-unit nested project integrity (M10); package **0.18** completes modules (M11), fine-grained edits (M12), and bounded offline LSP M13a+M13b (`aether lsp [--project …]`).
+0.12 added offline project verify and format (M9); package **0.13** adds multi-unit nested project integrity (M10); package **0.18** completes modules (M11), fine-grained edits (M12), and bounded offline LSP M13a+M13b (`aether lsp [--project …]`); package **0.19** adds grant-backed host I/O (M14).
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
 proof dual-compare. Seed Profile self-host, all shipped examples, the complete
@@ -86,7 +86,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Completion readiness audit | [docs/AUDIT_REPORT-2026-08-04-COMPLETION-READINESS.md](docs/AUDIT_REPORT-2026-08-04-COMPLETION-READINESS.md) |
 | Technical preview threat model | [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md) |
 | Capable host threat model v2 | [docs/THREAT_MODEL-v2-CAPABLE-HOST.md](docs/THREAT_MODEL-v2-CAPABLE-HOST.md) |
-| M14 host I/O (designed) | [docs/DESIGN-M14-HOST-IO-CAPABILITIES.md](docs/DESIGN-M14-HOST-IO-CAPABILITIES.md), [docs/ADR-018-m14-host-io-capabilities.md](docs/ADR-018-m14-host-io-capabilities.md), [docs/M14-VALIDATION-MATRIX.md](docs/M14-VALIDATION-MATRIX.md) |
+| M14 host I/O (implemented 0.19) | [docs/AETHER_0.19.md](docs/AETHER_0.19.md), [docs/DESIGN-M14-HOST-IO-CAPABILITIES.md](docs/DESIGN-M14-HOST-IO-CAPABILITIES.md), [docs/ADR-018-m14-host-io-capabilities.md](docs/ADR-018-m14-host-io-capabilities.md), [docs/M14-VALIDATION-MATRIX.md](docs/M14-VALIDATION-MATRIX.md) |
 | Technical preview notes | [docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md](docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md) |
 | M10 multi-unit projects | [docs/AETHER_0.13.md](docs/AETHER_0.13.md), [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md), [docs/ADR-013-m10-multi-unit-projects.md](docs/ADR-013-m10-multi-unit-projects.md), [docs/M10-VALIDATION-MATRIX.md](docs/M10-VALIDATION-MATRIX.md) |
 | Post-M10 track portfolio | [docs/ADR-014-post-m10-track-portfolio.md](docs/ADR-014-post-m10-track-portfolio.md), [docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md](docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md) |
@@ -101,8 +101,8 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.18.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.18.0) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.19.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.19.0) |
 | Artifact format | AETH **v4–v10** compatibility input + deterministic **v11** output with shape table, dual-layout tables, structured nurseries, effect metadata, host function kind, `HOST_CALL`, and `COMPTIME_WHOLE` provenance (earlier/unknown versions rejected) |
 | Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |
@@ -112,7 +112,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 
 1. **Seed-hosted product compile** — CLI default compile uses the Aether-written seed; bootstrap is not the product compiler path.
 2. **Verify before run / write** — VM and forge only accept verified supported AETH v4, v5, v6, v7, v8, v9, v10, or v11.
-3. **No host capability leak** — invoked artifacts have no file, process, network, or shell authority; forge host owns I/O after verification.
+3. **No ambient host capability leak** — default run installs only pure fixtures; grant-backed I/O (M14) requires explicit operator `--grant-*` roots/names and path jail; no shell/network; forge host owns I/O after verification.
 4. **Honest self-host claims** — Seed Profile, shipped examples, the complete documented prior canonical surface (including immutable records), and the documented M2 arena/buffer, M4 error-effect, M5 comptime, M6 layout, M7 nursery, and M8 host-pilot corpora match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
 5. **CLI authority boundary** — the CLI reads only caller-selected local files and writes source or artifacts only to an explicit output path after the required validation/seed-compile path; it has no model or network integration.
 6. **Legacy is reference only** — `legacy/` is never a production build input.

@@ -1,0 +1,9 @@
+world host_io_write
+
+host weave write_text [borrow path: Text, borrow body: Text] -> Whole
+
+weave main [] -> Whole:
+  bind path <- "out.txt"
+  bind body <- "hello"
+  bind n <- call write_text borrow path borrow body
+  yield n

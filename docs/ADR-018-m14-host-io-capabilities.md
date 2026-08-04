@@ -1,6 +1,6 @@
 # ADR-018: capability-mediated host I/O (M14)
 
-**Status:** Accepted (implementable) — **implementation not started**  
+**Status:** Accepted — **implemented in package 0.19.0**  
 **Date:** 2026-08-04  
 **Decision makers:** AGENTS Constitution; ADR-014 T-HOST after M13; threat model v2  
 **Related Rule IDs:** `SEC-INPUT-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`, `CONST-DEP-001`, `CONST-COMPLETE-001`  

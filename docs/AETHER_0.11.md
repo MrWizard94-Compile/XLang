@@ -62,8 +62,11 @@ include a kind byte after the effect byte:
 `aether.ast/v6`, `aether.edit/v6`, `aether.diagnostic/v6` expose `HostWeave`
 nodes and `hostWeaves` on the program document. v5 remains historical.
 
-## Explicit non-goals
+## Explicit non-goals (M8 document)
 
-C ABI, dynamic libraries, header ingestion, async host, guest file/network I/O,
-mutable host memory views, and erroring host weaves. Each needs a new threat
-model and ADR. See [DESIGN-M8-HOST-ABI-PILOT.md](DESIGN-M8-HOST-ABI-PILOT.md).
+C ABI, dynamic libraries, header ingestion, async host, ambient guest
+file/network I/O, mutable host memory views, and erroring host weaves. Package
+**0.19 / M14** later adds **grant-backed** read/write/env host weaves under
+threat model v2 — see [AETHER_0.19.md](AETHER_0.19.md). Shell, network, FFI, and
+ambient FS remain non-goals without a further ADR.
+See [DESIGN-M8-HOST-ABI-PILOT.md](DESIGN-M8-HOST-ABI-PILOT.md).

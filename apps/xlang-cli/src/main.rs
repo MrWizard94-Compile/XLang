@@ -9,14 +9,14 @@ mod lsp;
 use aether_core::{
     apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
     compile_to_bytecode, compile_with_seed, forge_bytecode, format_project, format_source,
-    multi_module_authority_note, parse_project_document, run_bytecode, structural_document_json,
-    unit_artifact_file_name, verify_bytecode, verify_project, InvocationValue, LANGUAGE_NAME,
-    LANGUAGE_VERSION,
+    multi_module_authority_note, parse_project_document, run_bytecode, run_bytecode_with_grants,
+    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
+    HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -141,15 +141,85 @@ fn forge(compiler_path: &Path, source_path: &Path, output_path: &Path) -> Result
     Ok(())
 }
 
-fn execute_artifact(artifact_path: &Path) -> Result<(), String> {
+fn execute_artifact(artifact_path: &Path, grants: HostGrantConfig) -> Result<(), String> {
     let artifact = read_artifact(artifact_path)?;
-    let output = run_bytecode(&artifact).map_err(|error| error.to_string())?;
+    let output = if grants.read_roots.is_empty()
+        && grants.write_roots.is_empty()
+        && grants.env_names.is_empty()
+    {
+        run_bytecode(&artifact).map_err(|error| error.to_string())?
+    } else {
+        run_bytecode_with_grants(&artifact, grants).map_err(|error| error.to_string())?
+    };
     print!("{}", output.stdout);
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} exited with {}",
         output.exit_code
     );
     Ok(())
+}
+
+fn require_existing_grant_root(path: &Path, kind: &str) -> Result<PathBuf, String> {
+    if !path.is_dir() {
+        return Err(format!(
+            "{kind} grant root must be an existing directory: {}",
+            path.display()
+        ));
+    }
+    path.canonicalize().map_err(|error| {
+        format!(
+            "could not resolve {kind} grant root {}: {error}",
+            path.display()
+        )
+    })
+}
+
+fn parse_run_grants(
+    arguments: &mut impl Iterator<Item = OsString>,
+) -> Result<HostGrantConfig, String> {
+    let mut grants = HostGrantConfig::default();
+    while let Some(flag) = arguments.next() {
+        match flag.to_string_lossy().as_ref() {
+            "--grant-read" => {
+                let root = next_argument(arguments, "--grant-read directory")?;
+                grants
+                    .read_roots
+                    .push(require_existing_grant_root(Path::new(&root), "read")?);
+            }
+            "--grant-write" => {
+                let root = next_argument(arguments, "--grant-write directory")?;
+                grants
+                    .write_roots
+                    .push(require_existing_grant_root(Path::new(&root), "write")?);
+            }
+            "--grant-env" => {
+                let name = next_argument(arguments, "--grant-env NAME")?;
+                let name = name
+                    .into_string()
+                    .map_err(|_| "grant-env NAME must be valid UTF-8".to_owned())?;
+                if name.is_empty() || name.len() > 256 {
+                    return Err(
+                        "grant-env NAME must be non-empty and at most 256 bytes".to_owned()
+                    );
+                }
+                if !name.bytes().all(|byte| {
+                    matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_')
+                }) {
+                    return Err(
+                        "grant-env NAME may contain only ASCII letters, digits, and underscore"
+                            .to_owned(),
+                    );
+                }
+                grants.env_names.push(name);
+            }
+            other => {
+                return Err(format!(
+                    "run accepts optional --grant-read/--grant-write/--grant-env after the artifact; unknown flag {other}"
+                ));
+            }
+        }
+    }
+    Ok(grants)
 }
 
 fn format_file(source_path: &Path, output_path: Option<&Path>) -> Result<(), String> {
@@ -343,10 +413,8 @@ fn run() -> Result<(), String> {
         }
         "run" => {
             let artifact = next_argument(&mut arguments, "artifact file")?;
-            if arguments.next().is_some() {
-                return Err("run accepts exactly one Aether artifact file".to_owned());
-            }
-            execute_artifact(Path::new(&artifact))
+            let grants = parse_run_grants(&mut arguments)?;
+            execute_artifact(Path::new(&artifact), grants)
         }
         "format" => {
             let source = next_argument(&mut arguments, "source file")?;
@@ -572,5 +640,34 @@ mod tests {
             output.push(char::from(HEX[usize::from(byte & 0x0F)]));
         }
         output
+    }
+
+    #[test]
+    fn run_with_grant_read_executes_host_io_example() {
+        let temporary = TemporaryDirectory::create();
+        let fixture = temporary.path.join("config.txt");
+        fs::write(&fixture, "Aether").expect("config fixture");
+        let source = fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/host-io-read.ae"),
+        )
+        .expect("host-io-read example");
+        let artifact = compile_with_seed(&source)
+            .expect("host-io-read should seed-compile")
+            .bytecode;
+        let artifact_path = temporary.path.join("host-io-read.aeth");
+        fs::write(&artifact_path, &artifact).expect("artifact write");
+
+        execute_artifact(
+            &artifact_path,
+            HostGrantConfig {
+                read_roots: vec![temporary.path.clone()],
+                write_roots: Vec::new(),
+                env_names: Vec::new(),
+            },
+        )
+        .expect("granted run should succeed");
+
+        let denied = execute_artifact(&artifact_path, HostGrantConfig::default());
+        assert!(denied.is_err(), "run without grant must fail closed");
     }
 }

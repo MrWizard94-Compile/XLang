@@ -6,7 +6,7 @@
 
 #![forbid(unsafe_code)]
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 
 mod authoring;
@@ -30,7 +30,7 @@ pub use project::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.18.0";
+pub const LANGUAGE_VERSION: &str = "0.19.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
@@ -1463,16 +1463,36 @@ struct NurseryFrame {
     seen: u8,
 }
 
-/// Capability-closed catalog of pure host services installed by the trusted host.
+/// Operator-selected host grants for capability-mediated I/O (M14 / ADR-018).
+///
+/// Empty grants install only pure fixtures (`whole_inc`, `text_extent`).
+#[derive(Clone, Debug, Default)]
+pub struct HostGrantConfig {
+    pub read_roots: Vec<std::path::PathBuf>,
+    pub write_roots: Vec<std::path::PathBuf>,
+    pub env_names: Vec<String>,
+}
+
+const HOST_IO_MAX_BYTES: usize = 1_000_000;
+
+/// Capability-closed catalog of host services installed by the trusted host.
 #[derive(Clone, Default)]
 struct HostServices {
     names: BTreeMap<String, HostServiceKind>,
+    read_roots: Vec<std::path::PathBuf>,
+    write_roots: Vec<std::path::PathBuf>,
+    env_names: BTreeSet<String>,
 }
 
 #[derive(Clone, Copy)]
 enum HostServiceKind {
     WholeInc,
     TextExtent,
+    ReadText,
+    ReadBytes,
+    WriteText,
+    WriteBytes,
+    EnvGet,
 }
 
 impl HostServices {
@@ -1481,7 +1501,42 @@ impl HostServices {
         let mut names = BTreeMap::new();
         names.insert("whole_inc".to_owned(), HostServiceKind::WholeInc);
         names.insert("text_extent".to_owned(), HostServiceKind::TextExtent);
-        Self { names }
+        Self {
+            names,
+            read_roots: Vec::new(),
+            write_roots: Vec::new(),
+            env_names: BTreeSet::new(),
+        }
+    }
+
+    /// Pure fixtures plus grant-backed I/O services when roots/names are non-empty.
+    fn with_grants(config: HostGrantConfig) -> Self {
+        let mut services = Self::pure_fixture();
+        services.read_roots = config.read_roots;
+        services.write_roots = config.write_roots;
+        services.env_names = config.env_names.into_iter().collect();
+        if !services.read_roots.is_empty() {
+            services
+                .names
+                .insert("read_text".to_owned(), HostServiceKind::ReadText);
+            services
+                .names
+                .insert("read_bytes".to_owned(), HostServiceKind::ReadBytes);
+        }
+        if !services.write_roots.is_empty() {
+            services
+                .names
+                .insert("write_text".to_owned(), HostServiceKind::WriteText);
+            services
+                .names
+                .insert("write_bytes".to_owned(), HostServiceKind::WriteBytes);
+        }
+        if !services.env_names.is_empty() {
+            services
+                .names
+                .insert("env_get".to_owned(), HostServiceKind::EnvGet);
+        }
+        services
     }
 
     fn invoke(
@@ -1539,8 +1594,299 @@ impl HostServices {
                 })?;
                 Ok(RuntimeValue::Whole(len))
             }
+            HostServiceKind::ReadText => {
+                let path = expect_one_text_path(arguments, offset, "read_text")?;
+                let full = resolve_under_roots(&self.read_roots, &path, offset)?;
+                let bytes = std::fs::read(&full).map_err(|error| {
+                    BytecodeError::new(
+                        offset,
+                        format!("AE-HOST-003: host service read_text failed: {error}"),
+                    )
+                })?;
+                if bytes.len() > HOST_IO_MAX_BYTES {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-005: host service read_text exceeds the 1000000-byte safety limit",
+                    ));
+                }
+                let text = String::from_utf8(bytes).map_err(|_| {
+                    BytecodeError::new(
+                        offset,
+                        "AE-HOST-003: host service read_text requires UTF-8 file contents",
+                    )
+                })?;
+                Ok(RuntimeValue::Text(text))
+            }
+            HostServiceKind::ReadBytes => {
+                let path = expect_one_text_path(arguments, offset, "read_bytes")?;
+                let full = resolve_under_roots(&self.read_roots, &path, offset)?;
+                let bytes = std::fs::read(&full).map_err(|error| {
+                    BytecodeError::new(
+                        offset,
+                        format!("AE-HOST-003: host service read_bytes failed: {error}"),
+                    )
+                })?;
+                if bytes.len() > HOST_IO_MAX_BYTES {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-005: host service read_bytes exceeds the 1000000-byte safety limit",
+                    ));
+                }
+                Ok(RuntimeValue::Bytes(bytes))
+            }
+            HostServiceKind::WriteText => {
+                if arguments.len() != 2 {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service write_text requires path and body Text",
+                    ));
+                }
+                let RuntimeValue::Text(path) = &arguments[0] else {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service write_text path must be Text",
+                    ));
+                };
+                let RuntimeValue::Text(body) = &arguments[1] else {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service write_text body must be Text",
+                    ));
+                };
+                if body.len() > HOST_IO_MAX_BYTES {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-005: host service write_text exceeds the 1000000-byte safety limit",
+                    ));
+                }
+                let full = resolve_under_roots(&self.write_roots, path, offset)?;
+                if let Some(parent) = full.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                std::fs::write(&full, body.as_bytes()).map_err(|error| {
+                    BytecodeError::new(
+                        offset,
+                        format!("AE-HOST-003: host service write_text failed: {error}"),
+                    )
+                })?;
+                let len = i64::try_from(body.len()).map_err(|_| {
+                    BytecodeError::new(
+                        offset,
+                        "AE-HOST-003: host service write_text length is outside Whole",
+                    )
+                })?;
+                Ok(RuntimeValue::Whole(len))
+            }
+            HostServiceKind::WriteBytes => {
+                if arguments.len() != 2 {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service write_bytes requires path Text and body Bytes",
+                    ));
+                }
+                let RuntimeValue::Text(path) = &arguments[0] else {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service write_bytes path must be Text",
+                    ));
+                };
+                let RuntimeValue::Bytes(body) = &arguments[1] else {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service write_bytes body must be Bytes",
+                    ));
+                };
+                if body.len() > HOST_IO_MAX_BYTES {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-005: host service write_bytes exceeds the 1000000-byte safety limit",
+                    ));
+                }
+                let full = resolve_under_roots(&self.write_roots, path, offset)?;
+                if let Some(parent) = full.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                std::fs::write(&full, body).map_err(|error| {
+                    BytecodeError::new(
+                        offset,
+                        format!("AE-HOST-003: host service write_bytes failed: {error}"),
+                    )
+                })?;
+                let len = i64::try_from(body.len()).map_err(|_| {
+                    BytecodeError::new(
+                        offset,
+                        "AE-HOST-003: host service write_bytes length is outside Whole",
+                    )
+                })?;
+                Ok(RuntimeValue::Whole(len))
+            }
+            HostServiceKind::EnvGet => {
+                let name = expect_one_text_path(arguments, offset, "env_get")?;
+                if name.len() > 256 {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-005: host service env_get name exceeds the 256-byte safety limit",
+                    ));
+                }
+                if !self.env_names.contains(&name) {
+                    return Err(BytecodeError::new(
+                        offset,
+                        format!("AE-HOST-003: host service env_get denied for name {name}"),
+                    ));
+                }
+                let value = std::env::var(&name).map_err(|_| {
+                    BytecodeError::new(
+                        offset,
+                        format!("AE-HOST-003: host service env_get missing environment variable {name}"),
+                    )
+                })?;
+                Ok(RuntimeValue::Text(value))
+            }
         }
     }
+}
+
+fn expect_one_text_path(
+    arguments: &[RuntimeValue],
+    offset: usize,
+    service: &str,
+) -> Result<String, BytecodeError> {
+    if arguments.len() != 1 {
+        return Err(BytecodeError::new(
+            offset,
+            format!("AE-HOST-002: host service {service} requires one Text path argument"),
+        ));
+    }
+    let RuntimeValue::Text(path) = &arguments[0] else {
+        return Err(BytecodeError::new(
+            offset,
+            format!("AE-HOST-002: host service {service} requires Text"),
+        ));
+    };
+    Ok(path.clone())
+}
+
+fn resolve_under_roots(
+    roots: &[std::path::PathBuf],
+    guest_path: &str,
+    offset: usize,
+) -> Result<std::path::PathBuf, BytecodeError> {
+    validate_guest_io_path(guest_path, offset)?;
+    if roots.is_empty() {
+        return Err(BytecodeError::new(
+            offset,
+            "AE-HOST-003: host I/O grant root is missing",
+        ));
+    }
+    if guest_path.len() > 4096 {
+        return Err(BytecodeError::new(
+            offset,
+            "AE-HOST-005: guest path exceeds the 4096-byte safety limit",
+        ));
+    }
+    let mut last_error = BytecodeError::new(offset, "AE-HOST-004: guest path escapes grant roots");
+    for root in roots {
+        let Ok(root_canon) = root.canonicalize() else {
+            last_error = BytecodeError::new(
+                offset,
+                format!(
+                    "AE-HOST-003: host grant root {} could not be resolved",
+                    root.display()
+                ),
+            );
+            continue;
+        };
+        let mut joined = root_canon.clone();
+        for segment in guest_path.split('/') {
+            joined.push(segment);
+        }
+        // Parent may not exist yet for writes: canonicalize parent + push file.
+        let resolved = if joined.exists() {
+            joined.canonicalize().map_err(|error| {
+                BytecodeError::new(
+                    offset,
+                    format!("AE-HOST-004: could not resolve guest path: {error}"),
+                )
+            })?
+        } else if let Some(parent) = joined.parent() {
+            let parent_canon = if parent.as_os_str().is_empty() {
+                root_canon.clone()
+            } else if parent.exists() {
+                parent.canonicalize().map_err(|error| {
+                    BytecodeError::new(
+                        offset,
+                        format!("AE-HOST-004: could not resolve guest path parent: {error}"),
+                    )
+                })?
+            } else {
+                // Allow write creating nested path only if we can create under root later;
+                // for resolve check, ensure planned path stays under root via component join.
+                let mut check = root_canon.clone();
+                for segment in guest_path.split('/') {
+                    check.push(segment);
+                }
+                if !check.starts_with(&root_canon) {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-004: guest path escapes grant root",
+                    ));
+                }
+                return Ok(check);
+            };
+            if !parent_canon.starts_with(&root_canon) {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AE-HOST-004: guest path escapes grant root",
+                ));
+            }
+            parent_canon.join(joined.file_name().ok_or_else(|| {
+                BytecodeError::new(offset, "AE-HOST-004: guest path has no file name")
+            })?)
+        } else {
+            return Err(BytecodeError::new(
+                offset,
+                "AE-HOST-004: guest path has no parent",
+            ));
+        };
+        if resolved.starts_with(&root_canon) {
+            return Ok(resolved);
+        }
+        last_error = BytecodeError::new(offset, "AE-HOST-004: guest path escapes grant root");
+    }
+    Err(last_error)
+}
+
+fn validate_guest_io_path(path: &str, offset: usize) -> Result<(), BytecodeError> {
+    if path.is_empty() {
+        return Err(BytecodeError::new(
+            offset,
+            "AE-HOST-004: guest path must be non-empty",
+        ));
+    }
+    if path.contains('\\') || path.starts_with('/') || path.contains(':') || path.contains("//") {
+        return Err(BytecodeError::new(
+            offset,
+            "AE-HOST-004: guest path must be relative with '/' separators only",
+        ));
+    }
+    for segment in path.split('/') {
+        if segment.is_empty() || segment == "." || segment == ".." {
+            return Err(BytecodeError::new(
+                offset,
+                "AE-HOST-004: guest path escapes grant root or has empty segments",
+            ));
+        }
+        if !segment
+            .bytes()
+            .all(|byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-'))
+        {
+            return Err(BytecodeError::new(
+                offset,
+                "AE-HOST-004: guest path contains an illegal segment",
+            ));
+        }
+    }
+    Ok(())
 }
 
 struct RuntimeState {
@@ -1555,10 +1901,6 @@ struct ArenaState {
 }
 
 impl RuntimeState {
-    fn new(capacity: u32) -> Result<Self, BytecodeError> {
-        Self::with_hosts(capacity, HostServices::pure_fixture())
-    }
-
     fn with_hosts(capacity: u32, hosts: HostServices) -> Result<Self, BytecodeError> {
         let capacity = usize::try_from(capacity)
             .map_err(|_| BytecodeError::new(0, "arena capacity is outside platform limits"))?;
@@ -2357,7 +2699,18 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
 }
 
 pub fn run_bytecode(bytecode: &[u8]) -> Result<RunOutput, BytecodeError> {
-    let output = invoke_bytecode(bytecode, "main", &[])?;
+    run_bytecode_with_grants(bytecode, HostGrantConfig::default())
+}
+
+/// Run verified bytecode with optional capability grants (M14).
+///
+/// Empty [`HostGrantConfig`] installs only pure fixtures (`whole_inc`,
+/// `text_extent`), preserving M8 behavior.
+pub fn run_bytecode_with_grants(
+    bytecode: &[u8],
+    grants: HostGrantConfig,
+) -> Result<RunOutput, BytecodeError> {
+    let output = invoke_bytecode_with_grants(bytecode, "main", &[], grants)?;
     let InvocationValue::Whole(exit_code) = output.value else {
         return Err(BytecodeError::new(0, "main did not yield Whole"));
     };
@@ -2376,6 +2729,16 @@ pub fn invoke_bytecode(
     weave_name: &str,
     arguments: &[InvocationValue],
 ) -> Result<InvocationOutput, BytecodeError> {
+    invoke_bytecode_with_grants(bytecode, weave_name, arguments, HostGrantConfig::default())
+}
+
+/// Like [`invoke_bytecode`] with optional host I/O grants (M14).
+pub fn invoke_bytecode_with_grants(
+    bytecode: &[u8],
+    weave_name: &str,
+    arguments: &[InvocationValue],
+    grants: HostGrantConfig,
+) -> Result<InvocationOutput, BytecodeError> {
     if weave_name.is_empty() {
         return Err(BytecodeError::new(0, "invoked weave name is empty"));
     }
@@ -2388,7 +2751,13 @@ pub fn invoke_bytecode(
         .ok_or_else(|| {
             BytecodeError::new(0, format!("artifact has no weave named {weave_name}"))
         })?;
-    invoke_artifact(&artifact, function_index, weave_name, arguments)
+    invoke_artifact_with_hosts(
+        &artifact,
+        function_index,
+        weave_name,
+        arguments,
+        HostServices::with_grants(grants),
+    )
 }
 
 /// Invokes the fixed compiler ABI used by `aether forge`.
@@ -2427,6 +2796,22 @@ fn invoke_artifact(
     function_index: usize,
     weave_name: &str,
     arguments: &[InvocationValue],
+) -> Result<InvocationOutput, BytecodeError> {
+    invoke_artifact_with_hosts(
+        artifact,
+        function_index,
+        weave_name,
+        arguments,
+        HostServices::pure_fixture(),
+    )
+}
+
+fn invoke_artifact_with_hosts(
+    artifact: &Artifact,
+    function_index: usize,
+    weave_name: &str,
+    arguments: &[InvocationValue],
+    hosts: HostServices,
 ) -> Result<InvocationOutput, BytecodeError> {
     let function = artifact
         .functions
@@ -2484,7 +2869,7 @@ fn invoke_artifact(
         runtime_arguments.push(runtime_from_invocation(argument)?);
     }
     let mut stdout = String::new();
-    let mut runtime_state = RuntimeState::new(artifact.arena_capacity)?;
+    let mut runtime_state = RuntimeState::with_hosts(artifact.arena_capacity, hosts)?;
     let exit = execute_function(
         artifact,
         function_index,
@@ -14189,6 +14574,197 @@ mod tests {
                 || refused.message.contains("resource")
                 || refused.message.contains("record")
         );
+    }
+
+    fn m14_temp_root(label: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "aether-m14-{}-{}-{}",
+            label,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&path).expect("m14 temp root");
+        path
+    }
+
+    #[test]
+    fn m14_pure_host_pilot_still_runs_without_grants() {
+        let source = include_str!("../../../examples/host-pilot.ae");
+        let artifact = compile_to_bytecode(source)
+            .expect("host-pilot should compile")
+            .bytecode;
+        let run = run_bytecode_with_grants(&artifact, HostGrantConfig::default())
+            .expect("empty grants keep pure fixtures");
+        assert_eq!(run.exit_code, 48);
+    }
+
+    #[test]
+    fn m14_read_text_requires_grant_and_respects_path_jail() {
+        let root = m14_temp_root("read");
+        std::fs::write(root.join("config.txt"), "Aether").expect("fixture write");
+        let source = include_str!("../../../examples/host-io-read.ae");
+        let artifact = compile_to_bytecode(source)
+            .expect("host-io-read should compile")
+            .bytecode;
+
+        let denied = run_bytecode(&artifact).expect_err("read without grant fails closed");
+        assert!(
+            denied.message.contains("AE-HOST-003"),
+            "missing grant: {}",
+            denied.message
+        );
+
+        let granted = run_bytecode_with_grants(
+            &artifact,
+            HostGrantConfig {
+                read_roots: vec![root.clone()],
+                write_roots: Vec::new(),
+                env_names: Vec::new(),
+            },
+        )
+        .expect("granted read_text should succeed");
+        assert_eq!(granted.exit_code, 6, "len(\"Aether\") == 6");
+
+        let escape_source = "world escape\n\nhost weave read_text [borrow path: Text] -> Text\n\nweave main [] -> Whole:\n  bind bad <- \"../config.txt\"\n  bind cfg <- call read_text borrow bad\n  yield 0\n";
+        let escape_artifact = compile_to_bytecode(escape_source)
+            .expect("escape program compiles")
+            .bytecode;
+        let escaped = run_bytecode_with_grants(
+            &escape_artifact,
+            HostGrantConfig {
+                read_roots: vec![root.clone()],
+                write_roots: Vec::new(),
+                env_names: Vec::new(),
+            },
+        )
+        .expect_err("path escape must fail");
+        assert!(
+            escaped.message.contains("AE-HOST-004"),
+            "escape: {}",
+            escaped.message
+        );
+
+        let absolute_source = "world absolute_path\n\nhost weave read_text [borrow path: Text] -> Text\n\nweave main [] -> Whole:\n  bind bad <- \"/tmp/x\"\n  bind cfg <- call read_text borrow bad\n  yield 0\n";
+        let absolute_artifact = compile_to_bytecode(absolute_source)
+            .expect("absolute program compiles")
+            .bytecode;
+        let absolute = run_bytecode_with_grants(
+            &absolute_artifact,
+            HostGrantConfig {
+                read_roots: vec![root.clone()],
+                write_roots: Vec::new(),
+                env_names: Vec::new(),
+            },
+        )
+        .expect_err("absolute guest path must fail");
+        assert!(
+            absolute.message.contains("AE-HOST-004"),
+            "absolute: {}",
+            absolute.message
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn m14_write_text_and_env_get_honor_grants() {
+        let root = m14_temp_root("write");
+        let write_source = include_str!("../../../examples/host-io-write.ae");
+        let write_artifact = compile_to_bytecode(write_source)
+            .expect("host-io-write should compile")
+            .bytecode;
+        let denied = run_bytecode(&write_artifact).expect_err("write without grant fails");
+        assert!(denied.message.contains("AE-HOST-003"));
+
+        let written = run_bytecode_with_grants(
+            &write_artifact,
+            HostGrantConfig {
+                read_roots: Vec::new(),
+                write_roots: vec![root.clone()],
+                env_names: Vec::new(),
+            },
+        )
+        .expect("granted write_text should succeed");
+        assert_eq!(written.exit_code, 5, "len(\"hello\") == 5");
+        let body = std::fs::read_to_string(root.join("out.txt")).expect("out.txt readable");
+        assert_eq!(body, "hello");
+
+        std::env::set_var("AETHER_M14_TEST_VAR", "granted-value");
+        let env_source = "world env_demo\n\nhost weave env_get [borrow name: Text] -> Text\n\nhost weave text_extent [borrow message: Text] -> Whole\n\nweave main [] -> Whole:\n  bind key <- \"AETHER_M14_TEST_VAR\"\n  bind value <- call env_get borrow key\n  yield call text_extent borrow value\n";
+        let env_artifact = compile_to_bytecode(env_source)
+            .expect("env_get program should compile")
+            .bytecode;
+        let env_denied = run_bytecode(&env_artifact).expect_err("env without grant fails");
+        assert!(env_denied.message.contains("AE-HOST-003"));
+        let env_wrong = run_bytecode_with_grants(
+            &env_artifact,
+            HostGrantConfig {
+                read_roots: Vec::new(),
+                write_roots: Vec::new(),
+                env_names: vec!["OTHER_NAME".to_owned()],
+            },
+        )
+        .expect_err("ungranted env name fails");
+        assert!(env_wrong.message.contains("AE-HOST-003"));
+        let env_ok = run_bytecode_with_grants(
+            &env_artifact,
+            HostGrantConfig {
+                read_roots: Vec::new(),
+                write_roots: Vec::new(),
+                env_names: vec!["AETHER_M14_TEST_VAR".to_owned()],
+            },
+        )
+        .expect("granted env_get succeeds");
+        assert_eq!(env_ok.exit_code, 13, "len(\"granted-value\") == 13");
+        std::env::remove_var("AETHER_M14_TEST_VAR");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn m14_read_bytes_and_size_limit() {
+        let root = m14_temp_root("bytes");
+        std::fs::write(root.join("blob.bin"), b"\x00\x01\x02").expect("blob");
+        let bytes_source = "world host_io_bytes\n\nhost weave read_bytes [borrow path: Text] -> Bytes\n\nweave main [] -> Whole:\n  bind path <- \"blob.bin\"\n  bind data <- call read_bytes borrow path\n  yield extent borrow data\n";
+        let artifact = compile_to_bytecode(bytes_source)
+            .expect("read_bytes program compiles")
+            .bytecode;
+        let run = run_bytecode_with_grants(
+            &artifact,
+            HostGrantConfig {
+                read_roots: vec![root.clone()],
+                write_roots: Vec::new(),
+                env_names: Vec::new(),
+            },
+        )
+        .expect("read_bytes under grant");
+        assert_eq!(run.exit_code, 3);
+
+        let oversize = vec![b'x'; HOST_IO_MAX_BYTES + 1];
+        std::fs::write(root.join("big.txt"), &oversize).expect("big file");
+        let big_source = "world host_io_big\n\nhost weave read_text [borrow path: Text] -> Text\n\nweave main [] -> Whole:\n  bind path <- \"big.txt\"\n  bind cfg <- call read_text borrow path\n  yield 0\n";
+        let big_artifact = compile_to_bytecode(big_source)
+            .expect("big read compiles")
+            .bytecode;
+        let limited = run_bytecode_with_grants(
+            &big_artifact,
+            HostGrantConfig {
+                read_roots: vec![root.clone()],
+                write_roots: Vec::new(),
+                env_names: Vec::new(),
+            },
+        )
+        .expect_err("oversize read fails");
+        assert!(
+            limited.message.contains("AE-HOST-005"),
+            "size: {}",
+            limited.message
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

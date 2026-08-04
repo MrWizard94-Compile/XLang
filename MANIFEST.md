@@ -2,22 +2,24 @@
 
 ## Contract
 
-Aether **0.18.0** (base language **0.11** plus M11 modules, M12 statement-level
-edits, and **M13 offline LSP** with project-aware imports, AETH **v11**) accepts
-Aether source, returns a canonical AST from the Rust bootstrap for tooling, and
-**emits AETH v11 bytecode primarily through the Aether-written seed compiler**
-(forge ABI). Single-file `compile` is seed-hosted. Multi-module `project build`
-elaborates the import DAG, dual-compares bootstrap≡seed, and writes seed
-artifacts. Authoring uses `aether.ast/v7` and `aether.edit/v7`. The CLI provides
-offline project verify/format and `aether lsp [--project …]` (bootstrap
-diagnostics; cross-file definition/hover for exported imports; no product AETH
-from LSP). Verified AETH v4–v10 remain compatibility inputs. Source is never
+Aether **0.19.0** (base language **0.11** plus M11 modules, M12 statement-level
+edits, **M13 offline LSP** with project-aware imports, and **M14 grant-backed
+host I/O**, AETH **v11**) accepts Aether source, returns a canonical AST from the
+Rust bootstrap for tooling, and **emits AETH v11 bytecode primarily through the
+Aether-written seed compiler** (forge ABI). Single-file `compile` is seed-hosted.
+Multi-module `project build` elaborates the import DAG, dual-compares
+bootstrap≡seed, and writes seed artifacts. Authoring uses `aether.ast/v7` and
+`aether.edit/v7`. The CLI provides offline project verify/format,
+`aether lsp [--project …]` (bootstrap diagnostics; cross-file definition/hover
+for exported imports; no product AETH from LSP), and `aether run` with optional
+`--grant-read` / `--grant-write` / `--grant-env` (M14; empty grants keep pure
+fixtures only). Verified AETH v4–v10 remain compatibility inputs. Source is never
 translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.18 product contract (0.11 core language,
-M9–M13 tooling/authoring). It intentionally
+This manifest is the executable Aether 0.19 product contract (0.11 core language,
+M9–M14 tooling/host session). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -105,8 +107,14 @@ M8 adds body-less `host weave` declarations for pure host services. Host
 parameters are only owned/copy `Whole`/`Truth` or `borrow Text`/`borrow Bytes`;
 results are only `Whole`/`Truth`/`Text`/`Bytes`. Ordinary `call` of a host weave
 emits `HOST_CALL` (65). The product pure fixture installs only `whole_inc` and
-`text_extent`; missing services fail closed. No guest file/process/network/shell
-authority is granted.
+`text_extent`; missing services fail closed.
+
+M14 (package 0.19) extends the host catalog with grant-backed `read_text` /
+`read_bytes` / `write_text` / `write_bytes` / `env_get` under threat model v2.
+Services install only when the operator passes matching `--grant-*` roots or
+env names to `aether run` (or test host APIs). Guest paths are relative and
+jailed under grant roots after canonicalize. There is no ambient guest
+file/process/network/shell authority and no shell/network host weaves.
 
 Every 0.11 compilation emits AETH v11 with an arena-capacity header field, a
 possibly empty bounded record table, a shape table, a function `effect_tag`, and
@@ -239,6 +247,8 @@ pwsh -File .\tools\package-preview.ps1
 pwsh -File .\dist\aether-0.13.0-tp\verify-preview.ps1
 ```
 
-Threat model freeze: [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md).  
+Threat model freeze (TP pure surface): [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md).  
+Capable host I/O threat model (M14): [docs/THREAT_MODEL-v2-CAPABLE-HOST.md](docs/THREAT_MODEL-v2-CAPABLE-HOST.md).  
 TP delivery: [docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md](docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md).  
-M10 delivery: [docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md](docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md).
+M10 delivery: [docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md](docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md).  
+M14 delivery: [docs/DELIVERY_REPORT-2026-08-04-M14-HOST-IO.md](docs/DELIVERY_REPORT-2026-08-04-M14-HOST-IO.md).

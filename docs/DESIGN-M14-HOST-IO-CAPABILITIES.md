@@ -1,6 +1,6 @@
 # M14 Design: capability-mediated host I/O
 
-**Status:** Accepted design for implementable ADR-018 (code not started)  
+**Status:** Accepted design for ADR-018 — **implemented in package 0.19.0**  
 **Date:** 2026-08-04  
 **Decision record:** [ADR-018](ADR-018-m14-host-io-capabilities.md)  
 **Threat model:** [THREAT_MODEL-v2-CAPABLE-HOST.md](THREAT_MODEL-v2-CAPABLE-HOST.md)  

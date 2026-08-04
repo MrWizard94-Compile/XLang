@@ -33,6 +33,8 @@ const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae")
 const M7_NURSERY_TOTAL_SOURCE: &str = include_str!("../../../examples/nursery-total.ae");
 const M7_NURSERY_CANCEL_SOURCE: &str = include_str!("../../../examples/nursery-cancel.ae");
 const M8_HOST_PILOT_SOURCE: &str = include_str!("../../../examples/host-pilot.ae");
+const M14_HOST_IO_READ_SOURCE: &str = include_str!("../../../examples/host-io-read.ae");
+const M14_HOST_IO_WRITE_SOURCE: &str = include_str!("../../../examples/host-io-write.ae");
 
 const M4_NORMAL_EFFECT_SOURCE: &str = concat!(
     "world normal_effect\n",
@@ -324,6 +326,37 @@ fn seed_profile_compiler_forges_bounded_m8_host_pilot_byte_identically() {
         48,
         "the M8 host-pilot fixture should preserve its defined outcome"
     );
+}
+
+#[test]
+fn seed_profile_compiler_forges_m14_host_io_declarations_byte_identically() {
+    // Compile/dual-compare only: I/O host weaves require grants at run time.
+    for (name, source) in [
+        ("host-io-read", M14_HOST_IO_READ_SOURCE),
+        ("host-io-write", M14_HOST_IO_WRITE_SOURCE),
+    ] {
+        let bootstrap = compile_to_bytecode(source)
+            .unwrap_or_else(|error| panic!("M14 {name} must bootstrap: {error}"))
+            .bytecode;
+        let seeded = compile_with_seed(source)
+            .unwrap_or_else(|error| panic!("M14 {name} must seed-compile: {error}"))
+            .bytecode;
+        assert_eq!(
+            seeded, bootstrap,
+            "M14 {name} seed-hosted compile must match bootstrap byte-for-byte"
+        );
+        verify_bytecode(&seeded).expect("M14 seed-produced artifact must verify");
+        assert!(
+            seeded.iter().any(|byte| *byte == 65),
+            "M14 {name} must emit HOST_CALL"
+        );
+        let denied = run_bytecode(&seeded).expect_err("M14 I/O without grants fails closed");
+        assert!(
+            denied.message.contains("AE-HOST-003"),
+            "M14 {name} deny without grant: {}",
+            denied.message
+        );
+    }
 }
 
 #[test]

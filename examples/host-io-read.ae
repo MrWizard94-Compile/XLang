@@ -1,0 +1,11 @@
+world host_io_read
+
+host weave read_text [borrow path: Text] -> Text
+
+host weave text_extent [borrow message: Text] -> Whole
+
+weave main [] -> Whole:
+  bind path <- "config.txt"
+  bind cfg <- call read_text borrow path
+  bind n <- call text_extent borrow cfg
+  yield n

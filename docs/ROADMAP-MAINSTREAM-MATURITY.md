@@ -936,7 +936,7 @@ Accepted by:
 
 1. Mainstream maturity roadmap committed.  
 2. **M11–M13 complete** (modules, edits, LSP through 0.18).  
-3. **M14 host I/O designed** (threat model v2 + ADR-018); **next: implement grants**.  
+3. **M14 host I/O implemented** (package 0.19; threat model v2 + ADR-018 grants).  
 4. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table (can wait).
 
 ---
