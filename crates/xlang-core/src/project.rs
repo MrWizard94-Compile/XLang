@@ -2,11 +2,14 @@
 //!
 //! Projects list local units and optional SHA-256 locks. Verification is fully
 //! local: schema, path confinement, lock digests, and seed compilation.
+//!
+//! M10: nested relative paths, multi-unit integrity, independent per-unit
+//! seed compile. Units are not language modules (no cross-file linking).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -93,6 +96,19 @@ pub struct ProjectVerifyReport {
     pub name: String,
     pub version: String,
     pub units: Vec<ProjectUnitReport>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectFormatUnit {
+    pub path: String,
+    pub formatted: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectFormatReport {
+    pub name: String,
+    pub version: String,
+    pub units: Vec<ProjectFormatUnit>,
 }
 
 /// Parse and structurally validate an `aether.project/v1` JSON document.
@@ -207,14 +223,24 @@ fn validate_project_document(document: &ProjectDocument) -> Result<(), ProjectEr
     Ok(())
 }
 
-fn validate_unit_path(path: &str) -> Result<(), ProjectError> {
+/// Validate a project-document unit path (forward-slash grammar only).
+///
+/// Nested paths use `/` only. Backslash, `..`, `.`, absolute, and drive paths
+/// fail closed (`AE-PROJECT-002`).
+pub fn validate_unit_path(path: &str) -> Result<(), ProjectError> {
     if path.is_empty() {
         return Err(ProjectError::new(
             "AE-PROJECT-002",
             "unit path must be non-empty",
         ));
     }
-    if path.starts_with('/') || path.starts_with('\\') {
+    if path.contains('\\') {
+        return Err(ProjectError::new(
+            "AE-PROJECT-002",
+            format!("unit path {path} must use forward slashes only"),
+        ));
+    }
+    if path.starts_with('/') {
         return Err(ProjectError::new(
             "AE-PROJECT-002",
             format!("unit path {path} must be relative"),
@@ -226,40 +252,65 @@ fn validate_unit_path(path: &str) -> Result<(), ProjectError> {
             format!("unit path {path} must not contain a drive or URL prefix"),
         ));
     }
+    if path.contains("//") {
+        return Err(ProjectError::new(
+            "AE-PROJECT-002",
+            format!("unit path {path} must not contain empty segments"),
+        ));
+    }
     if !path.ends_with(".ae") {
         return Err(ProjectError::new(
             "AE-PROJECT-002",
             format!("unit path {path} must end with .ae"),
         ));
     }
-    let candidate = Path::new(path);
-    if candidate.is_absolute() {
+    let segments: Vec<&str> = path.split('/').collect();
+    if segments.is_empty() {
         return Err(ProjectError::new(
             "AE-PROJECT-002",
-            format!("unit path {path} must be relative"),
+            "unit path must be non-empty",
         ));
     }
-    for component in candidate.components() {
-        match component {
-            Component::Normal(part) => {
-                let text = part.to_string_lossy();
-                if text.is_empty() || text == "." {
-                    return Err(ProjectError::new(
-                        "AE-PROJECT-002",
-                        format!("unit path {path} is illegal"),
-                    ));
-                }
-            }
-            Component::CurDir => {}
-            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                return Err(ProjectError::new(
-                    "AE-PROJECT-002",
-                    format!("unit path {path} escapes the project root"),
-                ));
-            }
+    for segment in &segments {
+        if *segment == "." || *segment == ".." {
+            return Err(ProjectError::new(
+                "AE-PROJECT-002",
+                format!("unit path {path} escapes the project root"),
+            ));
+        }
+        if segment.is_empty() {
+            return Err(ProjectError::new(
+                "AE-PROJECT-002",
+                format!("unit path {path} must not contain empty segments"),
+            ));
+        }
+        if !is_safe_path_segment(segment) {
+            return Err(ProjectError::new(
+                "AE-PROJECT-002",
+                format!("unit path {path} contains an illegal segment"),
+            ));
         }
     }
     Ok(())
+}
+
+fn is_safe_path_segment(segment: &str) -> bool {
+    !segment.is_empty()
+        && segment.bytes().all(
+            |byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-'),
+        )
+}
+
+/// Deterministic flat artifact file name for `project verify --output-dir`.
+///
+/// `src/main.ae` → `src__main.aeth`
+#[must_use]
+pub fn unit_artifact_file_name(unit_path: &str) -> String {
+    let without_ext = unit_path
+        .strip_suffix(".ae")
+        .unwrap_or(unit_path)
+        .replace('/', "__");
+    format!("{without_ext}.aeth")
 }
 
 fn is_sha256_hex(value: &str) -> bool {
@@ -280,6 +331,15 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     output
 }
 
+/// Join project-document path segments under the project root.
+fn join_unit_path(project_root: &Path, unit_path: &str) -> PathBuf {
+    let mut joined = project_root.to_path_buf();
+    for segment in unit_path.split('/') {
+        joined.push(segment);
+    }
+    joined
+}
+
 /// Resolve a unit path under the project root, rejecting escapes.
 pub fn resolve_unit_path(project_root: &Path, unit_path: &str) -> Result<PathBuf, ProjectError> {
     validate_unit_path(unit_path)?;
@@ -292,7 +352,7 @@ pub fn resolve_unit_path(project_root: &Path, unit_path: &str) -> Result<PathBuf
             ),
         )
     })?;
-    let joined = root.join(unit_path);
+    let joined = join_unit_path(&root, unit_path);
     let resolved = joined.canonicalize().map_err(|error| {
         ProjectError::new(
             "AE-PROJECT-002",
@@ -311,7 +371,7 @@ pub fn resolve_unit_path(project_root: &Path, unit_path: &str) -> Result<PathBuf
 /// Verify a project document against files under `project_root`.
 ///
 /// When `lock` is present, file digests must match. Every unit is seed-compiled
-/// and the resulting artifact is verified.
+/// independently and the resulting artifact is verified.
 pub fn verify_project(
     project_root: &Path,
     document: &ProjectDocument,
@@ -380,6 +440,47 @@ pub fn verify_project(
         name: document.name.clone(),
         version: document.version.clone(),
         units: reports,
+    })
+}
+
+/// Format every unit in declaration order (bootstrap formatter).
+///
+/// Does not write files. Callers may write with an explicit CLI flag.
+pub fn format_project(
+    project_root: &Path,
+    document: &ProjectDocument,
+) -> Result<ProjectFormatReport, ProjectError> {
+    validate_project_document(document)?;
+    let mut units = Vec::with_capacity(document.units.len());
+    for unit in &document.units {
+        let path = resolve_unit_path(project_root, &unit.path)?;
+        let bytes = fs::read(&path).map_err(|error| {
+            ProjectError::new(
+                "AE-PROJECT-002",
+                format!("could not read unit {}: {error}", unit.path),
+            )
+        })?;
+        let source = String::from_utf8(bytes).map_err(|_| {
+            ProjectError::new(
+                "AE-PROJECT-004",
+                format!("unit {} is not valid UTF-8", unit.path),
+            )
+        })?;
+        let formatted = format_source(&source).map_err(|error| {
+            ProjectError::new(
+                "AE-PROJECT-004",
+                format!("unit {} failed format: {error}", unit.path),
+            )
+        })?;
+        units.push(ProjectFormatUnit {
+            path: unit.path.clone(),
+            formatted,
+        });
+    }
+    Ok(ProjectFormatReport {
+        name: document.name.clone(),
+        version: document.version.clone(),
+        units,
     })
 }
 
@@ -457,5 +558,160 @@ mod tests {
             formatted,
             "world fmt\n\nweave main [] -> Whole:\n  yield sum 1 2\n"
         );
+    }
+
+    #[test]
+    fn nested_multi_unit_project_verifies_with_lock() {
+        let root = temp_dir();
+        fs::create_dir_all(root.join("src")).expect("src");
+        fs::create_dir_all(root.join("lib")).expect("lib");
+        let main_src = "world multi_main\n\nweave main [] -> Whole:\n  yield 3\n";
+        let lib_src = "world multi_lib\n\nweave main [] -> Whole:\n  yield 9\n";
+        fs::write(root.join("src").join("main.ae"), main_src).expect("main");
+        fs::write(root.join("lib").join("helper.ae"), lib_src).expect("lib");
+        let main_digest = sha256_hex(main_src.as_bytes());
+        let lib_digest = sha256_hex(lib_src.as_bytes());
+        let json = format!(
+            r#"{{
+  "schema": "aether.project/v1",
+  "name": "multi_demo",
+  "version": "0.1.0",
+  "units": [
+    {{ "path": "src/main.ae", "role": "main" }},
+    {{ "path": "lib/helper.ae", "role": "lib" }}
+  ],
+  "lock": {{
+    "units": [
+      {{ "path": "src/main.ae", "sha256": "{main_digest}" }},
+      {{ "path": "lib/helper.ae", "sha256": "{lib_digest}" }}
+    ]
+  }}
+}}"#
+        );
+        let document = parse_project_document(&json).expect("parse multi");
+        let report = verify_project(&root, &document).expect("verify multi");
+        assert_eq!(report.units.len(), 2);
+        assert_eq!(report.units[0].path, "src/main.ae");
+        assert_eq!(report.units[1].path, "lib/helper.ae");
+        assert_eq!(unit_artifact_file_name("src/main.ae"), "src__main.aeth");
+        assert_eq!(unit_artifact_file_name("lib/helper.ae"), "lib__helper.aeth");
+
+        let formatted = format_project(&root, &document).expect("format multi");
+        assert_eq!(formatted.units.len(), 2);
+        assert_eq!(formatted.units[0].formatted, main_src);
+        assert_eq!(formatted.units[1].formatted, lib_src);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_illegal_paths_roles_unknown_fields_and_bad_source() {
+        for (json, code) in [
+            (
+                r#"{"schema":"aether.project/v1","name":"x","version":"1","units":[{"path":"/abs/main.ae","role":"main"}]}"#,
+                "AE-PROJECT-002",
+            ),
+            (
+                r#"{"schema":"aether.project/v1","name":"x","version":"1","units":[{"path":"src\\main.ae","role":"main"}]}"#,
+                "AE-PROJECT-002",
+            ),
+            (
+                r#"{"schema":"aether.project/v1","name":"x","version":"1","units":[{"path":"src/./main.ae","role":"main"}]}"#,
+                "AE-PROJECT-002",
+            ),
+            (
+                r#"{"schema":"aether.project/v1","name":"x","version":"1","units":[{"path":"a.ae","role":"main"},{"path":"b.ae","role":"main"}]}"#,
+                "AE-PROJECT-001",
+            ),
+            (
+                r#"{"schema":"aether.project/v1","name":"x","version":"1","units":[{"path":"a.ae","role":"lib"}]}"#,
+                "AE-PROJECT-001",
+            ),
+            (
+                r#"{"schema":"aether.project/v1","name":"x","version":"1","units":[{"path":"a.ae","role":"main"}],"depends_on":[]}"#,
+                "AE-PROJECT-001",
+            ),
+        ] {
+            let error = parse_project_document(json).expect_err(json);
+            assert_eq!(error.code, code, "{json}");
+        }
+
+        let root = temp_dir();
+        fs::create_dir_all(root.join("src")).expect("src");
+        fs::create_dir_all(root.join("lib")).expect("lib");
+        let main_src = "world multi_main\n\nweave main [] -> Whole:\n  yield 1\n";
+        let bad_lib = "world multi_lib\n\nthis is not valid aether\n";
+        fs::write(root.join("src").join("main.ae"), main_src).expect("main");
+        fs::write(root.join("lib").join("helper.ae"), bad_lib).expect("lib");
+        let json = r#"{
+  "schema": "aether.project/v1",
+  "name": "bad_unit",
+  "version": "0.1.0",
+  "units": [
+    { "path": "src/main.ae", "role": "main" },
+    { "path": "lib/helper.ae", "role": "lib" }
+  ]
+}"#;
+        let document = parse_project_document(json).expect("parse");
+        let error = verify_project(&root, &document).expect_err("bad lib");
+        assert_eq!(error.code, "AE-PROJECT-004");
+
+        // Independence: main does not resolve weaves from another file.
+        let main_only =
+            "world only_main\n\nweave main [] -> Whole:\n  yield call helper_from_lib\n";
+        assert!(crate::compile_source(main_only).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn multi_unit_lock_must_cover_every_unit() {
+        let root = temp_dir();
+        fs::create_dir_all(root.join("src")).expect("src");
+        fs::create_dir_all(root.join("lib")).expect("lib");
+        let main_src = "world multi_main\n\nweave main [] -> Whole:\n  yield 1\n";
+        let lib_src = "world multi_lib\n\nweave main [] -> Whole:\n  yield 2\n";
+        fs::write(root.join("src").join("main.ae"), main_src).expect("main");
+        fs::write(root.join("lib").join("helper.ae"), lib_src).expect("lib");
+        let main_digest = sha256_hex(main_src.as_bytes());
+        let incomplete = format!(
+            r#"{{
+  "schema": "aether.project/v1",
+  "name": "incomplete_lock",
+  "version": "0.1.0",
+  "units": [
+    {{ "path": "src/main.ae", "role": "main" }},
+    {{ "path": "lib/helper.ae", "role": "lib" }}
+  ],
+  "lock": {{
+    "units": [
+      {{ "path": "src/main.ae", "sha256": "{main_digest}" }}
+    ]
+  }}
+}}"#
+        );
+        let error = parse_project_document(&incomplete).expect_err("incomplete lock");
+        assert_eq!(error.code, "AE-PROJECT-003");
+
+        let wrong = format!(
+            r#"{{
+  "schema": "aether.project/v1",
+  "name": "wrong_lock",
+  "version": "0.1.0",
+  "units": [
+    {{ "path": "src/main.ae", "role": "main" }},
+    {{ "path": "lib/helper.ae", "role": "lib" }}
+  ],
+  "lock": {{
+    "units": [
+      {{ "path": "src/main.ae", "sha256": "{main_digest}" }},
+      {{ "path": "lib/helper.ae", "sha256": "{}" }}
+    ]
+  }}
+}}"#,
+            "0".repeat(64)
+        );
+        let document = parse_project_document(&wrong).expect("parse");
+        let error = verify_project(&root, &document).expect_err("mismatch");
+        assert_eq!(error.code, "AE-PROJECT-003");
+        let _ = fs::remove_dir_all(&root);
     }
 }

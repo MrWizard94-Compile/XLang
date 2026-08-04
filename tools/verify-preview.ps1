@@ -36,9 +36,11 @@ function Resolve-PackageRoot {
         return (Resolve-Path -LiteralPath $scriptDir).Path
     }
     # monorepo tools/ → dist package
-    $fromTools = Join-Path $scriptDir "..\dist\aether-0.12.0-tp"
-    if (Test-Path -LiteralPath (Join-Path $fromTools "aether.exe")) {
-        return (Resolve-Path -LiteralPath $fromTools).Path
+    foreach ($name in @("aether-0.13.0-tp", "aether-0.12.0-tp")) {
+        $fromTools = Join-Path $scriptDir "..\dist\$name"
+        if (Test-Path -LiteralPath (Join-Path $fromTools "aether.exe")) {
+            return (Resolve-Path -LiteralPath $fromTools).Path
+        }
     }
     Fail "Could not locate package root (aether.exe). Pass -PackageRoot."
 }
@@ -73,7 +75,7 @@ Write-Host "  $($sumLines.Count) files OK"
 Write-Host "=== version ===" -ForegroundColor Cyan
 $verOut = & $exe version 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { Fail "version failed" }
-if ($verOut -notmatch "0\.12\.0") { Fail "expected version 0.12.0 in: $verOut" }
+if ($verOut -notmatch "0\.13\.0") { Fail "expected version 0.13.0 in: $verOut" }
 Write-Host "  $verOut".Trim()
 
 $work = Join-Path $Pkg "_verify_work"

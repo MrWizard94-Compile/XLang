@@ -1,6 +1,7 @@
 # M10 multi-unit offline projects validation matrix
 
-**Status:** Design gate for M10 — **implementation not yet green**  
+**Status:** Implementation gate for Aether 0.13 / M10 — satisfied by
+[DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md](DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md)  
 **Date:** 2026-08-04  
 **Design:** [DESIGN-M10-MULTI-UNIT-PROJECTS.md](DESIGN-M10-MULTI-UNIT-PROJECTS.md)  
 **ADR:** [ADR-013](ADR-013-m10-multi-unit-projects.md)
@@ -56,19 +57,19 @@
 
 ## Implementation checklist
 
-- [ ] Schema path pattern updated  
-- [ ] Rust path validation matches schema  
-- [ ] Core tests for P2–P6 and N1–N11  
-- [ ] CLI `project format`  
-- [ ] Example `examples/project-multi`  
-- [ ] DOC-SYNC product law  
-- [ ] `aether-gate` / project verify in gate script  
-- [ ] Delivery report  
+- [x] Schema path pattern updated  
+- [x] Rust path validation matches schema  
+- [x] Core tests for multi-unit / path / lock / independence  
+- [x] CLI `project format`  
+- [x] Example `examples/project-multi`  
+- [x] DOC-SYNC product law  
+- [x] Gate script multi-unit verify  
+- [x] Delivery report  
 
 ## Sign-off
 
 | Gate | Status |
 | --- | --- |
-| Design + ADR | **Ready** |
-| Implementation | Pending next turn |
-| Delivery | Pending |
+| Design + ADR | **Accepted** |
+| Implementation | **Done** (0.13.0) |
+| Delivery | **Done** |

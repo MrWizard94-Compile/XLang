@@ -1,0 +1,15 @@
+{
+  "schema": "aether.project/v1",
+  "name": "project_multi_demo",
+  "version": "0.1.0",
+  "units": [
+    { "path": "src/main.ae", "role": "main" },
+    { "path": "lib/helper.ae", "role": "lib" }
+  ],
+  "lock": {
+    "units": [
+      { "path": "src/main.ae", "sha256": "339850405bc79789a5dff498356c3bacd4f8738cbfaf404e600a343b88c78c76" },
+      { "path": "lib/helper.ae", "sha256": "f676f6848528992e68f9b4dd67bcde96d501059b83c630f08e11882007fe581d" }
+    ]
+  }
+}

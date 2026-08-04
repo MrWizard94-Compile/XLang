@@ -1,0 +1,4 @@
+world multi_main
+
+weave main [] -> Whole:
+  yield 3

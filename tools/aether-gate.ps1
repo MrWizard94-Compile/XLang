@@ -165,7 +165,7 @@ if ($hostText -notmatch "exited with 48\b") {
 }
 Write-Host "  host-pilot program exit 48 OK"
 
-# --- Project verify ---
+# --- Project verify (single-unit + multi-unit) ---
 Write-Step "project verify examples/project"
 $projectFile = Join-Path $examplesDir "project\aether.project.json"
 $projectOut = Join-Path $outDir "project-verify"
@@ -173,6 +173,20 @@ New-Item -ItemType Directory -Force -Path $projectOut | Out-Null
 cargo run -q -p aether-cli -- project verify $projectFile --output-dir $projectOut
 if ($LASTEXITCODE -ne 0) { Fail "project verify failed" }
 Write-Host "  project verify OK"
+
+Write-Step "project verify examples/project-multi"
+$multiFile = Join-Path $examplesDir "project-multi\aether.project.json"
+$multiOut = Join-Path $outDir "project-multi-verify"
+New-Item -ItemType Directory -Force -Path $multiOut | Out-Null
+cargo run -q -p aether-cli -- project verify $multiFile --output-dir $multiOut
+if ($LASTEXITCODE -ne 0) { Fail "project-multi verify failed" }
+$mappedMain = Join-Path $multiOut "src__main.aeth"
+$mappedLib = Join-Path $multiOut "lib__helper.aeth"
+if (-not (Test-Path -LiteralPath $mappedMain)) { Fail "missing $mappedMain" }
+if (-not (Test-Path -LiteralPath $mappedLib)) { Fail "missing $mappedLib" }
+cargo run -q -p aether-cli -- project format $multiFile
+if ($LASTEXITCODE -ne 0) { Fail "project-multi format failed" }
+Write-Host "  project-multi verify + format OK"
 
 # --- Full: seed forge identity ---
 if ($Mode -eq "full") {

@@ -18,13 +18,14 @@ pub use authoring::{
     STRUCTURAL_EDIT_PROTOCOL_VERSION,
 };
 pub use project::{
-    format_source, parse_project_document, resolve_unit_path, sha256_hex, verify_project,
-    ProjectDocument, ProjectError, ProjectLock, ProjectLockUnit, ProjectUnit, ProjectUnitReport,
-    ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
+    format_project, format_source, parse_project_document, resolve_unit_path, sha256_hex,
+    unit_artifact_file_name, validate_unit_path, verify_project, ProjectDocument, ProjectError,
+    ProjectFormatReport, ProjectFormatUnit, ProjectLock, ProjectLockUnit, ProjectUnit,
+    ProjectUnitReport, ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.12.0";
+pub const LANGUAGE_VERSION: &str = "0.13.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(

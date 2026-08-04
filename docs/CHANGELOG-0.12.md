@@ -1,7 +1,16 @@
-# Changelog — Aether 0.12 technical preview lineage
+# Changelog — Aether 0.12+ technical preview lineage
 
 Honest user-facing deltas from the bounded resource core through the technical
 preview package. This is **not** a claim of 1.0 completeness.
+
+## 0.13.0 — multi-unit offline projects (M10)
+
+- Package version **0.13.0**; language surface remains **0.11** / AETH **v11**.
+- Nested relative unit paths (`src/main.ae`) with forward-slash-only grammar.
+- Multi-unit locks, independent per-unit seed compile, `project format [--write]`.
+- `project verify --output-dir` flat mapping (`src/main.ae` → `src__main.aeth`).
+- Example: `examples/project-multi/`.
+- **Not included:** language modules/imports, registry, lib-without-main.
 
 ## 0.12.0 — offline project tooling (M9)
 

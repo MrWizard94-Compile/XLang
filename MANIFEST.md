@@ -2,18 +2,18 @@
 
 ## Contract
 
-Aether **0.12.0** (language surface **0.11** / AETH **v11**) accepts Aether
+Aether **0.13.0** (language surface **0.11** / AETH **v11**) accepts Aether
 source, returns a canonical AST from the Rust bootstrap for tooling, and
 **emits AETH v11 bytecode primarily through the Aether-written seed compiler**
 (forge ABI). The `aether` CLI is the product interface for that seed-hosted
-compile path and for offline project verification/formatting. Verified AETH
-v4/v5/v6/v7/v8/v9/v10 artifacts remain accepted compatibility inputs with their
-original meanings. Source is never translated to an existing language.
+compile path and for offline multi-unit project verification/formatting. Verified
+AETH v4/v5/v6/v7/v8/v9/v10 artifacts remain accepted compatibility inputs with
+their original meanings. Source is never translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.12 product contract (0.11 language plus
-M9 tooling). It intentionally
+This manifest is the executable Aether 0.13 product contract (0.11 language plus
+M9/M10 offline project tooling). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -36,13 +36,14 @@ and [docs/AETHER_0.9.md](docs/AETHER_0.9.md). M7 implements structured nurseries
 in [docs/AETHER_0.10.md](docs/AETHER_0.10.md). M8 implements the capability-closed
 pure host ABI pilot in [docs/AETHER_0.11.md](docs/AETHER_0.11.md). M9 adds
 offline project metadata and formatting in
-[docs/AETHER_0.12.md](docs/AETHER_0.12.md). Structural authoring is local tooling
-metadata, not a host-capability expansion; its current contract is
+[docs/AETHER_0.12.md](docs/AETHER_0.12.md). M10 multi-unit nested project tooling
+is in [docs/AETHER_0.13.md](docs/AETHER_0.13.md). Structural authoring is local
+tooling metadata, not a host-capability expansion; its current contract is
 [docs/AETHER_AUTHORING_PROTOCOL_v6.md](docs/AETHER_AUTHORING_PROTOCOL_v6.md).
 
 ## Implemented Language Boundary
 
-Aether 0.11 language surface (package 0.12) includes the 0.4/0.5 scalar and byte surface plus immutable nominal
+Aether 0.11 language surface (package 0.13) includes the 0.4/0.5 scalar and byte surface plus immutable nominal
 records declared after `world` and before weaves. Record fields are bounded to
 the primitive `Text`, `Whole`, `Truth`, and `Bytes` types; records cannot nest.
 `make` constructs in declaration order and `field borrow` projects a cloned
@@ -142,7 +143,7 @@ The seed artifact is checked in at `seed/aether_seed.aeth` and embedded as
 ## Seed-Profile Self Hosting
 
 `seed/aether_seed.ae` parses the complete documented canonical Aether **0.11**
-language surface (package 0.12 tooling): all statement and shallow expression
+language surface (package 0.13 tooling): all statement and shallow expression
 forms, named locals/params, `borrow`/`move`/`access`, multi-weave `call`
 including forward callees, hex bytes literals, UTF-8 text constants with the
 five defined escapes, and LF/CRLF input with or without a final line terminator.
@@ -192,18 +193,22 @@ the versioned structural contracts and deterministic diagnostics, not by giving
 an AI service compilation or persistence authority. The retired workbench is
 recorded in [docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-studio.md).
 
-## Project tooling boundary (M9)
+## Project tooling boundary (M9 / M10)
 
-Offline project documents use `aether.project/v1` with relative `.ae` units and
-optional SHA-256 locks. CLI:
+Offline project documents use `aether.project/v1` with relative `.ae` units
+(including nested forward-slash paths), optional SHA-256 locks, and independent
+per-unit seed compile. Units are not language modules. CLI:
 
 ```text
 aether format <source-file> [--output <source-file>]
 aether project verify <project-file> [--output-dir <dir>]
+aether project format <project-file> [--write]
 ```
 
-No package registry, network dependency fetch, or LSP server is included.
-See [docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md).
+`--output-dir` writes flat mapped artifacts (`src/main.ae` → `src__main.aeth`).
+No package registry, network dependency fetch, cross-file linking, or LSP server
+is included. See [docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md)
+and [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md).
 
 ## Quality Gate
 
@@ -219,12 +224,13 @@ fixture. A technical-preview package also requires
 of the release binary, SHA-256SUMS, and a successful launch on the target
 Windows system (local folder delivery unless human directs otherwise).
 
-Local technical preview helpers:
+Local technical preview helpers (rebuild after 0.13 bump):
 
 ```powershell
 pwsh -File .\tools\package-preview.ps1
-pwsh -File .\dist\aether-0.12.0-tp\verify-preview.ps1
+pwsh -File .\dist\aether-0.13.0-tp\verify-preview.ps1
 ```
 
 Threat model freeze: [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md).  
-Delivery report: [docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md](docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md).
+TP delivery: [docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md](docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md).  
+M10 delivery: [docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md](docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md).

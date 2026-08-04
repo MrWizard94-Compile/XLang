@@ -1,6 +1,6 @@
 # ADR-013: multi-unit offline projects (independent compilation units)
 
-**Status:** Accepted (design); implementation not started  
+**Status:** Accepted and implemented (Aether package 0.13.0)  
 **Date:** 2026-08-04  
 **Decision makers:** Human P0 freeze (TP-1 + TP-2 + P4.1); agent design under AGENTS Constitution  
 **Related Rule IDs:** `DOC-ADR-001`, `DOC-SYNC-001`, `SEC-INPUT-001`, `TEST-BEHAVIOR-001`, `CONST-DEP-001`, `CONST-COMPLETE-001`  

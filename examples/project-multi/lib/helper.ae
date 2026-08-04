@@ -1,0 +1,4 @@
+world multi_lib
+
+weave main [] -> Whole:
+  yield 9

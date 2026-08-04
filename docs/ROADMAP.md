@@ -1,6 +1,6 @@
 # Aether Language Development Roadmap
 
-**Status:** M0–M9 pilots complete; completion program TP-1 → TP-2 → P4.1
+**Status:** M0–M10 complete (language through 0.11; tooling through 0.13); TP-1/TP-2 delivered
 **Date:** 2026-08-04
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
@@ -67,7 +67,7 @@ invalid-source diagnostic parity.
 | M7 | Structured concurrency | M2 and M4 | Lexical task-group model with join, failure, cancellation, and effect-mediated blocking. | No orphan task/property tests, deterministic cleanup, capability rules, diagnostics, and seed parity pass. | **Implemented in Aether 0.10/AETH v10: structured nurseries** |
 | M8 | Foreign/host interface pilot | M1 and M2 | Narrow, typed, ownership-aware pure host ABI fixture (`host weave` / `HOST_CALL`); C-facing design only if a later threat model supports it. | Invalid-input, ownership transfer, capability denial, ABI compatibility, and local reproducibility tests pass. | **Implemented in Aether 0.11/AETH v11: pure host pilot** |
 | M9 | Integrated project/tooling evolution | M3 plus stable package/ABI decisions | Reproducible project metadata, dependency identity, formatter/LSP integration, and release workflow proposal. | Security, offline reproducibility, upgrade/rollback, and package verification criteria are approved and tested. | **Implemented pilot in 0.12: offline project verify + format; LSP/registry deferred** |
-| M10 | Multi-unit offline projects | M9 | Nested multi-unit `aether.project/v1`, locks, independent per-unit seed compile, `project format`; no language modules. | Path/lock negatives, multi-unit example, independence documented, matrix green, no registry/import. | **Designed (ADR-013); implementation pending** |
+| M10 | Multi-unit offline projects | M9 | Nested multi-unit `aether.project/v1`, locks, independent per-unit seed compile, `project format`; no language modules. | Path/lock negatives, multi-unit example, independence documented, matrix green, no registry/import. | **Implemented in package 0.13 (language surface still 0.11)** |
 
 ## Milestone detail
 
@@ -183,21 +183,21 @@ M9 is specified by [DESIGN-M9-PROJECT-TOOLING.md](DESIGN-M9-PROJECT-TOOLING.md),
 `aether.project/v1`, `project verify`, and `format`. Full LSP and network
 package registries remain deferred.
 
-### M10 — multi-unit offline projects (designed)
+### M10 — multi-unit offline projects (implemented)
 
 M10 is specified by [DESIGN-M10-MULTI-UNIT-PROJECTS.md](DESIGN-M10-MULTI-UNIT-PROJECTS.md),
 [ADR-013](ADR-013-m10-multi-unit-projects.md), and
-[M10 validation matrix](M10-VALIDATION-MATRIX.md). It extends M9 with nested
-paths and real multi-unit integrity while keeping **independent compilation
-units** (no import/module system). Implementation is the next engineering
-increment after TP-1/TP-2.
+[M10 validation matrix](M10-VALIDATION-MATRIX.md). Package **0.13** extends M9
+with nested paths and real multi-unit integrity while keeping **independent
+compilation units** (no import/module system). See
+[AETHER_0.13.md](AETHER_0.13.md) and
+[DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md](DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md).
 
 ### Remaining research / completion program
 
-TP-1 integrity and TP-2 local technical preview are delivered. **P4.1 / M10**
-design is accepted; implementation follows the M10 matrix. Expanded packages,
-language modules, LSP, C interop, and native backends remain large interaction
-surfaces. Each begins with the falsifiable spike described in
+TP-1, TP-2, and M10 tooling are delivered. Expanded packages, language modules,
+LSP, C interop, and native backends remain large interaction surfaces. Each
+begins with the falsifiable spike described in
 [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
 No milestone advances merely because its happy path works.
 

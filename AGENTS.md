@@ -55,7 +55,9 @@ JavaScript, LLVM, or another language.
 (the bounded `Error[Whole]` effect), M5 (literal deterministic `comptime bind`),
 M6 (explicit layout shapes and dual-layout tables), M7 (structured nurseries),
 and M8 (capability-closed pure host ABI pilot) are implemented on the
-seed-hosted product compile path in Aether 0.11 / AETH v11. Toolchain package 0.12 adds offline project verify and format (M9).
+seed-hosted product compile path in Aether 0.11 / AETH v11. Toolchain package
+0.12 added offline project verify and format (M9); package **0.13** adds multi-unit
+nested project integrity and `project format` (M10) without language modules.
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
 proof dual-compare. Seed Profile self-host, all shipped examples, the complete
@@ -71,7 +73,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Overview | [README.md](README.md) |
 | Contract / release gate | [MANIFEST.md](MANIFEST.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Language (0.11 surface / 0.12 toolchain current) | [docs/AETHER_0.12.md](docs/AETHER_0.12.md), [docs/AETHER_0.11.md](docs/AETHER_0.11.md), [docs/AETHER_0.10.md](docs/AETHER_0.10.md), [docs/AETHER_0.9.md](docs/AETHER_0.9.md), [docs/AETHER_0.8.md](docs/AETHER_0.8.md), [docs/AETHER_0.7.md](docs/AETHER_0.7.md), [docs/AETHER_0.6.md](docs/AETHER_0.6.md), [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
+| Language (0.11 surface / 0.13 toolchain current) | [docs/AETHER_0.13.md](docs/AETHER_0.13.md), [docs/AETHER_0.12.md](docs/AETHER_0.12.md), [docs/AETHER_0.11.md](docs/AETHER_0.11.md), [docs/AETHER_0.10.md](docs/AETHER_0.10.md), [docs/AETHER_0.9.md](docs/AETHER_0.9.md), [docs/AETHER_0.8.md](docs/AETHER_0.8.md), [docs/AETHER_0.7.md](docs/AETHER_0.7.md), [docs/AETHER_0.6.md](docs/AETHER_0.6.md), [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
 | Record decision | [docs/ADR-001-records-and-aeth-v5.md](docs/ADR-001-records-and-aeth-v5.md) |
 | AI-first design foundation | [docs/NORTH_STAR.md](docs/NORTH_STAR.md), [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), [docs/ADR-002-ai-first-design-foundation.md](docs/ADR-002-ai-first-design-foundation.md) |
 | M1/M2 resource decisions | [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md), [docs/ADR-003-value-resource-semantics.md](docs/ADR-003-value-resource-semantics.md), [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md), [docs/M1-VALIDATION-MATRIX.md](docs/M1-VALIDATION-MATRIX.md) |
@@ -85,7 +87,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Completion readiness audit | [docs/AUDIT_REPORT-2026-08-04-COMPLETION-READINESS.md](docs/AUDIT_REPORT-2026-08-04-COMPLETION-READINESS.md) |
 | Technical preview threat model | [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md) |
 | Technical preview notes | [docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md](docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md) |
-| M10 multi-unit projects (designed) | [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md), [docs/ADR-013-m10-multi-unit-projects.md](docs/ADR-013-m10-multi-unit-projects.md), [docs/M10-VALIDATION-MATRIX.md](docs/M10-VALIDATION-MATRIX.md) |
+| M10 multi-unit projects | [docs/AETHER_0.13.md](docs/AETHER_0.13.md), [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md), [docs/ADR-013-m10-multi-unit-projects.md](docs/ADR-013-m10-multi-unit-projects.md), [docs/M10-VALIDATION-MATRIX.md](docs/M10-VALIDATION-MATRIX.md) |
 | Legacy intake | [docs/LEGACY.md](docs/LEGACY.md) |
 
 ### Stack pins
@@ -93,8 +95,8 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.12.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.12.0) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.13.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.13.0) |
 | Artifact format | AETH **v4–v10** compatibility input + deterministic **v11** output with shape table, dual-layout tables, structured nurseries, effect metadata, host function kind, `HOST_CALL`, and `COMPTIME_WHOLE` provenance (earlier/unknown versions rejected) |
 | Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |

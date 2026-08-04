@@ -6,13 +6,14 @@ use std::process::ExitCode;
 
 use aether_core::{
     apply_structural_edit, canonical_ast, compile_source, compile_to_bytecode, compile_with_seed,
-    forge_bytecode, format_source, parse_project_document, run_bytecode, structural_document_json,
-    verify_bytecode, verify_project, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    forge_bytecode, format_project, format_source, parse_project_document, run_bytecode,
+    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
+    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default.\nstructure emits aether.ast/v6 JSON. apply-edit accepts aether.edit/v6, validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, path confinement, optional SHA-256 lock, seed-compile each unit.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default.\nstructure emits aether.ast/v6 JSON. apply-edit accepts aether.edit/v6, validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock, independent seed-compile of each unit.\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -164,27 +165,28 @@ fn format_file(source_path: &Path, output_path: Option<&Path>) -> Result<(), Str
     Ok(())
 }
 
+fn project_root_for(project_path: &Path) -> &Path {
+    project_path
+        .parent()
+        .filter(|candidate| !candidate.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
+}
+
 fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), String> {
     let json = read_source(project_path)?;
     let document = parse_project_document(&json).map_err(|error| error.to_string())?;
-    let root = project_path
-        .parent()
-        .filter(|candidate| !candidate.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
+    let root = project_root_for(project_path);
     let report = verify_project(root, &document).map_err(|error| error.to_string())?;
     if let Some(dir) = output_dir {
         if !dir.is_dir() {
             return Err(format!("output directory {} does not exist", dir.display()));
         }
         for unit in &document.units {
-            let source_path = root.join(&unit.path);
+            let source_path = aether_core::resolve_unit_path(root, &unit.path)
+                .map_err(|error| error.to_string())?;
             let source = read_source(&source_path)?;
             let compiled = compile_with_seed(&source).map_err(|error| error.to_string())?;
-            let stem = Path::new(&unit.path)
-                .file_stem()
-                .and_then(|value| value.to_str())
-                .ok_or_else(|| format!("unit {} has no file stem", unit.path))?;
-            let artifact_path = dir.join(format!("{stem}.aeth"));
+            let artifact_path = dir.join(unit_artifact_file_name(&unit.path));
             write_artifact(&artifact_path, compiled.bytecode)?;
         }
     }
@@ -204,6 +206,36 @@ fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), 
             unit.path, unit.sha256, unit.artifact_bytes
         );
     }
+    Ok(())
+}
+
+fn project_format(project_path: &Path, write: bool) -> Result<(), String> {
+    let json = read_source(project_path)?;
+    let document = parse_project_document(&json).map_err(|error| error.to_string())?;
+    let root = project_root_for(project_path);
+    let report = format_project(root, &document).map_err(|error| error.to_string())?;
+    if write {
+        for unit in &report.units {
+            let path = aether_core::resolve_unit_path(root, &unit.path)
+                .map_err(|error| error.to_string())?;
+            write_source(&path, &unit.formatted)?;
+            println!("{LANGUAGE_NAME} {LANGUAGE_VERSION} formatted {}", unit.path);
+        }
+    } else {
+        for unit in &report.units {
+            println!("=== {} ===", unit.path);
+            print!("{}", unit.formatted);
+            if !unit.formatted.ends_with('\n') {
+                println!();
+            }
+        }
+    }
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} project {}@{} formatted {} unit(s)",
+        report.name,
+        report.version,
+        report.units.len()
+    );
     Ok(())
 }
 
@@ -317,25 +349,46 @@ fn run() -> Result<(), String> {
         }
         "project" => {
             let subcommand = next_argument(&mut arguments, "project subcommand")?;
-            if subcommand != "verify" {
-                return Err("project accepts only the verify subcommand".to_owned());
-            }
-            let project = next_argument(&mut arguments, "project file")?;
-            let mut output_dir = None;
-            if let Some(flag) = arguments.next() {
-                if flag != "--output-dir" {
-                    return Err("project verify accepts optional --output-dir <dir>".to_owned());
+            match subcommand.to_string_lossy().as_ref() {
+                "verify" => {
+                    let project = next_argument(&mut arguments, "project file")?;
+                    let mut output_dir = None;
+                    if let Some(flag) = arguments.next() {
+                        if flag != "--output-dir" {
+                            return Err(
+                                "project verify accepts optional --output-dir <dir>".to_owned()
+                            );
+                        }
+                        let dir = next_argument(&mut arguments, "output directory")?;
+                        if arguments.next().is_some() {
+                            return Err(
+                                "project verify accepts one project file and optional --output-dir <dir>"
+                                    .to_owned(),
+                            );
+                        }
+                        output_dir = Some(dir);
+                    }
+                    project_verify(Path::new(&project), output_dir.as_ref().map(Path::new))
                 }
-                let dir = next_argument(&mut arguments, "output directory")?;
-                if arguments.next().is_some() {
-                    return Err(
-                        "project verify accepts one project file and optional --output-dir <dir>"
-                            .to_owned(),
-                    );
+                "format" => {
+                    let project = next_argument(&mut arguments, "project file")?;
+                    let mut write = false;
+                    if let Some(flag) = arguments.next() {
+                        if flag != "--write" {
+                            return Err("project format accepts optional --write".to_owned());
+                        }
+                        if arguments.next().is_some() {
+                            return Err(
+                                "project format accepts one project file and optional --write"
+                                    .to_owned(),
+                            );
+                        }
+                        write = true;
+                    }
+                    project_format(Path::new(&project), write)
                 }
-                output_dir = Some(dir);
+                _ => Err("project accepts verify or format subcommands".to_owned()),
             }
-            project_verify(Path::new(&project), output_dir.as_ref().map(Path::new))
         }
         "version" => {
             if arguments.next().is_some() {

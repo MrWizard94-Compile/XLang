@@ -1,6 +1,6 @@
 # M10 Design: multi-unit offline projects
 
-**Status:** Accepted design (implementation pending gate)  
+**Status:** Implemented in package 0.13.0  
 **Date:** 2026-08-04  
 **Decision record:** [ADR-013](ADR-013-m10-multi-unit-projects.md)  
 **Validation record:** [M10 validation matrix](M10-VALIDATION-MATRIX.md)  
