@@ -5,15 +5,16 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use aether_core::{
-    apply_structural_edit, canonical_ast, compile_source, compile_to_bytecode, compile_with_seed,
-    forge_bytecode, format_project, format_source, parse_project_document, run_bytecode,
-    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
-    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
+    compile_to_bytecode, compile_with_seed, forge_bytecode, format_project, format_source,
+    multi_module_authority_note, parse_project_document, run_bytecode, structural_document_json,
+    unit_artifact_file_name, verify_bytecode, verify_project, InvocationValue, LANGUAGE_NAME,
+    LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default.\nstructure emits aether.ast/v6 JSON. apply-edit accepts aether.edit/v6, validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock, independent seed-compile of each unit.\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v6 JSON. apply-edit accepts aether.edit/v6, validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build links import unit / export weave graphs via bootstrap multi-source compile (M11a; not seed-hosted yet).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -209,6 +210,22 @@ fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), 
     Ok(())
 }
 
+fn project_build(project_path: &Path, output_path: &Path) -> Result<(), String> {
+    let json = read_source(project_path)?;
+    let document = parse_project_document(&json).map_err(|error| error.to_string())?;
+    let root = project_root_for(project_path);
+    let compiled = compile_project_modules(root, &document).map_err(|error| error.to_string())?;
+    write_artifact(output_path, compiled.bytecode)?;
+    println!("{}", multi_module_authority_note());
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} project {}@{} built {} (bootstrap multi-module)",
+        document.name,
+        document.version,
+        output_path.display()
+    );
+    Ok(())
+}
+
 fn project_format(project_path: &Path, write: bool) -> Result<(), String> {
     let json = read_source(project_path)?;
     let document = parse_project_document(&json).map_err(|error| error.to_string())?;
@@ -387,7 +404,22 @@ fn run() -> Result<(), String> {
                     }
                     project_format(Path::new(&project), write)
                 }
-                _ => Err("project accepts verify or format subcommands".to_owned()),
+                "build" => {
+                    let project = next_argument(&mut arguments, "project file")?;
+                    let output_flag = next_argument(&mut arguments, "--output flag")?;
+                    if output_flag != "--output" {
+                        return Err("project build requires --output <artifact-file>".to_owned());
+                    }
+                    let output = next_argument(&mut arguments, "artifact output file")?;
+                    if arguments.next().is_some() {
+                        return Err(
+                            "project build accepts one project file and --output <artifact-file>"
+                                .to_owned(),
+                        );
+                    }
+                    project_build(Path::new(&project), Path::new(&output))
+                }
+                _ => Err("project accepts verify, format, or build subcommands".to_owned()),
             }
         }
         "version" => {

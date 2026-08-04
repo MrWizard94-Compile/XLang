@@ -1,6 +1,6 @@
 # M11 Design: language modules (import / export)
 
-**Status:** Accepted design for implementable ADR-015 (code not started)  
+**Status:** M11a implemented (bootstrap project build); M11b seed pending  
 **Date:** 2026-08-04  
 **Decision record:** [ADR-015](ADR-015-m11-language-modules.md)  
 **Validation record:** [M11 validation matrix](M11-VALIDATION-MATRIX.md)  

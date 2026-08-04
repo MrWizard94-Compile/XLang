@@ -188,6 +188,20 @@ cargo run -q -p aether-cli -- project format $multiFile
 if ($LASTEXITCODE -ne 0) { Fail "project-multi format failed" }
 Write-Host "  project-multi verify + format OK"
 
+Write-Step "project build examples/project-modules"
+$modFile = Join-Path $examplesDir "project-modules\aether.project.json"
+$modOut = Join-Path $outDir "project-modules.aeth"
+if (Test-Path -LiteralPath $modFile) {
+    cargo run -q -p aether-cli -- project build $modFile --output $modOut
+    if ($LASTEXITCODE -ne 0) { Fail "project-modules build failed" }
+    cargo run -q -p aether-cli -- run $modOut *>&1 | Tee-Object -FilePath (Join-Path $outDir "modules.run.txt") | Out-Host
+    $modText = Get-Content -LiteralPath (Join-Path $outDir "modules.run.txt") -Raw
+    if ($modText -notmatch "exited with 42\b") { Fail "project-modules expected exited with 42" }
+    Write-Host "  project-modules build+run 42 OK"
+} else {
+    Write-Host "  skip (no project-modules example)" -ForegroundColor Yellow
+}
+
 # --- Full: seed forge identity ---
 if ($Mode -eq "full") {
     Write-Step "Seed bootstrap + forge hash identity"

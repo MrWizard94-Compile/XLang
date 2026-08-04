@@ -56,8 +56,8 @@ JavaScript, LLVM, or another language.
 M6 (explicit layout shapes and dual-layout tables), M7 (structured nurseries),
 and M8 (capability-closed pure host ABI pilot) are implemented on the
 seed-hosted product compile path in Aether 0.11 / AETH v11. Toolchain package
-0.12 added offline project verify and format (M9); package **0.13** adds multi-unit
-nested project integrity and `project format` (M10) without language modules.
+0.12 added offline project verify and format (M9); package **0.13** adds multi-unit nested project integrity (M10); package **0.14**
+adds language modules via bootstrap `project build` (M11a; seed multi-module is M11b).
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
 proof dual-compare. Seed Profile self-host, all shipped examples, the complete
@@ -89,7 +89,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Technical preview notes | [docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md](docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md) |
 | M10 multi-unit projects | [docs/AETHER_0.13.md](docs/AETHER_0.13.md), [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md), [docs/ADR-013-m10-multi-unit-projects.md](docs/ADR-013-m10-multi-unit-projects.md), [docs/M10-VALIDATION-MATRIX.md](docs/M10-VALIDATION-MATRIX.md) |
 | Post-M10 track portfolio | [docs/ADR-014-post-m10-track-portfolio.md](docs/ADR-014-post-m10-track-portfolio.md), [docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md](docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md) |
-| M11 language modules (designed) | [docs/DESIGN-M11-LANGUAGE-MODULES.md](docs/DESIGN-M11-LANGUAGE-MODULES.md), [docs/ADR-015-m11-language-modules.md](docs/ADR-015-m11-language-modules.md), [docs/M11-VALIDATION-MATRIX.md](docs/M11-VALIDATION-MATRIX.md) |
+| M11 language modules (M11a done) | [docs/AETHER_0.12-MODULES.md](docs/AETHER_0.12-MODULES.md), [docs/DESIGN-M11-LANGUAGE-MODULES.md](docs/DESIGN-M11-LANGUAGE-MODULES.md), [docs/ADR-015-m11-language-modules.md](docs/ADR-015-m11-language-modules.md), [docs/M11-VALIDATION-MATRIX.md](docs/M11-VALIDATION-MATRIX.md) |
 | Mainstream maturity roadmap | [docs/ROADMAP-MAINSTREAM-MATURITY.md](docs/ROADMAP-MAINSTREAM-MATURITY.md) |
 | Legacy intake | [docs/LEGACY.md](docs/LEGACY.md) |
 
@@ -98,8 +98,8 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.13.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.13.0) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.14.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.14.0) |
 | Artifact format | AETH **v4–v10** compatibility input + deterministic **v11** output with shape table, dual-layout tables, structured nurseries, effect metadata, host function kind, `HOST_CALL`, and `COMPTIME_WHOLE` provenance (earlier/unknown versions rejected) |
 | Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |

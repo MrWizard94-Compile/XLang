@@ -2,18 +2,19 @@
 
 ## Contract
 
-Aether **0.13.0** (language surface **0.11** / AETH **v11**) accepts Aether
-source, returns a canonical AST from the Rust bootstrap for tooling, and
-**emits AETH v11 bytecode primarily through the Aether-written seed compiler**
-(forge ABI). The `aether` CLI is the product interface for that seed-hosted
-compile path and for offline multi-unit project verification/formatting. Verified
-AETH v4/v5/v6/v7/v8/v9/v10 artifacts remain accepted compatibility inputs with
-their original meanings. Source is never translated to an existing language.
+Aether **0.14.0** (base language **0.11** plus **M11a modules**, AETH **v11**)
+accepts Aether source, returns a canonical AST from the Rust bootstrap for
+tooling, and **emits AETH v11 bytecode primarily through the Aether-written seed
+compiler** for **single-file** sources (forge ABI). Multi-module `project build`
+uses **bootstrap multi-source elaboration** (M11a); seed multi-module authority
+is **not** claimed until M11b dual-compare. The CLI also provides offline project
+verify/format. Verified AETH v4–v10 remain compatibility inputs. Source is never
+translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.13 product contract (0.11 language plus
-M9/M10 offline project tooling). It intentionally
+This manifest is the executable Aether 0.14 product contract (0.11 core language,
+M9/M10 projects, M11a modules via bootstrap build). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -196,19 +197,22 @@ recorded in [docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-st
 ## Project tooling boundary (M9 / M10)
 
 Offline project documents use `aether.project/v1` with relative `.ae` units
-(including nested forward-slash paths), optional SHA-256 locks, and independent
-per-unit seed compile. Units are not language modules. CLI:
+(including nested forward-slash paths) and optional SHA-256 locks. M11a adds
+`import unit` / `export weave` and:
 
 ```text
 aether format <source-file> [--output <source-file>]
 aether project verify <project-file> [--output-dir <dir>]
 aether project format <project-file> [--write]
+aether project build <project-file> --output <artifact.aeth>
 ```
 
-`--output-dir` writes flat mapped artifacts (`src/main.ae` → `src__main.aeth`).
-No package registry, network dependency fetch, cross-file linking, or LSP server
-is included. See [docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md)
-and [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md).
+`project build` elaborates the main unit’s import DAG and **bootstrap-compiles**
+one AETH (not seed-hosted until M11b). Single-file `compile` remains seed-hosted
+and rejects `import unit`. See
+[docs/DESIGN-M11-LANGUAGE-MODULES.md](docs/DESIGN-M11-LANGUAGE-MODULES.md),
+[docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md), and
+[docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md).
 
 ## Quality Gate
 

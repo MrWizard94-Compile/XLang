@@ -1,0 +1,7 @@
+world math
+
+export weave double [n: Whole] -> Whole:
+  yield product n 2
+
+weave secret [n: Whole] -> Whole:
+  yield sum n 1

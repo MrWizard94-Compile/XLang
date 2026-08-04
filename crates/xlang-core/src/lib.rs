@@ -10,12 +10,17 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
 mod authoring;
+mod modules;
 mod project;
 
 pub use authoring::{
     apply_structural_edit, diagnostic_json, structural_document_json, StructuralEditError,
     StructuralEditResult, DIAGNOSTIC_SCHEMA_VERSION, STRUCTURAL_AST_SCHEMA_VERSION,
     STRUCTURAL_EDIT_PROTOCOL_VERSION,
+};
+pub use modules::{
+    compile_project_modules, elaborate_project_modules, mangle_weave, multi_module_authority_note,
+    source_requires_project_modules, validate_lib_module_source,
 };
 pub use project::{
     format_project, format_source, parse_project_document, resolve_unit_path, sha256_hex,
@@ -25,7 +30,7 @@ pub use project::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.13.0";
+pub const LANGUAGE_VERSION: &str = "0.14.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
@@ -1763,6 +1768,19 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
 
     let world = parse_world(lines[0])?;
     let mut index = 1;
+    if index < lines.len() && lines[index].content.starts_with("import unit ") {
+        let line = lines[index];
+        if line.indentation != 0 {
+            return Err(CompilerError::new(
+                line.span(1),
+                "AE-MOD-001: import unit must begin at indentation level zero",
+            ));
+        }
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-MOD-007: import unit requires aether project build (multi-module); single-file compile rejects imports",
+        ));
+    }
     let mut records = Vec::new();
     while index < lines.len() && lines[index].content.starts_with("record ") {
         let line = lines[index];
@@ -1830,6 +1848,12 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
             return Err(CompilerError::new(
                 line.span(1),
                 "AE-HOST-001: host declarations must use the form host weave name [params] -> Type",
+            ));
+        }
+        if line.content.starts_with("import unit ") {
+            return Err(CompilerError::new(
+                line.span(1),
+                "AE-MOD-001: import unit declarations must appear immediately after world",
             ));
         }
         let (name, parameters, result, effect) = parse_weave_header(line, &record_types)?;
@@ -2677,10 +2701,14 @@ fn parse_weave_header(
             "weave declarations must end with a colon",
         ));
     };
-    let Some(rest) = without_colon.strip_prefix("weave ") else {
+    let rest = if let Some(rest) = without_colon.strip_prefix("export weave ") {
+        rest
+    } else if let Some(rest) = without_colon.strip_prefix("weave ") {
+        rest
+    } else {
         return Err(CompilerError::new(
             line.span(1),
-            "expected weave declaration",
+            "expected weave or export weave declaration",
         ));
     };
     let Some(opening) = rest.find('[') else {
@@ -3669,7 +3697,7 @@ fn parse_expression(source: &str, span: Span) -> Result<Expression, CompilerErro
             let Some(weave) = tokens.get(index) else {
                 return Err(CompilerError::new(span, "call requires a weave name"));
             };
-            validate_name(weave, span, "called weave name", true)?;
+            validate_call_target(weave, span)?;
             index += 1;
             let mut arguments = Vec::new();
             while index < tokens.len() {
@@ -12916,6 +12944,24 @@ fn statement_token_count(statements: &[Statement]) -> usize {
             Statement::Together { spawns, .. } => 1 + spawns.len() * 3,
         })
         .sum()
+}
+
+fn validate_call_target(name: &str, span: Span) -> Result<(), CompilerError> {
+    if let Some((alias, weave)) = name.split_once('.') {
+        if alias.contains('.') || weave.contains('.') {
+            return Err(CompilerError::new(
+                span,
+                "AE-MOD-001: qualified call must use alias.weave with a single dot",
+            ));
+        }
+        validate_name(alias, span, "import alias", false)?;
+        validate_name(weave, span, "called weave name", true)?;
+        return Err(CompilerError::new(
+            span,
+            "AE-MOD-007: qualified call alias.weave requires aether project build (multi-module); single-file compile rejects qualified imports",
+        ));
+    }
+    validate_name(name, span, "called weave name", true)
 }
 
 fn validate_name(

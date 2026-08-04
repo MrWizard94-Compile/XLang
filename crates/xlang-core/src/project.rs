@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+use crate::modules::{source_requires_project_modules, validate_lib_module_source};
 use crate::{compile_with_seed, verify_bytecode, CompilerError, LANGUAGE_NAME, LANGUAGE_VERSION};
 
 pub const PROJECT_SCHEMA_VERSION: &str = "aether.project/v1";
@@ -417,23 +418,50 @@ pub fn verify_project(
                 format!("unit {} is not valid UTF-8", unit.path),
             )
         })?;
-        let compiled = compile_with_seed(&source).map_err(|error: CompilerError| {
-            ProjectError::new(
-                "AE-PROJECT-004",
-                format!("unit {} failed seed compile: {error}", unit.path),
-            )
-        })?;
-        verify_bytecode(&compiled.bytecode).map_err(|error| {
-            ProjectError::new(
-                "AE-PROJECT-004",
-                format!("unit {} produced an invalid artifact: {error}", unit.path),
-            )
-        })?;
+        // M11: lib units without main (or any unit using import/export) are not
+        // independently seed-compiled; validate module surface instead.
+        let module_surface = source_requires_project_modules(&source)
+            || (unit.role == ProjectUnitRole::Lib
+                && !source.lines().any(|line| {
+                    let t = line.trim_start();
+                    t.starts_with("weave main ") || t.starts_with("export weave main ")
+                }));
+        let artifact_bytes = if module_surface {
+            if unit.role == ProjectUnitRole::Lib {
+                validate_lib_module_source(&unit.path, &source)?;
+            } else if source_requires_project_modules(&source) {
+                // Entry with imports: full graph check deferred to project build.
+                if !source.lines().any(|line| {
+                    let t = line.trim_start();
+                    t.starts_with("weave main ") || t.starts_with("export weave main ")
+                }) {
+                    return Err(ProjectError::new(
+                        "AE-MOD-006",
+                        format!("entry unit {} must declare weave main", unit.path),
+                    ));
+                }
+            }
+            0
+        } else {
+            let compiled = compile_with_seed(&source).map_err(|error: CompilerError| {
+                ProjectError::new(
+                    "AE-PROJECT-004",
+                    format!("unit {} failed seed compile: {error}", unit.path),
+                )
+            })?;
+            verify_bytecode(&compiled.bytecode).map_err(|error| {
+                ProjectError::new(
+                    "AE-PROJECT-004",
+                    format!("unit {} produced an invalid artifact: {error}", unit.path),
+                )
+            })?;
+            compiled.bytecode.len()
+        };
         reports.push(ProjectUnitReport {
             path: unit.path.clone(),
             role: unit.role,
             sha256: digest,
-            artifact_bytes: compiled.bytecode.len(),
+            artifact_bytes,
         });
     }
     Ok(ProjectVerifyReport {
@@ -653,7 +681,11 @@ mod tests {
 }"#;
         let document = parse_project_document(json).expect("parse");
         let error = verify_project(&root, &document).expect_err("bad lib");
-        assert_eq!(error.code, "AE-PROJECT-004");
+        assert!(
+            error.code == "AE-PROJECT-004" || error.code == "AE-MOD-001",
+            "unexpected {}",
+            error.code
+        );
 
         // Independence: main does not resolve weaves from another file.
         let main_only =

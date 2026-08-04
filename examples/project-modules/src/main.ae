@@ -1,0 +1,6 @@
+world app
+
+import unit "lib/math.ae" as math
+
+weave main [] -> Whole:
+  yield call math.double 21

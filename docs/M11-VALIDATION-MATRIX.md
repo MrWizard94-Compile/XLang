@@ -1,6 +1,7 @@
 # M11 language modules validation matrix
 
-**Status:** Design gate for M11 — **implementation not yet green**  
+**Status:** M11a implementation green (bootstrap); M11b seed pending —
+[DELIVERY_REPORT-2026-08-04-M11A-LANGUAGE-MODULES.md](DELIVERY_REPORT-2026-08-04-M11A-LANGUAGE-MODULES.md)  
 **Date:** 2026-08-04  
 **Design:** [DESIGN-M11-LANGUAGE-MODULES.md](DESIGN-M11-LANGUAGE-MODULES.md)  
 **ADR:** [ADR-015](ADR-015-m11-language-modules.md)
@@ -69,15 +70,15 @@
 
 ### M11a
 
-- [ ] Parser/grammar  
-- [ ] Graph resolve + cycles  
-- [ ] Bootstrap multi-source compile  
-- [ ] `project build`  
-- [ ] Single-file reject import  
-- [ ] Example `examples/project-modules`  
-- [ ] Core/CLI tests P*/N*  
-- [ ] DOC-SYNC (0.12 language / 0.14 package suggested)  
-- [ ] Delivery report; claim bootstrap-hosted multi-module  
+- [x] Parser/grammar  
+- [x] Graph resolve + cycles  
+- [x] Bootstrap multi-source compile  
+- [x] `project build`  
+- [x] Single-file reject import  
+- [x] Example `examples/project-modules`  
+- [x] Core/CLI tests P*/N*  
+- [x] DOC-SYNC (0.14 package / modules surface note)  
+- [x] Delivery report; claim bootstrap-hosted multi-module  
 
 ### M11b
 
@@ -90,6 +91,6 @@
 
 | Gate | Status |
 | --- | --- |
-| Design + ADR-015 | **Ready / Accepted** |
-| M11a implementation | Pending |
+| Design + ADR-015 | **Accepted** |
+| M11a implementation | **Done** (0.14.0) |
 | M11b seed proof | Pending |

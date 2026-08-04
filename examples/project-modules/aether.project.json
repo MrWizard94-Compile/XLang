@@ -1,0 +1,15 @@
+{
+  "schema": "aether.project/v1",
+  "name": "project_modules_demo",
+  "version": "0.1.0",
+  "units": [
+    { "path": "src/main.ae", "role": "main" },
+    { "path": "lib/math.ae", "role": "lib" }
+  ],
+  "lock": {
+    "units": [
+      { "path": "src/main.ae", "sha256": "6cbe98542f44a72b5f439f4eecffad4de06f342bd1df8c4749f4850da35903d5" },
+      { "path": "lib/math.ae", "sha256": "2a6aef44b6fae554c1813bb649b8597c4db380863d7608755e83644a54f1df71" }
+    ]
+  }
+}
