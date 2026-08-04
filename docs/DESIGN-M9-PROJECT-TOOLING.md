@@ -100,11 +100,11 @@ milestone. No new AETH opcodes.
 
 ## Release workflow proposal (documented, not a public ship)
 
-1. `cargo fmt --check`, Clippy `-D warnings`, core/CLI/seed tests  
-2. `aether project verify` on each shipped project fixture  
-3. `cargo build --release -p aether-cli`  
-4. Inspect and launch release binary locally  
-5. Record hashes in a delivery report  
+1. `cargo fmt --check`, Clippy `-D warnings`, core/CLI/seed tests
+2. `aether project verify` on each shipped project fixture
+3. `cargo build --release -p aether-cli`
+4. Inspect and launch release binary locally
+5. Record hashes in a delivery report
 
 ## Stop conditions
 
