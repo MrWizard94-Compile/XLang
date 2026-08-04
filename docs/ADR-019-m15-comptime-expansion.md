@@ -1,6 +1,6 @@
 # ADR-019: bounded comptime expansion via name chaining (M15 / T-CT)
 
-**Status:** Accepted (implementable) — **implementation not started**  
+**Status:** Accepted — **implemented in package 0.20.0**  
 **Date:** 2026-08-04  
 **Decision makers:** AGENTS Constitution; ADR-014 **T-CT** after M14 delivery  
 **Related Rule IDs:** `CONST-DEP-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`, `SEC-INPUT-001`, `RND-INVAR-001`, `CONST-COMPLETE-001`

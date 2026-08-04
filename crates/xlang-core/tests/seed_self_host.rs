@@ -29,6 +29,7 @@ const FORWARD_CALL_SOURCE: &str = concat!(
 
 const M4_ERROR_EFFECT_SOURCE: &str = include_str!("../../../examples/error-effect.ae");
 const M5_COMPTIME_SOURCE: &str = include_str!("../../../examples/comptime.ae");
+const M15_COMPTIME_CHAIN_SOURCE: &str = include_str!("../../../examples/comptime-chain.ae");
 const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae");
 const M7_NURSERY_TOTAL_SOURCE: &str = include_str!("../../../examples/nursery-total.ae");
 const M7_NURSERY_CANCEL_SOURCE: &str = include_str!("../../../examples/nursery-cancel.ae");
@@ -222,6 +223,28 @@ fn seed_profile_compiler_forges_bounded_m5_comptime_byte_identically() {
             .exit_code,
         150,
         "the M5 comptime fixture should preserve its defined outcome"
+    );
+}
+
+#[test]
+fn seed_profile_compiler_forges_m15_comptime_chain_byte_identically() {
+    let bootstrap = compile_to_bytecode(M15_COMPTIME_CHAIN_SOURCE)
+        .expect("the M15 chain fixture must bootstrap")
+        .bytecode;
+    let seeded = compile_with_seed(M15_COMPTIME_CHAIN_SOURCE)
+        .expect("the M15 chain fixture must seed-compile")
+        .bytecode;
+    verify_bytecode(&seeded).expect("M15 seed-produced artifact must verify");
+    assert_eq!(
+        seeded, bootstrap,
+        "M15 comptime chain must match bootstrap byte-for-byte"
+    );
+    assert_eq!(
+        run_bytecode(&seeded)
+            .expect("M15 seed-produced chain must run")
+            .exit_code,
+        288,
+        "cell=64 row=256 header=32 total=288"
     );
 }
 
@@ -438,6 +461,7 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
             Some(17),
         ),
         ("comptime", M5_COMPTIME_SOURCE, Some(150)),
+        ("comptime-chain", M15_COMPTIME_CHAIN_SOURCE, Some(288)),
         ("layout-table", M6_LAYOUT_SOURCE, Some(10)),
         ("nursery-total", M7_NURSERY_TOTAL_SOURCE, Some(7)),
         ("nursery-cancel", M7_NURSERY_CANCEL_SOURCE, Some(9)),

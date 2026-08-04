@@ -30,7 +30,7 @@ pub use project::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.19.0";
+pub const LANGUAGE_VERSION: &str = "0.20.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
@@ -4542,6 +4542,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
                 },
             );
         }
+        let mut comptime_env = BTreeMap::new();
         validate_block(
             &weave.body,
             &mut scope,
@@ -4551,6 +4552,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
             weave,
             true,
             &mut resource_plan,
+            &mut comptime_env,
         )?;
     }
     Ok(resource_plan)
@@ -4599,7 +4601,37 @@ fn validate_comptime_budget(program: &Program) -> Result<(), CompilerError> {
     Ok(())
 }
 
-fn evaluate_comptime_whole(expression: &Expression) -> Result<i64, CompilerError> {
+fn comptime_operand_whole(
+    atom: &Atom,
+    env: &BTreeMap<String, i64>,
+) -> Result<i64, CompilerError> {
+    match &atom.kind {
+        AtomKind::Whole(value) => Ok(*value),
+        AtomKind::Name(name) => env.get(name).copied().ok_or_else(|| {
+            CompilerError::new(
+                atom.span,
+                format!(
+                    "AE-COMPTIME-001: comptime operand {name} is not a prior root-level comptime Whole binding"
+                ),
+            )
+        }),
+        AtomKind::Text(_)
+        | AtomKind::Bytes(_)
+        | AtomKind::Truth(_)
+        | AtomKind::Borrow(_)
+        | AtomKind::Move(_)
+        | AtomKind::Access(_) => Err(CompilerError::new(
+            atom.span,
+            "AE-COMPTIME-001: comptime bind accepts only Whole literals or prior comptime Whole names",
+        )),
+    }
+}
+
+/// M5/M15: one binary Whole arithmetic op over literals and/or prior comptime names.
+fn evaluate_comptime_whole(
+    expression: &Expression,
+    env: &BTreeMap<String, i64>,
+) -> Result<i64, CompilerError> {
     let ExpressionKind::Binary {
         operation,
         left,
@@ -4608,42 +4640,38 @@ fn evaluate_comptime_whole(expression: &Expression) -> Result<i64, CompilerError
     else {
         return Err(CompilerError::new(
             expression.span,
-            "AE-COMPTIME-001: comptime bind requires exactly one literal Whole sum, difference, product, quotient, or remainder expression",
+            "AE-COMPTIME-001: comptime bind requires exactly one Whole sum, difference, product, quotient, or remainder expression",
         ));
     };
-    let (AtomKind::Whole(left), AtomKind::Whole(right)) = (&left.kind, &right.kind) else {
-        return Err(CompilerError::new(
-            expression.span,
-            "AE-COMPTIME-001: comptime bind accepts only signed Whole literals, never names, owners, or other value shapes",
-        ));
-    };
+    let left = comptime_operand_whole(left, env)?;
+    let right = comptime_operand_whole(right, env)?;
     match operation {
-        BinaryOperation::Sum => left.checked_add(*right).ok_or_else(|| {
+        BinaryOperation::Sum => left.checked_add(right).ok_or_else(|| {
             CompilerError::new(
                 expression.span,
                 "AE-COMPTIME-002: comptime sum overflowed Whole",
             )
         }),
-        BinaryOperation::Difference => left.checked_sub(*right).ok_or_else(|| {
+        BinaryOperation::Difference => left.checked_sub(right).ok_or_else(|| {
             CompilerError::new(
                 expression.span,
                 "AE-COMPTIME-002: comptime difference overflowed Whole",
             )
         }),
-        BinaryOperation::Product => left.checked_mul(*right).ok_or_else(|| {
+        BinaryOperation::Product => left.checked_mul(right).ok_or_else(|| {
             CompilerError::new(
                 expression.span,
                 "AE-COMPTIME-002: comptime product overflowed Whole",
             )
         }),
         BinaryOperation::Quotient => {
-            if *right == 0 {
+            if right == 0 {
                 return Err(CompilerError::new(
                     expression.span,
                     "AE-COMPTIME-002: comptime quotient cannot divide by zero",
                 ));
             }
-            left.checked_div(*right).ok_or_else(|| {
+            left.checked_div(right).ok_or_else(|| {
                 CompilerError::new(
                     expression.span,
                     "AE-COMPTIME-002: comptime quotient overflowed Whole",
@@ -4651,13 +4679,13 @@ fn evaluate_comptime_whole(expression: &Expression) -> Result<i64, CompilerError
             })
         }
         BinaryOperation::Remainder => {
-            if *right == 0 {
+            if right == 0 {
                 return Err(CompilerError::new(
                     expression.span,
                     "AE-COMPTIME-002: comptime remainder cannot divide by zero",
                 ));
             }
-            left.checked_rem(*right).ok_or_else(|| {
+            left.checked_rem(right).ok_or_else(|| {
                 CompilerError::new(
                     expression.span,
                     "AE-COMPTIME-002: comptime remainder overflowed Whole",
@@ -4667,7 +4695,7 @@ fn evaluate_comptime_whole(expression: &Expression) -> Result<i64, CompilerError
         _ => Err(CompilerError::new(
             expression.span,
             format!(
-                "AE-COMPTIME-001: comptime bind does not admit {} in the bounded M5 evaluator",
+                "AE-COMPTIME-001: comptime bind does not admit {} in the bounded M15 evaluator",
                 operation.word()
             ),
         )),
@@ -5027,6 +5055,7 @@ fn validate_block(
     weave: &Weave,
     root: bool,
     resource_plan: &mut SemanticResourcePlan,
+    comptime_env: &mut BTreeMap<String, i64>,
 ) -> Result<(), CompilerError> {
     for (index, statement) in statements.iter().enumerate() {
         match statement {
@@ -5054,7 +5083,8 @@ fn validate_block(
                             "AE-COMPTIME-001: comptime bind must be immutable",
                         ));
                     }
-                    let _ = evaluate_comptime_whole(value)?;
+                    let folded = evaluate_comptime_whole(value, comptime_env)?;
+                    comptime_env.insert(name.clone(), folded);
                 }
                 if scope.contains_key(name) {
                     return Err(CompilerError::new(
@@ -5283,6 +5313,7 @@ fn validate_block(
                     weave,
                     false,
                     resource_plan,
+                    comptime_env,
                 )?;
                 let mut dim_scope = original.clone();
                 if !when_dim.is_empty() {
@@ -5295,6 +5326,7 @@ fn validate_block(
                         weave,
                         false,
                         resource_plan,
+                        comptime_env,
                     )?;
                 }
                 merge_scope(scope, &bright_scope, &dim_scope, statement.span())?;
@@ -5321,6 +5353,7 @@ fn validate_block(
                     weave,
                     false,
                     resource_plan,
+                    comptime_env,
                 )?;
                 merge_scope(scope, &before_loop, &body_scope, statement.span())?;
             }
@@ -7155,6 +7188,7 @@ fn emit_bytecode_with_resource_plan(
     for weave in &program.weaves {
         let layout = slot_layout(weave, &weave_results, &program.records, &program.shapes)?;
         let mut code = Vec::new();
+        let mut comptime_env = BTreeMap::new();
         emit_block(
             &weave.body,
             &layout,
@@ -7163,6 +7197,7 @@ fn emit_bytecode_with_resource_plan(
             &program.records,
             &program.shapes,
             resource_plan,
+            &mut comptime_env,
             &mut code,
         )?;
         let mut locals = vec![
@@ -7539,6 +7574,7 @@ fn emit_block(
     records: &[RecordDeclaration],
     shapes: &[ShapeDeclaration],
     resource_plan: &SemanticResourcePlan,
+    comptime_env: &mut BTreeMap<String, i64>,
     code: &mut Vec<u8>,
 ) -> Result<(), CompilerError> {
     for statement in statements {
@@ -7550,8 +7586,10 @@ fn emit_block(
                 ..
             } => {
                 if *comptime {
+                    let folded = evaluate_comptime_whole(value, comptime_env)?;
+                    comptime_env.insert(name.clone(), folded);
                     code.push(OP_COMPTIME_WHOLE);
-                    write_i64(code, evaluate_comptime_whole(value)?);
+                    write_i64(code, folded);
                 } else {
                     emit_expression(
                         value,
@@ -7742,6 +7780,7 @@ fn emit_block(
                         records,
                         shapes,
                         resource_plan,
+                        comptime_env,
                         code,
                     )?;
                     let dim_branch = code.len();
@@ -7754,6 +7793,7 @@ fn emit_block(
                         records,
                         shapes,
                         resource_plan,
+                        comptime_env,
                         code,
                     )?;
                     continue;
@@ -7778,6 +7818,7 @@ fn emit_block(
                     records,
                     shapes,
                     resource_plan,
+                    comptime_env,
                     code,
                 )?;
                 if when_dim.is_empty() {
@@ -7796,6 +7837,7 @@ fn emit_block(
                         records,
                         shapes,
                         resource_plan,
+                        comptime_env,
                         code,
                     )?;
                     let continuation = code.len();
@@ -7826,6 +7868,7 @@ fn emit_block(
                     records,
                     shapes,
                     resource_plan,
+                    comptime_env,
                     code,
                 )?;
                 code.push(OP_JUMP);
@@ -14159,6 +14202,56 @@ mod tests {
                 .exit_code,
             150
         );
+    }
+
+    #[test]
+    fn compiles_verifies_and_runs_m15_comptime_name_chaining() {
+        let source = include_str!("../../../examples/comptime-chain.ae");
+        let output = compile_to_bytecode(source).expect("M15 chain should compile");
+        assert!(
+            output.bytecode.contains(&OP_COMPTIME_WHOLE),
+            "M15 chain must emit COMPTIME_WHOLE"
+        );
+        assert_eq!(
+            format_program(&output.program),
+            source.replace("\r\n", "\n")
+        );
+        verify_bytecode(&output.bytecode).expect("M15 chain should verify");
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("M15 chain should run")
+                .exit_code,
+            288,
+            "cell=64 row=256 header=32 total=288"
+        );
+
+        let mixed = "world mixed\n\nweave main [] -> Whole:\n  comptime bind base <- sum 10 5\n  comptime bind next <- product base 2\n  yield next\n";
+        let mixed_out = compile_to_bytecode(mixed).expect("mixed operands compile");
+        assert_eq!(
+            run_bytecode(&mixed_out.bytecode)
+                .expect("mixed run")
+                .exit_code,
+            30
+        );
+    }
+
+    #[test]
+    fn rejects_m15_forward_ref_and_runtime_comptime_operands() {
+        let forward = "world invalid\n\nweave main [] -> Whole:\n  comptime bind a <- sum b 1\n  comptime bind b <- sum 1 1\n  yield a\n";
+        let error = compile_source(forward).expect_err("forward comptime name must fail");
+        assert_eq!(error.diagnostic().code, "AE-COMPTIME-001");
+        assert!(
+            error.to_string().contains("not a prior"),
+            "forward ref message: {error}"
+        );
+
+        let unknown = "world invalid\n\nweave main [] -> Whole:\n  comptime bind a <- sum missing 1\n  yield a\n";
+        let error = compile_source(unknown).expect_err("unknown name must fail");
+        assert_eq!(error.diagnostic().code, "AE-COMPTIME-001");
+
+        let overflow = "world invalid\n\nweave main [] -> Whole:\n  comptime bind big <- sum 9223372036854775807 0\n  comptime bind boom <- sum big 1\n  yield boom\n";
+        let error = compile_source(overflow).expect_err("overflow through name must fail");
+        assert_eq!(error.diagnostic().code, "AE-COMPTIME-002");
     }
 
     #[test]

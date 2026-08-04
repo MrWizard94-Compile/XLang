@@ -937,7 +937,8 @@ Accepted by:
 1. Mainstream maturity roadmap committed.  
 2. **M11–M13 complete** (modules, edits, LSP through 0.18).  
 3. **M14 host I/O implemented** (package 0.19; threat model v2 + ADR-018 grants).  
-4. **M15 comptime expansion designed** (ADR-019 name chaining; implement next).  
+4. **M15 comptime expansion implemented** (package 0.20; ADR-019 name chaining).  
+5. **Next design default:** T-RX resource↔effect (new ADR before code).  
 4. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table (can wait).
 
 ---

@@ -1,0 +1,8 @@
+world comptime_chain
+
+weave main [] -> Whole:
+  comptime bind cell <- product 8 8
+  comptime bind row <- product cell 4
+  comptime bind header <- sum 16 16
+  comptime bind total <- sum row header
+  yield total

@@ -2,24 +2,25 @@
 
 ## Contract
 
-Aether **0.19.0** (base language **0.11** plus M11 modules, M12 statement-level
-edits, **M13 offline LSP** with project-aware imports, and **M14 grant-backed
-host I/O**, AETH **v11**) accepts Aether source, returns a canonical AST from the
-Rust bootstrap for tooling, and **emits AETH v11 bytecode primarily through the
-Aether-written seed compiler** (forge ABI). Single-file `compile` is seed-hosted.
-Multi-module `project build` elaborates the import DAG, dual-compares
+Aether **0.20.0** (base language **0.11** plus M11 modules, M12 statement-level
+edits, **M13 offline LSP**, **M14 grant-backed host I/O**, and **M15 comptime
+name chaining**, AETH **v11**) accepts Aether source, returns a canonical AST from
+the Rust bootstrap for tooling, and **emits AETH v11 bytecode primarily through
+the Aether-written seed compiler** (forge ABI). Single-file `compile` is
+seed-hosted. Multi-module `project build` elaborates the import DAG, dual-compares
 bootstrap≡seed, and writes seed artifacts. Authoring uses `aether.ast/v7` and
 `aether.edit/v7`. The CLI provides offline project verify/format,
 `aether lsp [--project …]` (bootstrap diagnostics; cross-file definition/hover
 for exported imports; no product AETH from LSP), and `aether run` with optional
 `--grant-read` / `--grant-write` / `--grant-env` (M14; empty grants keep pure
-fixtures only). Verified AETH v4–v10 remain compatibility inputs. Source is never
-translated to an existing language.
+fixtures only). `comptime bind` may chain prior root-level comptime Whole names
+as operands (M15). Verified AETH v4–v10 remain compatibility inputs. Source is
+never translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.19 product contract (0.11 core language,
-M9–M14 tooling/host session). It intentionally
+This manifest is the executable Aether 0.20 product contract (0.11 core language,
+M9–M15 tooling/host/comptime). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -115,6 +116,12 @@ Services install only when the operator passes matching `--grant-*` roots or
 env names to `aether run` (or test host APIs). Guest paths are relative and
 jailed under grant roots after canonicalize. There is no ambient guest
 file/process/network/shell authority and no shell/network host weaves.
+
+M15 (package 0.20) expands M5 `comptime bind` so operands may be prior
+root-level immutable comptime Whole names (source order) as well as Whole
+literals. One binary op per directive, 1,024-directive budget, pure evaluation,
+and `COMPTIME_WHOLE` emission are unchanged. Forward refs, runtime names, calls,
+control flow, and host observation remain rejected.
 
 Every 0.11 compilation emits AETH v11 with an arena-capacity header field, a
 possibly empty bounded record table, a shape table, a function `effect_tag`, and

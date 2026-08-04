@@ -1,6 +1,6 @@
 # M15 Design: bounded comptime expansion (T-CT)
 
-**Status:** Accepted design for implementable ADR-019 (**code not started**)  
+**Status:** Accepted design for ADR-019 — **implemented in package 0.20.0**  
 **Date:** 2026-08-04  
 **Decision record:** [ADR-019](ADR-019-m15-comptime-expansion.md)  
 **Validation:** [M15 validation matrix](M15-VALIDATION-MATRIX.md)  
