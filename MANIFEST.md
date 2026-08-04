@@ -2,19 +2,19 @@
 
 ## Contract
 
-Aether **0.14.0** (base language **0.11** plus **M11a modules**, AETH **v11**)
+Aether **0.15.0** (base language **0.11** plus **M11 modules**, AETH **v11**)
 accepts Aether source, returns a canonical AST from the Rust bootstrap for
 tooling, and **emits AETH v11 bytecode primarily through the Aether-written seed
-compiler** for **single-file** sources (forge ABI). Multi-module `project build`
-uses **bootstrap multi-source elaboration** (M11a); seed multi-module authority
-is **not** claimed until M11b dual-compare. The CLI also provides offline project
-verify/format. Verified AETH v4–v10 remain compatibility inputs. Source is never
-translated to an existing language.
+compiler** (forge ABI). Single-file `compile` is seed-hosted. Multi-module
+`project build` **elaborates** the import DAG on the host, dual-compares
+bootstrap≡seed on that elaboration, and writes the **seed** artifact (M11b).
+The CLI also provides offline project verify/format. Verified AETH v4–v10 remain
+compatibility inputs. Source is never translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.14 product contract (0.11 core language,
-M9/M10 projects, M11a modules via bootstrap build). It intentionally
+This manifest is the executable Aether 0.15 product contract (0.11 core language,
+M9/M10 projects, M11 modules). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -207,9 +207,9 @@ aether project format <project-file> [--write]
 aether project build <project-file> --output <artifact.aeth>
 ```
 
-`project build` elaborates the main unit’s import DAG and **bootstrap-compiles**
-one AETH (not seed-hosted until M11b). Single-file `compile` remains seed-hosted
-and rejects `import unit`. See
+`project build` elaborates the main unit’s import DAG, dual-compares
+bootstrap≡seed AETH bytes, and writes the seed artifact. Single-file `compile`
+remains seed-hosted and rejects raw `import unit` (use project build). See
 [docs/DESIGN-M11-LANGUAGE-MODULES.md](docs/DESIGN-M11-LANGUAGE-MODULES.md),
 [docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md), and
 [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md).

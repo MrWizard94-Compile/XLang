@@ -1,6 +1,6 @@
 # ADR-015: language modules (import unit / export weave)
 
-**Status:** Accepted; **M11a implemented** (package 0.14.0); M11b seed pending  
+**Status:** Accepted; **M11a + M11b implemented** (package 0.15.0)  
 **Date:** 2026-08-04  
 **Decision makers:** AGENTS Constitution process; follows ADR-014 default T-MOD  
 **Related Rule IDs:** `DOC-ADR-001`, `CONST-DEP-001`, `TEST-BEHAVIOR-001`, `SEC-INPUT-001`, `DOC-SYNC-001`, `CONST-COMPLETE-001`  

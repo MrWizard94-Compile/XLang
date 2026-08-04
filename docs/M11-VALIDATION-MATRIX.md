@@ -1,7 +1,8 @@
 # M11 language modules validation matrix
 
-**Status:** M11a implementation green (bootstrap); M11b seed pending —
-[DELIVERY_REPORT-2026-08-04-M11A-LANGUAGE-MODULES.md](DELIVERY_REPORT-2026-08-04-M11A-LANGUAGE-MODULES.md)  
+**Status:** M11a + M11b green —
+[DELIVERY_REPORT-2026-08-04-M11A-LANGUAGE-MODULES.md](DELIVERY_REPORT-2026-08-04-M11A-LANGUAGE-MODULES.md),
+[DELIVERY_REPORT-2026-08-04-M11B-SEED-MODULES.md](DELIVERY_REPORT-2026-08-04-M11B-SEED-MODULES.md)  
 **Date:** 2026-08-04  
 **Design:** [DESIGN-M11-LANGUAGE-MODULES.md](DESIGN-M11-LANGUAGE-MODULES.md)  
 **ADR:** [ADR-015](ADR-015-m11-language-modules.md)
@@ -82,10 +83,10 @@
 
 ### M11b
 
-- [ ] Seed multi-module strategy implemented  
-- [ ] Dual-compare S1–S2  
-- [ ] MANIFEST authority switch  
-- [ ] Delivery report  
+- [x] Seed multi-module strategy (elaborate then seed-compile)  
+- [x] Dual-compare S1 (shipped example + unit tests)  
+- [x] MANIFEST authority switch (seed product path)  
+- [x] Delivery report  
 
 ## Sign-off
 
@@ -93,4 +94,4 @@
 | --- | --- |
 | Design + ADR-015 | **Accepted** |
 | M11a implementation | **Done** (0.14.0) |
-| M11b seed proof | Pending |
+| M11b seed proof | **Done** (0.15.0) |

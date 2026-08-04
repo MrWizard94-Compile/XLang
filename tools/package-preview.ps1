@@ -21,7 +21,7 @@ Set-StrictMode -Version Latest
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
-$Version = "0.14.0"
+$Version = "0.15.0"
 $PkgName = "aether-$Version-tp"
 $DistRoot = Join-Path $RepoRoot "dist"
 $Pkg = Join-Path $DistRoot $PkgName

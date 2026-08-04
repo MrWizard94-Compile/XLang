@@ -3,13 +3,18 @@
 Honest user-facing deltas from the bounded resource core through the technical
 preview package. This is **not** a claim of 1.0 completeness.
 
+## 0.15.0 — language modules M11b (seed product path)
+
+- Package **0.15.0**: multi-module build elaborates then **seed-compiles**.
+- Bootstrap≡seed dual-compare on every `project build`.
+- M11 language surface complete under ADR-015 (still host elaboration, not seed multi-file parse).
+
 ## 0.14.0 — language modules M11a (bootstrap multi-module)
 
 - Package **0.14.0**: `import unit`, `export weave`, `call alias.weave`.
-- `aether project build` elaborates the import DAG and **bootstrap-compiles** one AETH.
+- `aether project build` elaborates the import DAG and bootstrap-compiles one AETH.
 - Lib units may omit `main`; single-file seed compile rejects imports.
 - Example: `examples/project-modules` (exit 42).
-- **Not yet:** seed multi-module dual-compare (M11b); import records/shapes; registry.
 
 ## 0.13.0 — multi-unit offline projects (M10)
 

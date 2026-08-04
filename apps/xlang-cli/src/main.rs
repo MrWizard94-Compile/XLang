@@ -14,7 +14,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v6 JSON. apply-edit accepts aether.edit/v6, validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build links import unit / export weave graphs via bootstrap multi-source compile (M11a; not seed-hosted yet).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v6 JSON. apply-edit accepts aether.edit/v6, validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -218,7 +218,7 @@ fn project_build(project_path: &Path, output_path: &Path) -> Result<(), String> 
     write_artifact(output_path, compiled.bytecode)?;
     println!("{}", multi_module_authority_note());
     println!(
-        "{LANGUAGE_NAME} {LANGUAGE_VERSION} project {}@{} built {} (bootstrap multi-module)",
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} project {}@{} built {} (seed multi-module via elaboration)",
         document.name,
         document.version,
         output_path.display()

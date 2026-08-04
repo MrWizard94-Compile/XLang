@@ -11,7 +11,9 @@ use std::path::Path;
 use crate::project::{
     resolve_unit_path, validate_unit_path, ProjectDocument, ProjectError, ProjectUnitRole,
 };
-use crate::{compile_to_bytecode, CompileOutput, LANGUAGE_NAME, LANGUAGE_VERSION};
+use crate::{
+    compile_to_bytecode, compile_with_seed, CompileOutput, LANGUAGE_NAME, LANGUAGE_VERSION,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ModuleImport {
@@ -642,25 +644,42 @@ pub fn elaborate_project_modules(
     Ok(elaborated)
 }
 
-/// Bootstrap multi-source project build → one verified AETH (M11a).
+/// Multi-module project build → one verified AETH (M11b).
+///
+/// Host elaborates the import DAG to a deterministic single-file Aether program,
+/// then **seed-compiles** it. Bootstrap compilation of the same elaboration must
+/// match byte-for-byte before the seed artifact is returned (M11b dual-compare).
 pub fn compile_project_modules(
     project_root: &Path,
     document: &ProjectDocument,
 ) -> Result<CompileOutput, ProjectError> {
     let source = elaborate_project_modules(project_root, document)?;
-    compile_to_bytecode(&source).map_err(|error| {
+    let bootstrap = compile_to_bytecode(&source).map_err(|error| {
         module_error(
             "AE-PROJECT-004",
             format!("module project bootstrap compile failed: {error}"),
         )
-    })
+    })?;
+    let seed = compile_with_seed(&source).map_err(|error| {
+        module_error(
+            "AE-PROJECT-004",
+            format!("module project seed compile failed: {error}"),
+        )
+    })?;
+    if bootstrap.bytecode != seed.bytecode {
+        return Err(module_error(
+            "AE-PROJECT-004",
+            "M11b dual-compare failed: seed multi-module elaboration does not match bootstrap AETH bytes",
+        ));
+    }
+    Ok(seed)
 }
 
 /// Human-readable note for CLI.
 #[must_use]
 pub fn multi_module_authority_note() -> String {
     format!(
-        "{LANGUAGE_NAME} {LANGUAGE_VERSION} multi-module project build uses bootstrap compilation (M11a); seed dual-compare is M11b"
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} multi-module project build elaborates the import graph then seed-compiles (M11b; dual-compared to bootstrap)"
     )
 }
 
@@ -716,12 +735,41 @@ mod tests {
         let compiled = compile_project_modules(&root, &document).unwrap();
         let run = run_bytecode(&compiled.bytecode).unwrap();
         assert_eq!(run.exit_code, 42);
+        // M11b: product path is seed bytecode, dual-compared to bootstrap.
+        let bootstrap = crate::compile_to_bytecode(&elaborated).unwrap();
+        assert_eq!(
+            compiled.bytecode, bootstrap.bytecode,
+            "product build must return seed bytes identical to bootstrap"
+        );
 
         let bad = main.replace("math.double", "math.secret");
         fs::write(root.join("src/main.ae"), &bad).unwrap();
         let err = elaborate_project_modules(&root, &document).unwrap_err();
         assert_eq!(err.code, "AE-MOD-003");
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn shipped_project_modules_example_seed_matches_bootstrap() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root = manifest_dir.join("../../examples/project-modules");
+        let project = root.join("aether.project.json");
+        if !project.is_file() {
+            return;
+        }
+        let json = fs::read_to_string(&project).unwrap();
+        let document = parse_project_document(&json).unwrap();
+        let elaborated = elaborate_project_modules(&root, &document).unwrap();
+        let bootstrap = crate::compile_to_bytecode(&elaborated).unwrap();
+        let seed = crate::compile_with_seed(&elaborated).unwrap();
+        assert_eq!(
+            bootstrap.bytecode, seed.bytecode,
+            "examples/project-modules elaboration must dual-compare"
+        );
+        let product = compile_project_modules(&root, &document).unwrap();
+        assert_eq!(product.bytecode, seed.bytecode);
+        let run = run_bytecode(&product.bytecode).unwrap();
+        assert_eq!(run.exit_code, 42);
     }
 
     #[test]

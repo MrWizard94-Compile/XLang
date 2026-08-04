@@ -74,7 +74,7 @@ invalid-source diagnostic parity.
 | M8 | Foreign/host interface pilot | M1 and M2 | Narrow, typed, ownership-aware pure host ABI fixture (`host weave` / `HOST_CALL`); C-facing design only if a later threat model supports it. | Invalid-input, ownership transfer, capability denial, ABI compatibility, and local reproducibility tests pass. | **Implemented in Aether 0.11/AETH v11: pure host pilot** |
 | M9 | Integrated project/tooling evolution | M3 plus stable package/ABI decisions | Reproducible project metadata, dependency identity, formatter/LSP integration, and release workflow proposal. | Security, offline reproducibility, upgrade/rollback, and package verification criteria are approved and tested. | **Implemented pilot in 0.12: offline project verify + format; LSP/registry deferred** |
 | M10 | Multi-unit offline projects | M9 | Nested multi-unit `aether.project/v1`, locks, independent per-unit seed compile, `project format`; no language modules. | Path/lock negatives, multi-unit example, independence documented, matrix green, no registry/import. | **Implemented in package 0.13 (language surface still 0.11)** |
-| M11 | Language modules | M10 | `import unit` / `export weave` / qualified calls; lib without main; project build; phased seed proof. | Matrix green; bootstrap multi-module (M11a); seed dual-compare before seed authority (M11b). | **M11a implemented in 0.14; M11b seed pending** |
+| M11 | Language modules | M10 | `import unit` / `export weave` / qualified calls; lib without main; project build; phased seed proof. | Matrix green; bootstrap multi-module (M11a); seed dual-compare before seed authority (M11b). | **Implemented (0.15): M11a+M11b** |
 
 ## Milestone detail
 
