@@ -1,0 +1,11 @@
+world release_raise
+
+weave boom [] -> Whole raises Whole:
+  bind label <- "secret"
+  release label
+  raise 9
+
+weave main [] -> Whole:
+  bind mutable success <- 0
+  bind mutable code <- 0
+  handle call boom into success otherwise error into code

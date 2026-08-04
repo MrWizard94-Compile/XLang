@@ -331,6 +331,12 @@ fn statement_value(statement: &Statement, id: &str) -> Value {
             "name": name,
             "value": expression_value(value, &format!("{id}/value")),
         }),
+        Statement::Release { name, span } => json!({
+            "id": id,
+            "kind": "Release",
+            "span": span_value(*span),
+            "name": name,
+        }),
         Statement::Speak { value, span } => json!({
             "id": id,
             "kind": "Speak",

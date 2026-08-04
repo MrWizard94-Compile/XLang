@@ -56,7 +56,7 @@ JavaScript, LLVM, or another language.
 M6 (explicit layout shapes and dual-layout tables), M7 (structured nurseries),
 and M8 (capability-closed pure host ABI pilot) are implemented on the
 seed-hosted product compile path in Aether 0.11 / AETH v11. Toolchain package
-0.12 added offline project verify and format (M9); package **0.13** adds multi-unit nested project integrity (M10); package **0.18** completes modules (M11), fine-grained edits (M12), and bounded offline LSP M13a+M13b (`aether lsp [--project …]`); package **0.19** adds grant-backed host I/O (M14); package **0.20** adds comptime Whole name chaining (M15); package **0.21** allows terminal handle over live resources (M16); package **0.22** adds offline `aether test` (M17); package **0.23** adds offline multi-package workspaces (M18); package **0.24** adds stdlib layer 0 (M20) and cross-package imports (M22).
+0.12 added offline project verify and format (M9); package **0.13** adds multi-unit nested project integrity (M10); package **0.18** completes modules (M11), fine-grained edits (M12), and bounded offline LSP M13a+M13b (`aether lsp [--project …]`); package **0.19** adds grant-backed host I/O (M14); package **0.20** adds comptime Whole name chaining (M15); package **0.21** allows terminal handle over live resources (M16); package **0.22** adds offline `aether test` (M17); package **0.23** adds offline multi-package workspaces (M18); package **0.24** adds stdlib layer 0 (M20) and cross-package imports (M22); package **0.25** adds bootstrap `release` (M19a; seed dual-compare pending).
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
 proof dual-compare. Seed Profile self-host, all shipped examples, the complete
@@ -106,8 +106,8 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.24.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.24.0) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.25.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.25.0) |
 | Artifact format | AETH **v4–v10** compatibility input + deterministic **v11** output with shape table, dual-layout tables, structured nurseries, effect metadata, host function kind, `HOST_CALL`, and `COMPTIME_WHOLE` provenance (earlier/unknown versions rejected) |
 | Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |

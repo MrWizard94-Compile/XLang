@@ -38,7 +38,7 @@ pub use workspace::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.24.0";
+pub const LANGUAGE_VERSION: &str = "0.25.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
@@ -137,6 +137,8 @@ const OP_NURSERY_BEGIN: u8 = 62;
 const OP_NURSERY_SPAWN: u8 = 63;
 const OP_NURSERY_END: u8 = 64;
 const OP_HOST_CALL: u8 = 65;
+/// Logical destruction of a live owner local (M19a explicit `release`).
+const OP_RELEASE: u8 = 66;
 
 /// Function-table kind for AETH v11: ordinary guest weave.
 const FUNCTION_KIND_GUEST: u8 = 0;
@@ -613,6 +615,11 @@ pub enum Statement {
         value: Expression,
         span: Span,
     },
+    /// M19a: logical destruction of a live unique or resource owner.
+    Release {
+        name: String,
+        span: Span,
+    },
     Yield {
         value: Expression,
         span: Span,
@@ -656,6 +663,7 @@ impl Statement {
             Self::Bind { span, .. }
             | Self::Revise { span, .. }
             | Self::Speak { span, .. }
+            | Self::Release { span, .. }
             | Self::Yield { span, .. }
             | Self::Raise { span, .. }
             | Self::Forward { span, .. }
@@ -2084,6 +2092,8 @@ enum Instruction {
         function: usize,
         arguments: usize,
     },
+    /// M19a: destroy live owner at local slot.
+    Release(usize),
     JumpIfDim(usize),
     Jump(usize),
 }
@@ -3656,6 +3666,14 @@ fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerErro
             span,
         });
     }
+    if let Some(name) = line.content.strip_prefix("release ") {
+        let name = name.trim();
+        validate_name(name, span, "release target", false)?;
+        return Ok(Statement::Release {
+            name: name.to_owned(),
+            span,
+        });
+    }
     if let Some(expression) = line.content.strip_prefix("yield ") {
         return Ok(Statement::Yield {
             value: parse_expression(expression, span)?,
@@ -3689,7 +3707,7 @@ fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerErro
     }
     Err(CompilerError::new(
         span,
-        "unknown Aether statement; use comptime bind, bind, revise, speak, yield, raise, forward, choose, while, together, or handle",
+        "unknown Aether statement; use comptime bind, bind, revise, speak, release, yield, raise, forward, choose, while, together, or handle",
     ))
 }
 
@@ -4514,19 +4532,14 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         validate_value_type(weave.result, &program.records, weave.span)?;
         validate_resource_signature(weave)?;
         validate_effect_signature(weave)?;
-        // M16: abortive effect (raise/forward or erroring weave body resources)
-        // remains incompatible with resource ownership. Terminal handle in a
-        // total weave may coexist with arenas/buffers/tables (ADR-020).
-        if weave_uses_resource(weave) && weave_uses_abortive_effect(weave) {
-            return Err(CompilerError::new(
-                weave.span,
-                "AE-EFFECT-003: abortive raise/forward cannot share a weave with M2 arena, Buffer, access, table, or resource outcomes",
-            ));
-        }
+        // M19a: abortive raise/forward may appear after explicit `release` of
+        // owners; site-level clean boundary enforces liveness. Erroring weaves
+        // still cannot *declare* arena/buffer/table resource forms (main-owned
+        // arena plan + M2). Terminal handle may coexist with live resources (M16).
         if weave.effect == Effect::ErrorWhole && weave_uses_resource(weave) {
             return Err(CompilerError::new(
                 weave.span,
-                "AE-EFFECT-003: a weave that raises Whole cannot own arena, Buffer, access, table, or resource outcomes",
+                "AE-EFFECT-003: a weave that raises Whole cannot declare arena, Buffer, access, table, or resource outcomes",
             ));
         }
         if weave_uses_resource(weave) && weave_uses_nursery(weave) {
@@ -4590,6 +4603,7 @@ fn validate_comptime_budget(program: &Program) -> Result<(), CompilerError> {
                 Statement::Together { .. }
                 | Statement::Revise { .. }
                 | Statement::Speak { .. }
+                | Statement::Release { .. }
                 | Statement::Yield { .. }
                 | Statement::Raise { .. }
                 | Statement::Forward { .. }
@@ -4938,7 +4952,7 @@ fn collect_resource_declarations(
             | Statement::Yield { value, .. } => {
                 *resource_operations |= expression_uses_resource(value);
             }
-            Statement::Raise { .. } | Statement::Forward { .. } => {}
+            Statement::Raise { .. } | Statement::Forward { .. } | Statement::Release { .. } => {}
             Statement::Handle { .. } | Statement::Together { .. } => {}
             Statement::Choose {
                 condition,
@@ -4980,7 +4994,7 @@ fn weave_uses_resource(weave: &Weave) -> bool {
             | Statement::Revise { value, .. }
             | Statement::Speak { value, .. }
             | Statement::Yield { value, .. } => expression_uses_resource(value),
-            Statement::Raise { .. } | Statement::Forward { .. } => false,
+            Statement::Raise { .. } | Statement::Forward { .. } | Statement::Release { .. } => false,
             Statement::Handle { .. } | Statement::Together { .. } => false,
             Statement::Choose {
                 condition,
@@ -5000,28 +5014,6 @@ fn weave_uses_resource(weave: &Weave) -> bool {
     block_uses_resource(&weave.body)
 }
 
-/// Abortive effect control only (`raise` / `forward`). Terminal `handle` is excluded (M16).
-fn weave_uses_abortive_effect(weave: &Weave) -> bool {
-    fn block_uses_abortive(statements: &[Statement]) -> bool {
-        statements.iter().any(|statement| match statement {
-            Statement::Raise { .. } | Statement::Forward { .. } => true,
-            Statement::Choose {
-                when_bright,
-                when_dim,
-                ..
-            } => block_uses_abortive(when_bright) || block_uses_abortive(when_dim),
-            Statement::While { body, .. } => block_uses_abortive(body),
-            Statement::Handle { .. }
-            | Statement::Together { .. }
-            | Statement::Bind { .. }
-            | Statement::Revise { .. }
-            | Statement::Speak { .. }
-            | Statement::Yield { .. } => false,
-        })
-    }
-    block_uses_abortive(&weave.body)
-}
-
 fn weave_uses_nursery(weave: &Weave) -> bool {
     fn block_uses_nursery(statements: &[Statement]) -> bool {
         statements.iter().any(|statement| match statement {
@@ -5035,6 +5027,7 @@ fn weave_uses_nursery(weave: &Weave) -> bool {
             Statement::Bind { .. }
             | Statement::Revise { .. }
             | Statement::Speak { .. }
+            | Statement::Release { .. }
             | Statement::Yield { .. }
             | Statement::Raise { .. }
             | Statement::Forward { .. }
@@ -5178,6 +5171,58 @@ fn validate_block(
             Statement::Speak { value, .. } => {
                 let value_type = expression_type(value, scope, signatures, records, shapes)?;
                 require_source_type(value_type, ValueType::Text, value.span, "speak")?;
+            }
+            Statement::Release { name, span } => {
+                if !root {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-RESOURCE-001: release is allowed only in a weave root",
+                    ));
+                }
+                let Some(binding) = scope.get(name) else {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!("AE-RESOURCE-001: release target {name} has not been introduced"),
+                    ));
+                };
+                if binding.moved {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!("AE-RESOURCE-001: release target {name} has already been moved or released"),
+                    ));
+                }
+                let releasable = is_unique_value(binding.value_type)
+                    || matches!(
+                        binding.value_type,
+                        ValueType::Arena | ValueType::BufferWhole | ValueType::BufferTruth
+                    )
+                    || is_table_type(binding.value_type);
+                if !releasable || binding.value_type == ValueType::AccessArena {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!(
+                            "AE-RESOURCE-001: release cannot target copy values or access loans ({name})"
+                        ),
+                    ));
+                }
+                if binding.value_type == ValueType::Arena {
+                    let blocked = scope.iter().any(|(other, state)| {
+                        other != name
+                            && !state.moved
+                            && (is_buffer_type(state.value_type)
+                                || is_table_type(state.value_type)
+                                || state.value_type == ValueType::AccessArena)
+                    });
+                    if blocked {
+                        return Err(CompilerError::new(
+                            *span,
+                            format!(
+                                "AE-RESOURCE-001: release of arena {name} requires no live Buffer, table, or access loan"
+                            ),
+                        ));
+                    }
+                }
+                scope.get_mut(name).expect("release target").moved = true;
             }
             Statement::Yield { value, span } => {
                 if !root || index + 1 != statements.len() {
@@ -7703,6 +7748,16 @@ fn emit_block(
                 )?;
                 code.push(OP_YIELD);
             }
+            Statement::Release { name, .. } => {
+                let slot = layout.get(name).ok_or_else(|| {
+                    CompilerError::new(
+                        statement.span(),
+                        "internal compiler could not resolve release slot",
+                    )
+                })?;
+                code.push(OP_RELEASE);
+                write_u16(code, slot.index);
+            }
             Statement::Raise { code: value, .. } => {
                 emit_atom(value, layout, code)?;
                 code.push(OP_RAISE);
@@ -9656,6 +9711,41 @@ fn verify_instruction(
             Ok(vec![(next, state.clone()), (*target, state)])
         }
         Instruction::Jump(target) => Ok(vec![(*target, state)]),
+        Instruction::Release(slot) => {
+            if !state.stack.is_empty() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH RELEASE requires an empty operand stack",
+                ));
+            }
+            if *slot >= function.locals.len() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH RELEASE references an invalid local slot",
+                ));
+            }
+            if !state.initialized[*slot] || state.moved[*slot] {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH RELEASE requires an initialized live local",
+                ));
+            }
+            let local = &function.locals[*slot];
+            let releasable = is_unique_value(local.value_type)
+                || matches!(
+                    local.value_type,
+                    ValueType::Arena | ValueType::BufferWhole | ValueType::BufferTruth
+                )
+                || is_table_type(local.value_type);
+            if !releasable || local.value_type == ValueType::AccessArena {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH RELEASE cannot target a copy value or access loan",
+                ));
+            }
+            state.moved[*slot] = true;
+            continue_with(state)
+        }
     }
 }
 
@@ -11023,6 +11113,16 @@ fn execute_function(
                 }
             }
             Instruction::Jump(target) => position = target,
+            Instruction::Release(slot) => {
+                // Logical destruction: drop the runtime local so later uses fail closed.
+                if slot >= locals.len() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime RELEASE references an invalid local slot",
+                    ));
+                }
+                locals[slot] = None;
+            }
         }
     }
     Err(BytecodeError::new(
@@ -11270,6 +11370,10 @@ fn decode_instruction(
                 function: usize::from(read_u16(code, position)?),
                 arguments: usize::from(read_byte(code, position)?),
             }
+        }
+        OP_RELEASE => {
+            require_v11_instruction(version, offset, "release")?;
+            Instruction::Release(usize::from(read_u16(code, position)?))
         }
         OP_JUMP_IF_DIM => Instruction::JumpIfDim(read_usize_u32(code, position)?),
         OP_JUMP => Instruction::Jump(read_usize_u32(code, position)?),
@@ -12768,6 +12872,11 @@ fn write_block(statements: &[Statement], indentation: usize, output: &mut String
                 write_expression(value, output);
                 output.push('\n');
             }
+            Statement::Release { name, .. } => {
+                output.push_str("release ");
+                output.push_str(name);
+                output.push('\n');
+            }
             Statement::Yield { value, .. } => {
                 output.push_str("yield ");
                 write_expression(value, output);
@@ -13106,6 +13215,11 @@ fn write_ast_block(statements: &[Statement], output: &mut String) {
                 write_ast_expression(value, output);
                 output.push(')');
             }
+            Statement::Release { name, .. } => {
+                output.push_str("Release(");
+                output.push_str(name);
+                output.push(')');
+            }
             Statement::Yield { value, .. } => {
                 output.push_str("Yield(");
                 write_ast_expression(value, output);
@@ -13423,6 +13537,7 @@ fn statement_token_count(statements: &[Statement]) -> usize {
             Statement::Bind { .. }
             | Statement::Revise { .. }
             | Statement::Speak { .. }
+            | Statement::Release { .. }
             | Statement::Yield { .. } => 2,
             Statement::Raise { .. } | Statement::Forward { .. } => 2,
             Statement::Handle { .. } => 4,
@@ -14396,6 +14511,43 @@ mod tests {
                 .exit_code,
             17
         );
+    }
+
+    #[test]
+    fn compiles_verifies_and_runs_m19a_release_then_raise() {
+        let source = include_str!("../../../examples/release-raise.ae");
+        let output = compile_to_bytecode(source).expect("M19a release-raise should compile");
+        assert!(
+            output.bytecode.iter().any(|byte| *byte == OP_RELEASE),
+            "release must emit OP_RELEASE"
+        );
+        verify_bytecode(&output.bytecode).expect("verify");
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("handled raise after release")
+                .exit_code,
+            9
+        );
+        assert_eq!(
+            format_program(&output.program),
+            source.replace("\r\n", "\n")
+        );
+
+        let still_live = "world bad\n\nweave boom [] -> Whole raises Whole:\n  bind label <- \"x\"\n  raise 1\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call boom into success otherwise error into code\n";
+        let error = compile_source(still_live).expect_err("live Text at raise fails");
+        assert_eq!(error.diagnostic().code, "AE-EFFECT-003");
+
+        let copy = "world bad\n\nweave main [] -> Whole:\n  bind n <- 1\n  release n\n  yield 0\n";
+        let error = compile_source(copy).expect_err("cannot release Whole");
+        assert!(
+            error.to_string().contains("AE-RESOURCE-001")
+                || error.diagnostic().code == "AE-RESOURCE-001",
+            "{error}"
+        );
+
+        let double = "world bad\n\nweave main [] -> Whole:\n  bind label <- \"x\"\n  release label\n  release label\n  yield 0\n";
+        let error = compile_source(double).expect_err("double release fails");
+        assert!(error.to_string().contains("AE-RESOURCE-001") || error.diagnostic().code == "AE-RESOURCE-001");
     }
 
     #[test]
