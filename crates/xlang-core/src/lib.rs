@@ -30,7 +30,7 @@ pub use project::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.16.0";
+pub const LANGUAGE_VERSION: &str = "0.17.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(

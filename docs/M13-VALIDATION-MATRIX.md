@@ -1,6 +1,7 @@
 # M13 bounded LSP validation matrix
 
-**Status:** Design gate — **implementation not yet green**  
+**Status:** M13a implemented (0.17.0) —
+[DELIVERY_REPORT-2026-08-04-M13A-BOUNDED-LSP.md](DELIVERY_REPORT-2026-08-04-M13A-BOUNDED-LSP.md)  
 **Date:** 2026-08-04  
 **Design:** [DESIGN-M13-BOUNDED-LSP.md](DESIGN-M13-BOUNDED-LSP.md)  
 **ADR:** [ADR-017](ADR-017-m13-bounded-lsp.md)
@@ -49,13 +50,13 @@
 
 ### M13a
 
-- [ ] `aether lsp` command  
-- [ ] JSON-RPC framing  
-- [ ] Doc sync + diagnostics  
-- [ ] symbols, format, hover, definition  
-- [ ] Tests  
-- [ ] DOC-SYNC 0.17  
-- [ ] Delivery report  
+- [x] `aether lsp` command  
+- [x] JSON-RPC framing  
+- [x] Doc sync + diagnostics  
+- [x] symbols, format, hover, definition  
+- [x] Tests  
+- [x] DOC-SYNC 0.17  
+- [x] Delivery report  
 
 ### M13b
 
@@ -66,6 +67,6 @@
 
 | Gate | Status |
 | --- | --- |
-| Design + ADR-017 | **Ready / Accepted** |
-| M13a implementation | Pending |
+| Design + ADR-017 | **Accepted** |
+| M13a implementation | **Done** (0.17.0) |
 | M13b | Optional follow-on |

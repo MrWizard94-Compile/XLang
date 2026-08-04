@@ -2,20 +2,21 @@
 
 ## Contract
 
-Aether **0.16.0** (base language **0.11** plus **M11 modules** and **M12
-statement-level structural edits**, AETH **v11**) accepts Aether source, returns
-a canonical AST from the Rust bootstrap for tooling, and **emits AETH v11
-bytecode primarily through the Aether-written seed compiler** (forge ABI).
-Single-file `compile` is seed-hosted. Multi-module `project build` elaborates
-the import DAG, dual-compares bootstrap≡seed, and writes seed artifacts.
-Authoring uses `aether.ast/v7` and `aether.edit/v7` (including statement paths).
-The CLI also provides offline project verify/format. Verified AETH v4–v10 remain
-compatibility inputs. Source is never translated to an existing language.
+Aether **0.17.0** (base language **0.11** plus M11 modules, M12 statement-level
+edits, and **M13a offline LSP**, AETH **v11**) accepts Aether source, returns a
+canonical AST from the Rust bootstrap for tooling, and **emits AETH v11 bytecode
+primarily through the Aether-written seed compiler** (forge ABI). Single-file
+`compile` is seed-hosted. Multi-module `project build` elaborates the import DAG,
+dual-compares bootstrap≡seed, and writes seed artifacts. Authoring uses
+`aether.ast/v7` and `aether.edit/v7`. The CLI provides offline project
+verify/format and `aether lsp` (bootstrap diagnostics only; no product AETH from
+LSP). Verified AETH v4–v10 remain compatibility inputs. Source is never
+translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.16 product contract (0.11 core language,
-M9–M12 tooling/authoring). It intentionally
+This manifest is the executable Aether 0.17 product contract (0.11 core language,
+M9–M13a tooling/authoring). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),

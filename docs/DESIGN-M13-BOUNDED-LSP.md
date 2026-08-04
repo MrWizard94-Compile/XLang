@@ -1,6 +1,6 @@
 # M13 Design: bounded offline Language Server Protocol (T-LSP)
 
-**Status:** Accepted design for implementable ADR-017 (code not started)  
+**Status:** M13a implemented (package 0.17.0); M13b optional  
 **Date:** 2026-08-04  
 **Decision record:** [ADR-017](ADR-017-m13-bounded-lsp.md)  
 **Validation record:** [M13 validation matrix](M13-VALIDATION-MATRIX.md)  

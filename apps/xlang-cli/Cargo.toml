@@ -1,6 +1,6 @@
 [package]
 name = "aether-cli"
-version = "0.16.0"
+version = "0.17.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -14,6 +14,8 @@ path = "src/main.rs"
 
 [dependencies]
 aether-core = { path = "../../crates/xlang-core" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
 
 [lints]
 workspace = true

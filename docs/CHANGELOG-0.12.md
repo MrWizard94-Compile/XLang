@@ -3,6 +3,13 @@
 Honest user-facing deltas from the bounded resource core through the technical
 preview package. This is **not** a claim of 1.0 completeness.
 
+## 0.17.0 — bounded offline LSP (M13a)
+
+- `aether lsp` stdio JSON-RPC Language Server.
+- Bootstrap diagnostics, document symbols, formatting, hover, definition.
+- **Not** a product AETH compiler; **no** silent disk writes; offline only.
+- Editor diagnostics ≠ seed product compile (documented in diagnostic messages).
+
 ## 0.16.0 — fine-grained structural edits (M12)
 
 - `aether.edit/v7` / `aether.ast/v7` / `aether.diagnostic/v7`.

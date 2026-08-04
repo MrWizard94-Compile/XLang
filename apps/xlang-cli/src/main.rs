@@ -4,6 +4,8 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
+mod lsp;
+
 use aether_core::{
     apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
     compile_to_bytecode, compile_with_seed, forge_bytecode, format_project, format_source,
@@ -14,7 +16,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file>\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\naether lsp is an offline stdio Language Server (bootstrap diagnostics; no product AETH emit; no silent disk writes).\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -428,6 +430,12 @@ fn run() -> Result<(), String> {
             }
             println!("{LANGUAGE_NAME} {LANGUAGE_VERSION}");
             Ok(())
+        }
+        "lsp" => {
+            if arguments.next().is_some() {
+                return Err("lsp does not accept arguments in M13a (stdio only)".to_owned());
+            }
+            lsp::run()
         }
         _ => Err(format!("unknown command {command:?}")),
     }

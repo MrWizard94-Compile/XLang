@@ -1,6 +1,6 @@
 # ADR-017: bounded offline Language Server (`aether lsp`)
 
-**Status:** Accepted (implementable) — **implementation not started**  
+**Status:** Accepted; **M13a implemented** (package 0.17.0); M13b optional  
 **Date:** 2026-08-04  
 **Decision makers:** AGENTS Constitution; ADR-014 T-LSP after M12  
 **Related Rule IDs:** `DOC-ADR-001`, `CONST-DEP-001`, `SEC-INPUT-001`, `DOC-SYNC-001`, `TEST-BEHAVIOR-001`  
