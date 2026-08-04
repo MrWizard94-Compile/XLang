@@ -21,11 +21,11 @@ use crate::{
 };
 
 /// The JSON schema identifier emitted for a validated semantic document.
-pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v4";
+pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v5";
 /// The JSON protocol identifier accepted for a structural edit request.
-pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v4";
+pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v5";
 /// The JSON schema identifier used for machine-readable diagnostic envelopes.
-pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v4";
+pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v5";
 
 const MAX_STRUCTURAL_EDIT_BYTES: usize = 4_000_000;
 const MAX_STRUCTURAL_EDIT_OPERATIONS: usize = 32;
@@ -76,14 +76,14 @@ impl From<CompilerError> for StructuralEditError {
     }
 }
 
-/// Return deterministic, pretty-printed `aether.ast/v4` JSON for valid source.
+/// Return deterministic, pretty-printed `aether.ast/v5` JSON for valid source.
 /// Source spans always refer to the returned document's canonical LF source.
 pub fn structural_document_json(source: &str) -> Result<String, CompilerError> {
     let (program, canonical_source) = canonicalize_source(source)?;
     serialize_document(&canonical_source, &program).map_err(serialization_error)
 }
 
-/// Serialize a stable `aether.diagnostic/v4` envelope for any compiler or
+/// Serialize a stable `aether.diagnostic/v5` envelope for any compiler or
 /// structural-authoring diagnostic.
 #[must_use]
 pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
@@ -96,7 +96,7 @@ pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
     .to_string()
 }
 
-/// Apply one bounded `aether.edit/v4` document to matching source.
+/// Apply one bounded `aether.edit/v5` document to matching source.
 ///
 /// The function does not write files, invoke a model, execute code, or compile
 /// an artifact. It is intentionally pure apart from memory allocation. The CLI
@@ -375,6 +375,23 @@ fn statement_value(statement: &Statement, id: &str) -> Value {
             "condition": expression_value(condition, &format!("{id}/condition")),
             "body": body.iter().enumerate().map(|(index, nested)| {
                 statement_value(nested, &format!("{id}/body/{index}"))
+            }).collect::<Vec<_>>(),
+        }),
+        Statement::Together { spawns, span } => json!({
+            "id": id,
+            "kind": "Together",
+            "span": span_value(*span),
+            "spawns": spawns.iter().enumerate().map(|(index, spawn)| {
+                json!({
+                    "id": format!("{id}/spawn/{index}"),
+                    "kind": "Spawn",
+                    "span": span_value(spawn.span),
+                    "weave": &spawn.weave,
+                    "arguments": spawn.arguments.iter().enumerate().map(|(argument_index, argument)| {
+                        atom_value(argument, &format!("{id}/spawn/{index}/argument/{argument_index}"))
+                    }).collect::<Vec<_>>(),
+                    "destination": &spawn.destination,
+                })
             }).collect::<Vec<_>>(),
         }),
     }
@@ -929,7 +946,7 @@ fn apply_replace(
         }
         (EditTarget::World, _) => Err(protocol_error(
             "AE-EDIT-004",
-            "the world node cannot be replaced by structural edit v4",
+            "the world node cannot be replaced by structural edit v5",
         )),
         (EditTarget::Record(_), EditableDeclaration::Weave(_))
         | (EditTarget::Weave(_), EditableDeclaration::Record(_)) => Err(protocol_error(
@@ -992,7 +1009,7 @@ fn apply_delete(program: &mut Program, target: &EditTarget) -> Result<(), Struct
         }
         EditTarget::World => Err(protocol_error(
             "AE-EDIT-004",
-            "the world node cannot be deleted by structural edit v4",
+            "the world node cannot be deleted by structural edit v5",
         )),
     }
 }
@@ -1452,11 +1469,51 @@ fn parse_statement(
                 span: synthetic_span(),
             })
         }
+        "Together" => {
+            ensure_only_fields(object, &["kind", "spawns"], "Together statement")?;
+            let spawns = required_array(object, "spawns", "Together statement")?
+                .iter()
+                .map(|value| parse_spawn(value, node_budget))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Statement::Together {
+                spawns,
+                span: synthetic_span(),
+            })
+        }
         _ => Err(protocol_error(
             "AE-EDIT-001",
             format!("statement has unsupported kind {kind:?}"),
         )),
     }
+}
+
+fn parse_spawn(
+    value: &Value,
+    node_budget: &mut NodeBudget,
+) -> Result<crate::Spawn, StructuralEditError> {
+    node_budget.consume()?;
+    let object = expect_object(value, "spawn")?;
+    ensure_only_fields(
+        object,
+        &["kind", "weave", "arguments", "destination"],
+        "Spawn",
+    )?;
+    let kind = required_string(object, "kind", "Spawn")?;
+    if kind != "Spawn" {
+        return Err(protocol_error(
+            "AE-EDIT-001",
+            format!("spawn has unsupported kind {kind:?}"),
+        ));
+    }
+    Ok(crate::Spawn {
+        weave: required_string(object, "weave", "Spawn")?,
+        arguments: required_array(object, "arguments", "Spawn")?
+            .iter()
+            .map(|argument| parse_atom(argument, node_budget))
+            .collect::<Result<Vec<_>, _>>()?,
+        destination: required_string(object, "destination", "Spawn")?,
+        span: synthetic_span(),
+    })
 }
 
 fn parse_expression(
@@ -2139,8 +2196,8 @@ mod tests {
     fn replacement_edit(base_source: &str, value: i64) -> String {
         format!(
             r#"{{
-  "protocol": "aether.edit/v4",
-  "schema": "aether.ast/v4",
+  "protocol": "aether.edit/v5",
+  "schema": "aether.ast/v5",
   "baseSource": {},
   "operations": [{{
     "op": "replace",
@@ -2313,7 +2370,7 @@ mod tests {
         }))
         .expect("missing-stage edit should serialize");
         let error = apply_structural_edit(source, &missing_stage)
-            .expect_err("v4 edits must require every binding stage");
+            .expect_err("v5 edits must require every binding stage");
         assert_eq!(error.diagnostic().code, "AE-EDIT-001");
 
         let mut unknown_declaration = document["program"]["weaves"][0].clone();
@@ -2331,7 +2388,7 @@ mod tests {
         }))
         .expect("unknown-stage edit should serialize");
         let error = apply_structural_edit(source, &unknown_stage)
-            .expect_err("v4 edits must reject unknown binding stages");
+            .expect_err("v5 edits must reject unknown binding stages");
         assert_eq!(error.diagnostic().code, "AE-EDIT-001");
     }
 
@@ -2507,12 +2564,12 @@ mod tests {
 
     #[test]
     fn malformed_and_duplicate_edit_fields_are_rejected() {
-        let malformed = r#"{"protocol":"aether.edit/v4","schema":"aether.ast/v4","baseSource":"x","operations":[],"extra":true}"#;
+        let malformed = r#"{"protocol":"aether.edit/v5","schema":"aether.ast/v5","baseSource":"x","operations":[],"extra":true}"#;
         let malformed_error =
             apply_structural_edit(BASE_SOURCE, malformed).expect_err("unknown field must fail");
         assert_eq!(malformed_error.diagnostic().code, "AE-EDIT-001");
 
-        let duplicate = r#"{"protocol":"aether.edit/v4","protocol":"aether.edit/v4","schema":"aether.ast/v4","baseSource":"x","operations":[]}"#;
+        let duplicate = r#"{"protocol":"aether.edit/v5","protocol":"aether.edit/v5","schema":"aether.ast/v5","baseSource":"x","operations":[]}"#;
         let duplicate_error = apply_structural_edit(BASE_SOURCE, duplicate)
             .expect_err("duplicate JSON key must fail");
         assert_eq!(duplicate_error.diagnostic().code, "AE-EDIT-001");
@@ -2523,8 +2580,8 @@ mod tests {
     fn insert_and_delete_are_structural_top_level_operations() {
         let insert = format!(
             r#"{{
-  "protocol": "aether.edit/v4",
-  "schema": "aether.ast/v4",
+  "protocol": "aether.edit/v5",
+  "schema": "aether.ast/v5",
   "baseSource": {},
   "operations": [{{
     "op": "insertAfter",
@@ -2545,7 +2602,7 @@ mod tests {
         assert!(inserted.source.contains("weave helper [] -> Whole:"));
 
         let delete = format!(
-            r#"{{"protocol":"aether.edit/v4","schema":"aether.ast/v4","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
+            r#"{{"protocol":"aether.edit/v5","schema":"aether.ast/v5","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
             serde_json::to_string(&inserted.source).expect("source string must serialize")
         );
         let deleted =
@@ -2557,7 +2614,7 @@ mod tests {
     fn inserting_a_record_reindexes_existing_record_type_references_by_name() {
         let source = include_str!("../../../examples/records.ae");
         let insert = format!(
-            r#"{{"protocol":"aether.edit/v4","schema":"aether.ast/v4","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
+            r#"{{"protocol":"aether.edit/v5","schema":"aether.ast/v5","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
             serde_json::to_string(&format_program(
                 &compile_source(source).expect("record source should parse")
             ))
@@ -2583,7 +2640,7 @@ mod tests {
         let envelope: Value = serde_json::from_str(&diagnostic_json(&diagnostic))
             .expect("diagnostic envelope must be JSON");
         let schema: Value = serde_json::from_str(include_str!(
-            "../../../schemas/aether-diagnostic-v3.schema.json"
+            "../../../schemas/aether-diagnostic-v5.schema.json"
         ))
         .expect("diagnostic schema must be JSON");
         assert_eq!(envelope["schema"], DIAGNOSTIC_SCHEMA_VERSION);
@@ -2591,7 +2648,7 @@ mod tests {
         assert_eq!(envelope["span"]["line"], 4);
         assert_eq!(
             schema["$id"],
-            "https://aether.local/schemas/aether-diagnostic-v3.schema.json"
+            "https://aether.local/schemas/aether-diagnostic-v5.schema.json"
         );
         assert!(schema["required"]
             .as_array()

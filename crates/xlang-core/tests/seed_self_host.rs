@@ -30,6 +30,8 @@ const FORWARD_CALL_SOURCE: &str = concat!(
 const M4_ERROR_EFFECT_SOURCE: &str = include_str!("../../../examples/error-effect.ae");
 const M5_COMPTIME_SOURCE: &str = include_str!("../../../examples/comptime.ae");
 const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae");
+const M7_NURSERY_TOTAL_SOURCE: &str = include_str!("../../../examples/nursery-total.ae");
+const M7_NURSERY_CANCEL_SOURCE: &str = include_str!("../../../examples/nursery-cancel.ae");
 
 const M4_NORMAL_EFFECT_SOURCE: &str = concat!(
     "world normal_effect\n",
@@ -71,7 +73,7 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
 
     let variant = SEED_SOURCE.replacen(
         "  bind mutable v65 <- 0\n",
-        "  bind mutable v65 <- 0\n  bind mutable v100 <- 0\n",
+        "  bind mutable v65 <- 0\n  bind mutable v103 <- 0\n",
         1,
     );
     assert_ne!(
@@ -247,6 +249,53 @@ fn seed_profile_compiler_forges_bounded_m6_layout_tables_byte_identically() {
 }
 
 #[test]
+fn seed_profile_compiler_forges_bounded_m7_nurseries_byte_identically() {
+    let bootstrap_seed = compile_to_bytecode(SEED_SOURCE)
+        .expect("the checked-in Aether seed source must bootstrap")
+        .bytecode;
+
+    let total_bootstrap = compile_to_bytecode(M7_NURSERY_TOTAL_SOURCE)
+        .expect("the M7 total nursery fixture must bootstrap")
+        .bytecode;
+    let total_forged = bytes(
+        forge_bytecode(&bootstrap_seed, M7_NURSERY_TOTAL_SOURCE)
+            .expect("the M7 total nursery fixture must forge through the seed"),
+    );
+    verify_bytecode(&total_forged).expect("the M7 total seed-produced artifact must verify");
+    assert_eq!(
+        total_forged, total_bootstrap,
+        "the M7 total nursery fixture must match bootstrap byte-for-byte"
+    );
+    assert_eq!(
+        run_bytecode(&total_forged)
+            .expect("the M7 total seed-produced artifact must run")
+            .exit_code,
+        7,
+        "the M7 total nursery fixture should preserve its defined outcome"
+    );
+
+    let cancel_bootstrap = compile_to_bytecode(M7_NURSERY_CANCEL_SOURCE)
+        .expect("the M7 cancel nursery fixture must bootstrap")
+        .bytecode;
+    let cancel_forged = bytes(
+        forge_bytecode(&bootstrap_seed, M7_NURSERY_CANCEL_SOURCE)
+            .expect("the M7 cancel nursery fixture must forge through the seed"),
+    );
+    verify_bytecode(&cancel_forged).expect("the M7 cancel seed-produced artifact must verify");
+    assert_eq!(
+        cancel_forged, cancel_bootstrap,
+        "the M7 cancel nursery fixture must match bootstrap byte-for-byte"
+    );
+    assert_eq!(
+        run_bytecode(&cancel_forged)
+            .expect("the M7 cancel seed-produced artifact must run")
+            .exit_code,
+        9,
+        "the M7 cancel nursery fixture should preserve its defined outcome"
+    );
+}
+
+#[test]
 fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
     assert_eq!(
         SEED_COMPILER_ARTIFACT,
@@ -326,6 +375,8 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
         ),
         ("comptime", M5_COMPTIME_SOURCE, Some(150)),
         ("layout-table", M6_LAYOUT_SOURCE, Some(10)),
+        ("nursery-total", M7_NURSERY_TOTAL_SOURCE, Some(7)),
+        ("nursery-cancel", M7_NURSERY_CANCEL_SOURCE, Some(9)),
     ];
     for (name, source, expected_exit_code) in examples {
         let bootstrap = compile_to_bytecode(source)

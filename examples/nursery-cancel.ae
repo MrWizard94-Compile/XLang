@@ -1,0 +1,25 @@
+world nursery_cancel
+
+weave ok [] -> Whole:
+  yield 1
+
+weave boom [] -> Whole raises Whole:
+  raise 9
+
+weave later [] -> Whole:
+  yield 5
+
+weave work [] -> Whole raises Whole:
+  bind mutable a <- 0
+  bind mutable b <- 0
+  bind mutable c <- 0
+  together:
+    spawn call ok into a
+    spawn call boom into b
+    spawn call later into c
+  yield sum a c
+
+weave main [] -> Whole:
+  bind mutable ok <- 0
+  bind mutable code <- 0
+  handle call work into ok otherwise error into code

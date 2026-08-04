@@ -18,9 +18,9 @@ pub use authoring::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.9.0";
+pub const LANGUAGE_VERSION: &str = "0.10.0";
 
-/// Checked-in Aether-written seed compiler artifact (AETH v9).
+/// Checked-in Aether-written seed compiler artifact (AETH v10).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../seed/aether_seed.aeth"
@@ -33,6 +33,7 @@ const ARTIFACT_VERSION_V6: u8 = 6;
 const ARTIFACT_VERSION_V7: u8 = 7;
 const ARTIFACT_VERSION_V8: u8 = 8;
 const ARTIFACT_VERSION_V9: u8 = 9;
+const ARTIFACT_VERSION_V10: u8 = 10;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 const MAX_FUNCTIONS: usize = 256;
 const MAX_LOCALS: usize = u16::MAX as usize;
@@ -49,6 +50,7 @@ const MAX_ARENA_BYTES: u32 = 1_000_000;
 const BUFFER_METADATA_BYTES: usize = 16;
 const TABLE_METADATA_BYTES: usize = 16;
 const MAX_COMPTIME_BINDINGS: usize = 1_024;
+const MAX_NURSERY_SPAWNS: usize = 8;
 
 const OP_PUSH_TEXT: u8 = 1;
 const OP_PUSH_WHOLE: u8 = 2;
@@ -110,6 +112,9 @@ const OP_TABLE_ALLOCATE: u8 = 58;
 const OP_TABLE_STORE: u8 = 59;
 const OP_TABLE_LOAD: u8 = 60;
 const OP_TABLE_COUNT: u8 = 61;
+const OP_NURSERY_BEGIN: u8 = 62;
+const OP_NURSERY_SPAWN: u8 = 63;
+const OP_NURSERY_END: u8 = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -171,6 +176,16 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-task-003") {
+        "AE-TASK-003"
+    } else if normalized.contains("ae-task-002") {
+        "AE-TASK-002"
+    } else if normalized.contains("ae-task-001")
+        || normalized.contains("together")
+        || normalized.contains("nursery")
+        || normalized.contains("spawn")
+    {
+        "AE-TASK-001"
     } else if normalized.contains("ae-layout-003") {
         "AE-LAYOUT-003"
     } else if normalized.contains("ae-layout-002") {
@@ -391,13 +406,14 @@ impl ParameterMode {
                     | ARTIFACT_VERSION_V7
                     | ARTIFACT_VERSION_V8
                     | ARTIFACT_VERSION_V9
+                    | ARTIFACT_VERSION_V10
             ) =>
             {
                 Ok(Self::Access)
             }
             3 => Err(BytecodeError::new(
                 offset,
-                "access parameters are valid only in AETH v6, v7, v8, or v9 artifacts",
+                "access parameters are valid only in AETH v6, v7 through v10 artifacts",
             )),
             _ => Err(BytecodeError::new(offset, "unknown Aether parameter mode")),
         }
@@ -518,6 +534,14 @@ pub struct Parameter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Spawn {
+    pub weave: String,
+    pub arguments: Vec<Atom>,
+    pub destination: String,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Statement {
     Bind {
         name: String,
@@ -566,6 +590,10 @@ pub enum Statement {
         body: Vec<Statement>,
         span: Span,
     },
+    Together {
+        spawns: Vec<Spawn>,
+        span: Span,
+    },
 }
 
 impl Statement {
@@ -579,7 +607,8 @@ impl Statement {
             | Self::Forward { span, .. }
             | Self::Handle { span, .. }
             | Self::Choose { span, .. }
-            | Self::While { span, .. } => *span,
+            | Self::While { span, .. }
+            | Self::Together { span, .. } => *span,
         }
     }
 }
@@ -1224,10 +1253,17 @@ struct ArtifactShape {
 }
 
 #[derive(Clone, PartialEq, Eq)]
+struct NurseryVerification {
+    expected: u8,
+    seen: u8,
+}
+
+#[derive(Clone, PartialEq, Eq)]
 struct VerificationState {
     stack: VerificationStack,
     initialized: Vec<bool>,
     moved: Vec<bool>,
+    nursery: Option<NurseryVerification>,
 }
 
 /// Immutable verifier inputs shared by every instruction in one weave.
@@ -1365,8 +1401,16 @@ impl RuntimeValue {
     }
 }
 
+struct NurseryFrame {
+    cancelled: bool,
+    code: i64,
+    expected: u8,
+    seen: u8,
+}
+
 struct RuntimeState {
     arena: ArenaState,
+    nurseries: Vec<NurseryFrame>,
 }
 
 struct ArenaState {
@@ -1387,6 +1431,7 @@ impl RuntimeState {
         }
         Ok(Self {
             arena: ArenaState { bytes, used: 0 },
+            nurseries: Vec::new(),
         })
     }
 }
@@ -1530,6 +1575,15 @@ enum Instruction {
         success_target: usize,
         error_target: usize,
     },
+    NurseryBegin {
+        count: u8,
+    },
+    NurserySpawn {
+        function: usize,
+        arguments: usize,
+        destination: usize,
+    },
+    NurseryEnd,
     Call {
         function: usize,
         arguments: usize,
@@ -1933,7 +1987,11 @@ fn validate_artifact_resource_signature(
     if has_buffer
         && (!matches!(
             version,
-            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+            ARTIFACT_VERSION_V6
+                | ARTIFACT_VERSION_V7
+                | ARTIFACT_VERSION_V8
+                | ARTIFACT_VERSION_V9
+                | ARTIFACT_VERSION_V10
         ) || access_count != 1)
     {
         return Err(BytecodeError::new(
@@ -1960,7 +2018,7 @@ fn validate_artifact_effect_signature(
 ) -> Result<(), BytecodeError> {
     if !matches!(
         version,
-        ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+        ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10
     ) && function.effect != Effect::Total
     {
         return Err(BytecodeError::new(
@@ -2021,7 +2079,11 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
     }
     if !matches!(
         artifact.version,
-        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+        ARTIFACT_VERSION_V6
+            | ARTIFACT_VERSION_V7
+            | ARTIFACT_VERSION_V8
+            | ARTIFACT_VERSION_V9
+            | ARTIFACT_VERSION_V10
     ) {
         if artifact.arena_capacity != 0 || resource_instruction_seen {
             return Err(BytecodeError::new(
@@ -2721,6 +2783,48 @@ fn parse_block(
             continue;
         }
 
+        if line.content == "together:" {
+            let span = line.span(1);
+            *index += 1;
+            let mut spawns = Vec::new();
+            while *index < lines.len() {
+                let spawn_line = lines[*index];
+                if spawn_line.indentation < indentation + 1 {
+                    break;
+                }
+                if spawn_line.indentation > indentation + 1 {
+                    return Err(CompilerError::new(
+                        spawn_line.span(1),
+                        "AE-TASK-001: nursery bodies admit only spawn call lines at one indent level",
+                    ));
+                }
+                if spawn_line.content == "together:" {
+                    return Err(CompilerError::new(
+                        spawn_line.span(1),
+                        "AE-TASK-001: nested together blocks are not admitted",
+                    ));
+                }
+                if spawn_line.content.ends_with(':') {
+                    return Err(CompilerError::new(
+                        spawn_line.span(1),
+                        "AE-TASK-001: nursery bodies admit only spawn call lines",
+                    ));
+                }
+                spawns.push(parse_spawn_statement(spawn_line)?);
+                *index += 1;
+            }
+            if spawns.is_empty() || spawns.len() > MAX_NURSERY_SPAWNS {
+                return Err(CompilerError::new(
+                    span,
+                    format!(
+                        "AE-TASK-001: together requires 1 through {MAX_NURSERY_SPAWNS} spawn call lines"
+                    ),
+                ));
+            }
+            statements.push(Statement::Together { spawns, span });
+            continue;
+        }
+
         if line.content.ends_with(':') {
             return Err(CompilerError::new(
                 line.span(1),
@@ -2731,6 +2835,36 @@ fn parse_block(
         *index += 1;
     }
     Ok(statements)
+}
+
+fn parse_spawn_statement(line: SourceLine<'_>) -> Result<Spawn, CompilerError> {
+    let span = line.span(line.indentation * 2 + 1);
+    let Some(call_source) = line.content.strip_prefix("spawn call ") else {
+        return Err(CompilerError::new(
+            span,
+            "AE-TASK-001: nursery bodies admit only spawn call lines",
+        ));
+    };
+    let Some((call_body, destination)) = call_source.rsplit_once(" into ") else {
+        return Err(CompilerError::new(
+            span,
+            "AE-TASK-002: spawn call requires arguments and an into destination",
+        ));
+    };
+    validate_name(destination, span, "spawn destination", false)?;
+    let expression = parse_expression(&format!("call {call_body}"), span)?;
+    let ExpressionKind::Call { weave, arguments } = expression.kind else {
+        return Err(CompilerError::new(
+            span,
+            "AE-TASK-002: spawn requires call form spawn call <weave> <args...> into <name>",
+        ));
+    };
+    Ok(Spawn {
+        weave,
+        arguments,
+        destination: destination.to_owned(),
+        span,
+    })
 }
 
 fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerError> {
@@ -2794,7 +2928,7 @@ fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerErro
     }
     Err(CompilerError::new(
         span,
-        "unknown Aether statement; use comptime bind, bind, revise, speak, yield, raise, forward, choose, while, or handle",
+        "unknown Aether statement; use comptime bind, bind, revise, speak, yield, raise, forward, choose, while, together, or handle",
     ))
 }
 
@@ -3591,6 +3725,12 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
                 "AE-EFFECT-003: Aether M4 error control cannot share a weave with M2 arena, Buffer, access, table, or resource outcomes",
             ));
         }
+        if weave_uses_resource(weave) && weave_uses_nursery(weave) {
+            return Err(CompilerError::new(
+                weave.span,
+                "AE-TASK-003: Aether M7 nursery control cannot share a weave with M2 arena, Buffer, access, table, or resource outcomes",
+            ));
+        }
         let access_arena = weave
             .parameters
             .iter()
@@ -3641,7 +3781,8 @@ fn validate_comptime_budget(program: &Program) -> Result<(), CompilerError> {
                     ..
                 } => count(when_bright) + count(when_dim),
                 Statement::While { body, .. } => count(body),
-                Statement::Revise { .. }
+                Statement::Together { .. }
+                | Statement::Revise { .. }
                 | Statement::Speak { .. }
                 | Statement::Yield { .. }
                 | Statement::Raise { .. }
@@ -3966,7 +4107,7 @@ fn collect_resource_declarations(
                 *resource_operations |= expression_uses_resource(value);
             }
             Statement::Raise { .. } | Statement::Forward { .. } => {}
-            Statement::Handle { .. } => {}
+            Statement::Handle { .. } | Statement::Together { .. } => {}
             Statement::Choose {
                 condition,
                 when_bright,
@@ -4008,7 +4149,7 @@ fn weave_uses_resource(weave: &Weave) -> bool {
             | Statement::Speak { value, .. }
             | Statement::Yield { value, .. } => expression_uses_resource(value),
             Statement::Raise { .. } | Statement::Forward { .. } => false,
-            Statement::Handle { .. } => false,
+            Statement::Handle { .. } | Statement::Together { .. } => false,
             Statement::Choose {
                 condition,
                 when_bright,
@@ -4037,13 +4178,44 @@ fn weave_uses_effect_control(weave: &Weave) -> bool {
                 ..
             } => block_uses_effect_control(when_bright) || block_uses_effect_control(when_dim),
             Statement::While { body, .. } => block_uses_effect_control(body),
-            Statement::Bind { .. }
+            Statement::Together { .. }
+            | Statement::Bind { .. }
             | Statement::Revise { .. }
             | Statement::Speak { .. }
             | Statement::Yield { .. } => false,
         })
     }
     block_uses_effect_control(&weave.body)
+}
+
+fn weave_uses_nursery(weave: &Weave) -> bool {
+    fn block_uses_nursery(statements: &[Statement]) -> bool {
+        statements.iter().any(|statement| match statement {
+            Statement::Together { .. } => true,
+            Statement::Choose {
+                when_bright,
+                when_dim,
+                ..
+            } => block_uses_nursery(when_bright) || block_uses_nursery(when_dim),
+            Statement::While { body, .. } => block_uses_nursery(body),
+            Statement::Bind { .. }
+            | Statement::Revise { .. }
+            | Statement::Speak { .. }
+            | Statement::Yield { .. }
+            | Statement::Raise { .. }
+            | Statement::Forward { .. }
+            | Statement::Handle { .. } => false,
+        })
+    }
+    block_uses_nursery(&weave.body)
+}
+
+fn nursery_may_raise(spawns: &[Spawn], signatures: &BTreeMap<String, FunctionSignature>) -> bool {
+    spawns.iter().any(|spawn| {
+        signatures
+            .get(&spawn.weave)
+            .is_some_and(|signature| signature.effect == Effect::ErrorWhole)
+    })
 }
 
 fn is_buffer_type(value_type: ValueType) -> bool {
@@ -4365,6 +4537,42 @@ fn validate_block(
                 )?;
                 merge_scope(scope, &before_loop, &body_scope, statement.span())?;
             }
+            Statement::Together { spawns, span } => {
+                if spawns.is_empty() || spawns.len() > MAX_NURSERY_SPAWNS {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!(
+                            "AE-TASK-001: together requires 1 through {MAX_NURSERY_SPAWNS} spawn call lines"
+                        ),
+                    ));
+                }
+                if weave_uses_resource(weave) {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-TASK-003: nursery control cannot share a weave with arena, Buffer, access, table, or resource outcomes",
+                    ));
+                }
+                validate_effect_boundary(scope, *span)?;
+                let may_raise = nursery_may_raise(spawns, signatures);
+                if may_raise {
+                    if weave.effect != Effect::ErrorWhole {
+                        return Err(CompilerError::new(
+                            *span,
+                            "AE-TASK-002: a nursery that spawns an Error[Whole] child requires the enclosing weave to raise Whole",
+                        ));
+                    }
+                    if weave.name == "main" {
+                        return Err(CompilerError::new(
+                            *span,
+                            "AE-TASK-003: main must remain total; handle a may-raise nursery before the program entry boundary",
+                        ));
+                    }
+                }
+                let mut destinations = BTreeMap::new();
+                for spawn in spawns {
+                    validate_spawn(spawn, scope, signatures, &mut destinations)?;
+                }
+            }
         }
     }
     if root
@@ -4388,6 +4596,126 @@ fn validate_block(
         return Err(CompilerError::new(
             weave.span,
             "every weave must end with yield",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_spawn(
+    spawn: &Spawn,
+    scope: &mut BindingScope,
+    signatures: &BTreeMap<String, FunctionSignature>,
+    destinations: &mut BTreeMap<String, Span>,
+) -> Result<(), CompilerError> {
+    let Some(signature) = signatures.get(&spawn.weave) else {
+        return Err(CompilerError::new(
+            spawn.span,
+            format!("AE-TASK-002: weave {} has not been declared", spawn.weave),
+        ));
+    };
+    if signature.result != ValueType::Whole {
+        return Err(CompilerError::new(
+            spawn.span,
+            format!(
+                "AE-TASK-002: spawn target {} must return Whole",
+                spawn.weave
+            ),
+        ));
+    }
+    if signature.parameters.len() != spawn.arguments.len() {
+        return Err(CompilerError::new(
+            spawn.span,
+            format!(
+                "AE-TASK-002: spawn call {} requires {} argument(s), received {}",
+                spawn.weave,
+                signature.parameters.len(),
+                spawn.arguments.len()
+            ),
+        ));
+    }
+    if signature.effect == Effect::ErrorWhole {
+        for (argument, parameter) in spawn.arguments.iter().zip(&signature.parameters) {
+            if parameter.mode != ParameterMode::Own
+                || !matches!(parameter.value_type, ValueType::Whole | ValueType::Truth)
+            {
+                return Err(CompilerError::new(
+                    spawn.span,
+                    format!(
+                        "AE-TASK-002: spawn of erroring weave {} accepts only ordinary Whole or Truth copy arguments",
+                        spawn.weave
+                    ),
+                ));
+            }
+            if !matches!(
+                argument.kind,
+                AtomKind::Whole(_) | AtomKind::Truth(_) | AtomKind::Name(_)
+            ) {
+                return Err(CompilerError::new(
+                    argument.span,
+                    "AE-TASK-002: spawn of an erroring weave requires copy literals or copy binding names",
+                ));
+            }
+            require_source_type(
+                atom_type(argument, scope)?,
+                parameter.value_type,
+                argument.span,
+                "spawn argument",
+            )?;
+        }
+    } else {
+        for (argument, parameter) in spawn.arguments.iter().zip(&signature.parameters) {
+            let argument_type = atom_type(argument, scope)?;
+            let expected = if parameter.mode == ParameterMode::Access {
+                ValueType::AccessArena
+            } else {
+                parameter.value_type
+            };
+            require_source_type(argument_type, expected, argument.span, "spawn argument")?;
+            if parameter.mode == ParameterMode::Access
+                || is_buffer_type(parameter.value_type)
+                || parameter.value_type == ValueType::Arena
+                || is_table_type(parameter.value_type)
+            {
+                return Err(CompilerError::new(
+                    argument.span,
+                    "AE-TASK-003: nursery spawn arguments cannot cross arena, Buffer, access, or table boundaries",
+                ));
+            }
+            if parameter.mode == ParameterMode::Own
+                && is_unique_value(parameter.value_type)
+                && !matches!(
+                    (&argument.kind, parameter.value_type),
+                    (AtomKind::Text(_), ValueType::Text) | (AtomKind::Bytes(_), ValueType::Bytes)
+                )
+                && !matches!(argument.kind, AtomKind::Move(_))
+            {
+                return Err(CompilerError::new(
+                    argument.span,
+                    format!(
+                        "AE-TASK-002: spawn {} consumes {} parameter {}; use move name or a matching literal",
+                        spawn.weave, parameter.value_type, parameter.name
+                    ),
+                ));
+            }
+        }
+    }
+    validate_effect_destination(
+        scope,
+        &spawn.destination,
+        ValueType::Whole,
+        spawn.span,
+        "spawn",
+    )?;
+    if destinations
+        .insert(spawn.destination.clone(), spawn.span)
+        .is_some()
+    {
+        return Err(CompilerError::new(
+            spawn.span,
+            format!(
+                "AE-TASK-002: spawn destination {} is used more than once in the same nursery",
+                spawn.destination
+            ),
         ));
     }
     Ok(())
@@ -6011,7 +6339,7 @@ fn emit_bytecode_with_resource_plan(
     }
 
     let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
-    bytecode.push(ARTIFACT_VERSION_V9);
+    bytecode.push(ARTIFACT_VERSION_V10);
     write_u32(&mut bytecode, resource_plan.arena_capacity());
     write_u16(
         &mut bytecode,
@@ -6617,6 +6945,45 @@ fn emit_block(
                 let continuation = code.len();
                 patch_u32(code, loop_end, continuation)?;
             }
+            Statement::Together { spawns, .. } => {
+                let count = u8::try_from(spawns.len()).map_err(|_| {
+                    CompilerError::new(
+                        statement.span(),
+                        "nursery spawn count is outside AETH range",
+                    )
+                })?;
+                code.push(OP_NURSERY_BEGIN);
+                code.push(count);
+                for spawn in spawns {
+                    for argument in &spawn.arguments {
+                        emit_atom(argument, layout, code)?;
+                    }
+                    let function = weave_indices.get(&spawn.weave).ok_or_else(|| {
+                        CompilerError::new(
+                            spawn.span,
+                            format!("internal compiler could not resolve weave {}", spawn.weave),
+                        )
+                    })?;
+                    let destination = layout.get(&spawn.destination).ok_or_else(|| {
+                        CompilerError::new(
+                            spawn.span,
+                            "internal compiler could not resolve spawn destination",
+                        )
+                    })?;
+                    code.push(OP_NURSERY_SPAWN);
+                    write_u16(
+                        code,
+                        u16::try_from(*function).map_err(|_| {
+                            CompilerError::new(spawn.span, "weave index is outside the AETH range")
+                        })?,
+                    );
+                    code.push(u8::try_from(spawn.arguments.len()).map_err(|_| {
+                        CompilerError::new(spawn.span, "spawn has too many AETH arguments")
+                    })?);
+                    write_u16(code, destination.index);
+                }
+                code.push(OP_NURSERY_END);
+            }
         }
     }
     Ok(())
@@ -6992,6 +7359,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             | ARTIFACT_VERSION_V7
             | ARTIFACT_VERSION_V8
             | ARTIFACT_VERSION_V9
+            | ARTIFACT_VERSION_V10
     ) {
         return Err(BytecodeError::new(
             ARTIFACT_MAGIC.len(),
@@ -7001,13 +7369,17 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     let mut position = ARTIFACT_MAGIC.len() + 1;
     let arena_capacity = if matches!(
         version,
-        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+        ARTIFACT_VERSION_V6
+            | ARTIFACT_VERSION_V7
+            | ARTIFACT_VERSION_V8
+            | ARTIFACT_VERSION_V9
+            | ARTIFACT_VERSION_V10
     ) {
         let capacity = read_u32(bytecode, &mut position)?;
         if capacity > MAX_ARENA_BYTES {
             return Err(BytecodeError::new(
                 position,
-                "AETH v6/v7/v8/v9 arena capacity exceeds the M2 safety limit",
+                "AETH v6 through v10 arena capacity exceeds the M2 safety limit",
             ));
         }
         capacity
@@ -7022,6 +7394,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             | ARTIFACT_VERSION_V7
             | ARTIFACT_VERSION_V8
             | ARTIFACT_VERSION_V9
+            | ARTIFACT_VERSION_V10
     ) {
         let record_count = usize::from(read_u16(bytecode, &mut position)?);
         if (version == ARTIFACT_VERSION_V5 && record_count == 0) || record_count > MAX_RECORDS {
@@ -7083,7 +7456,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         }
     }
     let mut shapes = Vec::new();
-    if version == ARTIFACT_VERSION_V9 {
+    if matches!(version, ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10) {
         let shape_count = usize::from(read_u16(bytecode, &mut position)?);
         if shape_count > MAX_SHAPES {
             return Err(BytecodeError::new(
@@ -7172,7 +7545,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         )?;
         let effect = if matches!(
             version,
-            ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+            ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10
         ) {
             Effect::from_byte(read_byte(bytecode, &mut position)?, position)?
         } else {
@@ -7288,6 +7661,7 @@ fn verify_function(
             .map(|(index, _)| index < function.parameters.len())
             .collect(),
         moved: vec![false; function.locals.len()],
+        nursery: None,
     };
     states.insert(0_usize, initial);
     let mut queue = VecDeque::from([0_usize]);
@@ -8016,6 +8390,140 @@ fn verify_instruction(
             }
             state.stack.push(called_function.result);
             let _ = function_index;
+            continue_with(state)
+        }
+        Instruction::NurseryBegin { count } => {
+            if state.nursery.is_some() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_BEGIN cannot nest another nursery",
+                ));
+            }
+            if *count == 0 || usize::from(*count) > MAX_NURSERY_SPAWNS {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_BEGIN count must be between 1 and 8",
+                ));
+            }
+            if !state.stack.is_empty() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_BEGIN requires an empty operand stack",
+                ));
+            }
+            state.nursery = Some(NurseryVerification {
+                expected: *count,
+                seen: 0,
+            });
+            continue_with(state)
+        }
+        Instruction::NurserySpawn {
+            function: called,
+            arguments,
+            destination,
+        } => {
+            let Some(nursery) = state.nursery.as_mut() else {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_SPAWN requires an open nursery frame",
+                ));
+            };
+            if nursery.seen >= nursery.expected {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_SPAWN exceeds the nursery begin count",
+                ));
+            }
+            let Some(called_function) = functions.get(*called) else {
+                return Err(BytecodeError::new(
+                    offset,
+                    "nursery spawn references an unknown weave",
+                ));
+            };
+            if called_function.result != ValueType::Whole {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_SPAWN target must return Whole",
+                ));
+            }
+            if called_function.effect == Effect::ErrorWhole {
+                if function.effect != Effect::ErrorWhole {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AETH NURSERY_SPAWN of Error[Whole] requires an Error[Whole] enclosing weave",
+                    ));
+                }
+                verify_effect_call_signature(
+                    function,
+                    called_function,
+                    *arguments,
+                    offset,
+                    "nursery spawn",
+                )?;
+                pop_verifier_effect_arguments(
+                    &mut state.stack,
+                    called_function,
+                    offset,
+                    "nursery spawn",
+                )?;
+            } else {
+                if called_function.parameters.len() != *arguments {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "nursery spawn argument count disagrees with its weave signature",
+                    ));
+                }
+                for (expected, mode) in called_function.parameters.iter().rev() {
+                    if *mode == ParameterMode::Access
+                        || is_buffer_type(*expected)
+                        || *expected == ValueType::Arena
+                        || is_table_type(*expected)
+                    {
+                        return Err(BytecodeError::new(
+                            offset,
+                            "AETH NURSERY_SPAWN cannot cross arena, Buffer, access, or table boundaries",
+                        ));
+                    }
+                    pop_type(&mut state.stack, *expected, offset, "nursery spawn")?;
+                }
+            }
+            let dest = local_descriptor(function, *destination, offset)?;
+            if !dest.mutable
+                || dest.value_type != ValueType::Whole
+                || !state.initialized[*destination]
+                || state.moved[*destination]
+            {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_SPAWN destination must be a live mutable Whole local",
+                ));
+            }
+            if let Some(nursery) = state.nursery.as_mut() {
+                nursery.seen = nursery.seen.saturating_add(1);
+            }
+            continue_with(state)
+        }
+        Instruction::NurseryEnd => {
+            let Some(nursery) = state.nursery.take() else {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_END requires an open nursery frame",
+                ));
+            };
+            if nursery.seen != nursery.expected {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_END spawn count disagrees with NURSERY_BEGIN",
+                ));
+            }
+            if !state.stack.is_empty() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH NURSERY_END requires an empty operand stack",
+                ));
+            }
+            // Cancel may re-raise at runtime; the success path continues after END.
+            let _ = effect_exited;
             continue_with(state)
         }
         Instruction::JumpIfDim(target) => {
@@ -9091,6 +9599,164 @@ fn execute_function(
                     }
                 }
             }
+            Instruction::NurseryBegin { count } => {
+                if count == 0 || usize::from(count) > MAX_NURSERY_SPAWNS {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime nursery begin count is invalid",
+                    ));
+                }
+                if !stack.is_empty() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime nursery begin left values on the operand stack",
+                    ));
+                }
+                runtime_state.nurseries.push(NurseryFrame {
+                    cancelled: false,
+                    code: 0,
+                    expected: count,
+                    seen: 0,
+                });
+            }
+            Instruction::NurserySpawn {
+                function: called,
+                arguments,
+                destination,
+            } => {
+                let Some(frame) = runtime_state.nurseries.last_mut() else {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime nursery spawn without an open nursery",
+                    ));
+                };
+                if frame.seen >= frame.expected {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime nursery spawn exceeds begin count",
+                    ));
+                }
+                frame.seen = frame.seen.saturating_add(1);
+                let called_function = artifact.functions.get(called).ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "runtime nursery spawn references an unknown weave",
+                    )
+                })?;
+                if called_function.result != ValueType::Whole
+                    || called_function.parameters.len() != arguments
+                {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime nursery spawn signature is invalid",
+                    ));
+                }
+                let mut values = Vec::with_capacity(arguments);
+                for (value_type, mode) in called_function.parameters.iter().rev() {
+                    let value = pop_runtime(&mut stack, decoded.offset, "nursery spawn")?;
+                    if *mode != ParameterMode::Own
+                        || matches!(
+                            value_type,
+                            ValueType::Arena
+                                | ValueType::AccessArena
+                                | ValueType::BufferWhole
+                                | ValueType::BufferTruth
+                                | ValueType::Table(_)
+                        )
+                    {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime nursery spawn crosses a resource boundary",
+                        ));
+                    }
+                    require_runtime_type(&value, *value_type, decoded.offset, "nursery spawn")?;
+                    values.push(value);
+                }
+                values.reverse();
+                let cancelled = runtime_state
+                    .nurseries
+                    .last()
+                    .is_some_and(|frame| frame.cancelled);
+                if cancelled {
+                    // Drop arguments; destination stays unchanged.
+                    continue;
+                }
+                match execute_function(artifact, called, values, stdout, runtime_state, depth + 1)?
+                {
+                    RuntimeExit::Return(value) => {
+                        let local = function.locals.get(destination).ok_or_else(|| {
+                            BytecodeError::new(
+                                decoded.offset,
+                                "runtime nursery spawn destination is invalid",
+                            )
+                        })?;
+                        if !local.mutable || local.value_type != ValueType::Whole {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime nursery spawn destination is invalid",
+                            ));
+                        }
+                        require_runtime_type(
+                            &value,
+                            ValueType::Whole,
+                            decoded.offset,
+                            "nursery spawn",
+                        )?;
+                        if locals.get(destination).is_none() || locals[destination].is_none() {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime nursery spawn destination is not live",
+                            ));
+                        }
+                        locals[destination] = Some(value);
+                    }
+                    RuntimeExit::ErrorWhole(code) => {
+                        if function.effect != Effect::ErrorWhole {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime nursery spawn raised in a total weave",
+                            ));
+                        }
+                        let Some(frame) = runtime_state.nurseries.last_mut() else {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime nursery frame was lost during spawn",
+                            ));
+                        };
+                        frame.cancelled = true;
+                        frame.code = code;
+                    }
+                }
+            }
+            Instruction::NurseryEnd => {
+                let Some(frame) = runtime_state.nurseries.pop() else {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime nursery end without an open nursery",
+                    ));
+                };
+                if frame.seen != frame.expected {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime nursery end spawn count is incomplete",
+                    ));
+                }
+                if !stack.is_empty() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime nursery end left values on the operand stack",
+                    ));
+                }
+                if frame.cancelled {
+                    if function.effect != Effect::ErrorWhole {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime cancelled nursery raised in a total weave",
+                        ));
+                    }
+                    return Ok(RuntimeExit::ErrorWhole(frame.code));
+                }
+            }
             Instruction::Call {
                 function: called,
                 arguments,
@@ -9235,10 +9901,11 @@ fn decode_instruction(
                     | ARTIFACT_VERSION_V7
                     | ARTIFACT_VERSION_V8
                     | ARTIFACT_VERSION_V9
+                    | ARTIFACT_VERSION_V10
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record construction is valid only in AETH v5 through v9 artifacts",
+                    "record construction is valid only in AETH v5 through v10 artifacts",
                 ));
             }
             Instruction::MakeRecord(read_u16(code, position)?)
@@ -9251,10 +9918,11 @@ fn decode_instruction(
                     | ARTIFACT_VERSION_V7
                     | ARTIFACT_VERSION_V8
                     | ARTIFACT_VERSION_V9
+                    | ARTIFACT_VERSION_V10
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record field projection is valid only in AETH v5 through v9 artifacts",
+                    "record field projection is valid only in AETH v5 through v10 artifacts",
                 ));
             }
             Instruction::Field {
@@ -9335,6 +10003,24 @@ fn decode_instruction(
             require_v9_instruction(version, offset, "table count")?;
             Instruction::TableCount
         }
+        OP_NURSERY_BEGIN => {
+            require_v10_instruction(version, offset, "nursery begin")?;
+            Instruction::NurseryBegin {
+                count: read_byte(code, position)?,
+            }
+        }
+        OP_NURSERY_SPAWN => {
+            require_v10_instruction(version, offset, "nursery spawn")?;
+            Instruction::NurserySpawn {
+                function: usize::from(read_u16(code, position)?),
+                arguments: usize::from(read_byte(code, position)?),
+                destination: usize::from(read_u16(code, position)?),
+            }
+        }
+        OP_NURSERY_END => {
+            require_v10_instruction(version, offset, "nursery end")?;
+            Instruction::NurseryEnd
+        }
         OP_RAISE => {
             require_v7_instruction(version, offset, "raise")?;
             Instruction::Raise
@@ -9375,13 +10061,17 @@ fn decode_instruction(
 fn require_v6_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
     if matches!(
         version,
-        ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+        ARTIFACT_VERSION_V6
+            | ARTIFACT_VERSION_V7
+            | ARTIFACT_VERSION_V8
+            | ARTIFACT_VERSION_V9
+            | ARTIFACT_VERSION_V10
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v6 through v9 artifacts"),
+            format!("{subject} is valid only in AETH v6 through v10 artifacts"),
         ))
     }
 }
@@ -9389,35 +10079,49 @@ fn require_v6_instruction(version: u8, offset: usize, subject: &str) -> Result<(
 fn require_v7_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
     if matches!(
         version,
-        ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+        ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v7, v8, or v9 artifacts"),
+            format!("{subject} is valid only in AETH v7 through v10 artifacts"),
         ))
     }
 }
 
 fn require_v8_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if matches!(version, ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9) {
+    if matches!(
+        version,
+        ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10
+    ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v8 or v9 artifacts"),
+            format!("{subject} is valid only in AETH v8 through v10 artifacts"),
         ))
     }
 }
 
 fn require_v9_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if version == ARTIFACT_VERSION_V9 {
+    if matches!(version, ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v9 artifacts"),
+            format!("{subject} is valid only in AETH v9 or v10 artifacts"),
+        ))
+    }
+}
+
+fn require_v10_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
+    if version == ARTIFACT_VERSION_V10 {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{subject} is valid only in AETH v10 artifacts"),
         ))
     }
 }
@@ -10508,10 +11212,11 @@ fn read_value_type(
                     | ARTIFACT_VERSION_V7
                     | ARTIFACT_VERSION_V8
                     | ARTIFACT_VERSION_V9
+                    | ARTIFACT_VERSION_V10
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record types are valid only in AETH v5 through v9 artifacts",
+                    "record types are valid only in AETH v5 through v10 artifacts",
                 ));
             }
             let record_id = read_u16(bytes, position)?;
@@ -10525,21 +11230,33 @@ fn read_value_type(
         }
         6 if matches!(
             version,
-            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+            ARTIFACT_VERSION_V6
+                | ARTIFACT_VERSION_V7
+                | ARTIFACT_VERSION_V8
+                | ARTIFACT_VERSION_V9
+                | ARTIFACT_VERSION_V10
         ) =>
         {
             Ok(ValueType::Arena)
         }
         7 if matches!(
             version,
-            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+            ARTIFACT_VERSION_V6
+                | ARTIFACT_VERSION_V7
+                | ARTIFACT_VERSION_V8
+                | ARTIFACT_VERSION_V9
+                | ARTIFACT_VERSION_V10
         ) =>
         {
             Ok(ValueType::BufferWhole)
         }
         8 if matches!(
             version,
-            ARTIFACT_VERSION_V6 | ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9
+            ARTIFACT_VERSION_V6
+                | ARTIFACT_VERSION_V7
+                | ARTIFACT_VERSION_V8
+                | ARTIFACT_VERSION_V9
+                | ARTIFACT_VERSION_V10
         ) =>
         {
             Ok(ValueType::BufferTruth)
@@ -10548,7 +11265,7 @@ fn read_value_type(
             offset,
             "access loans are verifier-internal and cannot be serialized",
         )),
-        10 if version == ARTIFACT_VERSION_V9 => {
+        10 if matches!(version, ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10) => {
             let shape_id = read_u16(bytes, position)?;
             if usize::from(shape_id) >= shape_count {
                 return Err(BytecodeError::new(
@@ -10863,6 +11580,21 @@ fn write_block(statements: &[Statement], indentation: usize, output: &mut String
                 write_expression(condition, output);
                 output.push_str(":\n");
                 write_block(body, indentation + 1, output);
+            }
+            Statement::Together { spawns, .. } => {
+                output.push_str("together:\n");
+                for spawn in spawns {
+                    output.push_str(&"  ".repeat(indentation + 1));
+                    output.push_str("spawn call ");
+                    output.push_str(&spawn.weave);
+                    for argument in &spawn.arguments {
+                        output.push(' ');
+                        write_atom(argument, output);
+                    }
+                    output.push_str(" into ");
+                    output.push_str(&spawn.destination);
+                    output.push('\n');
+                }
             }
         }
     }
@@ -11183,6 +11915,24 @@ fn write_ast_block(statements: &[Statement], output: &mut String) {
                 write_ast_block(body, output);
                 output.push(')');
             }
+            Statement::Together { spawns, .. } => {
+                output.push_str("Together(");
+                for (index, spawn) in spawns.iter().enumerate() {
+                    if index > 0 {
+                        output.push(',');
+                    }
+                    output.push_str("Spawn(");
+                    output.push_str(&spawn.weave);
+                    output.push(',');
+                    output.push_str(&spawn.destination);
+                    for argument in &spawn.arguments {
+                        output.push(',');
+                        write_ast_atom(argument, output);
+                    }
+                    output.push(')');
+                }
+                output.push(')');
+            }
         }
     }
     output.push('}');
@@ -11431,6 +12181,7 @@ fn statement_token_count(statements: &[Statement]) -> usize {
                 ..
             } => 2 + statement_token_count(when_bright) + statement_token_count(when_dim),
             Statement::While { body, .. } => 2 + statement_token_count(body),
+            Statement::Together { spawns, .. } => 1 + spawns.len() * 3,
         })
         .sum()
 }
@@ -11645,7 +12396,7 @@ mod tests {
         assert_eq!(run.exit_code, 0);
         assert_eq!(format_program(&output.program), HELLO);
         assert!(canonical_ast(&output.program).contains("Borrow(greeting)"));
-        assert_eq!(&output.bytecode[..5], b"AETH\x09");
+        assert_eq!(&output.bytecode[..5], b"AETH\x0a");
     }
 
     #[test]
@@ -11841,7 +12592,7 @@ mod tests {
         let first = compile_to_bytecode(HELLO).expect("first compilation should work");
         let second = compile_to_bytecode(HELLO).expect("second compilation should work");
         assert_eq!(first.bytecode, second.bytecode);
-        assert_eq!(&first.bytecode[..5], b"AETH\x09");
+        assert_eq!(&first.bytecode[..5], b"AETH\x0a");
         verify_bytecode(&first.bytecode).expect("compiler artifact must verify");
     }
 
@@ -11907,7 +12658,7 @@ mod tests {
         let run = run_bytecode(&output.bytecode).expect("record artifact should run");
         assert_eq!(run.stdout, "Aether");
         assert_eq!(run.exit_code, 8);
-        assert_eq!(&output.bytecode[..5], b"AETH\x09");
+        assert_eq!(&output.bytecode[..5], b"AETH\x0a");
         assert_eq!(format_program(&output.program), source);
         assert!(canonical_ast(&output.program).contains("Record(card)[label:Text"));
 
@@ -11949,9 +12700,13 @@ mod tests {
     fn runs_bounded_arena_buffer_operations() {
         let source = "world arena_buffer\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 0\n  choose allocate access memory move values 2 into values:\n    choose append move values 7 into values:\n      choose at borrow values 0 into observed:\n        yield observed\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
         let output = compile_to_bytecode(source).expect("arena-buffer source should compile");
-        assert_eq!(&output.bytecode[..5], b"AETH\x09");
+        assert_eq!(&output.bytecode[..5], b"AETH\x0a");
         assert_eq!(
-            u32::from_le_bytes(output.bytecode[5..9].try_into().expect("v9 capacity bytes")),
+            u32::from_le_bytes(
+                output.bytecode[5..9]
+                    .try_into()
+                    .expect("v10 capacity bytes")
+            ),
             64
         );
         let run = run_bytecode(&output.bytecode).expect("arena-buffer artifact should run");
@@ -12222,10 +12977,10 @@ mod tests {
     fn compiles_verifies_and_runs_the_bounded_m5_comptime_bindings() {
         let source = "world comptime_math\n\nweave main [] -> Whole:\n  comptime bind table_width <- product 16 8\n  comptime bind header_size <- sum 12 4\n  comptime bind word_count <- quotient 144 12\n  comptime bind remainder_value <- remainder 17 5\n  comptime bind signed_delta <- difference 5 13\n  bind first <- sum table_width header_size\n  bind second <- sum word_count remainder_value\n  bind third <- sum first second\n  yield sum third signed_delta\n";
         let output = compile_to_bytecode(source).expect("M5 comptime source should compile");
-        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V9);
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V10);
         assert!(
             output.bytecode.contains(&OP_COMPTIME_WHOLE),
-            "M5 artifacts must retain compile-time provenance in AETH v8/v9"
+            "M5 artifacts must retain compile-time provenance in AETH v8 through v10"
         );
         assert_eq!(format_program(&output.program), source);
         assert!(canonical_ast(&output.program).contains("ComptimeBind(table_width"));
@@ -12293,7 +13048,7 @@ mod tests {
         let error = verify_bytecode(&artifact)
             .expect_err("AETH v7 must not reinterpret AETH v8 comptime provenance");
         assert!(
-            error.message.contains("valid only in AETH v8 or v9")
+            error.message.contains("valid only in AETH v8 through v10")
                 || error.message.contains("valid only in AETH v8")
         );
     }
@@ -12302,7 +13057,7 @@ mod tests {
     fn compiles_verifies_and_runs_the_bounded_m4_error_effect() {
         let source = "world effects\n\nweave leaf [value: Whole] -> Whole raises Whole:\n  raise value\n\nweave forwarded [value: Whole] -> Whole raises Whole:\n  forward call leaf value\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call forwarded 17 into success otherwise error into code\n";
         let output = compile_to_bytecode(source).expect("M4 handled source should compile");
-        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V9);
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V10);
         assert_eq!(format_program(&output.program), source);
         verify_bytecode(&output.bytecode).expect("M4 artifact should verify");
         assert_eq!(
@@ -12414,7 +13169,7 @@ mod tests {
         let columns_out =
             compile_to_bytecode(columns).expect("columns layout-table source should compile");
         let rows_out = compile_to_bytecode(&rows).expect("rows layout-table source should compile");
-        assert_eq!(columns_out.bytecode[4], ARTIFACT_VERSION_V9);
+        assert_eq!(columns_out.bytecode[4], ARTIFACT_VERSION_V10);
         assert!(columns_out.bytecode.contains(&OP_TABLE));
         assert!(columns_out.bytecode.contains(&OP_TABLE_ALLOCATE));
         assert!(columns_out.bytecode.contains(&OP_TABLE_STORE));
@@ -12489,6 +13244,65 @@ mod tests {
                 || error.message.contains("unknown")
                 || error.message.contains("function count")
                 || error.message.contains("shape")
+        );
+    }
+
+    #[test]
+    fn compiles_verifies_and_runs_structured_nurseries() {
+        let total = include_str!("../../../examples/nursery-total.ae");
+        let output = compile_to_bytecode(total).expect("total nursery should compile");
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V10);
+        assert!(output.bytecode.contains(&OP_NURSERY_BEGIN));
+        assert!(output.bytecode.contains(&OP_NURSERY_SPAWN));
+        assert!(output.bytecode.contains(&OP_NURSERY_END));
+        verify_bytecode(&output.bytecode).expect("total nursery should verify");
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("total nursery should run")
+                .exit_code,
+            7
+        );
+
+        let cancel = include_str!("../../../examples/nursery-cancel.ae");
+        let cancel_out = compile_to_bytecode(cancel).expect("cancel nursery should compile");
+        verify_bytecode(&cancel_out.bytecode).expect("cancel nursery should verify");
+        assert_eq!(
+            run_bytecode(&cancel_out.bytecode)
+                .expect("cancel nursery should run")
+                .exit_code,
+            9
+        );
+    }
+
+    #[test]
+    fn rejects_illegal_nursery_shapes_and_boundaries() {
+        let empty = "world invalid\n\nweave main [] -> Whole:\n  together:\n  yield 0\n";
+        let error = compile_source(empty).expect_err("empty together must fail");
+        assert_eq!(error.diagnostic().code, "AE-TASK-001");
+
+        let resources = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable a <- 0\n  together:\n    spawn call main into a\n  yield a\n";
+        let error = compile_source(resources).expect_err("nursery+resource must fail");
+        assert!(
+            error.diagnostic().code == "AE-TASK-003"
+                || error.diagnostic().code == "AE-EFFECT-003"
+                || error.diagnostic().code == "AE-TASK-002"
+        );
+    }
+
+    #[test]
+    fn verifier_rejects_nursery_opcodes_outside_aeth_v10() {
+        let source = include_str!("../../../examples/nursery-total.ae");
+        let mut artifact = compile_to_bytecode(source)
+            .expect("nursery fixture should compile")
+            .bytecode;
+        artifact[4] = ARTIFACT_VERSION_V9;
+        let error = verify_bytecode(&artifact)
+            .expect_err("AETH v9 must not accept AETH v10 nursery opcodes");
+        assert!(
+            error.message.contains("valid only in AETH v10")
+                || error.message.contains("unknown")
+                || error.message.contains("outside")
+                || error.message.contains("trailing")
         );
     }
 

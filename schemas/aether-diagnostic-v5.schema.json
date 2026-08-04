@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.local/schemas/aether-diagnostic-v5.schema.json",
+  "title": "Aether diagnostic envelope v5",
+  "description": "A stable, local machine-readable Aether source or structural-edit diagnostic, including M4 effects, M5 comptime, M6 layout, and M7 nursery categories.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "code", "span", "message"],
+  "properties": {
+    "schema": { "const": "aether.diagnostic/v5" },
+    "code": {
+      "enum": [
+        "AE-SOURCE-001", "AE-SYNTAX-001", "AE-NAME-001", "AE-TYPE-001", "AE-OWNERSHIP-001", "AE-RESOURCE-001", "AE-SEMANTIC-001",
+        "AE-EFFECT-001", "AE-EFFECT-002", "AE-EFFECT-003", "AE-EFFECT-004",
+        "AE-COMPTIME-001", "AE-COMPTIME-002", "AE-COMPTIME-003",
+        "AE-LAYOUT-001", "AE-LAYOUT-002", "AE-LAYOUT-003", "AE-TASK-001", "AE-TASK-002", "AE-TASK-003",
+        "AE-EDIT-001", "AE-EDIT-002", "AE-EDIT-003", "AE-EDIT-004", "AE-EDIT-005", "AE-EDIT-006"
+      ]
+    },
+    "span": {
+      "type": "object", "additionalProperties": false, "required": ["line", "column"],
+      "properties": { "line": { "type": "integer", "minimum": 1 }, "column": { "type": "integer", "minimum": 1 } }
+    },
+    "message": { "type": "string", "minLength": 1 }
+  }
+}

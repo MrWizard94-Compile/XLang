@@ -1,6 +1,6 @@
 # Aether Language Development Roadmap
 
-**Status:** M6 implemented; controlled product-forward plan
+**Status:** M7 implemented; controlled product-forward plan
 **Date:** 2026-08-03
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
@@ -8,17 +8,15 @@ constitution gate.
 
 ## Current baseline
 
-Stage 7 and M3–M6 are complete: Aether 0.9 has a seed-hosted product compile
-path, deterministic verified AETH v9 output while retaining verified AETH
-v4/v5/v6/v7/v8 compatibility, bounded value/byte behavior, immutable nominal
-records, one explicit bounded arena with Whole/Truth buffers, dual-layout
-Whole tables, one bounded `Error[Whole]` effect, and explicit literal
-compile-time `Whole` evaluation. Authoring provides `aether.ast/v4`,
-`aether.edit/v4`, and `aether.diagnostic/v4`. Its exact executable scope is
-[MANIFEST.md](../MANIFEST.md), [AETHER_0.9.md](AETHER_0.9.md), and
-[AETHER_AUTHORING_PROTOCOL_v4.md](AETHER_AUTHORING_PROTOCOL_v4.md). The
+Stage 7 and M3–M7 are complete: Aether 0.10 has a seed-hosted product compile
+path, deterministic verified AETH v10 output while retaining verified AETH v4–v9 compatibility, bounded value/byte behavior, immutable nominal
+records, one explicit bounded arena with Whole/Truth buffers, dual-layout Whole tables, structured nurseries, one bounded `Error[Whole]` effect, and explicit literal
+compile-time `Whole` evaluation. Authoring provides `aether.ast/v5`,
+`aether.edit/v5`, and `aether.diagnostic/v5`. Its exact executable scope is
+[MANIFEST.md](../MANIFEST.md), [AETHER_0.10.md](AETHER_0.10.md), and
+[AETHER_AUTHORING_PROTOCOL_v5.md](AETHER_AUTHORING_PROTOCOL_v5.md). The
 long-range direction is [NORTH_STAR.md](NORTH_STAR.md); it must not be mistaken
-for current behavior. M6 admits author-selected `rows`/`columns` layout only;
+for current behavior. M7 admits structured nurseries; M6 admits author-selected `rows`/`columns` layout only;
 it does not claim general generics, automatic layout rewriting, or seed
 invalid-source diagnostic parity.
 
@@ -46,7 +44,7 @@ invalid-source diagnostic parity.
 | M4 | Typed errors and effects | M1 | One bounded handled/forwarded/rejected `Error[Whole]` capability. | Source, v7 verifier/VM, seed, authoring, and byte identity agree; no hidden exception route. | **Implemented in Aether 0.7; preserved by Aether 0.8/AETH v8** |
 | M5 | Deterministic compile-time execution | M1 and M4 design decision | A pure, resource-bounded compile-time subset using ordinary Aether forms. | Determinism, fixed limits, no host I/O, diagnostics, v8 provenance, v3 stage contract, and seed byte identity agree; no macro/text expansion bypass exists. | **Implemented in Aether 0.8/AETH v8** |
 | M6 | Generic shapes and data-layout experiment | M1 and M2 | Explicit-layout collection plus a constrained shape-analysis prototype. | Layout/ABI rules, semantic-equivalence tests, and reproducible performance methodology demonstrate a scoped benefit. | **Implemented in Aether 0.9/AETH v9: dual-layout Whole tables** |
-| M7 | Structured concurrency | M2 and M4 | Lexical task-group model with join, failure, cancellation, and effect-mediated blocking. | No orphan task/property tests, deterministic cleanup, capability rules, diagnostics, and seed parity pass. | Research-gated |
+| M7 | Structured concurrency | M2 and M4 | Lexical task-group model with join, failure, cancellation, and effect-mediated blocking. | No orphan task/property tests, deterministic cleanup, capability rules, diagnostics, and seed parity pass. | **Implemented in Aether 0.10/AETH v10: structured nurseries** |
 | M8 | Foreign/host interface pilot | M1 and M2 | Narrow, typed, ownership-aware ABI fixture; C-facing design only if the threat model supports it. | Invalid-input, ownership transfer, capability denial, ABI compatibility, and local reproducibility tests pass. | Research-gated |
 | M9 | Integrated project/tooling evolution | M3 plus stable package/ABI decisions | Reproducible project metadata, dependency identity, formatter/LSP integration, and release workflow proposal. | Security, offline reproducibility, upgrade/rollback, and package verification criteria are approved and tested. | Deferred |
 

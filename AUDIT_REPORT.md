@@ -1,8 +1,8 @@
 # Aether Migration Audit
 
-Date: 2026-08-03 (Aether 0.9: Stage 7 bounded resources, M3–M6 authoring,
-typed-error baseline, deterministic literal comptime, and dual-layout tables;
-active Studio retirement)
+Date: 2026-08-03 (Aether 0.10: Stage 7 bounded resources, M3–M7 authoring,
+typed-error baseline, deterministic literal comptime, dual-layout tables, and
+structured nurseries; active Studio retirement)
 
 ## Legacy Intake
 
@@ -14,11 +14,11 @@ active Studio retirement)
 
 ## Production Boundary
 
-The production compiler accepts Aether 0.9.0 source. Default CLI compilation
+The production compiler accepts Aether 0.10.0 source. Default CLI compilation
 uses the Aether-written seed compiler; the Rust bootstrap remains the canonical
 AST and invalid-source diagnostic authority and is selected explicitly with
-`--bootstrap`. Both paths produce deterministic AETH v9, which is verified
-before the VM runs it. Verified AETH v4/v5/v6/v7/v8 remain compatibility inputs.
+`--bootstrap`. Both paths produce deterministic AETH v10, which is verified
+before the VM runs it. Verified AETH v4 through v9 remain compatibility inputs.
 The command line is the sole active product interface.
 
 Stage 7 completes canonical Aether 0.6 source-emission parity in the
@@ -34,8 +34,8 @@ Legacy C-shaped, Rust-shaped, V1, V2, and pre-v4 AETH input remains intentionall
 rejected. The repository does not transpile Aether to C, Rust, JavaScript, LLVM,
 or another target language.
 
-M3–M6 add local `aether.ast/v4`, `aether.edit/v4`, and
-`aether.diagnostic/v4` tooling contracts. They are not another Aether grammar
+M3–M7 add local `aether.ast/v5`, `aether.edit/v5`, and
+`aether.diagnostic/v5` tooling contracts. They are not another Aether grammar
 or artifact format: every accepted edit is formatter-canonicalized and
 bootstrap-validated, and the CLI seed-compiles it before source is written to
 the caller-supplied output path. The protocol accepts only typed top-level
