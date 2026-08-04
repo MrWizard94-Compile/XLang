@@ -934,11 +934,10 @@ Accepted by:
 
 ## 26. Immediate next actions (this week / next sprint)
 
-1. Mainstream maturity roadmap is committed as strategic Level-4 guidance.  
-2. **M11 design package is committed** (DESIGN-M11, ADR-015 Accepted, matrix).  
-3. **Next: implement M11a** — parser, bootstrap multi-source compile, `project build`,
-   tests, example `project-modules` — **without** claiming seed multi-module.  
-4. Keep TP/gate green on 0.13; do not regress M10.  
+1. Mainstream maturity roadmap committed.  
+2. **M11 modules complete** (0.15: elaborate + seed dual-compare).  
+3. **M12 fine-grained edits designed** (ADR-016); **next: implement v7 apply-edit**.  
+4. Keep gates green; do not regress M10/M11.  
 5. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table (can wait).
 
 ---

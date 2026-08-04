@@ -75,6 +75,7 @@ invalid-source diagnostic parity.
 | M9 | Integrated project/tooling evolution | M3 plus stable package/ABI decisions | Reproducible project metadata, dependency identity, formatter/LSP integration, and release workflow proposal. | Security, offline reproducibility, upgrade/rollback, and package verification criteria are approved and tested. | **Implemented pilot in 0.12: offline project verify + format; LSP/registry deferred** |
 | M10 | Multi-unit offline projects | M9 | Nested multi-unit `aether.project/v1`, locks, independent per-unit seed compile, `project format`; no language modules. | Path/lock negatives, multi-unit example, independence documented, matrix green, no registry/import. | **Implemented in package 0.13 (language surface still 0.11)** |
 | M11 | Language modules | M10 | `import unit` / `export weave` / qualified calls; lib without main; project build; phased seed proof. | Matrix green; bootstrap multi-module (M11a); seed dual-compare before seed authority (M11b). | **Implemented (0.15): M11a+M11b** |
+| M12 | Fine-grained structural edits | M3, M11 | `aether.edit/v7` statement-level replace/insert/delete under weave bodies; seed-before-write. | Matrix green; no expression-atom paths; v7 protocol. | **Designed (ADR-016); implementation pending** |
 
 ## Milestone detail
 
@@ -200,13 +201,19 @@ compilation units** (no import/module system). See
 [AETHER_0.13.md](AETHER_0.13.md) and
 [DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md](DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md).
 
-### M11 — language modules (designed)
+### M11 — language modules (implemented)
 
 M11 is specified by [DESIGN-M11-LANGUAGE-MODULES.md](DESIGN-M11-LANGUAGE-MODULES.md),
 [ADR-015](ADR-015-m11-language-modules.md), and
-[M11 validation matrix](M11-VALIDATION-MATRIX.md). **M11a** ships bootstrap
-multi-source `project build`; **M11b** adds seed dual-compare before seed-hosted
-multi-module authority. Implementation is the next engineering increment.
+[M11 validation matrix](M11-VALIDATION-MATRIX.md). Package **0.15** elaborates
+import graphs then seed-compiles with dual-compare.
+
+### M12 — fine-grained structural edits (designed)
+
+M12 is specified by [DESIGN-M12-FINE-GRAINED-EDITS.md](DESIGN-M12-FINE-GRAINED-EDITS.md),
+[ADR-016](ADR-016-m12-fine-grained-edits.md), and
+[M12 validation matrix](M12-VALIDATION-MATRIX.md). Statement-level edit ops under
+weave bodies (`aether.edit/v7`); implementation is the next increment.
 
 ### Remaining research / completion program
 
@@ -216,7 +223,7 @@ TP-1, TP-2, and M10 tooling are delivered. Post-M10 growth is governed by
 Mainstream multi-epoch plan:
 [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next implementation:** **M11a** per ADR-015 (after this design package).
+**Default next implementation:** **M12** fine-grained edits per ADR-016.
 
 Ordered backlog: modules → fine-grained edits → bounded LSP → comptime →
 resource↔effect → host I/O (threat rewrite first) → C/FFI → multi-package.
