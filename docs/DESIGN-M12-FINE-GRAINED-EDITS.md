@@ -1,6 +1,6 @@
 # M12 Design: fine-grained structural edits (T-EDIT)
 
-**Status:** Accepted design for implementable ADR-016 (code not started)  
+**Status:** Implemented (package 0.16.0)  
 **Date:** 2026-08-04  
 **Decision record:** [ADR-016](ADR-016-m12-fine-grained-edits.md)  
 **Validation record:** [M12 validation matrix](M12-VALIDATION-MATRIX.md)  

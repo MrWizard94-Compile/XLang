@@ -1,6 +1,7 @@
 # M12 fine-grained structural edits validation matrix
 
-**Status:** Design gate — **implementation not yet green**  
+**Status:** Implemented (0.16.0) —
+[DELIVERY_REPORT-2026-08-04-M12-FINE-GRAINED-EDITS.md](DELIVERY_REPORT-2026-08-04-M12-FINE-GRAINED-EDITS.md)  
 **Date:** 2026-08-04  
 **Design:** [DESIGN-M12-FINE-GRAINED-EDITS.md](DESIGN-M12-FINE-GRAINED-EDITS.md)  
 **ADR:** [ADR-016](ADR-016-m12-fine-grained-edits.md)
@@ -44,17 +45,17 @@
 
 ## Implementation checklist
 
-- [ ] Schemas v7  
-- [ ] Protocol doc v7  
-- [ ] apply-edit statement ops  
-- [ ] Core tests P*/N*  
-- [ ] CLI seed-before-write regression  
-- [ ] DOC-SYNC package 0.16  
-- [ ] Delivery report  
+- [x] Schemas v7  
+- [x] Protocol doc v7  
+- [x] apply-edit statement ops  
+- [x] Core tests P*/N*  
+- [x] CLI seed-before-write regression  
+- [x] DOC-SYNC package 0.16  
+- [x] Delivery report  
 
 ## Sign-off
 
 | Gate | Status |
 | --- | --- |
-| Design + ADR-016 | **Ready / Accepted** |
-| Implementation | Pending |
+| Design + ADR-016 | **Accepted** |
+| Implementation | **Done** (0.16.0) |

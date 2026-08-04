@@ -75,7 +75,7 @@ invalid-source diagnostic parity.
 | M9 | Integrated project/tooling evolution | M3 plus stable package/ABI decisions | Reproducible project metadata, dependency identity, formatter/LSP integration, and release workflow proposal. | Security, offline reproducibility, upgrade/rollback, and package verification criteria are approved and tested. | **Implemented pilot in 0.12: offline project verify + format; LSP/registry deferred** |
 | M10 | Multi-unit offline projects | M9 | Nested multi-unit `aether.project/v1`, locks, independent per-unit seed compile, `project format`; no language modules. | Path/lock negatives, multi-unit example, independence documented, matrix green, no registry/import. | **Implemented in package 0.13 (language surface still 0.11)** |
 | M11 | Language modules | M10 | `import unit` / `export weave` / qualified calls; lib without main; project build; phased seed proof. | Matrix green; bootstrap multi-module (M11a); seed dual-compare before seed authority (M11b). | **Implemented (0.15): M11a+M11b** |
-| M12 | Fine-grained structural edits | M3, M11 | `aether.edit/v7` statement-level replace/insert/delete under weave bodies; seed-before-write. | Matrix green; no expression-atom paths; v7 protocol. | **Designed (ADR-016); implementation pending** |
+| M12 | Fine-grained structural edits | M3, M11 | `aether.edit/v7` statement-level replace/insert/delete under weave bodies; seed-before-write. | Matrix green; no expression-atom paths; v7 protocol. | **Implemented in package 0.16** |
 
 ## Milestone detail
 

@@ -1,6 +1,6 @@
 # ADR-016: fine-grained structural edits (statement-level)
 
-**Status:** Accepted (implementable) — **implementation not started**  
+**Status:** Accepted and implemented (package 0.16.0)  
 **Date:** 2026-08-04  
 **Decision makers:** AGENTS Constitution; ADR-014 default T-EDIT after M11  
 **Related Rule IDs:** `DOC-ADR-001`, `CONST-DEP-001`, `SEC-INPUT-001`, `TEST-BEHAVIOR-001`, `DOC-SYNC-001`  

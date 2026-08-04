@@ -2,19 +2,20 @@
 
 ## Contract
 
-Aether **0.15.0** (base language **0.11** plus **M11 modules**, AETH **v11**)
-accepts Aether source, returns a canonical AST from the Rust bootstrap for
-tooling, and **emits AETH v11 bytecode primarily through the Aether-written seed
-compiler** (forge ABI). Single-file `compile` is seed-hosted. Multi-module
-`project build` **elaborates** the import DAG on the host, dual-compares
-bootstrap≡seed on that elaboration, and writes the **seed** artifact (M11b).
+Aether **0.16.0** (base language **0.11** plus **M11 modules** and **M12
+statement-level structural edits**, AETH **v11**) accepts Aether source, returns
+a canonical AST from the Rust bootstrap for tooling, and **emits AETH v11
+bytecode primarily through the Aether-written seed compiler** (forge ABI).
+Single-file `compile` is seed-hosted. Multi-module `project build` elaborates
+the import DAG, dual-compares bootstrap≡seed, and writes seed artifacts.
+Authoring uses `aether.ast/v7` and `aether.edit/v7` (including statement paths).
 The CLI also provides offline project verify/format. Verified AETH v4–v10 remain
 compatibility inputs. Source is never translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.15 product contract (0.11 core language,
-M9/M10 projects, M11 modules). It intentionally
+This manifest is the executable Aether 0.16 product contract (0.11 core language,
+M9–M12 tooling/authoring). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -113,11 +114,12 @@ their original bytes and meanings; earlier and unknown versions are rejected.
 
 ## Structural authoring boundary
 
-`aether.ast/v6` describes successfully parsed Aether 0.11 source after
-formatter canonicalization. `aether.edit/v6` accepts only a matching complete
-canonical `baseSource` and bounded typed top-level declaration
-`replace`/`insertAfter`/`delete` operations (records, shapes, weaves, host
-weaves as contracted). The bootstrap revalidates the formatter-owned result; the
+`aether.ast/v7` describes successfully parsed Aether 0.11+module source after
+formatter canonicalization. `aether.edit/v7` accepts a matching complete
+canonical `baseSource` and bounded typed operations: top-level declaration
+`replace`/`insertAfter`/`delete`, plus statement-level
+`replaceStatement`/`insertStatementAt`/`insertStatementAfter`/`deleteStatement`
+on weave body paths. The bootstrap revalidates the formatter-owned result; the
 CLI seed-compiles it before writing source to the requested output path. It
 cannot execute code, write a file by itself, contact an AI/model service, change
 artifact bytes, or grant a guest capability.

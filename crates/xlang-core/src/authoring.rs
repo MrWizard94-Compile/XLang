@@ -21,11 +21,11 @@ use crate::{
 };
 
 /// The JSON schema identifier emitted for a validated semantic document.
-pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v6";
+pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v7";
 /// The JSON protocol identifier accepted for a structural edit request.
-pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v6";
+pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v7";
 /// The JSON schema identifier used for machine-readable diagnostic envelopes.
-pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v6";
+pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v7";
 
 const MAX_STRUCTURAL_EDIT_BYTES: usize = 4_000_000;
 const MAX_STRUCTURAL_EDIT_OPERATIONS: usize = 32;
@@ -76,14 +76,14 @@ impl From<CompilerError> for StructuralEditError {
     }
 }
 
-/// Return deterministic, pretty-printed `aether.ast/v6` JSON for valid source.
+/// Return deterministic, pretty-printed `aether.ast/v7` JSON for valid source.
 /// Source spans always refer to the returned document's canonical LF source.
 pub fn structural_document_json(source: &str) -> Result<String, CompilerError> {
     let (program, canonical_source) = canonicalize_source(source)?;
     serialize_document(&canonical_source, &program).map_err(serialization_error)
 }
 
-/// Serialize a stable `aether.diagnostic/v6` envelope for any compiler or
+/// Serialize a stable `aether.diagnostic/v7` envelope for any compiler or
 /// structural-authoring diagnostic.
 #[must_use]
 pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
@@ -96,7 +96,7 @@ pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
     .to_string()
 }
 
-/// Apply one bounded `aether.edit/v6` document to matching source.
+/// Apply one bounded `aether.edit/v7` document to matching source.
 ///
 /// The function does not write files, invoke a model, execute code, or compile
 /// an artifact. It is intentionally pure apart from memory allocation. The CLI
@@ -759,8 +759,14 @@ struct EditRequest {
 #[derive(Debug)]
 struct EditOperation {
     kind: EditOperationKind,
-    target: EditTarget,
+    target: Option<EditTarget>,
+    /// Statement path for fine-grained ops (`weave:main/body/0`, …).
+    path: Option<StatementPath>,
+    /// List path without trailing index (`weave:main/body`, nested lists).
+    list: Option<BodyListRef>,
+    index: Option<usize>,
     declaration: Option<Value>,
+    statement: Option<Value>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -768,6 +774,10 @@ enum EditOperationKind {
     Replace,
     InsertAfter,
     Delete,
+    ReplaceStatement,
+    InsertStatementAfter,
+    InsertStatementAt,
+    DeleteStatement,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -775,6 +785,21 @@ enum EditTarget {
     World,
     Record(String),
     Weave(String),
+}
+
+/// A weave body list that may receive statement edits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BodyListRef {
+    WeaveBody { weave: String },
+    ChooseBright { weave: String, statement: usize },
+    ChooseDim { weave: String, statement: usize },
+    WhileBody { weave: String, statement: usize },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StatementPath {
+    list: BodyListRef,
+    index: usize,
 }
 
 #[derive(Debug)]
@@ -868,33 +893,206 @@ fn parse_operation(value: &Value, index: usize) -> Result<EditOperation, Structu
     let context = format!("operation {index}");
     let object = expect_object(value, &context)?;
     let operation = required_string(object, "op", &context)?;
-    let (kind, requires_declaration) = match operation.as_str() {
-        "replace" => (EditOperationKind::Replace, true),
-        "insertAfter" => (EditOperationKind::InsertAfter, true),
-        "delete" => (EditOperationKind::Delete, false),
-        _ => {
+    match operation.as_str() {
+        "replace" => {
+            ensure_only_fields(object, &["op", "target", "declaration"], &context)?;
+            Ok(EditOperation {
+                kind: EditOperationKind::Replace,
+                target: Some(parse_target(&required_string(object, "target", &context)?)?),
+                path: None,
+                list: None,
+                index: None,
+                declaration: Some(required_value(object, "declaration", &context)?.clone()),
+                statement: None,
+            })
+        }
+        "insertAfter" => {
+            ensure_only_fields(object, &["op", "target", "declaration"], &context)?;
+            Ok(EditOperation {
+                kind: EditOperationKind::InsertAfter,
+                target: Some(parse_target(&required_string(object, "target", &context)?)?),
+                path: None,
+                list: None,
+                index: None,
+                declaration: Some(required_value(object, "declaration", &context)?.clone()),
+                statement: None,
+            })
+        }
+        "delete" => {
+            ensure_only_fields(object, &["op", "target"], &context)?;
+            Ok(EditOperation {
+                kind: EditOperationKind::Delete,
+                target: Some(parse_target(&required_string(object, "target", &context)?)?),
+                path: None,
+                list: None,
+                index: None,
+                declaration: None,
+                statement: None,
+            })
+        }
+        "replaceStatement" => {
+            ensure_only_fields(object, &["op", "path", "statement"], &context)?;
+            Ok(EditOperation {
+                kind: EditOperationKind::ReplaceStatement,
+                target: None,
+                path: Some(parse_statement_path(&required_string(
+                    object, "path", &context,
+                )?)?),
+                list: None,
+                index: None,
+                declaration: None,
+                statement: Some(required_value(object, "statement", &context)?.clone()),
+            })
+        }
+        "insertStatementAfter" => {
+            ensure_only_fields(object, &["op", "path", "statement"], &context)?;
+            Ok(EditOperation {
+                kind: EditOperationKind::InsertStatementAfter,
+                target: None,
+                path: Some(parse_statement_path(&required_string(
+                    object, "path", &context,
+                )?)?),
+                list: None,
+                index: None,
+                declaration: None,
+                statement: Some(required_value(object, "statement", &context)?.clone()),
+            })
+        }
+        "insertStatementAt" => {
+            ensure_only_fields(object, &["op", "list", "index", "statement"], &context)?;
+            let index_value = required_value(object, "index", &context)?;
+            let index = index_value.as_u64().ok_or_else(|| {
+                protocol_error(
+                    "AE-EDIT-011",
+                    format!("{context} index must be a non-negative integer"),
+                )
+            })?;
+            let index = usize::try_from(index).map_err(|_| {
+                protocol_error("AE-EDIT-011", format!("{context} index is out of range"))
+            })?;
+            Ok(EditOperation {
+                kind: EditOperationKind::InsertStatementAt,
+                target: None,
+                path: None,
+                list: Some(parse_body_list(&required_string(
+                    object, "list", &context,
+                )?)?),
+                index: Some(index),
+                declaration: None,
+                statement: Some(required_value(object, "statement", &context)?.clone()),
+            })
+        }
+        "deleteStatement" => {
+            ensure_only_fields(object, &["op", "path"], &context)?;
+            Ok(EditOperation {
+                kind: EditOperationKind::DeleteStatement,
+                target: None,
+                path: Some(parse_statement_path(&required_string(
+                    object, "path", &context,
+                )?)?),
+                list: None,
+                index: None,
+                declaration: None,
+                statement: None,
+            })
+        }
+        _ => Err(protocol_error(
+            "AE-EDIT-005",
+            format!("{context} has unsupported operation {operation:?}"),
+        )),
+    }
+}
+
+fn parse_body_list(value: &str) -> Result<BodyListRef, StructuralEditError> {
+    let parts: Vec<&str> = value.split('/').collect();
+    // weave:name/body
+    // weave:name/body/N/whenBright|whenDim|body
+    if parts.len() == 2 {
+        let weave = parse_weave_path_head(parts[0])?;
+        if parts[1] != "body" {
             return Err(protocol_error(
-                "AE-EDIT-005",
-                format!("{context} has unsupported operation {operation:?}"),
+                "AE-EDIT-010",
+                format!("{value:?} is not a body list path"),
             ));
         }
+        return Ok(BodyListRef::WeaveBody { weave });
+    }
+    if parts.len() == 4 {
+        let weave = parse_weave_path_head(parts[0])?;
+        if parts[1] != "body" {
+            return Err(protocol_error(
+                "AE-EDIT-010",
+                format!("{value:?} is not a nested body list path"),
+            ));
+        }
+        let statement = parse_path_index(parts[2])?;
+        return match parts[3] {
+            "whenBright" => Ok(BodyListRef::ChooseBright { weave, statement }),
+            "whenDim" => Ok(BodyListRef::ChooseDim { weave, statement }),
+            "body" => Ok(BodyListRef::WhileBody { weave, statement }),
+            _ => Err(protocol_error(
+                "AE-EDIT-010",
+                format!("{value:?} has unsupported nested list segment"),
+            )),
+        };
+    }
+    Err(protocol_error(
+        "AE-EDIT-010",
+        format!("{value:?} is not an allowed statement list path"),
+    ))
+}
+
+fn parse_statement_path(value: &str) -> Result<StatementPath, StructuralEditError> {
+    let parts: Vec<&str> = value.split('/').collect();
+    // weave:name/body/N
+    // weave:name/body/N/whenBright/M
+    if parts.len() == 3 {
+        let weave = parse_weave_path_head(parts[0])?;
+        if parts[1] != "body" {
+            return Err(protocol_error(
+                "AE-EDIT-010",
+                format!("{value:?} is not a statement path"),
+            ));
+        }
+        let index = parse_path_index(parts[2])?;
+        return Ok(StatementPath {
+            list: BodyListRef::WeaveBody { weave },
+            index,
+        });
+    }
+    if parts.len() == 5 {
+        let list = parse_body_list(&parts[..4].join("/"))?;
+        let index = parse_path_index(parts[4])?;
+        return Ok(StatementPath { list, index });
+    }
+    Err(protocol_error(
+        "AE-EDIT-010",
+        format!("{value:?} is not an allowed statement path"),
+    ))
+}
+
+fn parse_weave_path_head(head: &str) -> Result<String, StructuralEditError> {
+    let Some(name) = head.strip_prefix("weave:") else {
+        return Err(protocol_error(
+            "AE-EDIT-010",
+            format!("{head:?} must start with weave:"),
+        ));
     };
-    let allowed = if requires_declaration {
-        &["op", "target", "declaration"][..]
-    } else {
-        &["op", "target"][..]
-    };
-    ensure_only_fields(object, allowed, &context)?;
-    let target = parse_target(&required_string(object, "target", &context)?)?;
-    let declaration = if requires_declaration {
-        Some(required_value(object, "declaration", &context)?.clone())
-    } else {
-        None
-    };
-    Ok(EditOperation {
-        kind,
-        target,
-        declaration,
+    parse_target_name(name)
+}
+
+fn parse_path_index(text: &str) -> Result<usize, StructuralEditError> {
+    if text.len() > 1 && text.starts_with('0') {
+        return Err(protocol_error(
+            "AE-EDIT-010",
+            format!("statement index {text:?} must not have leading zeros"),
+        ));
+    }
+    text.parse::<usize>().map_err(|_| {
+        protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {text:?} is not a valid non-negative integer"),
+        )
     })
 }
 
@@ -941,7 +1139,22 @@ fn apply_operation(
     match operation.kind {
         EditOperationKind::Replace => apply_replace(program, operation, node_budget),
         EditOperationKind::InsertAfter => apply_insert_after(program, operation, node_budget),
-        EditOperationKind::Delete => apply_delete(program, &operation.target),
+        EditOperationKind::Delete => {
+            let target = operation.target.as_ref().ok_or_else(|| {
+                protocol_error("AE-EDIT-001", "delete requires a top-level target")
+            })?;
+            apply_delete(program, target)
+        }
+        EditOperationKind::ReplaceStatement => {
+            apply_replace_statement(program, operation, node_budget)
+        }
+        EditOperationKind::InsertStatementAfter => {
+            apply_insert_statement_after(program, operation, node_budget)
+        }
+        EditOperationKind::InsertStatementAt => {
+            apply_insert_statement_at(program, operation, node_budget)
+        }
+        EditOperationKind::DeleteStatement => apply_delete_statement(program, operation),
     }
 }
 
@@ -950,8 +1163,12 @@ fn apply_replace(
     operation: &EditOperation,
     node_budget: &mut NodeBudget,
 ) -> Result<(), StructuralEditError> {
+    let target = operation
+        .target
+        .as_ref()
+        .ok_or_else(|| protocol_error("AE-EDIT-001", "replace requires a top-level target"))?;
     let declaration = parse_operation_declaration(program, operation, node_budget)?;
-    match (&operation.target, declaration) {
+    match (target, declaration) {
         (EditTarget::Record(target_name), EditableDeclaration::Record(record)) => {
             if record.name != *target_name {
                 return Err(protocol_error(
@@ -978,7 +1195,7 @@ fn apply_replace(
         }
         (EditTarget::World, _) => Err(protocol_error(
             "AE-EDIT-004",
-            "the world node cannot be replaced by structural edit v6",
+            "the world node cannot be replaced by structural edit v7",
         )),
         (EditTarget::Record(_), EditableDeclaration::Weave(_))
         | (EditTarget::Weave(_), EditableDeclaration::Record(_)) => Err(protocol_error(
@@ -993,8 +1210,12 @@ fn apply_insert_after(
     operation: &EditOperation,
     node_budget: &mut NodeBudget,
 ) -> Result<(), StructuralEditError> {
+    let target = operation
+        .target
+        .as_ref()
+        .ok_or_else(|| protocol_error("AE-EDIT-001", "insertAfter requires a top-level target"))?;
     let declaration = parse_operation_declaration(program, operation, node_budget)?;
-    match (&operation.target, declaration) {
+    match (target, declaration) {
         (EditTarget::World, EditableDeclaration::Record(record)) => {
             let previous_records = program.records.clone();
             program.records.insert(0, record);
@@ -1041,9 +1262,166 @@ fn apply_delete(program: &mut Program, target: &EditTarget) -> Result<(), Struct
         }
         EditTarget::World => Err(protocol_error(
             "AE-EDIT-004",
-            "the world node cannot be deleted by structural edit v6",
+            "the world node cannot be deleted by structural edit v7",
         )),
     }
+}
+
+fn parse_operation_statement(
+    program: &Program,
+    operation: &EditOperation,
+    node_budget: &mut NodeBudget,
+) -> Result<Statement, StructuralEditError> {
+    let value = operation.statement.as_ref().ok_or_else(|| {
+        protocol_error(
+            "AE-EDIT-012",
+            "statement operation requires a statement payload",
+        )
+    })?;
+    let kind = value
+        .as_object()
+        .and_then(|object| object.get("kind"))
+        .and_then(Value::as_str);
+    if matches!(kind, Some("Together")) {
+        // Allowed as whole-statement replace of a Together node, but not nested spawn edit.
+    }
+    if kind.is_none() {
+        return Err(protocol_error(
+            "AE-EDIT-012",
+            "statement payload must be an object with a kind field",
+        ));
+    }
+    parse_statement(value, &program.records, node_budget, 0)
+}
+
+fn body_list_mut<'a>(
+    program: &'a mut Program,
+    list: &BodyListRef,
+) -> Result<&'a mut Vec<Statement>, StructuralEditError> {
+    match list {
+        BodyListRef::WeaveBody { weave } => {
+            let index = weave_index(program, weave)?;
+            Ok(&mut program.weaves[index].body)
+        }
+        BodyListRef::ChooseBright { weave, statement }
+        | BodyListRef::ChooseDim { weave, statement }
+        | BodyListRef::WhileBody { weave, statement } => {
+            let weave_index = weave_index(program, weave)?;
+            let body = &mut program.weaves[weave_index].body;
+            let stmt = body.get_mut(*statement).ok_or_else(|| {
+                protocol_error(
+                    "AE-EDIT-011",
+                    format!("statement index {statement} is out of range for weave {weave}"),
+                )
+            })?;
+            match (list, stmt) {
+                (BodyListRef::ChooseBright { .. }, Statement::Choose { when_bright, .. }) => {
+                    Ok(when_bright)
+                }
+                (BodyListRef::ChooseDim { .. }, Statement::Choose { when_dim, .. }) => Ok(when_dim),
+                (BodyListRef::WhileBody { .. }, Statement::While { body, .. }) => Ok(body),
+                (BodyListRef::ChooseBright { .. } | BodyListRef::ChooseDim { .. }, _) => {
+                    Err(protocol_error(
+                        "AE-EDIT-013",
+                        "nested whenBright/whenDim path requires a Choose statement",
+                    ))
+                }
+                (BodyListRef::WhileBody { .. }, _) => Err(protocol_error(
+                    "AE-EDIT-013",
+                    "nested body path requires a While statement",
+                )),
+                (BodyListRef::WeaveBody { .. }, _) => unreachable!("weave body handled above"),
+            }
+        }
+    }
+}
+
+fn apply_replace_statement(
+    program: &mut Program,
+    operation: &EditOperation,
+    node_budget: &mut NodeBudget,
+) -> Result<(), StructuralEditError> {
+    let path = operation
+        .path
+        .as_ref()
+        .ok_or_else(|| protocol_error("AE-EDIT-010", "replaceStatement requires path"))?;
+    let statement = parse_operation_statement(program, operation, node_budget)?;
+    let list = body_list_mut(program, &path.list)?;
+    if path.index >= list.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {} is out of range", path.index),
+        ));
+    }
+    list[path.index] = statement;
+    Ok(())
+}
+
+fn apply_insert_statement_after(
+    program: &mut Program,
+    operation: &EditOperation,
+    node_budget: &mut NodeBudget,
+) -> Result<(), StructuralEditError> {
+    let path = operation
+        .path
+        .as_ref()
+        .ok_or_else(|| protocol_error("AE-EDIT-010", "insertStatementAfter requires path"))?;
+    let statement = parse_operation_statement(program, operation, node_budget)?;
+    let list = body_list_mut(program, &path.list)?;
+    if path.index >= list.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {} is out of range", path.index),
+        ));
+    }
+    list.insert(path.index + 1, statement);
+    Ok(())
+}
+
+fn apply_insert_statement_at(
+    program: &mut Program,
+    operation: &EditOperation,
+    node_budget: &mut NodeBudget,
+) -> Result<(), StructuralEditError> {
+    let list_ref = operation
+        .list
+        .as_ref()
+        .ok_or_else(|| protocol_error("AE-EDIT-010", "insertStatementAt requires list"))?;
+    let index = operation
+        .index
+        .ok_or_else(|| protocol_error("AE-EDIT-011", "insertStatementAt requires index"))?;
+    let statement = parse_operation_statement(program, operation, node_budget)?;
+    let list = body_list_mut(program, list_ref)?;
+    if index > list.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!(
+                "insert index {index} is out of range for body length {}",
+                list.len()
+            ),
+        ));
+    }
+    list.insert(index, statement);
+    Ok(())
+}
+
+fn apply_delete_statement(
+    program: &mut Program,
+    operation: &EditOperation,
+) -> Result<(), StructuralEditError> {
+    let path = operation
+        .path
+        .as_ref()
+        .ok_or_else(|| protocol_error("AE-EDIT-010", "deleteStatement requires path"))?;
+    let list = body_list_mut(program, &path.list)?;
+    if path.index >= list.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {} is out of range", path.index),
+        ));
+    }
+    list.remove(path.index);
+    Ok(())
 }
 
 fn reindex_record_references(
@@ -2228,8 +2606,8 @@ mod tests {
     fn replacement_edit(base_source: &str, value: i64) -> String {
         format!(
             r#"{{
-  "protocol": "aether.edit/v6",
-  "schema": "aether.ast/v6",
+  "protocol": "aether.edit/v7",
+  "schema": "aether.ast/v7",
   "baseSource": {},
   "operations": [{{
     "op": "replace",
@@ -2596,12 +2974,12 @@ mod tests {
 
     #[test]
     fn malformed_and_duplicate_edit_fields_are_rejected() {
-        let malformed = r#"{"protocol":"aether.edit/v6","schema":"aether.ast/v6","baseSource":"x","operations":[],"extra":true}"#;
+        let malformed = r#"{"protocol":"aether.edit/v7","schema":"aether.ast/v7","baseSource":"x","operations":[],"extra":true}"#;
         let malformed_error =
             apply_structural_edit(BASE_SOURCE, malformed).expect_err("unknown field must fail");
         assert_eq!(malformed_error.diagnostic().code, "AE-EDIT-001");
 
-        let duplicate = r#"{"protocol":"aether.edit/v6","protocol":"aether.edit/v6","schema":"aether.ast/v6","baseSource":"x","operations":[]}"#;
+        let duplicate = r#"{"protocol":"aether.edit/v7","protocol":"aether.edit/v7","schema":"aether.ast/v7","baseSource":"x","operations":[]}"#;
         let duplicate_error = apply_structural_edit(BASE_SOURCE, duplicate)
             .expect_err("duplicate JSON key must fail");
         assert_eq!(duplicate_error.diagnostic().code, "AE-EDIT-001");
@@ -2612,8 +2990,8 @@ mod tests {
     fn insert_and_delete_are_structural_top_level_operations() {
         let insert = format!(
             r#"{{
-  "protocol": "aether.edit/v6",
-  "schema": "aether.ast/v6",
+  "protocol": "aether.edit/v7",
+  "schema": "aether.ast/v7",
   "baseSource": {},
   "operations": [{{
     "op": "insertAfter",
@@ -2634,7 +3012,7 @@ mod tests {
         assert!(inserted.source.contains("weave helper [] -> Whole:"));
 
         let delete = format!(
-            r#"{{"protocol":"aether.edit/v6","schema":"aether.ast/v6","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
+            r#"{{"protocol":"aether.edit/v7","schema":"aether.ast/v7","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
             serde_json::to_string(&inserted.source).expect("source string must serialize")
         );
         let deleted =
@@ -2646,7 +3024,7 @@ mod tests {
     fn inserting_a_record_reindexes_existing_record_type_references_by_name() {
         let source = include_str!("../../../examples/records.ae");
         let insert = format!(
-            r#"{{"protocol":"aether.edit/v6","schema":"aether.ast/v6","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
+            r#"{{"protocol":"aether.edit/v7","schema":"aether.ast/v7","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
             serde_json::to_string(&format_program(
                 &compile_source(source).expect("record source should parse")
             ))
@@ -2661,6 +3039,92 @@ mod tests {
     }
 
     #[test]
+    fn statement_level_replace_and_insert_edit_main_body() {
+        let source = "world app\n\nweave main [] -> Whole:\n  bind n <- 20\n  yield n\n";
+        let document: Value = serde_json::from_str(
+            &structural_document_json(source).expect("source should describe"),
+        )
+        .expect("JSON");
+        let canonical = document["canonicalSource"].as_str().expect("canonical");
+        let yield_stmt = json!({
+            "kind": "Yield",
+            "value": {
+                "kind": "Binary",
+                "operation": "sum",
+                "left": { "kind": "Name", "name": "n" },
+                "right": { "kind": "Whole", "value": 1 }
+            }
+        });
+        let edit = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": canonical,
+            "operations": [{
+                "op": "replaceStatement",
+                "path": "weave:main/body/1",
+                "statement": yield_stmt,
+            }],
+        }))
+        .expect("serialize");
+        let result = apply_structural_edit(canonical, &edit).expect("replaceStatement");
+        assert!(result.source.contains("yield sum n 1"));
+        compile_with_seed(&result.source).expect("seed compile after statement edit");
+
+        let bind = json!({
+            "kind": "Bind",
+            "name": "m",
+            "mutable": false,
+            "stage": "runtime",
+            "value": { "kind": "Atom", "atom": { "kind": "Whole", "value": 3 } }
+        });
+        let insert = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": canonical,
+            "operations": [{
+                "op": "insertStatementAt",
+                "list": "weave:main/body",
+                "index": 0,
+                "statement": bind,
+            }],
+        }))
+        .expect("serialize insert");
+        let inserted = apply_structural_edit(canonical, &insert).expect("insertStatementAt");
+        assert!(inserted.source.contains("bind m <- 3"));
+
+        let oob = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": canonical,
+            "operations": [{
+                "op": "deleteStatement",
+                "path": "weave:main/body/99",
+            }],
+        }))
+        .expect("serialize oob");
+        let error = apply_structural_edit(canonical, &oob).expect_err("oob");
+        assert_eq!(error.diagnostic().code, "AE-EDIT-011");
+
+        let bad_path = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": canonical,
+            "operations": [{
+                "op": "replaceStatement",
+                "path": "weave:main/body/0/value",
+                "statement": { "kind": "Yield", "value": { "kind": "Atom", "atom": { "kind": "Whole", "value": 1 } } },
+            }],
+        }))
+        .expect("serialize bad path");
+        let error = apply_structural_edit(canonical, &bad_path).expect_err("bad path");
+        assert_eq!(error.diagnostic().code, "AE-EDIT-010");
+
+        let v6 = r#"{"protocol":"aether.edit/v6","schema":"aether.ast/v6","baseSource":"x","operations":[{"op":"delete","target":"weave:main"}]}"#;
+        let error = apply_structural_edit(canonical, v6).expect_err("v6 rejected");
+        assert_eq!(error.diagnostic().code, "AE-EDIT-002");
+    }
+
+    #[test]
     fn compiler_diagnostics_expose_stable_type_code_and_span() {
         let error =
             compile_source("world diagnostic\n\nweave main [] -> Whole:\n  yield \"wrong type\"\n")
@@ -2672,7 +3136,7 @@ mod tests {
         let envelope: Value = serde_json::from_str(&diagnostic_json(&diagnostic))
             .expect("diagnostic envelope must be JSON");
         let schema: Value = serde_json::from_str(include_str!(
-            "../../../schemas/aether-diagnostic-v6.schema.json"
+            "../../../schemas/aether-diagnostic-v7.schema.json"
         ))
         .expect("diagnostic schema must be JSON");
         assert_eq!(envelope["schema"], DIAGNOSTIC_SCHEMA_VERSION);
@@ -2680,7 +3144,7 @@ mod tests {
         assert_eq!(envelope["span"]["line"], 4);
         assert_eq!(
             schema["$id"],
-            "https://aether.local/schemas/aether-diagnostic-v6.schema.json"
+            "https://aether.local/schemas/aether-diagnostic-v7.schema.json"
         );
         assert!(schema["required"]
             .as_array()

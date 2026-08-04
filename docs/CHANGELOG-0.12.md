@@ -3,6 +3,14 @@
 Honest user-facing deltas from the bounded resource core through the technical
 preview package. This is **not** a claim of 1.0 completeness.
 
+## 0.16.0 — fine-grained structural edits (M12)
+
+- `aether.edit/v7` / `aether.ast/v7` / `aether.diagnostic/v7`.
+- Statement ops: `replaceStatement`, `insertStatementAt`, `insertStatementAfter`, `deleteStatement`.
+- Paths like `weave:main/body/1`; Choose/While nested lists supported.
+- Product apply-edit accepts **v7 only** (v6 rejected).
+- Seed compile before write unchanged.
+
 ## 0.15.0 — language modules M11b (seed product path)
 
 - Package **0.15.0**: multi-module build elaborates then **seed-compiles**.

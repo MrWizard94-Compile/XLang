@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.local/schemas/aether-edit-v7.schema.json",
+  "title": "Aether structural edit protocol v7",
+  "description": "Top-level declaration edits plus statement-level body edits (M12). Paths are typed weave body indices, not JSONPath.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "schema", "baseSource", "operations"],
+  "properties": {
+    "protocol": { "const": "aether.edit/v7" },
+    "schema": { "const": "aether.ast/v7" },
+    "baseSource": { "type": "string", "maxLength": 1000000 },
+    "operations": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/operation" } }
+  },
+  "$defs": {
+    "target": {
+      "oneOf": [
+        { "const": "world" },
+        { "type": "string", "pattern": "^(record|shape|weave):[a-z][a-z0-9_]*$" }
+      ]
+    },
+    "statementPath": {
+      "type": "string",
+      "pattern": "^weave:[a-z][a-z0-9_]*/body/[0-9]+(?:/(?:whenBright|whenDim|body)/[0-9]+)?$"
+    },
+    "listPath": {
+      "type": "string",
+      "pattern": "^weave:[a-z][a-z0-9_]*/body(?:/[0-9]+/(?:whenBright|whenDim|body))?$"
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["op", "target", "declaration"],
+          "properties": {
+            "op": { "const": "replace" },
+            "target": { "$ref": "#/$defs/target" },
+            "declaration": { "$ref": "aether-ast-v7.schema.json#/$defs/editableDeclaration" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["op", "target", "declaration"],
+          "properties": {
+            "op": { "const": "insertAfter" },
+            "target": { "$ref": "#/$defs/target" },
+            "declaration": { "$ref": "aether-ast-v7.schema.json#/$defs/editableDeclaration" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["op", "target"],
+          "properties": {
+            "op": { "const": "delete" },
+            "target": { "$ref": "#/$defs/target" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["op", "path", "statement"],
+          "properties": {
+            "op": { "const": "replaceStatement" },
+            "path": { "$ref": "#/$defs/statementPath" },
+            "statement": { "type": "object" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["op", "path", "statement"],
+          "properties": {
+            "op": { "const": "insertStatementAfter" },
+            "path": { "$ref": "#/$defs/statementPath" },
+            "statement": { "type": "object" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["op", "list", "index", "statement"],
+          "properties": {
+            "op": { "const": "insertStatementAt" },
+            "list": { "$ref": "#/$defs/listPath" },
+            "index": { "type": "integer", "minimum": 0 },
+            "statement": { "type": "object" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["op", "path"],
+          "properties": {
+            "op": { "const": "deleteStatement" },
+            "path": { "$ref": "#/$defs/statementPath" }
+          }
+        }
+      ]
+    }
+  }
+}

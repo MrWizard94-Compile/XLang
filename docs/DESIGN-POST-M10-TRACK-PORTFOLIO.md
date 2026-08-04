@@ -84,11 +84,9 @@ Host I/O must **not** start from happy-path `read_file` examples. Required first
 
 ## Next concrete docs (default)
 
-1. ~~M11 modules design + impl~~ **Done (0.15)**  
-2. ~~`docs/DESIGN-M12-FINE-GRAINED-EDITS.md`~~ **Done**  
-3. ~~`docs/ADR-016-m12-fine-grained-edits.md`~~ **Accepted (implementable)**  
-4. ~~`docs/M12-VALIDATION-MATRIX.md`~~ **Done**  
-5. **Next:** implement M12 apply-edit v7 per ADR-016  
+1. ~~M11 modules~~ **Done (0.15)**  
+2. ~~M12 fine-grained edits~~ **Done (0.16)**  
+3. **Next portfolio default:** T-LSP (bounded LSP) design, or human override  
 
 ---
 
