@@ -1,0 +1,4 @@
+world util_pkg
+
+weave main [] -> Whole:
+  yield 0

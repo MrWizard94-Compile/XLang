@@ -1,0 +1,9 @@
+{
+  "schema": "aether.workspace/v1",
+  "name": "workspace_demo",
+  "version": "0.1.0",
+  "packages": [
+    { "name": "util", "path": "util" },
+    { "name": "app", "path": "app", "depends_on": ["util"] }
+  ]
+}

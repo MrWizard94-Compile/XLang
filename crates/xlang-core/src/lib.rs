@@ -12,6 +12,7 @@ use std::fmt;
 mod authoring;
 mod modules;
 mod project;
+mod workspace;
 
 pub use authoring::{
     apply_structural_edit, diagnostic_json, structural_document_json, StructuralEditError,
@@ -28,9 +29,14 @@ pub use project::{
     ProjectFormatReport, ProjectFormatUnit, ProjectLock, ProjectLockUnit, ProjectUnit,
     ProjectUnitReport, ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
 };
+pub use workspace::{
+    parse_workspace_document, resolve_package_path, topological_package_order, verify_workspace,
+    WorkspaceDocument, WorkspaceError, WorkspacePackage, WorkspacePackageReport,
+    WorkspaceVerifyReport, WORKSPACE_PROJECT_FILE, WORKSPACE_SCHEMA_VERSION,
+};
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.22.0";
+pub const LANGUAGE_VERSION: &str = "0.23.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(

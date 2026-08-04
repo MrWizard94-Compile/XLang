@@ -1,0 +1,4 @@
+world app_pkg
+
+weave main [] -> Whole:
+  yield 1

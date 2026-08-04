@@ -1,0 +1,8 @@
+{
+  "schema": "aether.project/v1",
+  "name": "app_pkg",
+  "version": "0.1.0",
+  "units": [
+    { "path": "main.ae", "role": "main" }
+  ]
+}

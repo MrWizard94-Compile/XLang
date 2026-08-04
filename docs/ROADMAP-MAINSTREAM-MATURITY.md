@@ -940,7 +940,8 @@ Accepted by:
 4. **M15 comptime expansion implemented** (package 0.20; ADR-019 name chaining).  
 5. **M16 resource↔handle implemented** (package 0.21; ADR-020 T-RX first slice).  
 6. **M17 offline `aether test` implemented** (package 0.22; ADR-021).  
-7. **Next:** T-PKG, deeper T-RX, stdlib, or T-FFI — each needs its ADR.  
+7. **M18 offline workspace implemented** (package 0.23; ADR-022 T-PKG).  
+8. **Next:** deeper T-RX, stdlib, or T-FFI — each needs its ADR.  
 4. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table (can wait).
 
 ---
