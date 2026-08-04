@@ -67,6 +67,7 @@ invalid-source diagnostic parity.
 | M7 | Structured concurrency | M2 and M4 | Lexical task-group model with join, failure, cancellation, and effect-mediated blocking. | No orphan task/property tests, deterministic cleanup, capability rules, diagnostics, and seed parity pass. | **Implemented in Aether 0.10/AETH v10: structured nurseries** |
 | M8 | Foreign/host interface pilot | M1 and M2 | Narrow, typed, ownership-aware pure host ABI fixture (`host weave` / `HOST_CALL`); C-facing design only if a later threat model supports it. | Invalid-input, ownership transfer, capability denial, ABI compatibility, and local reproducibility tests pass. | **Implemented in Aether 0.11/AETH v11: pure host pilot** |
 | M9 | Integrated project/tooling evolution | M3 plus stable package/ABI decisions | Reproducible project metadata, dependency identity, formatter/LSP integration, and release workflow proposal. | Security, offline reproducibility, upgrade/rollback, and package verification criteria are approved and tested. | **Implemented pilot in 0.12: offline project verify + format; LSP/registry deferred** |
+| M10 | Multi-unit offline projects | M9 | Nested multi-unit `aether.project/v1`, locks, independent per-unit seed compile, `project format`; no language modules. | Path/lock negatives, multi-unit example, independence documented, matrix green, no registry/import. | **Designed (ADR-013); implementation pending** |
 
 ## Milestone detail
 
@@ -182,13 +183,21 @@ M9 is specified by [DESIGN-M9-PROJECT-TOOLING.md](DESIGN-M9-PROJECT-TOOLING.md),
 `aether.project/v1`, `project verify`, and `format`. Full LSP and network
 package registries remain deferred.
 
+### M10 — multi-unit offline projects (designed)
+
+M10 is specified by [DESIGN-M10-MULTI-UNIT-PROJECTS.md](DESIGN-M10-MULTI-UNIT-PROJECTS.md),
+[ADR-013](ADR-013-m10-multi-unit-projects.md), and
+[M10 validation matrix](M10-VALIDATION-MATRIX.md). It extends M9 with nested
+paths and real multi-unit integrity while keeping **independent compilation
+units** (no import/module system). Implementation is the next engineering
+increment after TP-1/TP-2.
+
 ### Remaining research / completion program
 
-After M0–M9 pilots, product completion follows TP-1 (integrity) and TP-2 (local
-technical preview). The next language/tooling track is **P4.1 multi-unit offline
-projects** (full SOP design → ADR → matrix before code). Expanded packages, LSP,
-C interop, and native backends remain large interaction surfaces. Each begins
-with the falsifiable spike described in
+TP-1 integrity and TP-2 local technical preview are delivered. **P4.1 / M10**
+design is accepted; implementation follows the M10 matrix. Expanded packages,
+language modules, LSP, C interop, and native backends remain large interaction
+surfaces. Each begins with the falsifiable spike described in
 [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
 No milestone advances merely because its happy path works.
 
@@ -205,6 +214,8 @@ No milestone advances merely because its happy path works.
 | Task model and cancellation semantics | It affects resource lifetime, scheduler behavior, and failure propagation. | M7 |
 | Foreign interface scope, including any C-header strategy | It affects ownership, hostile input handling, portability, and host capability boundaries. | M8 |
 | Any native/LLVM backend | It conflicts with current AETH-only project law and therefore requires explicit law/ADR change before design work. | Outside this roadmap unless approved |
+| Language modules / cross-file weave resolution | Changes seed surface and ownership/diagnostics; cannot be implied by multi-unit project files alone. | Post-M10 (separate ADR) |
+| Lib units without standalone `main` | Requires language + seed definition of non-entry units. | Post-M10 language ADR |
 
 ## Universal acceptance gate for a language milestone
 
