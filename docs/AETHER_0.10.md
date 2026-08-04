@@ -1,7 +1,6 @@
 # Aether 0.10 Language Contract
 
-**Status:** Current executable product contract — M7 structured nursery
-concurrency
+**Status:** Historical executable product contract — M7 structured nursery concurrency; superseded by Aether 0.11 / AETH v11 for new emission
 
 **Artifact output:** AETH v10
 

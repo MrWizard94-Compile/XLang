@@ -2,16 +2,16 @@
 
 ## Contract
 
-Aether **0.10.0** accepts Aether source, returns a canonical AST from the Rust
-bootstrap for tooling, and **emits AETH v10 bytecode primarily through the
+Aether **0.11.0** accepts Aether source, returns a canonical AST from the Rust
+bootstrap for tooling, and **emits AETH v11 bytecode primarily through the
 Aether-written seed compiler** (forge ABI). The `aether` CLI is the product
-interface for that seed-hosted compile path. Verified AETH v4/v5/v6/v7/v8/v9
-artifacts remain accepted compatibility inputs with their original meanings.
-Source is never translated to an existing language.
+interface for that seed-hosted compile path. Verified AETH
+v4/v5/v6/v7/v8/v9/v10 artifacts remain accepted compatibility inputs with their
+original meanings. Source is never translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.10 product contract. It intentionally
+This manifest is the executable Aether 0.11 product contract. It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -20,9 +20,9 @@ The accepted M1 direction is
 [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md).
 The bounded executable M2 decision is
 [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md).
-Structured concurrency, general generics, C interop, and a native backend are
-not Aether 0.10 surface area. M4 implements the bounded, testable `Error[Whole]`
-capability in
+General generics, C-header interop, libloading, ambient guest I/O, and a native
+backend are not Aether 0.11 surface area. M4 implements the bounded, testable
+`Error[Whole]` capability in
 [docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md](docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md)
 and [docs/AETHER_0.7.md](docs/AETHER_0.7.md). M5 implements bounded explicit
 literal compile-time `Whole` evaluation in
@@ -30,13 +30,17 @@ literal compile-time `Whole` evaluation in
 and [docs/AETHER_0.8.md](docs/AETHER_0.8.md). M6 implements explicit layout
 shapes and dual-layout tables in
 [docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md](docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md)
-and [docs/AETHER_0.10.md](docs/AETHER_0.10.md). Structural authoring is local
-tooling metadata, not a host-capability expansion; its current contract is
-[docs/AETHER_AUTHORING_PROTOCOL_v5.md](docs/AETHER_AUTHORING_PROTOCOL_v5.md).
+and [docs/AETHER_0.9.md](docs/AETHER_0.9.md). M7 implements structured nurseries
+in [docs/AETHER_0.10.md](docs/AETHER_0.10.md). M8 implements the capability-closed
+pure host ABI pilot in [docs/AETHER_0.11.md](docs/AETHER_0.11.md). Structural
+authoring is local tooling metadata, not a host-capability expansion; its
+current contract is
+[docs/AETHER_AUTHORING_PROTOCOL_v5.md](docs/AETHER_AUTHORING_PROTOCOL_v5.md)
+with v6 node surface for host weaves.
 
 ## Implemented Language Boundary
 
-Aether 0.10.0 includes the 0.4/0.5 scalar and byte surface plus immutable nominal
+Aether 0.11.0 includes the 0.4/0.5 scalar and byte surface plus immutable nominal
 records declared after `world` and before weaves. Record fields are bounded to
 the primitive `Text`, `Whole`, `Truth`, and `Bytes` types; records cannot nest.
 `make` constructs in declaration order and `field borrow` projects a cloned
@@ -90,13 +94,18 @@ M7 adds lexical `together:` nurseries with `spawn call ... into` lines
 `Error[Whole]` cancels remaining unstarted spawns and re-raises. Nursery
 weaves keep the M4 clean resource boundary; `main` remains total.
 
-Every 0.10 compilation emits AETH v10 with an arena-capacity header field, a
-possibly empty bounded record table, a shape table, and a function `effect_tag`.
-v10 preserves prior verified forms and adds `COMPTIME_WHOLE` (56), table opcodes
-`TABLE` (57), `TABLE_ALLOCATE` (58), `TABLE_STORE` (59), `TABLE_LOAD` (60),
-`TABLE_COUNT` (61), and nursery opcodes `NURSERY_BEGIN` (62), `NURSERY_SPAWN`
-(63), and `NURSERY_END` (64). AETH v4/v5/v6/v7/v8/v9 remain accepted with their
-original bytes and meanings; earlier and unknown versions are rejected.
+M8 adds body-less `host weave` declarations for pure host services. Host
+parameters are only owned/copy `Whole`/`Truth` or `borrow Text`/`borrow Bytes`;
+results are only `Whole`/`Truth`/`Text`/`Bytes`. Ordinary `call` of a host weave
+emits `HOST_CALL` (65). The product pure fixture installs only `whole_inc` and
+`text_extent`; missing services fail closed. No guest file/process/network/shell
+authority is granted.
+
+Every 0.11 compilation emits AETH v11 with an arena-capacity header field, a
+possibly empty bounded record table, a shape table, a function `effect_tag`, and
+a function host-kind byte. v11 preserves prior verified forms and adds host
+function entries plus `HOST_CALL` (65). AETH v4 through v10 remain accepted with
+their original bytes and meanings; earlier and unknown versions are rejected.
 
 ## Structural authoring boundary
 

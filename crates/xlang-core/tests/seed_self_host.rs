@@ -32,6 +32,7 @@ const M5_COMPTIME_SOURCE: &str = include_str!("../../../examples/comptime.ae");
 const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae");
 const M7_NURSERY_TOTAL_SOURCE: &str = include_str!("../../../examples/nursery-total.ae");
 const M7_NURSERY_CANCEL_SOURCE: &str = include_str!("../../../examples/nursery-cancel.ae");
+const M8_HOST_PILOT_SOURCE: &str = include_str!("../../../examples/host-pilot.ae");
 
 const M4_NORMAL_EFFECT_SOURCE: &str = concat!(
     "world normal_effect\n",
@@ -296,6 +297,36 @@ fn seed_profile_compiler_forges_bounded_m7_nurseries_byte_identically() {
 }
 
 #[test]
+fn seed_profile_compiler_forges_bounded_m8_host_pilot_byte_identically() {
+    let bootstrap_seed = compile_to_bytecode(SEED_SOURCE)
+        .expect("the checked-in Aether seed source must bootstrap")
+        .bytecode;
+    let bootstrap = compile_to_bytecode(M8_HOST_PILOT_SOURCE)
+        .expect("the M8 host-pilot fixture must bootstrap")
+        .bytecode;
+    let forged = bytes(
+        forge_bytecode(&bootstrap_seed, M8_HOST_PILOT_SOURCE)
+            .expect("the M8 host-pilot fixture must forge through the seed"),
+    );
+    verify_bytecode(&forged).expect("the M8 seed-produced artifact must verify");
+    assert_eq!(
+        forged, bootstrap,
+        "the M8 host-pilot fixture must match bootstrap byte-for-byte"
+    );
+    assert!(
+        forged.iter().any(|byte| *byte == 65),
+        "seed host-pilot forge must emit HOST_CALL opcode 65"
+    );
+    assert_eq!(
+        run_bytecode(&forged)
+            .expect("the M8 seed-produced artifact must run")
+            .exit_code,
+        48,
+        "the M8 host-pilot fixture should preserve its defined outcome"
+    );
+}
+
+#[test]
 fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
     assert_eq!(
         SEED_COMPILER_ARTIFACT,
@@ -377,6 +408,7 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
         ("layout-table", M6_LAYOUT_SOURCE, Some(10)),
         ("nursery-total", M7_NURSERY_TOTAL_SOURCE, Some(7)),
         ("nursery-cancel", M7_NURSERY_CANCEL_SOURCE, Some(9)),
+        ("host-pilot", M8_HOST_PILOT_SOURCE, Some(48)),
     ];
     for (name, source, expected_exit_code) in examples {
         let bootstrap = compile_to_bytecode(source)

@@ -5,7 +5,7 @@ flowchart LR
     CLI["aether CLI"] -->|"compile"| SeedPath["compile_with_seed"]
     CLI -->|"structure / apply-edit"| Authoring["aether.ast/v5 + aether.edit/v5"]
     Authoring -->|"canonical validated source"| SeedPath
-    SeedPath --> SeedArt["embedded seed AETH v10 compiler"]
+    SeedPath --> SeedArt["embedded seed AETH v11 compiler"]
     SeedArt --> Artifact["Verified AETH v4 through v10 artifact"]
     Artifact --> VM["Aether VM"]
     VM --> Result["stdout and exit value"]
@@ -18,13 +18,13 @@ flowchart LR
 
 ## Scope and Future-Design Boundary
 
-This document describes the implemented Aether 0.10 architecture. The broader
+This document describes the implemented Aether 0.11 architecture. The broader
 AI-first systems-language direction is documented separately in
 [NORTH_STAR.md](NORTH_STAR.md), [CORE_CLAIMS.md](CORE_CLAIMS.md), and
 [ROADMAP.md](ROADMAP.md). The accepted M1 direction is
 [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md);
 the executable bounded M2 subset is [ADR-004](ADR-004-aeth-v6-bounded-resources.md).
-Aether 0.10 includes bounded `Error[Whole]`, literal `comptime bind`, dual-layout
+Aether 0.11 includes bounded `Error[Whole]`, literal `comptime bind`, dual-layout
 Whole tables, and structured nurseries. It still has no general effects,
 OS-thread parallelism, generic type parameters, C-header ingestion,
 fine-grained arbitrary-node structural edits, or a native backend.
@@ -45,7 +45,7 @@ M3 JSON parsing and deterministic structural-document serialization. It parses
 UTF-8 Aether source, validates names, types, mutation, `Text` and `Bytes` move state, and
 structured control flow, serializes a deterministic AST, builds typed M2
 resource, M4 effect, M5 comptime, M6 layout, and M7 nursery validation plans,
-and emits AETH v10 bytecode. The bytecode verifier runs
+and emits AETH v11 bytecode. The bytecode verifier runs
 before the VM. The compiler does not call a
 model, evaluate JavaScript, contact a network service, or persist source.
 
@@ -124,7 +124,7 @@ bounded error effect, and literal compile-time Whole evaluation:
 - CLI `compile --bootstrap` and `check` still use the Rust bootstrap for seed
   rebuild and AST diagnostics.
 
-The Seed Profile emits the complete documented canonical Aether 0.10 source
+The Seed Profile emits the complete documented canonical Aether 0.11 source
 surface: all statement and shallow expression families, named locals/params,
 `borrow`/`move`/`access`, multi-weave `call` (including forward callees), hex
 `bytes` literals, UTF-8 text constants with all defined escapes, LF/CRLF input

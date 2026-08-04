@@ -1,0 +1,12 @@
+world host_pilot
+
+host weave whole_inc [value: Whole] -> Whole
+
+host weave text_extent [borrow message: Text] -> Whole
+
+weave main [] -> Whole:
+  bind mutable n <- 41
+  bind after <- call whole_inc n
+  bind message <- "Aether"
+  bind len <- call text_extent borrow message
+  yield sum after len

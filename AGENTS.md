@@ -53,14 +53,16 @@ JavaScript, LLVM, or another language.
 
 **Stage status:** Stage 7 (bounded arenas and Copy-element buffers), M4
 (the bounded `Error[Whole]` effect), M5 (literal deterministic `comptime bind`),
-M6 (explicit layout shapes and dual-layout tables), and M7 (structured nurseries) are implemented on the
-seed-hosted product compile path in Aether 0.10 / AETH v10.
+M6 (explicit layout shapes and dual-layout tables), M7 (structured nurseries),
+and M8 (capability-closed pure host ABI pilot) are implemented on the
+seed-hosted product compile path in Aether 0.11 / AETH v11.
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
 proof dual-compare. Seed Profile self-host, all shipped examples, the complete
 prior canonical surface (including records), the documented M2 arena/buffer
-corpus, the M4 error-effect corpus, the M5 comptime corpus, the M6 layout corpus, and the M7 nursery corpus match bootstrap byte-for-byte.
-Full diagnostic parity is not claimed for the seed.
+corpus, the M4 error-effect corpus, the M5 comptime corpus, the M6 layout
+corpus, the M7 nursery corpus, and the M8 host-pilot corpus match bootstrap
+byte-for-byte. Full diagnostic parity is not claimed for the seed.
 
 ### Product docs (Level 4)
 
@@ -69,11 +71,11 @@ Full diagnostic parity is not claimed for the seed.
 | Overview | [README.md](README.md) |
 | Contract / release gate | [MANIFEST.md](MANIFEST.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Language (0.10 current / 0.9–0.4 historical) | [docs/AETHER_0.10.md](docs/AETHER_0.10.md), [docs/AETHER_0.9.md](docs/AETHER_0.9.md), [docs/AETHER_0.8.md](docs/AETHER_0.8.md), [docs/AETHER_0.7.md](docs/AETHER_0.7.md), [docs/AETHER_0.6.md](docs/AETHER_0.6.md), [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
+| Language (0.11 current / 0.10–0.4 historical) | [docs/AETHER_0.11.md](docs/AETHER_0.11.md), [docs/AETHER_0.10.md](docs/AETHER_0.10.md), [docs/AETHER_0.9.md](docs/AETHER_0.9.md), [docs/AETHER_0.8.md](docs/AETHER_0.8.md), [docs/AETHER_0.7.md](docs/AETHER_0.7.md), [docs/AETHER_0.6.md](docs/AETHER_0.6.md), [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
 | Record decision | [docs/ADR-001-records-and-aeth-v5.md](docs/ADR-001-records-and-aeth-v5.md) |
 | AI-first design foundation | [docs/NORTH_STAR.md](docs/NORTH_STAR.md), [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), [docs/ADR-002-ai-first-design-foundation.md](docs/ADR-002-ai-first-design-foundation.md) |
 | M1/M2 resource decisions | [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md), [docs/ADR-003-value-resource-semantics.md](docs/ADR-003-value-resource-semantics.md), [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md), [docs/M1-VALIDATION-MATRIX.md](docs/M1-VALIDATION-MATRIX.md) |
-| M3–M7 authoring, effects, comptime, layout | [docs/AETHER_AUTHORING_PROTOCOL_v5.md](docs/AETHER_AUTHORING_PROTOCOL_v5.md), [docs/ADR-007-m4-typed-error-effect.md](docs/ADR-007-m4-typed-error-effect.md), [docs/ADR-008-m5-deterministic-comptime.md](docs/ADR-008-m5-deterministic-comptime.md), [docs/ADR-009-m6-explicit-layout-shapes.md](docs/ADR-009-m6-explicit-layout-shapes.md), [docs/ADR-010-m7-structured-concurrency.md](docs/ADR-010-m7-structured-concurrency.md), [docs/M4-VALIDATION-MATRIX.md](docs/M4-VALIDATION-MATRIX.md), [docs/M5-VALIDATION-MATRIX.md](docs/M5-VALIDATION-MATRIX.md), [docs/M6-VALIDATION-MATRIX.md](docs/M6-VALIDATION-MATRIX.md), [docs/M7-VALIDATION-MATRIX.md](docs/M7-VALIDATION-MATRIX.md) |
+| M3–M8 authoring, effects, comptime, layout, host ABI | [docs/AETHER_AUTHORING_PROTOCOL_v5.md](docs/AETHER_AUTHORING_PROTOCOL_v5.md), [docs/ADR-007-m4-typed-error-effect.md](docs/ADR-007-m4-typed-error-effect.md), [docs/ADR-008-m5-deterministic-comptime.md](docs/ADR-008-m5-deterministic-comptime.md), [docs/ADR-009-m6-explicit-layout-shapes.md](docs/ADR-009-m6-explicit-layout-shapes.md), [docs/ADR-010-m7-structured-concurrency.md](docs/ADR-010-m7-structured-concurrency.md), [docs/ADR-011-m8-host-abi-pilot.md](docs/ADR-011-m8-host-abi-pilot.md), [docs/DESIGN-M8-HOST-ABI-PILOT.md](docs/DESIGN-M8-HOST-ABI-PILOT.md), [docs/M4-VALIDATION-MATRIX.md](docs/M4-VALIDATION-MATRIX.md), [docs/M5-VALIDATION-MATRIX.md](docs/M5-VALIDATION-MATRIX.md), [docs/M6-VALIDATION-MATRIX.md](docs/M6-VALIDATION-MATRIX.md), [docs/M7-VALIDATION-MATRIX.md](docs/M7-VALIDATION-MATRIX.md), [docs/M8-VALIDATION-MATRIX.md](docs/M8-VALIDATION-MATRIX.md) |
 | Research and roadmap | [docs/research/](docs/research/), [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Seed Profile | [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) |
 | Forge ABI | [docs/FORGE_CONTRACT.md](docs/FORGE_CONTRACT.md) |
@@ -86,9 +88,9 @@ Full diagnostic parity is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.10.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.10.0) |
-| Artifact format | AETH **v4–v9** compatibility input + deterministic **v10** output with shape table, dual-layout tables, structured nurseries, effect metadata, and `COMPTIME_WHOLE` provenance (earlier/unknown versions rejected) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.11.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.11.0) |
+| Artifact format | AETH **v4–v10** compatibility input + deterministic **v11** output with shape table, dual-layout tables, structured nurseries, effect metadata, host function kind, `HOST_CALL`, and `COMPTIME_WHOLE` provenance (earlier/unknown versions rejected) |
 | Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |
 | Seed compiler | `seed/aether_seed.ae` + checked-in `seed/aether_seed.aeth` |
@@ -96,9 +98,9 @@ Full diagnostic parity is not claimed for the seed.
 ### Invariants (may tighten pack; never weaken CONST-\*)
 
 1. **Seed-hosted product compile** — CLI default compile uses the Aether-written seed; bootstrap is not the product compiler path.
-2. **Verify before run / write** — VM and forge only accept verified supported AETH v4, v5, v6, v7, v8, v9, or v10.
+2. **Verify before run / write** — VM and forge only accept verified supported AETH v4, v5, v6, v7, v8, v9, v10, or v11.
 3. **No host capability leak** — invoked artifacts have no file, process, network, or shell authority; forge host owns I/O after verification.
-4. **Honest self-host claims** — Seed Profile, shipped examples, the complete documented prior canonical surface (including immutable records), and the documented M2 arena/buffer, M4 error-effect, M5 comptime, M6 layout, and M7 nursery corpora match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
+4. **Honest self-host claims** — Seed Profile, shipped examples, the complete documented prior canonical surface (including immutable records), and the documented M2 arena/buffer, M4 error-effect, M5 comptime, M6 layout, M7 nursery, and M8 host-pilot corpora match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
 5. **CLI authority boundary** — the CLI reads only caller-selected local files and writes source or artifacts only to an explicit output path after the required validation/seed-compile path; it has no model or network integration.
 6. **Legacy is reference only** — `legacy/` is never a production build input.
 7. **Zero-warning gate** — workspace Clippy `all = "deny"`; `unsafe_code = "forbid"`.

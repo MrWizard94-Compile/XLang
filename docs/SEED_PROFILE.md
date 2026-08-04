@@ -1,29 +1,31 @@
 # Aether Seed Profile
 
-Status: normative Stage 7/M4–M7 Seed Profile (complete canonical 0.10 source
+Status: normative Stage 7/M4–M8 Seed Profile (complete canonical 0.11 source
 surface + product compile path), 2026-08-04.
 
 This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
-It covers the complete documented canonical Aether 0.10 source surface. Product
+It covers the complete documented canonical Aether 0.11 source surface. Product
 `compile` uses this profile via the seed artifact. Rust bootstrap remains for
 seed rebuild, `check` AST, and dual-compare proofs. A Seed Profile claim is not
 a claim of full bootstrap diagnostic parity for invalid input.
 
-Here, *canonical* means the Aether 0.10 grammar and formatting constraints in
-[AETHER_0.10.md](AETHER_0.10.md): shallow prefix expressions, exact indentation,
+Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
+[AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,
 root-only bindings, bounded immutable records, closed bounded-resource forms,
-dual-layout tables, bounded terminal effect forms, literal `comptime bind`, and
-structured nurseries. The profile does not expand that language surface.
+dual-layout tables, bounded terminal effect forms, literal `comptime bind`,
+structured nurseries, and capability-closed `host weave` declarations. The
+profile does not expand that language surface.
 
 ## Claim
 
 `seed/aether_seed.ae` is an Aether-written compiler that:
 
-1. Accepts complete canonical Aether 0.10 source as `Text`.
+1. Accepts complete canonical Aether 0.11 source as `Text`.
 2. Parses statements and expressions itself (no host parser callback).
-3. Emits a complete AETH **v10** artifact with a resource-capacity header,
-   optional record table, shape table, function effect metadata, table opcodes,
-   and nursery opcodes through ordinary `Bytes` operations.
+3. Emits a complete AETH **v11** artifact with a resource-capacity header,
+   optional record table, shape table, function effect and host-kind metadata,
+   table opcodes, nursery opcodes, and `HOST_CALL` through ordinary `Bytes`
+   operations.
 4. Exposes the forge ABI `weave compile [borrow source: Text] -> Bytes`.
 5. Rebuilds its own source byte-for-byte under `aether forge`.
 6. Compiles every documented canonical statement, shallow expression, literal,
@@ -52,6 +54,10 @@ structured nurseries. The profile does not expand that language surface.
 13. Parses lexical `together:` nurseries with `spawn call ... into` lines;
     emits nursery opcodes (62–64) byte-for-byte like the bootstrap for the
     documented M7 corpus.
+14. Parses body-less `host weave` declarations and emits AETH v11 host function
+    entries (`kind=host`, empty code) plus `HOST_CALL` (65) for host targets
+    byte-for-byte like the bootstrap for the documented M8 host-pilot corpus.
+    The seed itself does not call host weaves.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.

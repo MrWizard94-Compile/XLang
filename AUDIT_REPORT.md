@@ -1,6 +1,6 @@
 # Aether Migration Audit
 
-Date: 2026-08-04 (Aether 0.10: Stage 7 bounded resources, M3–M7 authoring,
+Date: 2026-08-04 (Aether 0.11: Stage 7 bounded resources, M3–M8 authoring/host,
 typed-error baseline, deterministic literal comptime, dual-layout tables, and
 structured nurseries; active Studio retirement; DOC-SYNC audit remediation)
 
@@ -136,6 +136,14 @@ Explicit `shape` declarations and `table Shape layout rows|columns` with closed
 allocate/store/load, semantic equivalence, and seed byte identity are recorded
 in [docs/ADR-009-m6-explicit-layout-shapes.md](docs/ADR-009-m6-explicit-layout-shapes.md)
 and [docs/DELIVERY_REPORT-2026-08-03-M6-EXPLICIT-LAYOUT.md](docs/DELIVERY_REPORT-2026-08-03-M6-EXPLICIT-LAYOUT.md).
+
+## M8 Host ABI Pilot
+
+Capability-closed pure host weaves (host weave + HOST_CALL / AETH v11) are
+implemented with product fixtures whole_inc and 	ext_extent only. See
+[docs/AETHER_0.11.md](docs/AETHER_0.11.md),
+[docs/ADR-011-m8-host-abi-pilot.md](docs/ADR-011-m8-host-abi-pilot.md), and
+[docs/DELIVERY_REPORT-2026-08-04-M8-HOST-ABI.md](docs/DELIVERY_REPORT-2026-08-04-M8-HOST-ABI.md).
 
 ## M7 Structured Nurseries
 

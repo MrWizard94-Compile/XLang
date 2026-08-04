@@ -1,11 +1,11 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and CLI toolchain for
-deterministic, AI-primary authorship. Aether **0.10.0** parses only Aether
-source, emits deterministic AETH v10 bytecode, verifies every artifact, and runs
+deterministic, AI-primary authorship. Aether **0.11.0** parses only Aether
+source, emits deterministic AETH v11 bytecode, verifies every artifact, and runs
 it in the Aether VM. It never translates source to Rust, C, JavaScript, LLVM,
-or another language. Verified AETH v4/v5/v6/v7/v8/v9 artifacts remain compatible
-inputs with their original meanings; new compilation emits v10.
+or another language. Verified AETH v4/v5/v6/v7/v8/v9/v10 artifacts remain
+compatible inputs with their original meanings; new compilation emits v11.
 
 ## Seed-hosted compile path, resources, effects, comptime, and layout
 
@@ -19,14 +19,15 @@ inputs with their original meanings; new compilation emits v10.
 - The seed self-hosts, and the shipped examples plus a complete canonical-surface
   regression corpus produce bytecode **byte-identical** to the Rust bootstrap.
 
-Seed Profile emits the complete prior canonical surface plus Aether 0.10's
-documented M2 resource, M4 error, M5 comptime, M6 layout, and M7 nursery corpora: named
-locals/parameters, every statement and shallow expression family,
-`borrow`/`move`/`access`, multi-weave calls, immutable records, closed `arena` /
-Whole-or-Truth-buffer outcomes, dual-layout Whole tables, the explicit
-`raises Whole`, `raise`, `forward call`, and terminal `handle call` forms, and
-root-only literal `comptime bind`. New compilation emits verified AETH v10. See
-[docs/AETHER_0.10.md](docs/AETHER_0.10.md) and
+Seed Profile emits the complete prior canonical surface plus Aether 0.11's
+documented M2 resource, M4 error, M5 comptime, M6 layout, M7 nursery, and M8
+host-pilot corpora: named locals/parameters, every statement and shallow
+expression family, `borrow`/`move`/`access`, multi-weave calls, immutable
+records, closed `arena` / Whole-or-Truth-buffer outcomes, dual-layout Whole
+tables, the explicit `raises Whole`, `raise`, `forward call`, and terminal
+`handle call` forms, root-only literal `comptime bind`, structured nurseries,
+and capability-closed `host weave` / `HOST_CALL`. New compilation emits verified
+AETH v11. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md) and
 [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether
@@ -76,8 +77,8 @@ physical order. See
 
 ## Versioned structural authoring contract
 
-Aether 0.10 tooling exposes a local, machine-readable `aether.ast/v5` document
-and accepts bounded `aether.edit/v5` structural edits. The protocol
+Aether 0.11 tooling exposes a local, machine-readable `aether.ast/v6` document
+and accepts bounded `aether.edit/v6` structural edits. The protocol
 uses exact canonical source revisions to reject stale requests, supports typed
 top-level record/shape/weave insert, replace, and delete operations, reparses the
 formatter-owned result, and seed-compiles it before the CLI writes source to an

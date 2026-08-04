@@ -18,9 +18,9 @@ pub use authoring::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.10.0";
+pub const LANGUAGE_VERSION: &str = "0.11.0";
 
-/// Checked-in Aether-written seed compiler artifact (AETH v10).
+/// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../seed/aether_seed.aeth"
@@ -34,6 +34,7 @@ const ARTIFACT_VERSION_V7: u8 = 7;
 const ARTIFACT_VERSION_V8: u8 = 8;
 const ARTIFACT_VERSION_V9: u8 = 9;
 const ARTIFACT_VERSION_V10: u8 = 10;
+const ARTIFACT_VERSION_V11: u8 = 11;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 const MAX_FUNCTIONS: usize = 256;
 const MAX_LOCALS: usize = u16::MAX as usize;
@@ -115,6 +116,12 @@ const OP_TABLE_COUNT: u8 = 61;
 const OP_NURSERY_BEGIN: u8 = 62;
 const OP_NURSERY_SPAWN: u8 = 63;
 const OP_NURSERY_END: u8 = 64;
+const OP_HOST_CALL: u8 = 65;
+
+/// Function-table kind for AETH v11: ordinary guest weave.
+const FUNCTION_KIND_GUEST: u8 = 0;
+/// Function-table kind for AETH v11: host weave (empty guest code).
+const FUNCTION_KIND_HOST: u8 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -176,6 +183,16 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-host-003") {
+        "AE-HOST-003"
+    } else if normalized.contains("ae-host-002") {
+        "AE-HOST-002"
+    } else if normalized.contains("ae-host-001")
+        || normalized.contains("host weave")
+        || normalized.contains("host service")
+        || normalized.contains("host call")
+    {
+        "AE-HOST-001"
     } else if normalized.contains("ae-task-003") {
         "AE-TASK-003"
     } else if normalized.contains("ae-task-002") {
@@ -407,13 +424,14 @@ impl ParameterMode {
                     | ARTIFACT_VERSION_V8
                     | ARTIFACT_VERSION_V9
                     | ARTIFACT_VERSION_V10
+                    | ARTIFACT_VERSION_V11
             ) =>
             {
                 Ok(Self::Access)
             }
             3 => Err(BytecodeError::new(
                 offset,
-                "access parameters are valid only in AETH v6, v7 through v10 artifacts",
+                "access parameters are valid only in AETH v6, v7 through v11 artifacts",
             )),
             _ => Err(BytecodeError::new(offset, "unknown Aether parameter mode")),
         }
@@ -425,6 +443,8 @@ pub struct Program {
     pub world: String,
     pub records: Vec<RecordDeclaration>,
     pub shapes: Vec<ShapeDeclaration>,
+    /// Capability-closed host weave declarations (M8). No body; total external ABI.
+    pub host_weaves: Vec<HostWeave>,
     pub weaves: Vec<Weave>,
 }
 
@@ -442,11 +462,25 @@ impl Program {
                 .map(|shape| 2 + shape.fields.len() * 2)
                 .sum::<usize>()
             + self
+                .host_weaves
+                .iter()
+                .map(|host| 3 + host.parameters.len() * 2)
+                .sum::<usize>()
+            + self
                 .weaves
                 .iter()
                 .map(|weave| 4 + weave.parameters.len() * 2 + statement_token_count(&weave.body))
                 .sum::<usize>()
     }
+}
+
+/// A total host weave: external pure service signature with no Aether body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostWeave {
+    pub name: String,
+    pub parameters: Vec<Parameter>,
+    pub result: ValueType,
+    pub span: Span,
 }
 
 /// An immutable nominal aggregate declaration. Its index in [`Program::records`]
@@ -1200,6 +1234,7 @@ struct FunctionSignature {
     parameters: Vec<Parameter>,
     result: ValueType,
     effect: Effect,
+    is_host: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -1221,8 +1256,16 @@ struct ArtifactFunction {
     parameters: Vec<(ValueType, ParameterMode)>,
     result: ValueType,
     effect: Effect,
+    /// AETH v11: guest (0) or host (1). Pre-v11 artifacts are always guest.
+    kind: u8,
     locals: Vec<LocalDescriptor>,
     code: Vec<u8>,
+}
+
+impl ArtifactFunction {
+    const fn is_host(&self) -> bool {
+        self.kind == FUNCTION_KIND_HOST
+    }
 }
 
 #[derive(Clone)]
@@ -1408,9 +1451,90 @@ struct NurseryFrame {
     seen: u8,
 }
 
+/// Capability-closed catalog of pure host services installed by the trusted host.
+#[derive(Clone, Default)]
+struct HostServices {
+    names: BTreeMap<String, HostServiceKind>,
+}
+
+#[derive(Clone, Copy)]
+enum HostServiceKind {
+    WholeInc,
+    TextExtent,
+}
+
+impl HostServices {
+    /// Product pure fixture: only `whole_inc` and `text_extent`.
+    fn pure_fixture() -> Self {
+        let mut names = BTreeMap::new();
+        names.insert("whole_inc".to_owned(), HostServiceKind::WholeInc);
+        names.insert("text_extent".to_owned(), HostServiceKind::TextExtent);
+        Self { names }
+    }
+
+    fn invoke(
+        &self,
+        name: &str,
+        arguments: &[RuntimeValue],
+        offset: usize,
+    ) -> Result<RuntimeValue, BytecodeError> {
+        let Some(kind) = self.names.get(name) else {
+            return Err(BytecodeError::new(
+                offset,
+                format!("AE-HOST-003: host service {name} is missing or denied"),
+            ));
+        };
+        match kind {
+            HostServiceKind::WholeInc => {
+                if arguments.len() != 1 {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service whole_inc requires one Whole argument",
+                    ));
+                }
+                let RuntimeValue::Whole(value) = &arguments[0] else {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service whole_inc requires Whole",
+                    ));
+                };
+                let next = value.checked_add(1).ok_or_else(|| {
+                    BytecodeError::new(
+                        offset,
+                        "AE-HOST-003: host service whole_inc overflowed Whole",
+                    )
+                })?;
+                Ok(RuntimeValue::Whole(next))
+            }
+            HostServiceKind::TextExtent => {
+                if arguments.len() != 1 {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service text_extent requires one borrowed Text argument",
+                    ));
+                }
+                let RuntimeValue::Text(text) = &arguments[0] else {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "AE-HOST-002: host service text_extent requires Text",
+                    ));
+                };
+                let len = i64::try_from(text.len()).map_err(|_| {
+                    BytecodeError::new(
+                        offset,
+                        "AE-HOST-003: host service text_extent length is outside Whole",
+                    )
+                })?;
+                Ok(RuntimeValue::Whole(len))
+            }
+        }
+    }
+}
+
 struct RuntimeState {
     arena: ArenaState,
     nurseries: Vec<NurseryFrame>,
+    hosts: HostServices,
 }
 
 struct ArenaState {
@@ -1420,6 +1544,10 @@ struct ArenaState {
 
 impl RuntimeState {
     fn new(capacity: u32) -> Result<Self, BytecodeError> {
+        Self::with_hosts(capacity, HostServices::pure_fixture())
+    }
+
+    fn with_hosts(capacity: u32, hosts: HostServices) -> Result<Self, BytecodeError> {
         let capacity = usize::try_from(capacity)
             .map_err(|_| BytecodeError::new(0, "arena capacity is outside platform limits"))?;
         let mut bytes = Vec::new();
@@ -1432,6 +1560,7 @@ impl RuntimeState {
         Ok(Self {
             arena: ArenaState { bytes, used: 0 },
             nurseries: Vec::new(),
+            hosts,
         })
     }
 }
@@ -1588,6 +1717,11 @@ enum Instruction {
         function: usize,
         arguments: usize,
     },
+    /// AETH v11 host service invoke. `function` is the function-table index of a host entry.
+    HostCall {
+        function: usize,
+        arguments: usize,
+    },
     JumpIfDim(usize),
     Jump(usize),
 }
@@ -1646,6 +1780,18 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
         shapes.push(parse_shape_declaration(&lines, &mut index)?);
     }
     let record_types = record_type_map(&records)?;
+    let mut host_weaves = Vec::new();
+    while index < lines.len() && lines[index].content.starts_with("host weave ") {
+        let line = lines[index];
+        if line.indentation != 0 {
+            return Err(CompilerError::new(
+                line.span(1),
+                "AE-HOST-001: a host weave declaration must begin at indentation level zero",
+            ));
+        }
+        host_weaves.push(parse_host_weave_header(line, &record_types)?);
+        index += 1;
+    }
     let mut weaves = Vec::new();
     while index < lines.len() {
         let line = lines[index];
@@ -1665,6 +1811,18 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
             return Err(CompilerError::new(
                 line.span(1),
                 "shape declarations must appear after records and before every weave",
+            ));
+        }
+        if line.content.starts_with("host weave ") {
+            return Err(CompilerError::new(
+                line.span(1),
+                "AE-HOST-001: host weave declarations must appear after shapes and before every ordinary weave",
+            ));
+        }
+        if line.content.starts_with("host ") {
+            return Err(CompilerError::new(
+                line.span(1),
+                "AE-HOST-001: host declarations must use the form host weave name [params] -> Type",
             ));
         }
         let (name, parameters, result, effect) = parse_weave_header(line, &record_types)?;
@@ -1690,6 +1848,7 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
         world,
         records,
         shapes,
+        host_weaves,
         weaves,
     };
     validate_program(&program)?;
@@ -1764,6 +1923,28 @@ pub fn format_program(program: &Program) -> String {
             formatted.push_str(" Whole\n");
         }
     }
+    for host in &program.host_weaves {
+        formatted.push('\n');
+        formatted.push_str("host weave ");
+        formatted.push_str(&host.name);
+        formatted.push_str(" [");
+        for (index, parameter) in host.parameters.iter().enumerate() {
+            if index > 0 {
+                formatted.push_str(", ");
+            }
+            match parameter.mode {
+                ParameterMode::Own => {}
+                ParameterMode::Borrow => formatted.push_str("borrow "),
+                ParameterMode::Access => formatted.push_str("access "),
+            }
+            formatted.push_str(&parameter.name);
+            formatted.push_str(": ");
+            formatted.push_str(&format_value_type(parameter.value_type, &program.records));
+        }
+        formatted.push_str("] -> ");
+        formatted.push_str(&format_value_type(host.result, &program.records));
+        formatted.push('\n');
+    }
     for weave in &program.weaves {
         formatted.push('\n');
         formatted.push_str("weave ");
@@ -1822,6 +2003,27 @@ pub fn canonical_ast(program: &Program) -> String {
             }
             output.push_str(&field.name);
             output.push_str(":Whole");
+        }
+        output.push(']');
+    }
+    for host in &program.host_weaves {
+        output.push_str(";HostWeave(");
+        output.push_str(&host.name);
+        output.push_str("->");
+        output.push_str(&format_value_type(host.result, &program.records));
+        output.push_str(")[");
+        for (index, parameter) in host.parameters.iter().enumerate() {
+            if index > 0 {
+                output.push(',');
+            }
+            match parameter.mode {
+                ParameterMode::Own => {}
+                ParameterMode::Borrow => output.push_str("Borrow "),
+                ParameterMode::Access => output.push_str("Access "),
+            }
+            output.push_str(&parameter.name);
+            output.push(':');
+            output.push_str(&format_value_type(parameter.value_type, &program.records));
         }
         output.push(']');
     }
@@ -1903,6 +2105,9 @@ pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
         return Err(BytecodeError::new(0, "artifact has no main weave"));
     };
     let main = &artifact.functions[main_index];
+    if main.is_host() {
+        return Err(BytecodeError::new(0, "main cannot be a host weave"));
+    }
     if !main.parameters.is_empty()
         || main.result != ValueType::Whole
         || main.effect != Effect::Total
@@ -1992,6 +2197,7 @@ fn validate_artifact_resource_signature(
                 | ARTIFACT_VERSION_V8
                 | ARTIFACT_VERSION_V9
                 | ARTIFACT_VERSION_V10
+                | ARTIFACT_VERSION_V11
         ) || access_count != 1)
     {
         return Err(BytecodeError::new(
@@ -2018,7 +2224,11 @@ fn validate_artifact_effect_signature(
 ) -> Result<(), BytecodeError> {
     if !matches!(
         version,
-        ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10
+        ARTIFACT_VERSION_V7
+            | ARTIFACT_VERSION_V8
+            | ARTIFACT_VERSION_V9
+            | ARTIFACT_VERSION_V10
+            | ARTIFACT_VERSION_V11
     ) && function.effect != Effect::Total
     {
         return Err(BytecodeError::new(
@@ -2084,6 +2294,7 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
             | ARTIFACT_VERSION_V8
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
+            | ARTIFACT_VERSION_V11
     ) {
         if artifact.arena_capacity != 0 || resource_instruction_seen {
             return Err(BytecodeError::new(
@@ -2325,6 +2536,128 @@ fn parse_world(line: SourceLine<'_>) -> Result<String, CompilerError> {
     };
     validate_name(name, line.span(7), "world name", false)?;
     Ok(name.to_owned())
+}
+
+fn parse_host_weave_header(
+    line: SourceLine<'_>,
+    record_types: &BTreeMap<String, u16>,
+) -> Result<HostWeave, CompilerError> {
+    if line.content.ends_with(':') {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-HOST-001: host weaves declare an external signature only and cannot open a body block",
+        ));
+    }
+    let Some(rest) = line.content.strip_prefix("host weave ") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-HOST-001: expected host weave declaration",
+        ));
+    };
+    if rest.contains(" raises ") {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-HOST-001: host weaves are total and cannot raise Whole",
+        ));
+    }
+    let Some(opening) = rest.find('[') else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-HOST-001: host weave parameters must be enclosed by square brackets",
+        ));
+    };
+    let name = rest[..opening].trim_end();
+    validate_name(name, line.span(12), "host weave name", true)?;
+    let after_opening = &rest[opening + 1..];
+    let Some(closing) = after_opening.find(']') else {
+        return Err(CompilerError::new(
+            line.span(12 + opening + 1),
+            "AE-HOST-001: host weave parameter list is missing its closing bracket",
+        ));
+    };
+    let parameters = parse_parameters(&after_opening[..closing], line, record_types)?;
+    let after_parameters = after_opening[closing + 1..].trim();
+    let Some(result_text) = after_parameters.strip_prefix("-> ") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-HOST-001: host weave result must use -> Type",
+        ));
+    };
+    if result_text.trim() != result_text {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-HOST-001: host weave result type must follow -> with a single space",
+        ));
+    }
+    let result = parse_value_type(result_text, line.span(line.content.len()), record_types)?;
+    validate_host_abi_types(&parameters, result, line.span(1))?;
+    Ok(HostWeave {
+        name: name.to_owned(),
+        parameters,
+        result,
+        span: line.span(1),
+    })
+}
+
+fn validate_host_abi_types(
+    parameters: &[Parameter],
+    result: ValueType,
+    span: Span,
+) -> Result<(), CompilerError> {
+    for parameter in parameters {
+        match (parameter.mode, parameter.value_type) {
+            (ParameterMode::Own, ValueType::Whole | ValueType::Truth) => {}
+            (ParameterMode::Borrow, ValueType::Text | ValueType::Bytes) => {}
+            (ParameterMode::Access, _)
+            | (
+                _,
+                ValueType::Arena
+                | ValueType::AccessArena
+                | ValueType::BufferWhole
+                | ValueType::BufferTruth
+                | ValueType::Table(_)
+                | ValueType::Record(_),
+            ) => {
+                return Err(CompilerError::new(
+                    parameter.span,
+                    format!(
+                        "AE-HOST-001: host weave parameter {} cannot use mode {:?} with type {}",
+                        parameter.name, parameter.mode, parameter.value_type
+                    ),
+                ));
+            }
+            (ParameterMode::Own, ValueType::Text | ValueType::Bytes) => {
+                return Err(CompilerError::new(
+                    parameter.span,
+                    format!(
+                        "AE-HOST-001: host weave Text/Bytes parameter {} must be borrowed",
+                        parameter.name
+                    ),
+                ));
+            }
+            (ParameterMode::Borrow, ValueType::Whole | ValueType::Truth) => {
+                return Err(CompilerError::new(
+                    parameter.span,
+                    format!(
+                        "AE-HOST-001: host weave copy parameter {} cannot use borrow",
+                        parameter.name
+                    ),
+                ));
+            }
+        }
+    }
+    match result {
+        ValueType::Whole | ValueType::Truth | ValueType::Text | ValueType::Bytes => Ok(()),
+        ValueType::Record(_)
+        | ValueType::Arena
+        | ValueType::AccessArena
+        | ValueType::BufferWhole
+        | ValueType::BufferTruth
+        | ValueType::Table(_) => Err(CompilerError::new(
+            span,
+            format!("AE-HOST-001: host weave result cannot be {result}"),
+        )),
+    }
 }
 
 fn parse_weave_header(
@@ -3669,7 +4002,11 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
             "an Aether program must declare at least one weave",
         ));
     }
-    if program.weaves.len() > MAX_FUNCTIONS {
+    let total_functions = program
+        .host_weaves
+        .len()
+        .saturating_add(program.weaves.len());
+    if total_functions > MAX_FUNCTIONS {
         return Err(CompilerError::new(
             Span::synthetic(),
             format!("Aether supports at most {MAX_FUNCTIONS} weaves per artifact"),
@@ -3677,6 +4014,35 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
     }
 
     let mut signatures = BTreeMap::new();
+    for host in &program.host_weaves {
+        validate_host_abi_types(&host.parameters, host.result, host.span)?;
+        if host.name == "main" {
+            return Err(CompilerError::new(
+                host.span,
+                "AE-HOST-001: main cannot be a host weave",
+            ));
+        }
+        if signatures
+            .insert(
+                host.name.clone(),
+                FunctionSignature {
+                    parameters: host.parameters.clone(),
+                    result: host.result,
+                    effect: Effect::Total,
+                    is_host: true,
+                },
+            )
+            .is_some()
+        {
+            return Err(CompilerError::new(
+                host.span,
+                format!(
+                    "AE-HOST-001: host weave {} is declared more than once",
+                    host.name
+                ),
+            ));
+        }
+    }
     for weave in &program.weaves {
         if signatures
             .insert(
@@ -3685,6 +4051,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
                     parameters: weave.parameters.clone(),
                     result: weave.result,
                     effect: weave.effect,
+                    is_host: false,
                 },
             )
             .is_some()
@@ -5917,11 +6284,19 @@ fn expression_type(
             if signature.parameters.len() != arguments.len() {
                 return Err(CompilerError::new(
                     expression.span,
-                    format!(
-                        "call {weave} requires {} argument(s), received {}",
-                        signature.parameters.len(),
-                        arguments.len()
-                    ),
+                    if signature.is_host {
+                        format!(
+                            "AE-HOST-002: host call {weave} requires {} argument(s), received {}",
+                            signature.parameters.len(),
+                            arguments.len()
+                        )
+                    } else {
+                        format!(
+                            "call {weave} requires {} argument(s), received {}",
+                            signature.parameters.len(),
+                            arguments.len()
+                        )
+                    },
                 ));
             }
             for (argument, parameter) in arguments.iter().zip(&signature.parameters) {
@@ -5931,7 +6306,33 @@ fn expression_type(
                 } else {
                     parameter.value_type
                 };
-                require_source_type(argument_type, expected, argument.span, "call argument")?;
+                if signature.is_host {
+                    if argument_type != expected {
+                        return Err(CompilerError::new(
+                            argument.span,
+                            format!(
+                                "AE-HOST-002: host call {weave} argument {} requires {expected}, received {argument_type}",
+                                parameter.name
+                            ),
+                        ));
+                    }
+                    if parameter.mode == ParameterMode::Borrow
+                        && !matches!(
+                            argument.kind,
+                            AtomKind::Borrow(_) | AtomKind::Text(_) | AtomKind::Bytes(_)
+                        )
+                    {
+                        return Err(CompilerError::new(
+                            argument.span,
+                            format!(
+                                "AE-HOST-002: host call {weave} borrow parameter {} requires borrow name or a matching literal",
+                                parameter.name
+                            ),
+                        ));
+                    }
+                } else {
+                    require_source_type(argument_type, expected, argument.span, "call argument")?;
+                }
                 let direct_owned_literal = matches!(
                     (&argument.kind, parameter.value_type),
                     (AtomKind::Text(_), ValueType::Text) | (AtomKind::Bytes(_), ValueType::Bytes)
@@ -6302,11 +6703,32 @@ fn emit_bytecode_with_resource_plan(
     program: &Program,
     resource_plan: &SemanticResourcePlan,
 ) -> Result<Vec<u8>, CompilerError> {
+    // Function table: host weaves first (declaration order), then guest weaves.
     let mut weave_indices = BTreeMap::new();
     let mut weave_results = BTreeMap::new();
+    let mut host_flags = BTreeMap::new();
+    for (index, host) in program.host_weaves.iter().enumerate() {
+        weave_indices.insert(host.name.clone(), index);
+        weave_results.insert(host.name.clone(), host.result);
+        host_flags.insert(host.name.clone(), true);
+    }
+    let host_count = program.host_weaves.len();
     for (index, weave) in program.weaves.iter().enumerate() {
-        weave_indices.insert(weave.name.clone(), index);
+        weave_indices.insert(weave.name.clone(), host_count + index);
         weave_results.insert(weave.name.clone(), weave.result);
+        host_flags.insert(weave.name.clone(), false);
+    }
+
+    let mut compiled_hosts = Vec::new();
+    for host in &program.host_weaves {
+        let mut locals = Vec::with_capacity(host.parameters.len());
+        for parameter in &host.parameters {
+            locals.push(LocalDescriptor {
+                value_type: parameter.value_type,
+                mutable: false,
+            });
+        }
+        compiled_hosts.push((host, locals));
     }
 
     let mut compiled = Vec::new();
@@ -6317,6 +6739,7 @@ fn emit_bytecode_with_resource_plan(
             &weave.body,
             &layout,
             &weave_indices,
+            &host_flags,
             &program.records,
             &program.shapes,
             resource_plan,
@@ -6339,7 +6762,7 @@ fn emit_bytecode_with_resource_plan(
     }
 
     let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
-    bytecode.push(ARTIFACT_VERSION_V10);
+    bytecode.push(ARTIFACT_VERSION_V11);
     write_u32(&mut bytecode, resource_plan.arena_capacity());
     write_u16(
         &mut bytecode,
@@ -6398,15 +6821,53 @@ fn emit_bytecode_with_resource_plan(
             bytecode.extend_from_slice(field.name.as_bytes());
         }
     }
+    let function_count = compiled_hosts
+        .len()
+        .checked_add(compiled.len())
+        .ok_or_else(|| {
+            CompilerError::new(
+                Span::synthetic(),
+                "artifact contains too many weaves for AETH",
+            )
+        })?;
     write_u16(
         &mut bytecode,
-        u16::try_from(compiled.len()).map_err(|_| {
+        u16::try_from(function_count).map_err(|_| {
             CompilerError::new(
                 Span::synthetic(),
                 "artifact contains too many weaves for AETH",
             )
         })?,
     );
+    for (host, locals) in compiled_hosts {
+        let name_length = u8::try_from(host.name.len()).map_err(|_| {
+            CompilerError::new(host.span, "host weave name exceeds the AETH name limit")
+        })?;
+        bytecode.push(name_length);
+        bytecode.extend_from_slice(host.name.as_bytes());
+        let parameter_count = u8::try_from(host.parameters.len()).map_err(|_| {
+            CompilerError::new(host.span, "host weave has too many parameters for AETH")
+        })?;
+        bytecode.push(parameter_count);
+        for parameter in &host.parameters {
+            write_value_type(&mut bytecode, parameter.value_type);
+            bytecode.push(parameter.mode.to_byte());
+        }
+        write_value_type(&mut bytecode, host.result);
+        bytecode.push(Effect::Total.to_byte());
+        bytecode.push(FUNCTION_KIND_HOST);
+        write_u16(
+            &mut bytecode,
+            u16::try_from(locals.len()).map_err(|_| {
+                CompilerError::new(host.span, "host weave has too many local bindings for AETH")
+            })?,
+        );
+        for local in locals {
+            write_value_type(&mut bytecode, local.value_type);
+            bytecode.push(u8::from(local.mutable));
+        }
+        write_u32(&mut bytecode, 0);
+    }
     for (weave, locals, code) in compiled {
         let name_length = u8::try_from(weave.name.len()).map_err(|_| {
             CompilerError::new(weave.span, "weave name exceeds the AETH name limit")
@@ -6423,6 +6884,7 @@ fn emit_bytecode_with_resource_plan(
         }
         write_value_type(&mut bytecode, weave.result);
         bytecode.push(weave.effect.to_byte());
+        bytecode.push(FUNCTION_KIND_GUEST);
         write_u16(
             &mut bytecode,
             u16::try_from(locals.len()).map_err(|_| {
@@ -6648,10 +7110,12 @@ fn static_atom_type(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_block(
     statements: &[Statement],
     layout: &BTreeMap<String, SlotInfo>,
     weave_indices: &BTreeMap<String, usize>,
+    host_flags: &BTreeMap<String, bool>,
     records: &[RecordDeclaration],
     shapes: &[ShapeDeclaration],
     resource_plan: &SemanticResourcePlan,
@@ -6673,6 +7137,7 @@ fn emit_block(
                         value,
                         layout,
                         weave_indices,
+                        host_flags,
                         records,
                         shapes,
                         resource_plan,
@@ -6698,6 +7163,7 @@ fn emit_block(
                     value,
                     layout,
                     weave_indices,
+                    host_flags,
                     records,
                     shapes,
                     resource_plan,
@@ -6722,6 +7188,7 @@ fn emit_block(
                     value,
                     layout,
                     weave_indices,
+                    host_flags,
                     records,
                     shapes,
                     resource_plan,
@@ -6734,6 +7201,7 @@ fn emit_block(
                     value,
                     layout,
                     weave_indices,
+                    host_flags,
                     records,
                     shapes,
                     resource_plan,
@@ -6838,6 +7306,7 @@ fn emit_block(
                         condition,
                         layout,
                         weave_indices,
+                        host_flags,
                         records,
                         shapes,
                         resource_plan,
@@ -6849,6 +7318,7 @@ fn emit_block(
                         when_bright,
                         layout,
                         weave_indices,
+                        host_flags,
                         records,
                         shapes,
                         resource_plan,
@@ -6860,6 +7330,7 @@ fn emit_block(
                         when_dim,
                         layout,
                         weave_indices,
+                        host_flags,
                         records,
                         shapes,
                         resource_plan,
@@ -6871,6 +7342,7 @@ fn emit_block(
                     condition,
                     layout,
                     weave_indices,
+                    host_flags,
                     records,
                     shapes,
                     resource_plan,
@@ -6882,6 +7354,7 @@ fn emit_block(
                     when_bright,
                     layout,
                     weave_indices,
+                    host_flags,
                     records,
                     shapes,
                     resource_plan,
@@ -6899,6 +7372,7 @@ fn emit_block(
                         when_dim,
                         layout,
                         weave_indices,
+                        host_flags,
                         records,
                         shapes,
                         resource_plan,
@@ -6916,6 +7390,7 @@ fn emit_block(
                     condition,
                     layout,
                     weave_indices,
+                    host_flags,
                     records,
                     shapes,
                     resource_plan,
@@ -6927,6 +7402,7 @@ fn emit_block(
                     body,
                     layout,
                     weave_indices,
+                    host_flags,
                     records,
                     shapes,
                     resource_plan,
@@ -6989,10 +7465,12 @@ fn emit_block(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit_expression(
     expression: &Expression,
     layout: &BTreeMap<String, SlotInfo>,
     weave_indices: &BTreeMap<String, usize>,
+    host_flags: &BTreeMap<String, bool>,
     records: &[RecordDeclaration],
     shapes: &[ShapeDeclaration],
     resource_plan: &SemanticResourcePlan,
@@ -7109,7 +7587,8 @@ fn emit_expression(
                     format!("internal compiler could not resolve weave {weave}"),
                 )
             })?;
-            code.push(OP_CALL);
+            let is_host = host_flags.get(weave).copied().unwrap_or(false);
+            code.push(if is_host { OP_HOST_CALL } else { OP_CALL });
             write_u16(
                 code,
                 u16::try_from(*function).map_err(|_| {
@@ -7360,6 +7839,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             | ARTIFACT_VERSION_V8
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
+            | ARTIFACT_VERSION_V11
     ) {
         return Err(BytecodeError::new(
             ARTIFACT_MAGIC.len(),
@@ -7374,12 +7854,13 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             | ARTIFACT_VERSION_V8
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
+            | ARTIFACT_VERSION_V11
     ) {
         let capacity = read_u32(bytecode, &mut position)?;
         if capacity > MAX_ARENA_BYTES {
             return Err(BytecodeError::new(
                 position,
-                "AETH v6 through v10 arena capacity exceeds the M2 safety limit",
+                "AETH v6 through v11 arena capacity exceeds the M2 safety limit",
             ));
         }
         capacity
@@ -7395,6 +7876,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             | ARTIFACT_VERSION_V8
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
+            | ARTIFACT_VERSION_V11
     ) {
         let record_count = usize::from(read_u16(bytecode, &mut position)?);
         if (version == ARTIFACT_VERSION_V5 && record_count == 0) || record_count > MAX_RECORDS {
@@ -7456,7 +7938,10 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         }
     }
     let mut shapes = Vec::new();
-    if matches!(version, ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10) {
+    if matches!(
+        version,
+        ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11
+    ) {
         let shape_count = usize::from(read_u16(bytecode, &mut position)?);
         if shape_count > MAX_SHAPES {
             return Err(BytecodeError::new(
@@ -7545,11 +8030,27 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         )?;
         let effect = if matches!(
             version,
-            ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10
+            ARTIFACT_VERSION_V7
+                | ARTIFACT_VERSION_V8
+                | ARTIFACT_VERSION_V9
+                | ARTIFACT_VERSION_V10
+                | ARTIFACT_VERSION_V11
         ) {
             Effect::from_byte(read_byte(bytecode, &mut position)?, position)?
         } else {
             Effect::Total
+        };
+        let kind = if version == ARTIFACT_VERSION_V11 {
+            let kind = read_byte(bytecode, &mut position)?;
+            if kind != FUNCTION_KIND_GUEST && kind != FUNCTION_KIND_HOST {
+                return Err(BytecodeError::new(
+                    position,
+                    "artifact function kind must be guest (0) or host (1)",
+                ));
+            }
+            kind
+        } else {
+            FUNCTION_KIND_GUEST
         };
         let local_count = usize::from(read_u16(bytecode, &mut position)?);
         if local_count > MAX_LOCALS {
@@ -7585,6 +8086,42 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
         let code_length = usize::try_from(read_u32(bytecode, &mut position)?).map_err(|_| {
             BytecodeError::new(position, "artifact code length is outside platform limits")
         })?;
+        if kind == FUNCTION_KIND_HOST {
+            if effect != Effect::Total {
+                return Err(BytecodeError::new(
+                    position,
+                    "host weaves must remain total in AETH v11",
+                ));
+            }
+            if code_length != 0 {
+                return Err(BytecodeError::new(
+                    position,
+                    "host weaves must have empty guest bytecode",
+                ));
+            }
+            for (value_type, mode) in &parameters {
+                let legal = matches!(
+                    (*mode, *value_type),
+                    (ParameterMode::Own, ValueType::Whole | ValueType::Truth)
+                        | (ParameterMode::Borrow, ValueType::Text | ValueType::Bytes)
+                );
+                if !legal {
+                    return Err(BytecodeError::new(
+                        position,
+                        "host weave parameter ABI is outside the M8 primitive surface",
+                    ));
+                }
+            }
+            if !matches!(
+                result,
+                ValueType::Whole | ValueType::Truth | ValueType::Text | ValueType::Bytes
+            ) {
+                return Err(BytecodeError::new(
+                    position,
+                    "host weave result ABI is outside the M8 primitive surface",
+                ));
+            }
+        }
         let end = position
             .checked_add(code_length)
             .ok_or_else(|| BytecodeError::new(position, "artifact code length overflowed"))?;
@@ -7597,6 +8134,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             parameters,
             result,
             effect,
+            kind,
             locals,
             code: code.to_vec(),
         });
@@ -7624,6 +8162,24 @@ fn verify_function(
     shapes: &[ArtifactShape],
     version: u8,
 ) -> Result<(), BytecodeError> {
+    if function.is_host() {
+        if version != ARTIFACT_VERSION_V11 {
+            return Err(BytecodeError::new(
+                0,
+                "host weaves are valid only in AETH v11 artifacts",
+            ));
+        }
+        if !function.code.is_empty() {
+            return Err(BytecodeError::new(
+                0,
+                "host weaves must have empty guest bytecode",
+            ));
+        }
+        if function.name == "main" {
+            return Err(BytecodeError::new(0, "main cannot be a host weave"));
+        }
+        return Ok(());
+    }
     let decoded = decode_code(&function.code, version)?;
     if decoded.is_empty() {
         return Err(BytecodeError::new(0, "weave contains no instructions"));
@@ -8357,6 +8913,12 @@ fn verify_instruction(
                     "call references an unknown weave",
                 ));
             };
+            if called_function.is_host() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "ordinary AETH CALL cannot invoke a host weave; use HOST_CALL",
+                ));
+            }
             if called_function.effect != Effect::Total {
                 return Err(BytecodeError::new(
                     offset,
@@ -8387,6 +8949,65 @@ fn verify_instruction(
                         ParameterMode::Access => unreachable!("access parameters use AccessArena"),
                     }
                 }
+            }
+            state.stack.push(called_function.result);
+            let _ = function_index;
+            continue_with(state)
+        }
+        Instruction::HostCall {
+            function: called,
+            arguments,
+        } => {
+            let Some(called_function) = functions.get(*called) else {
+                return Err(BytecodeError::new(
+                    offset,
+                    "host call references an unknown weave",
+                ));
+            };
+            if !called_function.is_host() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "HOST_CALL can only target a host weave entry",
+                ));
+            }
+            if called_function.effect != Effect::Total {
+                return Err(BytecodeError::new(offset, "host weaves must remain total"));
+            }
+            if called_function.parameters.len() != *arguments {
+                return Err(BytecodeError::new(
+                    offset,
+                    "host call argument count disagrees with its weave signature",
+                ));
+            }
+            for (expected, mode) in called_function.parameters.iter().rev() {
+                if *mode == ParameterMode::Access
+                    || is_buffer_type(*expected)
+                    || is_table_type(*expected)
+                    || matches!(
+                        expected,
+                        ValueType::Record(_) | ValueType::Arena | ValueType::AccessArena
+                    )
+                {
+                    return Err(BytecodeError::new(
+                        offset,
+                        "host call cannot cross a resource or record boundary",
+                    ));
+                }
+                pop_type(&mut state.stack, *expected, offset, "host call")?;
+            }
+            if matches!(
+                called_function.result,
+                ValueType::Record(_)
+                    | ValueType::Arena
+                    | ValueType::AccessArena
+                    | ValueType::BufferWhole
+                    | ValueType::BufferTruth
+                    | ValueType::Table(_)
+            ) {
+                return Err(BytecodeError::new(
+                    offset,
+                    "host call cannot yield a resource or record",
+                ));
             }
             state.stack.push(called_function.result);
             let _ = function_index;
@@ -8672,6 +9293,12 @@ fn execute_function(
         .functions
         .get(function_index)
         .ok_or_else(|| BytecodeError::new(0, "runtime call references an unknown weave"))?;
+    if function.is_host() {
+        return Err(BytecodeError::new(
+            0,
+            "runtime cannot execute a host weave as guest bytecode",
+        ));
+    }
     if function.parameters.len() != arguments.len() {
         return Err(BytecodeError::new(
             0,
@@ -9764,6 +10391,12 @@ fn execute_function(
                 let called_function = artifact.functions.get(called).ok_or_else(|| {
                     BytecodeError::new(decoded.offset, "runtime call references an unknown weave")
                 })?;
+                if called_function.is_host() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime ordinary call cannot invoke a host weave",
+                    ));
+                }
                 if called_function.effect != Effect::Total {
                     return Err(BytecodeError::new(
                         decoded.offset,
@@ -9800,6 +10433,62 @@ fn execute_function(
                         "runtime total call reached an Error[Whole] exit",
                     ));
                 };
+                stack.push(value);
+            }
+            Instruction::HostCall {
+                function: called,
+                arguments,
+            } => {
+                let called_function = artifact.functions.get(called).ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "runtime host call references an unknown weave",
+                    )
+                })?;
+                if !called_function.is_host() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime HOST_CALL target is not a host weave",
+                    ));
+                }
+                if called_function.parameters.len() != arguments {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime host call has an invalid argument count",
+                    ));
+                }
+                let mut values = Vec::with_capacity(arguments);
+                for (value_type, mode) in called_function.parameters.iter().rev() {
+                    let value = pop_runtime(&mut stack, decoded.offset, "host call")?;
+                    if *mode == ParameterMode::Access
+                        || matches!(
+                            value,
+                            RuntimeValue::Record { .. }
+                                | RuntimeValue::Arena
+                                | RuntimeValue::AccessArena
+                                | RuntimeValue::Buffer { .. }
+                                | RuntimeValue::Table { .. }
+                        )
+                    {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime host call cannot cross a resource or record boundary",
+                        ));
+                    }
+                    require_runtime_type(&value, *value_type, decoded.offset, "host call")?;
+                    values.push(value);
+                }
+                values.reverse();
+                let value =
+                    runtime_state
+                        .hosts
+                        .invoke(&called_function.name, &values, decoded.offset)?;
+                if value.value_type() != called_function.result {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime host service returned a type that disagrees with its signature",
+                    ));
+                }
                 stack.push(value);
             }
             Instruction::JumpIfDim(target) => {
@@ -9902,10 +10591,11 @@ fn decode_instruction(
                     | ARTIFACT_VERSION_V8
                     | ARTIFACT_VERSION_V9
                     | ARTIFACT_VERSION_V10
+                    | ARTIFACT_VERSION_V11
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record construction is valid only in AETH v5 through v10 artifacts",
+                    "record construction is valid only in AETH v5 through v11 artifacts",
                 ));
             }
             Instruction::MakeRecord(read_u16(code, position)?)
@@ -9919,10 +10609,11 @@ fn decode_instruction(
                     | ARTIFACT_VERSION_V8
                     | ARTIFACT_VERSION_V9
                     | ARTIFACT_VERSION_V10
+                    | ARTIFACT_VERSION_V11
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record field projection is valid only in AETH v5 through v10 artifacts",
+                    "record field projection is valid only in AETH v5 through v11 artifacts",
                 ));
             }
             Instruction::Field {
@@ -10047,6 +10738,13 @@ fn decode_instruction(
             function: usize::from(read_u16(code, position)?),
             arguments: usize::from(read_byte(code, position)?),
         },
+        OP_HOST_CALL => {
+            require_v11_instruction(version, offset, "host call")?;
+            Instruction::HostCall {
+                function: usize::from(read_u16(code, position)?),
+                arguments: usize::from(read_byte(code, position)?),
+            }
+        }
         OP_JUMP_IF_DIM => Instruction::JumpIfDim(read_usize_u32(code, position)?),
         OP_JUMP => Instruction::Jump(read_usize_u32(code, position)?),
         _ => return Err(BytecodeError::new(offset, "unknown Aether opcode")),
@@ -10066,12 +10764,13 @@ fn require_v6_instruction(version: u8, offset: usize, subject: &str) -> Result<(
             | ARTIFACT_VERSION_V8
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
+            | ARTIFACT_VERSION_V11
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v6 through v10 artifacts"),
+            format!("{subject} is valid only in AETH v6 through v11 artifacts"),
         ))
     }
 }
@@ -10079,13 +10778,17 @@ fn require_v6_instruction(version: u8, offset: usize, subject: &str) -> Result<(
 fn require_v7_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
     if matches!(
         version,
-        ARTIFACT_VERSION_V7 | ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10
+        ARTIFACT_VERSION_V7
+            | ARTIFACT_VERSION_V8
+            | ARTIFACT_VERSION_V9
+            | ARTIFACT_VERSION_V10
+            | ARTIFACT_VERSION_V11
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v7 through v10 artifacts"),
+            format!("{subject} is valid only in AETH v7 through v11 artifacts"),
         ))
     }
 }
@@ -10093,35 +10796,49 @@ fn require_v7_instruction(version: u8, offset: usize, subject: &str) -> Result<(
 fn require_v8_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
     if matches!(
         version,
-        ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10
+        ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v8 through v10 artifacts"),
+            format!("{subject} is valid only in AETH v8 through v11 artifacts"),
         ))
     }
 }
 
 fn require_v9_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if matches!(version, ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10) {
+    if matches!(
+        version,
+        ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11
+    ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v9 or v10 artifacts"),
+            format!("{subject} is valid only in AETH v9 through v11 artifacts"),
         ))
     }
 }
 
 fn require_v10_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if version == ARTIFACT_VERSION_V10 {
+    if matches!(version, ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v10 artifacts"),
+            format!("{subject} is valid only in AETH v10 or v11 artifacts"),
+        ))
+    }
+}
+
+fn require_v11_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
+    if version == ARTIFACT_VERSION_V11 {
+        Ok(())
+    } else {
+        Err(BytecodeError::new(
+            offset,
+            format!("{subject} is valid only in AETH v11 artifacts"),
         ))
     }
 }
@@ -11213,10 +11930,11 @@ fn read_value_type(
                     | ARTIFACT_VERSION_V8
                     | ARTIFACT_VERSION_V9
                     | ARTIFACT_VERSION_V10
+                    | ARTIFACT_VERSION_V11
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record types are valid only in AETH v5 through v10 artifacts",
+                    "record types are valid only in AETH v5 through v11 artifacts",
                 ));
             }
             let record_id = read_u16(bytes, position)?;
@@ -11235,6 +11953,7 @@ fn read_value_type(
                 | ARTIFACT_VERSION_V8
                 | ARTIFACT_VERSION_V9
                 | ARTIFACT_VERSION_V10
+                | ARTIFACT_VERSION_V11
         ) =>
         {
             Ok(ValueType::Arena)
@@ -11246,6 +11965,7 @@ fn read_value_type(
                 | ARTIFACT_VERSION_V8
                 | ARTIFACT_VERSION_V9
                 | ARTIFACT_VERSION_V10
+                | ARTIFACT_VERSION_V11
         ) =>
         {
             Ok(ValueType::BufferWhole)
@@ -11257,6 +11977,7 @@ fn read_value_type(
                 | ARTIFACT_VERSION_V8
                 | ARTIFACT_VERSION_V9
                 | ARTIFACT_VERSION_V10
+                | ARTIFACT_VERSION_V11
         ) =>
         {
             Ok(ValueType::BufferTruth)
@@ -11265,7 +11986,11 @@ fn read_value_type(
             offset,
             "access loans are verifier-internal and cannot be serialized",
         )),
-        10 if matches!(version, ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10) => {
+        10 if matches!(
+            version,
+            ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11
+        ) =>
+        {
             let shape_id = read_u16(bytes, position)?;
             if usize::from(shape_id) >= shape_count {
                 return Err(BytecodeError::new(
@@ -12396,7 +13121,7 @@ mod tests {
         assert_eq!(run.exit_code, 0);
         assert_eq!(format_program(&output.program), HELLO);
         assert!(canonical_ast(&output.program).contains("Borrow(greeting)"));
-        assert_eq!(&output.bytecode[..5], b"AETH\x0a");
+        assert_eq!(&output.bytecode[..5], b"AETH\x0b");
     }
 
     #[test]
@@ -12592,7 +13317,7 @@ mod tests {
         let first = compile_to_bytecode(HELLO).expect("first compilation should work");
         let second = compile_to_bytecode(HELLO).expect("second compilation should work");
         assert_eq!(first.bytecode, second.bytecode);
-        assert_eq!(&first.bytecode[..5], b"AETH\x0a");
+        assert_eq!(&first.bytecode[..5], b"AETH\x0b");
         verify_bytecode(&first.bytecode).expect("compiler artifact must verify");
     }
 
@@ -12615,8 +13340,8 @@ mod tests {
         let mut artifact = compile_to_bytecode(record_source)
             .expect("record source should compile")
             .bytecode;
-        // Translate a current v9 artifact into a v5-compatible payload:
-        // drop arena capacity and the empty shape table, then the effect byte.
+        // Translate a current v11 artifact into a v5-compatible payload:
+        // drop arena capacity, empty shape table, effect byte, and host kind byte.
         artifact[4] = ARTIFACT_VERSION_V5;
         artifact.drain(5..9).for_each(drop);
         let record_bytes = 2 + 1 + "card".len() + 1 + 1 + "score".len() + 1;
@@ -12632,6 +13357,11 @@ mod tests {
         artifact.drain(shape_count_offset..shape_count_offset + 2);
         let effect_offset = shape_count_offset + 2 + 1 + "main".len() + 1 + 1;
         assert_eq!(artifact[effect_offset], 0, "fixture main must be total");
+        artifact.remove(effect_offset);
+        assert_eq!(
+            artifact[effect_offset], FUNCTION_KIND_GUEST,
+            "fixture main must be a guest weave"
+        );
         artifact.remove(effect_offset);
         verify_bytecode(&artifact).expect("the translated v5 compatibility fixture should verify");
         let field_offset = artifact
@@ -12658,7 +13388,7 @@ mod tests {
         let run = run_bytecode(&output.bytecode).expect("record artifact should run");
         assert_eq!(run.stdout, "Aether");
         assert_eq!(run.exit_code, 8);
-        assert_eq!(&output.bytecode[..5], b"AETH\x0a");
+        assert_eq!(&output.bytecode[..5], b"AETH\x0b");
         assert_eq!(format_program(&output.program), source);
         assert!(canonical_ast(&output.program).contains("Record(card)[label:Text"));
 
@@ -12700,7 +13430,7 @@ mod tests {
     fn runs_bounded_arena_buffer_operations() {
         let source = "world arena_buffer\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 0\n  choose allocate access memory move values 2 into values:\n    choose append move values 7 into values:\n      choose at borrow values 0 into observed:\n        yield observed\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
         let output = compile_to_bytecode(source).expect("arena-buffer source should compile");
-        assert_eq!(&output.bytecode[..5], b"AETH\x0a");
+        assert_eq!(&output.bytecode[..5], b"AETH\x0b");
         assert_eq!(
             u32::from_le_bytes(
                 output.bytecode[5..9]
@@ -12977,10 +13707,10 @@ mod tests {
     fn compiles_verifies_and_runs_the_bounded_m5_comptime_bindings() {
         let source = "world comptime_math\n\nweave main [] -> Whole:\n  comptime bind table_width <- product 16 8\n  comptime bind header_size <- sum 12 4\n  comptime bind word_count <- quotient 144 12\n  comptime bind remainder_value <- remainder 17 5\n  comptime bind signed_delta <- difference 5 13\n  bind first <- sum table_width header_size\n  bind second <- sum word_count remainder_value\n  bind third <- sum first second\n  yield sum third signed_delta\n";
         let output = compile_to_bytecode(source).expect("M5 comptime source should compile");
-        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V10);
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V11);
         assert!(
             output.bytecode.contains(&OP_COMPTIME_WHOLE),
-            "M5 artifacts must retain compile-time provenance in AETH v8 through v10"
+            "M5 artifacts must retain compile-time provenance in AETH v8 through v11"
         );
         assert_eq!(format_program(&output.program), source);
         assert!(canonical_ast(&output.program).contains("ComptimeBind(table_width"));
@@ -13034,7 +13764,8 @@ mod tests {
         let mut artifact = compile_to_bytecode(source)
             .expect("M5 provenance fixture should compile")
             .bytecode;
-        // Drop the empty shape table so the payload can be reinterpreted as v8/v7.
+        // Drop the empty shape table and guest kind byte so the payload can be
+        // reinterpreted as v7 (pre-kind, pre-shape).
         let shape_count_offset = 5 + 4 + 2;
         assert_eq!(
             u16::from_le_bytes([
@@ -13044,12 +13775,17 @@ mod tests {
             0
         );
         artifact.drain(shape_count_offset..shape_count_offset + 2);
+        // function table: count(2) + name_len(1) + "main"(4) + params(1) + result(1) + effect(1) + kind(1)
+        let kind_offset = shape_count_offset + 2 + 1 + "main".len() + 1 + 1 + 1;
+        assert_eq!(artifact[kind_offset], FUNCTION_KIND_GUEST);
+        artifact.remove(kind_offset);
         artifact[4] = ARTIFACT_VERSION_V7;
         let error = verify_bytecode(&artifact)
             .expect_err("AETH v7 must not reinterpret AETH v8 comptime provenance");
         assert!(
-            error.message.contains("valid only in AETH v8 through v10")
+            error.message.contains("valid only in AETH v8 through v11")
                 || error.message.contains("valid only in AETH v8")
+                || error.message.contains("unknown Aether opcode")
         );
     }
 
@@ -13057,7 +13793,7 @@ mod tests {
     fn compiles_verifies_and_runs_the_bounded_m4_error_effect() {
         let source = "world effects\n\nweave leaf [value: Whole] -> Whole raises Whole:\n  raise value\n\nweave forwarded [value: Whole] -> Whole raises Whole:\n  forward call leaf value\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call forwarded 17 into success otherwise error into code\n";
         let output = compile_to_bytecode(source).expect("M4 handled source should compile");
-        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V10);
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V11);
         assert_eq!(format_program(&output.program), source);
         verify_bytecode(&output.bytecode).expect("M4 artifact should verify");
         assert_eq!(
@@ -13169,7 +13905,7 @@ mod tests {
         let columns_out =
             compile_to_bytecode(columns).expect("columns layout-table source should compile");
         let rows_out = compile_to_bytecode(&rows).expect("rows layout-table source should compile");
-        assert_eq!(columns_out.bytecode[4], ARTIFACT_VERSION_V10);
+        assert_eq!(columns_out.bytecode[4], ARTIFACT_VERSION_V11);
         assert!(columns_out.bytecode.contains(&OP_TABLE));
         assert!(columns_out.bytecode.contains(&OP_TABLE_ALLOCATE));
         assert!(columns_out.bytecode.contains(&OP_TABLE_STORE));
@@ -13251,7 +13987,7 @@ mod tests {
     fn compiles_verifies_and_runs_structured_nurseries() {
         let total = include_str!("../../../examples/nursery-total.ae");
         let output = compile_to_bytecode(total).expect("total nursery should compile");
-        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V10);
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V11);
         assert!(output.bytecode.contains(&OP_NURSERY_BEGIN));
         assert!(output.bytecode.contains(&OP_NURSERY_SPAWN));
         assert!(output.bytecode.contains(&OP_NURSERY_END));
@@ -13300,9 +14036,105 @@ mod tests {
             .expect_err("AETH v9 must not accept AETH v10 nursery opcodes");
         assert!(
             error.message.contains("valid only in AETH v10")
+                || error.message.contains("valid only in AETH v10 or v11")
                 || error.message.contains("unknown")
                 || error.message.contains("outside")
                 || error.message.contains("trailing")
+                || error.message.contains("function kind")
+                || error.message.contains("code is truncated")
+                || error.message.contains("local")
+        );
+    }
+
+    #[test]
+    fn compiles_verifies_and_runs_the_host_abi_pilot() {
+        let source = include_str!("../../../examples/host-pilot.ae");
+        let output = compile_to_bytecode(source).expect("host-pilot should compile");
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V11);
+        assert!(
+            output.bytecode.iter().any(|byte| *byte == OP_HOST_CALL),
+            "host-pilot artifact must emit HOST_CALL"
+        );
+        assert!(
+            !output
+                .program
+                .host_weaves
+                .iter()
+                .any(|host| host.name == "main"),
+            "main must remain a guest weave"
+        );
+        assert_eq!(output.program.host_weaves.len(), 2);
+        verify_bytecode(&output.bytecode).expect("host-pilot should verify");
+        let run = run_bytecode(&output.bytecode).expect("host-pilot should run");
+        assert_eq!(run.exit_code, 48, "41+1 + len(\"Aether\") == 48");
+        assert_eq!(
+            format_program(&output.program),
+            source.replace("\r\n", "\n")
+        );
+    }
+
+    #[test]
+    fn rejects_illegal_host_weave_forms_and_missing_services() {
+        let body = "world bad\n\nhost weave whole_inc [value: Whole] -> Whole:\n  yield value\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(body).expect_err("host weave with body must fail");
+        assert_eq!(error.diagnostic().code, "AE-HOST-001");
+
+        let raises = "world bad\n\nhost weave boom [value: Whole] -> Whole raises Whole\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(raises).expect_err("host weave raises must fail");
+        assert_eq!(error.diagnostic().code, "AE-HOST-001");
+
+        let buffer = "world bad\n\nhost weave take [buffer: BufferWhole] -> Whole\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(buffer).expect_err("host buffer param must fail");
+        assert_eq!(error.diagnostic().code, "AE-HOST-001");
+
+        let unknown = "world bad\n\nhost weave mystery [value: Whole] -> Whole\n\nweave main [] -> Whole:\n  yield call mystery 1\n";
+        let output = compile_to_bytecode(unknown).expect("undeclared service name still compiles");
+        let error =
+            run_bytecode(&output.bytecode).expect_err("missing host service must fail closed");
+        assert!(error.message.contains("AE-HOST-003"));
+    }
+
+    #[test]
+    fn verifier_rejects_host_call_outside_aeth_v11() {
+        let source = include_str!("../../../examples/host-pilot.ae");
+        let mut artifact = compile_to_bytecode(source)
+            .expect("host-pilot should compile")
+            .bytecode;
+        artifact[4] = ARTIFACT_VERSION_V10;
+        let error = verify_bytecode(&artifact)
+            .expect_err("AETH v10 must not accept host kind metadata or HOST_CALL");
+        assert!(
+            error.message.contains("valid only in AETH v11")
+                || error.message.contains("unknown")
+                || error.message.contains("outside")
+                || error.message.contains("truncated")
+                || error.message.contains("local")
+                || error.message.contains("function kind")
+                || error.message.contains("truncated is truncated")
+        );
+    }
+
+    #[test]
+    fn host_invoke_still_rejects_resources_at_the_boundary() {
+        let source = "world boundary\n\nweave main [] -> Whole:\n  yield 0\n\nweave helper [value: Whole] -> Whole:\n  yield value\n";
+        let artifact = compile_to_bytecode(source)
+            .expect("helper fixture should compile")
+            .bytecode;
+        let error = invoke_bytecode(&artifact, "helper", &[InvocationValue::Whole(1)])
+            .expect("primitive host invoke remains legal")
+            .value;
+        assert_eq!(error, InvocationValue::Whole(1));
+        // Record/resource rejection is preserved on the forge-style boundary.
+        let record_source = "world records\n\nrecord card [score: Whole]\n\nweave main [] -> Whole:\n  bind value <- make card 7\n  yield call project borrow value\n\nweave project [borrow value: card] -> Whole:\n  yield field borrow value score\n";
+        let record_artifact = compile_to_bytecode(record_source)
+            .expect("record fixture should compile")
+            .bytecode;
+        let refused = invoke_bytecode(&record_artifact, "project", &[InvocationValue::Whole(0)])
+            .expect_err("host invoke still rejects mismatched record parameters");
+        assert!(
+            refused.message.contains("requires")
+                || refused.message.contains("resource")
+                || refused.message.contains("record")
         );
     }
 
