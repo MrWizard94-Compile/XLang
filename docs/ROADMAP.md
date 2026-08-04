@@ -50,7 +50,7 @@ diagnostic parity.
 | M6 | Generic shapes and data-layout experiment | M1 and M2 | Explicit-layout collection plus a constrained shape-analysis prototype. | Layout/ABI rules, semantic-equivalence tests, and reproducible performance methodology demonstrate a scoped benefit. | **Implemented in Aether 0.9/AETH v9: dual-layout Whole tables** |
 | M7 | Structured concurrency | M2 and M4 | Lexical task-group model with join, failure, cancellation, and effect-mediated blocking. | No orphan task/property tests, deterministic cleanup, capability rules, diagnostics, and seed parity pass. | **Implemented in Aether 0.10/AETH v10: structured nurseries** |
 | M8 | Foreign/host interface pilot | M1 and M2 | Narrow, typed, ownership-aware pure host ABI fixture (`host weave` / `HOST_CALL`); C-facing design only if a later threat model supports it. | Invalid-input, ownership transfer, capability denial, ABI compatibility, and local reproducibility tests pass. | **Implemented in Aether 0.11/AETH v11: pure host pilot** |
-| M9 | Integrated project/tooling evolution | M3 plus stable package/ABI decisions | Reproducible project metadata, dependency identity, formatter/LSP integration, and release workflow proposal. | Security, offline reproducibility, upgrade/rollback, and package verification criteria are approved and tested. | Deferred |
+| M9 | Integrated project/tooling evolution | M3 plus stable package/ABI decisions | Reproducible project metadata, dependency identity, formatter/LSP integration, and release workflow proposal. | Security, offline reproducibility, upgrade/rollback, and package verification criteria are approved and tested. | **Implemented pilot in 0.12: offline project verify + format; LSP/registry deferred** |
 
 ## Milestone detail
 
@@ -151,10 +151,25 @@ M7 is specified by [DESIGN-M7-STRUCTURED-CONCURRENCY.md](DESIGN-M7-STRUCTURED-CO
 first-failure cancel of remaining unstarted spawns. No OS-thread parallelism is
 claimed.
 
-### M8 — controlled experiment, not feature pile-on
+### M8 — implemented pure host ABI pilot
 
-Foreign interfaces and remaining research items have large interaction surfaces.
-Each begins with the falsifiable spike described in
+M8 is specified by [DESIGN-M8-HOST-ABI-PILOT.md](DESIGN-M8-HOST-ABI-PILOT.md),
+[ADR-011](ADR-011-m8-host-abi-pilot.md), and
+[M8 validation matrix](M8-VALIDATION-MATRIX.md). Aether 0.11 admits body-less
+`host weave` declarations and `HOST_CALL` with a pure product fixture only.
+
+### M9 — implemented offline project tooling pilot
+
+M9 is specified by [DESIGN-M9-PROJECT-TOOLING.md](DESIGN-M9-PROJECT-TOOLING.md),
+[ADR-012](ADR-012-m9-project-tooling.md), and
+[M9 validation matrix](M9-VALIDATION-MATRIX.md). Package 0.12 adds
+`aether.project/v1`, `project verify`, and `format`. Full LSP and network
+package registries remain deferred.
+
+### Remaining research
+
+Further work (expanded packages, LSP, C interop, native backends) has large
+interaction surfaces. Each begins with the falsifiable spike described in
 [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
 No milestone advances merely because its happy path works.
 

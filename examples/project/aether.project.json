@@ -1,0 +1,13 @@
+{
+  "schema": "aether.project/v1",
+  "name": "project_demo",
+  "version": "0.1.0",
+  "units": [
+    { "path": "main.ae", "role": "main" }
+  ],
+  "lock": {
+    "units": [
+      { "path": "main.ae", "sha256": "6e98fd55475f10dc120d568941451f420676826a228dbb396dae4d0a708399bc" }
+    ]
+  }
+}

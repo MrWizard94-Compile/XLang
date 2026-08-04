@@ -1,7 +1,7 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and CLI toolchain for
-deterministic, AI-primary authorship. Aether **0.11.0** parses only Aether
+deterministic, AI-primary authorship. Aether **0.12.0** parses only Aether
 source, emits deterministic AETH v11 bytecode, verifies every artifact, and runs
 it in the Aether VM. It never translates source to Rust, C, JavaScript, LLVM,
 or another language. Verified AETH v4/v5/v6/v7/v8/v9/v10 artifacts remain
@@ -27,7 +27,7 @@ records, closed `arena` / Whole-or-Truth-buffer outcomes, dual-layout Whole
 tables, the explicit `raises Whole`, `raise`, `forward call`, and terminal
 `handle call` forms, root-only literal `comptime bind`, structured nurseries,
 and capability-closed `host weave` / `HOST_CALL`. New compilation emits verified
-AETH v11. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md) and
+AETH v11 (language 0.11). Toolchain 0.12 adds offline project verify and format. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md) and
 [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether

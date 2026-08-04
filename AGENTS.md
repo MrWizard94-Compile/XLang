@@ -55,7 +55,7 @@ JavaScript, LLVM, or another language.
 (the bounded `Error[Whole]` effect), M5 (literal deterministic `comptime bind`),
 M6 (explicit layout shapes and dual-layout tables), M7 (structured nurseries),
 and M8 (capability-closed pure host ABI pilot) are implemented on the
-seed-hosted product compile path in Aether 0.11 / AETH v11.
+seed-hosted product compile path in Aether 0.11 / AETH v11. Toolchain package 0.12 adds offline project verify and format (M9).
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
 proof dual-compare. Seed Profile self-host, all shipped examples, the complete
@@ -71,11 +71,11 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Overview | [README.md](README.md) |
 | Contract / release gate | [MANIFEST.md](MANIFEST.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Language (0.11 current / 0.10–0.4 historical) | [docs/AETHER_0.11.md](docs/AETHER_0.11.md), [docs/AETHER_0.10.md](docs/AETHER_0.10.md), [docs/AETHER_0.9.md](docs/AETHER_0.9.md), [docs/AETHER_0.8.md](docs/AETHER_0.8.md), [docs/AETHER_0.7.md](docs/AETHER_0.7.md), [docs/AETHER_0.6.md](docs/AETHER_0.6.md), [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
+| Language (0.11 surface / 0.12 toolchain current) | [docs/AETHER_0.12.md](docs/AETHER_0.12.md), [docs/AETHER_0.11.md](docs/AETHER_0.11.md), [docs/AETHER_0.10.md](docs/AETHER_0.10.md), [docs/AETHER_0.9.md](docs/AETHER_0.9.md), [docs/AETHER_0.8.md](docs/AETHER_0.8.md), [docs/AETHER_0.7.md](docs/AETHER_0.7.md), [docs/AETHER_0.6.md](docs/AETHER_0.6.md), [docs/AETHER_0.5.md](docs/AETHER_0.5.md), [docs/AETHER_0.4.md](docs/AETHER_0.4.md) |
 | Record decision | [docs/ADR-001-records-and-aeth-v5.md](docs/ADR-001-records-and-aeth-v5.md) |
 | AI-first design foundation | [docs/NORTH_STAR.md](docs/NORTH_STAR.md), [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), [docs/ADR-002-ai-first-design-foundation.md](docs/ADR-002-ai-first-design-foundation.md) |
 | M1/M2 resource decisions | [docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md), [docs/ADR-003-value-resource-semantics.md](docs/ADR-003-value-resource-semantics.md), [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md), [docs/M1-VALIDATION-MATRIX.md](docs/M1-VALIDATION-MATRIX.md) |
-| M3–M8 authoring, effects, comptime, layout, host ABI | [docs/AETHER_AUTHORING_PROTOCOL_v5.md](docs/AETHER_AUTHORING_PROTOCOL_v5.md), [docs/ADR-007-m4-typed-error-effect.md](docs/ADR-007-m4-typed-error-effect.md), [docs/ADR-008-m5-deterministic-comptime.md](docs/ADR-008-m5-deterministic-comptime.md), [docs/ADR-009-m6-explicit-layout-shapes.md](docs/ADR-009-m6-explicit-layout-shapes.md), [docs/ADR-010-m7-structured-concurrency.md](docs/ADR-010-m7-structured-concurrency.md), [docs/ADR-011-m8-host-abi-pilot.md](docs/ADR-011-m8-host-abi-pilot.md), [docs/DESIGN-M8-HOST-ABI-PILOT.md](docs/DESIGN-M8-HOST-ABI-PILOT.md), [docs/M4-VALIDATION-MATRIX.md](docs/M4-VALIDATION-MATRIX.md), [docs/M5-VALIDATION-MATRIX.md](docs/M5-VALIDATION-MATRIX.md), [docs/M6-VALIDATION-MATRIX.md](docs/M6-VALIDATION-MATRIX.md), [docs/M7-VALIDATION-MATRIX.md](docs/M7-VALIDATION-MATRIX.md), [docs/M8-VALIDATION-MATRIX.md](docs/M8-VALIDATION-MATRIX.md) |
+| M3–M9 authoring, effects, layout, host ABI, project tooling | [docs/AETHER_AUTHORING_PROTOCOL_v6.md](docs/AETHER_AUTHORING_PROTOCOL_v6.md), [docs/ADR-007-m4-typed-error-effect.md](docs/ADR-007-m4-typed-error-effect.md), [docs/ADR-008-m5-deterministic-comptime.md](docs/ADR-008-m5-deterministic-comptime.md), [docs/ADR-009-m6-explicit-layout-shapes.md](docs/ADR-009-m6-explicit-layout-shapes.md), [docs/ADR-010-m7-structured-concurrency.md](docs/ADR-010-m7-structured-concurrency.md), [docs/ADR-011-m8-host-abi-pilot.md](docs/ADR-011-m8-host-abi-pilot.md), [docs/ADR-012-m9-project-tooling.md](docs/ADR-012-m9-project-tooling.md), [docs/DESIGN-M8-HOST-ABI-PILOT.md](docs/DESIGN-M8-HOST-ABI-PILOT.md), [docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md), [docs/M4-VALIDATION-MATRIX.md](docs/M4-VALIDATION-MATRIX.md), [docs/M5-VALIDATION-MATRIX.md](docs/M5-VALIDATION-MATRIX.md), [docs/M6-VALIDATION-MATRIX.md](docs/M6-VALIDATION-MATRIX.md), [docs/M7-VALIDATION-MATRIX.md](docs/M7-VALIDATION-MATRIX.md), [docs/M8-VALIDATION-MATRIX.md](docs/M8-VALIDATION-MATRIX.md), [docs/M9-VALIDATION-MATRIX.md](docs/M9-VALIDATION-MATRIX.md) |
 | Research and roadmap | [docs/research/](docs/research/), [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Seed Profile | [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) |
 | Forge ABI | [docs/FORGE_CONTRACT.md](docs/FORGE_CONTRACT.md) |
@@ -88,8 +88,8 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.11.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.11.0) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.12.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.12.0) |
 | Artifact format | AETH **v4–v10** compatibility input + deterministic **v11** output with shape table, dual-layout tables, structured nurseries, effect metadata, host function kind, `HOST_CALL`, and `COMPTIME_WHOLE` provenance (earlier/unknown versions rejected) |
 | Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |

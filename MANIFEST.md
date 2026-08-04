@@ -2,16 +2,18 @@
 
 ## Contract
 
-Aether **0.11.0** accepts Aether source, returns a canonical AST from the Rust
-bootstrap for tooling, and **emits AETH v11 bytecode primarily through the
-Aether-written seed compiler** (forge ABI). The `aether` CLI is the product
-interface for that seed-hosted compile path. Verified AETH
+Aether **0.12.0** (language surface **0.11** / AETH **v11**) accepts Aether
+source, returns a canonical AST from the Rust bootstrap for tooling, and
+**emits AETH v11 bytecode primarily through the Aether-written seed compiler**
+(forge ABI). The `aether` CLI is the product interface for that seed-hosted
+compile path and for offline project verification/formatting. Verified AETH
 v4/v5/v6/v7/v8/v9/v10 artifacts remain accepted compatibility inputs with their
 original meanings. Source is never translated to an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.11 product contract. It intentionally
+This manifest is the executable Aether 0.12 product contract (0.11 language plus
+M9 tooling). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -32,15 +34,15 @@ shapes and dual-layout tables in
 [docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md](docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md)
 and [docs/AETHER_0.9.md](docs/AETHER_0.9.md). M7 implements structured nurseries
 in [docs/AETHER_0.10.md](docs/AETHER_0.10.md). M8 implements the capability-closed
-pure host ABI pilot in [docs/AETHER_0.11.md](docs/AETHER_0.11.md). Structural
-authoring is local tooling metadata, not a host-capability expansion; its
-current contract is
-[docs/AETHER_AUTHORING_PROTOCOL_v5.md](docs/AETHER_AUTHORING_PROTOCOL_v5.md)
-with v6 node surface for host weaves.
+pure host ABI pilot in [docs/AETHER_0.11.md](docs/AETHER_0.11.md). M9 adds
+offline project metadata and formatting in
+[docs/AETHER_0.12.md](docs/AETHER_0.12.md). Structural authoring is local tooling
+metadata, not a host-capability expansion; its current contract is
+[docs/AETHER_AUTHORING_PROTOCOL_v6.md](docs/AETHER_AUTHORING_PROTOCOL_v6.md).
 
 ## Implemented Language Boundary
 
-Aether 0.11.0 includes the 0.4/0.5 scalar and byte surface plus immutable nominal
+Aether 0.11 language surface (package 0.12) includes the 0.4/0.5 scalar and byte surface plus immutable nominal
 records declared after `world` and before weaves. Record fields are bounded to
 the primitive `Text`, `Whole`, `Truth`, and `Bytes` types; records cannot nest.
 `make` constructs in declaration order and `field borrow` projects a cloned
@@ -182,9 +184,23 @@ the versioned structural contracts and deterministic diagnostics, not by giving
 an AI service compilation or persistence authority. The retired workbench is
 recorded in [docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-studio.md).
 
+## Project tooling boundary (M9)
+
+Offline project documents use `aether.project/v1` with relative `.ae` units and
+optional SHA-256 locks. CLI:
+
+```text
+aether format <source-file> [--output <source-file>]
+aether project verify <project-file> [--output-dir <dir>]
+```
+
+No package registry, network dependency fetch, or LSP server is included.
+See [docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md).
+
 ## Quality Gate
 
 Rust format, Clippy `-D warnings`, core/CLI/seed tests, CLI seed-compile of
-examples, and forge self-host hash check are required. A release also requires
+examples, forge self-host hash check, and `aether project verify` on the
+shipped project fixture are required. A release also requires
 `cargo build --release -p aether-cli`, forge contract verification, inspection
 of the release binary, and a successful launch on the target Windows system.

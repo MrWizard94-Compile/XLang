@@ -1,0 +1,4 @@
+world project_demo
+
+weave main [] -> Whole:
+  yield 7

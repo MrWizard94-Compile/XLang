@@ -10,15 +10,21 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
 mod authoring;
+mod project;
 
 pub use authoring::{
     apply_structural_edit, diagnostic_json, structural_document_json, StructuralEditError,
     StructuralEditResult, DIAGNOSTIC_SCHEMA_VERSION, STRUCTURAL_AST_SCHEMA_VERSION,
     STRUCTURAL_EDIT_PROTOCOL_VERSION,
 };
+pub use project::{
+    format_source, parse_project_document, resolve_unit_path, sha256_hex, verify_project,
+    ProjectDocument, ProjectError, ProjectLock, ProjectLockUnit, ProjectUnit, ProjectUnitReport,
+    ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
+};
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.11.0";
+pub const LANGUAGE_VERSION: &str = "0.12.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
