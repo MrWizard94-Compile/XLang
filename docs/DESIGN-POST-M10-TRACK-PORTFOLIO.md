@@ -84,9 +84,10 @@ Host I/O must **not** start from happy-path `read_file` examples. Required first
 
 ## Next concrete docs (default)
 
-1. `docs/DESIGN-M11-LANGUAGE-MODULES.md`  
-2. `docs/ADR-015-…` implementable modules decision  
-3. `docs/M11-VALIDATION-MATRIX.md`  
+1. ~~`docs/DESIGN-M11-LANGUAGE-MODULES.md`~~ **Done**  
+2. ~~`docs/ADR-015-m11-language-modules.md`~~ **Accepted (implementable)**  
+3. ~~`docs/M11-VALIDATION-MATRIX.md`~~ **Done**  
+4. **Next:** implement M11a per ADR-015  
 
 ---
 

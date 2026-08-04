@@ -74,6 +74,7 @@ invalid-source diagnostic parity.
 | M8 | Foreign/host interface pilot | M1 and M2 | Narrow, typed, ownership-aware pure host ABI fixture (`host weave` / `HOST_CALL`); C-facing design only if a later threat model supports it. | Invalid-input, ownership transfer, capability denial, ABI compatibility, and local reproducibility tests pass. | **Implemented in Aether 0.11/AETH v11: pure host pilot** |
 | M9 | Integrated project/tooling evolution | M3 plus stable package/ABI decisions | Reproducible project metadata, dependency identity, formatter/LSP integration, and release workflow proposal. | Security, offline reproducibility, upgrade/rollback, and package verification criteria are approved and tested. | **Implemented pilot in 0.12: offline project verify + format; LSP/registry deferred** |
 | M10 | Multi-unit offline projects | M9 | Nested multi-unit `aether.project/v1`, locks, independent per-unit seed compile, `project format`; no language modules. | Path/lock negatives, multi-unit example, independence documented, matrix green, no registry/import. | **Implemented in package 0.13 (language surface still 0.11)** |
+| M11 | Language modules | M10 | `import unit` / `export weave` / qualified calls; lib without main; project build; phased seed proof. | Matrix green; bootstrap multi-module (M11a); seed dual-compare before seed authority (M11b). | **Designed (ADR-015); implementation pending** |
 
 ## Milestone detail
 
@@ -199,14 +200,23 @@ compilation units** (no import/module system). See
 [AETHER_0.13.md](AETHER_0.13.md) and
 [DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md](DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md).
 
+### M11 — language modules (designed)
+
+M11 is specified by [DESIGN-M11-LANGUAGE-MODULES.md](DESIGN-M11-LANGUAGE-MODULES.md),
+[ADR-015](ADR-015-m11-language-modules.md), and
+[M11 validation matrix](M11-VALIDATION-MATRIX.md). **M11a** ships bootstrap
+multi-source `project build`; **M11b** adds seed dual-compare before seed-hosted
+multi-module authority. Implementation is the next engineering increment.
+
 ### Remaining research / completion program
 
 TP-1, TP-2, and M10 tooling are delivered. Post-M10 growth is governed by
 [ADR-014](ADR-014-post-m10-track-portfolio.md) and
 [DESIGN-POST-M10-TRACK-PORTFOLIO.md](DESIGN-POST-M10-TRACK-PORTFOLIO.md).
+Mainstream multi-epoch plan:
+[ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next design (not code):** **T-MOD language modules** → implementable
-ADR-015 + M11 matrix before any parser/seed/VM work.
+**Default next implementation:** **M11a** per ADR-015 (after this design package).
 
 Ordered backlog: modules → fine-grained edits → bounded LSP → comptime →
 resource↔effect → host I/O (threat rewrite first) → C/FFI → multi-package.
@@ -229,7 +239,7 @@ No milestone advances merely because its happy path works.
 | Task model and cancellation semantics | It affects resource lifetime, scheduler behavior, and failure propagation. | M7 |
 | Foreign interface scope, including any C-header strategy | It affects ownership, hostile input handling, portability, and host capability boundaries. | M8 / **T-FFI** (after pure host; ADR-014) |
 | Any native/LLVM backend | It conflicts with current AETH-only project law and therefore requires explicit law/ADR change before design work. | Outside this roadmap unless approved (**T-NATIVE**) |
-| Language modules / cross-file weave resolution | Changes seed surface and ownership/diagnostics; cannot be implied by multi-unit project files alone. | **T-MOD** — default next design; implementable ADR-015 required ([ADR-014](ADR-014-post-m10-track-portfolio.md)) |
+| Language modules / cross-file weave resolution | Changes seed surface and ownership/diagnostics; cannot be implied by multi-unit project files alone. | **M11 / T-MOD** — designed ([ADR-015](ADR-015-m11-language-modules.md)); implement M11a then M11b |
 | Lib units without standalone `main` | Requires language + seed definition of non-entry units. | With **T-MOD** |
 | Host I/O beyond pure fixtures | Expands guest-visible host authority; TP threat model must be revised first. | **T-HOST** (ADR-014; not default next) |
 | Bounded LSP | Must not become second compiler authority; offline-first. | **T-LSP** (after T-EDIT preferred) |
