@@ -1,0 +1,10 @@
+world resource_handle
+
+weave ok [] -> Whole raises Whole:
+  yield 7
+
+weave main [] -> Whole:
+  bind memory <- arena 64
+  bind mutable success <- 0
+  bind mutable code <- 0
+  handle call ok into success otherwise error into code

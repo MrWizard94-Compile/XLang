@@ -1,9 +1,10 @@
 # ADR-014: post-M10 track portfolio (modules, host I/O, LSP, and related)
 
-**Status:** Accepted (portfolio / process decision) — tracks complete through **M14**;
-**M15/T-CT designed** ([ADR-019](ADR-019-m15-comptime-expansion.md)); portfolio itself
+**Status:** Accepted (portfolio / process decision) — tracks complete through **M16**;
+T-CT ([ADR-019](ADR-019-m15-comptime-expansion.md)) and T-RX first slice
+([ADR-020](ADR-020-m16-resource-effect.md)) implemented; portfolio itself
 authorizes no code without per-track ADRs  
-**Date:** 2026-08-04 (status refreshed after M14)  
+**Date:** 2026-08-04 (status refreshed after M16)  
 **Decision makers:** Product direction under AGENTS Constitution; agent authors portfolio ADR after M10 Done  
 **Related Rule IDs:** `DOC-ADR-001`, `DOC-SYNC-001`, `CONST-DEP-001`, `CONST-COMPLETE-001`, `SEC-INPUT-001`, `TEST-BEHAVIOR-001`, `CONST-CONTRACT-001`  
 
@@ -72,10 +73,10 @@ Human may reorder with an explicit written override (ROADMAP or superseding ADR)
 Unless the human redirects:
 
 1. **Historical default after M10:** T-MOD → T-EDIT → T-LSP → T-CT → T-RX →
-   T-HOST → T-FFI → T-PKG (T-HOST was completed as M14 after T-LSP).  
-2. **Current default next implementation:** **T-CT / M15** per
-   [ADR-019](ADR-019-m15-comptime-expansion.md) (name chaining).  
-3. **Do not** start T-RX, T-FFI, or T-PKG in the same delivery as M15.  
+   T-HOST → T-FFI → T-PKG (T-HOST completed as M14; T-CT as M15; T-RX slice as M16).  
+2. **Current default next:** deeper T-RX, **T-PKG**, stdlib/test tooling, or
+   **T-FFI** — each requires its own design/ADR (not free-form continuation).  
+3. **Do not** claim full resourceful effects or nursery+resource without a new ADR.  
 4. **Do not** claim full comptime metaprogramming until later T-CT slices have
    their own ADRs.
 

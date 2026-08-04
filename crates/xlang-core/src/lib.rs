@@ -30,7 +30,7 @@ pub use project::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.20.0";
+pub const LANGUAGE_VERSION: &str = "0.21.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
@@ -4506,10 +4506,19 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         validate_value_type(weave.result, &program.records, weave.span)?;
         validate_resource_signature(weave)?;
         validate_effect_signature(weave)?;
-        if weave_uses_resource(weave) && weave_uses_effect_control(weave) {
+        // M16: abortive effect (raise/forward or erroring weave body resources)
+        // remains incompatible with resource ownership. Terminal handle in a
+        // total weave may coexist with arenas/buffers/tables (ADR-020).
+        if weave_uses_resource(weave) && weave_uses_abortive_effect(weave) {
             return Err(CompilerError::new(
                 weave.span,
-                "AE-EFFECT-003: Aether M4 error control cannot share a weave with M2 arena, Buffer, access, table, or resource outcomes",
+                "AE-EFFECT-003: abortive raise/forward cannot share a weave with M2 arena, Buffer, access, table, or resource outcomes",
+            ));
+        }
+        if weave.effect == Effect::ErrorWhole && weave_uses_resource(weave) {
+            return Err(CompilerError::new(
+                weave.span,
+                "AE-EFFECT-003: a weave that raises Whole cannot own arena, Buffer, access, table, or resource outcomes",
             ));
         }
         if weave_uses_resource(weave) && weave_uses_nursery(weave) {
@@ -4983,24 +4992,26 @@ fn weave_uses_resource(weave: &Weave) -> bool {
     block_uses_resource(&weave.body)
 }
 
-fn weave_uses_effect_control(weave: &Weave) -> bool {
-    fn block_uses_effect_control(statements: &[Statement]) -> bool {
+/// Abortive effect control only (`raise` / `forward`). Terminal `handle` is excluded (M16).
+fn weave_uses_abortive_effect(weave: &Weave) -> bool {
+    fn block_uses_abortive(statements: &[Statement]) -> bool {
         statements.iter().any(|statement| match statement {
-            Statement::Raise { .. } | Statement::Forward { .. } | Statement::Handle { .. } => true,
+            Statement::Raise { .. } | Statement::Forward { .. } => true,
             Statement::Choose {
                 when_bright,
                 when_dim,
                 ..
-            } => block_uses_effect_control(when_bright) || block_uses_effect_control(when_dim),
-            Statement::While { body, .. } => block_uses_effect_control(body),
-            Statement::Together { .. }
+            } => block_uses_abortive(when_bright) || block_uses_abortive(when_dim),
+            Statement::While { body, .. } => block_uses_abortive(body),
+            Statement::Handle { .. }
+            | Statement::Together { .. }
             | Statement::Bind { .. }
             | Statement::Revise { .. }
             | Statement::Speak { .. }
             | Statement::Yield { .. } => false,
         })
     }
-    block_uses_effect_control(&weave.body)
+    block_uses_abortive(&weave.body)
 }
 
 fn weave_uses_nursery(weave: &Weave) -> bool {
@@ -5235,7 +5246,7 @@ fn validate_block(
                         "AE-EFFECT-002: handle discharges Error[Whole], so its enclosing weave must be total",
                     ));
                 }
-                validate_effect_boundary(scope, *span)?;
+                validate_handle_boundary(scope, *span)?;
                 let signature =
                     validate_effect_call(called, arguments, scope, signatures, *span, "handle")?;
                 if weave.result != ValueType::Whole || signature.result != ValueType::Whole {
@@ -5541,11 +5552,13 @@ fn validate_spawn(
     Ok(())
 }
 
+/// Full clean boundary for abortive effect and nurseries (M4/M7).
 fn validate_effect_boundary(scope: &BindingScope, span: Span) -> Result<(), CompilerError> {
     let Some((name, _)) = scope.iter().find(|(_, binding)| {
         !binding.moved
             && (is_unique_value(binding.value_type)
                 || binding.value_type == ValueType::Arena
+                || binding.value_type == ValueType::AccessArena
                 || !matches!(binding.resource, ResourceBindingState::Plain))
     }) else {
         return Ok(());
@@ -5554,6 +5567,21 @@ fn validate_effect_boundary(scope: &BindingScope, span: Span) -> Result<(), Comp
         span,
         format!(
             "AE-EFFECT-003: effect control cannot cross live owner, loan, arena, Buffer, or table binding {name}"
+        ),
+    ))
+}
+
+/// M16 handle boundary: live resource owners may remain; exclusive access loans may not.
+fn validate_handle_boundary(scope: &BindingScope, span: Span) -> Result<(), CompilerError> {
+    let Some((name, _)) = scope.iter().find(|(_, binding)| {
+        !binding.moved && binding.value_type == ValueType::AccessArena
+    }) else {
+        return Ok(());
+    };
+    Err(CompilerError::new(
+        span,
+        format!(
+            "AE-EFFECT-003: handle cannot cross live exclusive access loan {name}"
         ),
     ))
 }
@@ -9332,7 +9360,7 @@ fn verify_instruction(
                 ));
             }
             pop_verifier_effect_arguments(&mut state.stack, called_function, offset, "handle")?;
-            require_verifier_effect_boundary(function, &state, offset)?;
+            require_verifier_handle_boundary(function, &state, offset)?;
             if success_destination == error_destination {
                 return Err(BytecodeError::new(
                     offset,
@@ -9639,11 +9667,38 @@ fn require_verifier_effect_boundary(
             && !state.moved[index]
             && (is_unique_value(local.value_type)
                 || local.value_type == ValueType::Arena
-                || is_buffer_type(local.value_type))
+                || local.value_type == ValueType::AccessArena
+                || is_buffer_type(local.value_type)
+                || is_table_type(local.value_type))
     }) {
         return Err(BytecodeError::new(
             offset,
             "AETH effect control cannot cross a live owner, Arena, or Buffer local",
+        ));
+    }
+    Ok(())
+}
+
+/// M16: HANDLE_CALL may keep live resource owners; exclusive access loans must not span it.
+fn require_verifier_handle_boundary(
+    function: &ArtifactFunction,
+    state: &VerificationState,
+    offset: usize,
+) -> Result<(), BytecodeError> {
+    if !state.stack.is_empty() {
+        return Err(BytecodeError::new(
+            offset,
+            "AETH effect control requires an empty operand stack after its arguments",
+        ));
+    }
+    if function.locals.iter().enumerate().any(|(index, local)| {
+        state.initialized[index]
+            && !state.moved[index]
+            && local.value_type == ValueType::AccessArena
+    }) {
+        return Err(BytecodeError::new(
+            offset,
+            "AETH HANDLE_CALL cannot cross a live exclusive Arena access loan",
         ));
     }
     Ok(())
@@ -14336,6 +14391,32 @@ mod tests {
     }
 
     #[test]
+    fn compiles_verifies_and_runs_m16_resource_handle_mix() {
+        let source = include_str!("../../../examples/resource-handle.ae");
+        let output = compile_to_bytecode(source).expect("M16 resource-handle should compile");
+        verify_bytecode(&output.bytecode).expect("M16 artifact should verify");
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("M16 success path should run")
+                .exit_code,
+            7
+        );
+        assert_eq!(
+            format_program(&output.program),
+            source.replace("\r\n", "\n")
+        );
+
+        let err_path = "world resource_handle_err\n\nweave boom [] -> Whole raises Whole:\n  raise 3\n\nweave main [] -> Whole:\n  bind memory <- arena 32\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call boom into success otherwise error into code\n";
+        let err_out = compile_to_bytecode(err_path).expect("M16 error path should compile");
+        assert_eq!(
+            run_bytecode(&err_out.bytecode)
+                .expect("M16 handled error should run")
+                .exit_code,
+            3
+        );
+    }
+
+    #[test]
     fn handles_the_normal_exit_of_a_may_error_weave() {
         let source = "world effects\n\nweave value [] -> Whole raises Whole:\n  yield 23\n\nweave main [] -> Whole:\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call value into success otherwise error into code\n";
         let bytecode = compile_to_bytecode(source)
@@ -14360,9 +14441,20 @@ mod tests {
             compile_source(owner_boundary).expect_err("M4 control cannot cross a live owner");
         assert_eq!(error.diagnostic().code, "AE-EFFECT-003");
 
-        let resource_mix = "world invalid\n\nweave leaf [] -> Whole raises Whole:\n  raise 1\n\nweave main [] -> Whole:\n  bind memory <- arena 8\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call leaf into success otherwise error into code\n";
-        let error = compile_source(resource_mix)
-            .expect_err("M4 control cannot share a weave with resources");
+        // M16: total handle may share a weave with an arena (ADR-020).
+        let resource_handle = "world ok\n\nweave leaf [] -> Whole raises Whole:\n  raise 1\n\nweave main [] -> Whole:\n  bind memory <- arena 8\n  bind mutable success <- 0\n  bind mutable code <- 0\n  handle call leaf into success otherwise error into code\n";
+        let resource_out = compile_to_bytecode(resource_handle)
+            .expect("M16 handle may share a total weave with arena");
+        assert_eq!(
+            run_bytecode(&resource_out.bytecode)
+                .expect("M16 resource+handle should run")
+                .exit_code,
+            1
+        );
+
+        let raises_resource = "world invalid\n\nweave bad [] -> Whole raises Whole:\n  bind mutable items <- buffer Whole\n  raise 1\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  yield 0\n";
+        let error = compile_source(raises_resource)
+            .expect_err("erroring weaves cannot own buffers with raise");
         assert_eq!(error.diagnostic().code, "AE-EFFECT-003");
 
         let erroring_main = "world invalid\n\nweave main [] -> Whole raises Whole:\n  raise 1\n";

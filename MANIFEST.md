@@ -2,25 +2,24 @@
 
 ## Contract
 
-Aether **0.20.0** (base language **0.11** plus M11 modules, M12 statement-level
-edits, **M13 offline LSP**, **M14 grant-backed host I/O**, and **M15 comptime
-name chaining**, AETH **v11**) accepts Aether source, returns a canonical AST from
-the Rust bootstrap for tooling, and **emits AETH v11 bytecode primarily through
-the Aether-written seed compiler** (forge ABI). Single-file `compile` is
-seed-hosted. Multi-module `project build` elaborates the import DAG, dual-compares
+Aether **0.21.0** (base language **0.11** plus M11–M16 tooling and semantics,
+AETH **v11**) accepts Aether source, returns a canonical AST from the Rust
+bootstrap for tooling, and **emits AETH v11 bytecode primarily through the
+Aether-written seed compiler** (forge ABI). Single-file `compile` is seed-hosted.
+Multi-module `project build` elaborates the import DAG, dual-compares
 bootstrap≡seed, and writes seed artifacts. Authoring uses `aether.ast/v7` and
 `aether.edit/v7`. The CLI provides offline project verify/format,
-`aether lsp [--project …]` (bootstrap diagnostics; cross-file definition/hover
-for exported imports; no product AETH from LSP), and `aether run` with optional
-`--grant-read` / `--grant-write` / `--grant-env` (M14; empty grants keep pure
-fixtures only). `comptime bind` may chain prior root-level comptime Whole names
-as operands (M15). Verified AETH v4–v10 remain compatibility inputs. Source is
-never translated to an existing language.
+`aether lsp [--project …]`, and `aether run` with optional `--grant-*` (M14).
+`comptime bind` may chain prior comptime Whole names (M15). Total weaves may
+own arenas/buffers/tables and terminal-`handle` pure `Error[Whole]` callees
+(M16); abortive raise/forward and nurseries remain resource-incompatible.
+Verified AETH v4–v10 remain compatibility inputs. Source is never translated to
+an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.20 product contract (0.11 core language,
-M9–M15 tooling/host/comptime). It intentionally
+This manifest is the executable Aether 0.21 product contract (0.11 core language,
+M9–M16 tooling/host/comptime/resource-handle). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -122,6 +121,12 @@ root-level immutable comptime Whole names (source order) as well as Whole
 literals. One binary op per directive, 1,024-directive budget, pure evaluation,
 and `COMPTIME_WHOLE` emission are unchanged. Forward refs, runtime names, calls,
 control flow, and host observation remain rejected.
+
+M16 (package 0.21) allows a **total** weave to own M2/M6 resources and use
+terminal `handle call` against a resource-free copy-only `Error[Whole]` callee.
+Live Arena/Buffer/table/Text/Bytes/record owners may span the handle; exclusive
+`access` loans may not. Abortive `raise`/`forward` and nurseries remain
+incompatible with resource ownership in the same weave.
 
 Every 0.11 compilation emits AETH v11 with an arena-capacity header field, a
 possibly empty bounded record table, a shape table, a function `effect_tag`, and

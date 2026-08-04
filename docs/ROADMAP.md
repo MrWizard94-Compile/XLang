@@ -1,7 +1,7 @@
 # Aether Language Development Roadmap
 
-**Status:** M0–M15 complete (language 0.11; package through 0.20 comptime chain);
-TP-1/TP-2 delivered; portfolio ADR-014; next design default **T-RX**
+**Status:** M0–M16 complete (language 0.11; package through 0.21 resource↔handle);
+TP-1/TP-2 delivered; portfolio ADR-014
 **Date:** 2026-08-04
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
@@ -80,6 +80,7 @@ invalid-source diagnostic parity.
 | M13 | Bounded offline LSP | M12 | `aether lsp` stdio: diagnostics, symbols, format, hover, definition; project-aware imports (M13b). | Matrix green; bootstrap diagnostics honesty; no AETH from LSP. | **Implemented 0.18 (M13a+M13b)** |
 | M14 | Capability host I/O | M8 + threat v2 | Grant-backed read/write/env host weaves; deny-by-default; no shell/network. | Threat model v2; matrix path-jail negatives; pure run unchanged. | **Implemented in package 0.19 (ADR-018)** |
 | M15 | Comptime expansion (T-CT) | M5 | Prior root-level comptime Whole **name chaining** as operands; still one op/directive, 1,024 fuel, pure, no calls/control/host. | Matrix green; seed dual-compare chain corpus; M5 programs unchanged. | **Implemented in package 0.20 (ADR-019)** |
+| M16 | Resource ↔ handle (T-RX) | M2, M4 | Total weave may own arena/buffer/table and terminal-`handle` pure Error[Whole]; abortive raise/forward and nurseries stay resource-free. | Matrix green; seed dual-compare mix example; access cannot span handle. | **Implemented in package 0.21 (ADR-020)** |
 
 ## Milestone detail
 
@@ -241,13 +242,13 @@ Post-M10 growth is governed by [ADR-014](ADR-014-post-m10-track-portfolio.md).
 Mainstream multi-epoch plan:
 [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next design/implementation:** **T-RX** resource↔effect interaction
-(new design + ADR before code). M11–M15 are implemented.
+**Default next design:** further T-RX slices (abort-after-cleanup, nursery+resource)
+or **T-PKG** / stdlib/test-runner tracks need new ADRs. M11–M16 are implemented.
 
-Ordered backlog remaining: resource↔effect (T-RX) → C/FFI → multi-package →
-optional stdlib/test runner per maturity roadmap. Further T-CT slices (calls,
-control) need new ADRs. Native/LLVM and network registries remain blocked
-without law change.
+Ordered backlog remaining: deeper T-RX → C/FFI → multi-package → optional
+stdlib/test runner per maturity roadmap. Further T-CT slices (calls, control)
+need new ADRs. Native/LLVM and network registries remain blocked without law
+change.
 
 Each track begins with the falsifiable spike discipline in
 [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).

@@ -30,6 +30,7 @@ const FORWARD_CALL_SOURCE: &str = concat!(
 const M4_ERROR_EFFECT_SOURCE: &str = include_str!("../../../examples/error-effect.ae");
 const M5_COMPTIME_SOURCE: &str = include_str!("../../../examples/comptime.ae");
 const M15_COMPTIME_CHAIN_SOURCE: &str = include_str!("../../../examples/comptime-chain.ae");
+const M16_RESOURCE_HANDLE_SOURCE: &str = include_str!("../../../examples/resource-handle.ae");
 const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae");
 const M7_NURSERY_TOTAL_SOURCE: &str = include_str!("../../../examples/nursery-total.ae");
 const M7_NURSERY_CANCEL_SOURCE: &str = include_str!("../../../examples/nursery-cancel.ae");
@@ -223,6 +224,27 @@ fn seed_profile_compiler_forges_bounded_m5_comptime_byte_identically() {
             .exit_code,
         150,
         "the M5 comptime fixture should preserve its defined outcome"
+    );
+}
+
+#[test]
+fn seed_profile_compiler_forges_m16_resource_handle_byte_identically() {
+    let bootstrap = compile_to_bytecode(M16_RESOURCE_HANDLE_SOURCE)
+        .expect("M16 resource-handle must bootstrap")
+        .bytecode;
+    let seeded = compile_with_seed(M16_RESOURCE_HANDLE_SOURCE)
+        .expect("M16 resource-handle must seed-compile")
+        .bytecode;
+    verify_bytecode(&seeded).expect("M16 seed artifact must verify");
+    assert_eq!(
+        seeded, bootstrap,
+        "M16 resource-handle must match bootstrap byte-for-byte"
+    );
+    assert_eq!(
+        run_bytecode(&seeded)
+            .expect("M16 seed artifact must run")
+            .exit_code,
+        7
     );
 }
 
@@ -462,6 +484,7 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
         ),
         ("comptime", M5_COMPTIME_SOURCE, Some(150)),
         ("comptime-chain", M15_COMPTIME_CHAIN_SOURCE, Some(288)),
+        ("resource-handle", M16_RESOURCE_HANDLE_SOURCE, Some(7)),
         ("layout-table", M6_LAYOUT_SOURCE, Some(10)),
         ("nursery-total", M7_NURSERY_TOTAL_SOURCE, Some(7)),
         ("nursery-cancel", M7_NURSERY_CANCEL_SOURCE, Some(9)),
