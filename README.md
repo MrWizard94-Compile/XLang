@@ -1,34 +1,36 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and CLI toolchain for
-deterministic, AI-primary authorship. Aether **0.12.0** parses only Aether
-source, emits deterministic AETH v11 bytecode, verifies every artifact, and runs
-it in the Aether VM. It never translates source to Rust, C, JavaScript, LLVM,
-or another language. Verified AETH v4/v5/v6/v7/v8/v9/v10 artifacts remain
-compatible inputs with their original meanings; new compilation emits v11.
+deterministic, AI-primary authorship. Aether toolchain package **0.25.0**
+(language surface **0.11**, AETH **v11**) parses only Aether source, emits
+deterministic AETH bytecode, verifies every artifact, and runs it in the Aether
+VM. It never translates source to Rust, C, JavaScript, LLVM, or another
+language. Verified AETH v4–v10 artifacts remain compatible inputs with their
+original meanings; new compilation emits v11.
+
+**Executable contract:** [MANIFEST.md](MANIFEST.md) · **Claims:** [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) · **Law:** [AGENTS.md](AGENTS.md)
 
 ## Seed-hosted compile path, resources, effects, comptime, and layout
 
-**Default compilation is no longer bootstrap-hosted for user programs.**
+**Default compilation is seed-hosted for user programs** (except forms the seed
+does not yet emit — currently M19a `release`, which requires
+`compile --bootstrap` until seed dual-compare lands).
 
 - `aether compile` invokes the **Aether-written seed compiler**
   (`seed/aether_seed.aeth`, embedded as `SEED_COMPILER_ARTIFACT`) through the
   forge ABI.
 - The Rust core remains the **bootstrap**: rebuild the seed (`compile --bootstrap`),
   produce the AST for `check`, and verify seed output against bootstrap in tests.
-- The seed self-hosts, and the shipped examples plus a complete canonical-surface
-  regression corpus produce bytecode **byte-identical** to the Rust bootstrap.
+- The seed self-hosts, and the documented dual-compare corpus (shipped examples
+  on the seed path, M2–M8 fixtures, modules via elaboration, etc.) produces
+  bytecode **byte-identical** to the Rust bootstrap where claimed in tests.
 
-Seed Profile emits the complete prior canonical surface plus Aether 0.11's
-documented M2 resource, M4 error, M5 comptime, M6 layout, M7 nursery, and M8
-host-pilot corpora: named locals/parameters, every statement and shallow
-expression family, `borrow`/`move`/`access`, multi-weave calls, immutable
-records, closed `arena` / Whole-or-Truth-buffer outcomes, dual-layout Whole
-tables, the explicit `raises Whole`, `raise`, `forward call`, and terminal
-`handle call` forms, root-only literal `comptime bind`, structured nurseries,
-and capability-closed `host weave` / `HOST_CALL`. New compilation emits verified
-AETH v11 (language 0.11). Toolchain 0.12 adds offline project verify and format. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md) and
-[docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
+M6 layout, M7 nurseries, and M8 pure host weaves. Toolchain packages through
+**0.25** add offline projects/modules/LSP, grant-backed host I/O, comptime name
+chaining, resource+handle, `aether test`, workspaces, stdlib layer 0,
+cross-package imports, and bootstrap `release`. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
+[docs/AETHER_0.25.md](docs/AETHER_0.25.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

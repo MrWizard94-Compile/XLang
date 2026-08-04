@@ -242,9 +242,7 @@ fn parse_import_line(content: &str, module_path: &str) -> Result<ModuleImport, P
         let Some((pkg_name, after_pkg)) = pkg_rest.split_once(" as ") else {
             return Err(module_error(
                 "AE-MOD-001",
-                format!(
-                    "import unit in {module_path} with from package requires `as <alias>`"
-                ),
+                format!("import unit in {module_path} with from package requires `as <alias>`"),
             ));
         };
         let pkg_name = pkg_name.trim();
@@ -392,9 +390,7 @@ fn load_graph(
         let pending: Vec<ModuleImport> = by_key
             .values()
             .flat_map(|module| module.imports.clone())
-            .filter(|import| {
-                import.package.is_some() && !by_key.contains_key(&import.graph_key())
-            })
+            .filter(|import| import.package.is_some() && !by_key.contains_key(&import.graph_key()))
             .collect();
         if pending.is_empty() {
             break;
@@ -436,9 +432,7 @@ fn load_foreign_package_unit(
     let json = fs::read_to_string(&project_file).map_err(|error| {
         module_error(
             "AE-MOD-002",
-            format!(
-                "package {package_name} missing aether.project.json: {error}"
-            ),
+            format!("package {package_name} missing aether.project.json: {error}"),
         )
     })?;
     let document = parse_project_document(&json)?;
@@ -461,7 +455,9 @@ fn load_foreign_package_unit(
     if unit.role != ProjectUnitRole::Lib {
         return Err(module_error(
             "AE-MOD-002",
-            format!("package {package_name} unit {unit_path} must be role lib for cross-package import"),
+            format!(
+                "package {package_name} unit {unit_path} must be role lib for cross-package import"
+            ),
         ));
     }
     let resolved = resolve_unit_path(package_root, unit_path)?;

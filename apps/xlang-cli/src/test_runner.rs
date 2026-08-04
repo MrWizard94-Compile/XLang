@@ -3,7 +3,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use aether_core::{compile_with_seed, run_bytecode, verify_bytecode, LANGUAGE_NAME, LANGUAGE_VERSION};
+use aether_core::{
+    compile_with_seed, run_bytecode, verify_bytecode, LANGUAGE_NAME, LANGUAGE_VERSION,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestResult {
@@ -44,7 +46,10 @@ pub fn collect_test_sources(paths: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     collected.sort();
     collected.dedup();
     if collected.is_empty() {
-        return Err("no test sources found (expected *_test.ae under directories, or explicit .ae files)".to_owned());
+        return Err(
+            "no test sources found (expected *_test.ae under directories, or explicit .ae files)"
+                .to_owned(),
+        );
     }
     Ok(collected)
 }
@@ -65,7 +70,10 @@ fn collect_from_path(path: &Path, collected: &mut Vec<PathBuf>) -> Result<(), St
     }
     if path.is_dir() {
         let root = path.canonicalize().map_err(|error| {
-            format!("could not resolve test directory {}: {error}", path.display())
+            format!(
+                "could not resolve test directory {}: {error}",
+                path.display()
+            )
         })?;
         // Walk the caller-selected path so reported paths stay relative when possible.
         walk_test_dir(&root, path, collected)?;

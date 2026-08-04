@@ -9,8 +9,8 @@ mod test_runner;
 
 use aether_core::{
     apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
-    compile_to_bytecode, compile_with_seed, forge_bytecode, format_project, format_source,
-    compile_workspace_package, multi_module_authority_note, parse_project_document,
+    compile_to_bytecode, compile_with_seed, compile_workspace_package, forge_bytecode,
+    format_project, format_source, multi_module_authority_note, parse_project_document,
     parse_workspace_document, run_bytecode, run_bytecode_with_grants, structural_document_json,
     unit_artifact_file_name, verify_bytecode, verify_project, verify_workspace, HostGrantConfig,
     InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
@@ -200,13 +200,12 @@ fn parse_run_grants(
                     .into_string()
                     .map_err(|_| "grant-env NAME must be valid UTF-8".to_owned())?;
                 if name.is_empty() || name.len() > 256 {
-                    return Err(
-                        "grant-env NAME must be non-empty and at most 256 bytes".to_owned()
-                    );
+                    return Err("grant-env NAME must be non-empty and at most 256 bytes".to_owned());
                 }
-                if !name.bytes().all(|byte| {
-                    matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_')
-                }) {
+                if !name
+                    .bytes()
+                    .all(|byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_'))
+                {
                     return Err(
                         "grant-env NAME may contain only ASCII letters, digits, and underscore"
                             .to_owned(),
@@ -789,8 +788,11 @@ mod tests {
         let temporary = TemporaryDirectory::create();
         let pass_path = temporary.path.join("ok_test.ae");
         let fail_path = temporary.path.join("bad_test.ae");
-        fs::write(&pass_path, "world ok\n\nweave main [] -> Whole:\n  yield 0\n")
-            .expect("pass fixture");
+        fs::write(
+            &pass_path,
+            "world ok\n\nweave main [] -> Whole:\n  yield 0\n",
+        )
+        .expect("pass fixture");
         fs::write(
             &fail_path,
             "world bad\n\nweave main [] -> Whole:\n  yield 1\n",
@@ -814,8 +816,7 @@ mod tests {
 
     #[test]
     fn shipped_examples_tests_directory_passes() {
-        let tests_dir =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/tests");
+        let tests_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/tests");
         let report = test_runner::run_tests(&[tests_dir]).expect("examples/tests should run");
         assert!(
             report.all_passed(),

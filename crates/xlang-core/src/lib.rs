@@ -1753,7 +1753,9 @@ impl HostServices {
                 let value = std::env::var(&name).map_err(|_| {
                     BytecodeError::new(
                         offset,
-                        format!("AE-HOST-003: host service env_get missing environment variable {name}"),
+                        format!(
+                            "AE-HOST-003: host service env_get missing environment variable {name}"
+                        ),
                     )
                 })?;
                 Ok(RuntimeValue::Text(value))
@@ -1892,10 +1894,9 @@ fn validate_guest_io_path(path: &str, offset: usize) -> Result<(), BytecodeError
                 "AE-HOST-004: guest path escapes grant root or has empty segments",
             ));
         }
-        if !segment
-            .bytes()
-            .all(|byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-'))
-        {
+        if !segment.bytes().all(
+            |byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-'),
+        ) {
             return Err(BytecodeError::new(
                 offset,
                 "AE-HOST-004: guest path contains an illegal segment",
@@ -4632,10 +4633,7 @@ fn validate_comptime_budget(program: &Program) -> Result<(), CompilerError> {
     Ok(())
 }
 
-fn comptime_operand_whole(
-    atom: &Atom,
-    env: &BTreeMap<String, i64>,
-) -> Result<i64, CompilerError> {
+fn comptime_operand_whole(atom: &Atom, env: &BTreeMap<String, i64>) -> Result<i64, CompilerError> {
     match &atom.kind {
         AtomKind::Whole(value) => Ok(*value),
         AtomKind::Name(name) => env.get(name).copied().ok_or_else(|| {
@@ -4994,7 +4992,9 @@ fn weave_uses_resource(weave: &Weave) -> bool {
             | Statement::Revise { value, .. }
             | Statement::Speak { value, .. }
             | Statement::Yield { value, .. } => expression_uses_resource(value),
-            Statement::Raise { .. } | Statement::Forward { .. } | Statement::Release { .. } => false,
+            Statement::Raise { .. } | Statement::Forward { .. } | Statement::Release { .. } => {
+                false
+            }
             Statement::Handle { .. } | Statement::Together { .. } => false,
             Statement::Choose {
                 condition,
@@ -5626,16 +5626,15 @@ fn validate_effect_boundary(scope: &BindingScope, span: Span) -> Result<(), Comp
 
 /// M16 handle boundary: live resource owners may remain; exclusive access loans may not.
 fn validate_handle_boundary(scope: &BindingScope, span: Span) -> Result<(), CompilerError> {
-    let Some((name, _)) = scope.iter().find(|(_, binding)| {
-        !binding.moved && binding.value_type == ValueType::AccessArena
-    }) else {
+    let Some((name, _)) = scope
+        .iter()
+        .find(|(_, binding)| !binding.moved && binding.value_type == ValueType::AccessArena)
+    else {
         return Ok(());
     };
     Err(CompilerError::new(
         span,
-        format!(
-            "AE-EFFECT-003: handle cannot cross live exclusive access loan {name}"
-        ),
+        format!("AE-EFFECT-003: handle cannot cross live exclusive access loan {name}"),
     ))
 }
 
@@ -14547,7 +14546,10 @@ mod tests {
 
         let double = "world bad\n\nweave main [] -> Whole:\n  bind label <- \"x\"\n  release label\n  release label\n  yield 0\n";
         let error = compile_source(double).expect_err("double release fails");
-        assert!(error.to_string().contains("AE-RESOURCE-001") || error.diagnostic().code == "AE-RESOURCE-001");
+        assert!(
+            error.to_string().contains("AE-RESOURCE-001")
+                || error.diagnostic().code == "AE-RESOURCE-001"
+        );
     }
 
     #[test]

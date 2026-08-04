@@ -12,9 +12,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::modules::compile_project_modules_with_packages;
-use crate::project::{
-    parse_project_document, verify_project, ProjectError, ProjectVerifyReport,
-};
+use crate::project::{parse_project_document, verify_project, ProjectError, ProjectVerifyReport};
 use crate::{CompileOutput, LANGUAGE_NAME, LANGUAGE_VERSION};
 
 pub const WORKSPACE_SCHEMA_VERSION: &str = "aether.workspace/v1";
@@ -52,7 +50,10 @@ impl From<ProjectError> for WorkspaceError {
     fn from(error: ProjectError) -> Self {
         Self::new(
             "AE-WORKSPACE-004",
-            format!("nested project verify failed [{}]: {}", error.code, error.message),
+            format!(
+                "nested project verify failed [{}]: {}",
+                error.code, error.message
+            ),
         )
     }
 }
@@ -184,10 +185,7 @@ fn validate_workspace_document(document: &WorkspaceDocument) -> Result<(), Works
             if !names.contains(dep) {
                 return Err(WorkspaceError::new(
                     "AE-WORKSPACE-003",
-                    format!(
-                        "package {} depends_on unknown package {dep}",
-                        package.name
-                    ),
+                    format!("package {} depends_on unknown package {dep}", package.name),
                 ));
             }
         }
@@ -226,9 +224,9 @@ fn validate_package_dir_path(path: &str) -> Result<(), WorkspaceError> {
                 format!("package path {path} escapes the workspace root or has empty segments"),
             ));
         }
-        if !segment.bytes().all(|byte| {
-            matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-')
-        }) {
+        if !segment.bytes().all(
+            |byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'.' | b'_' | b'-'),
+        ) {
             return Err(WorkspaceError::new(
                 "AE-WORKSPACE-002",
                 format!("package path {path} contains an illegal segment"),
@@ -297,7 +295,10 @@ pub fn topological_package_order(
     for package in &document.packages {
         for dep in &package.depends_on {
             // edge dep -> package (dep must come first)
-            edges.entry(dep.as_str()).or_default().push(package.name.as_str());
+            edges
+                .entry(dep.as_str())
+                .or_default()
+                .push(package.name.as_str());
             *indegree.get_mut(package.name.as_str()).expect("indegree") += 1;
         }
     }
@@ -360,7 +361,10 @@ pub fn verify_workspace(
     if !failures.is_empty() {
         return Err(WorkspaceError::new(
             "AE-WORKSPACE-004",
-            format!("workspace package verification failed: {}", failures.join("; ")),
+            format!(
+                "workspace package verification failed: {}",
+                failures.join("; ")
+            ),
         ));
     }
     Ok(WorkspaceVerifyReport {
@@ -417,8 +421,8 @@ pub fn compile_workspace_package(
     allowed.insert(package.name.clone());
     package_roots.insert(package.name.clone(), package_root.clone());
 
-    compile_project_modules_with_packages(&package_root, &project, &package_roots, &allowed).map_err(
-        |error| {
+    compile_project_modules_with_packages(&package_root, &project, &package_roots, &allowed)
+        .map_err(|error| {
             WorkspaceError::new(
                 "AE-WORKSPACE-004",
                 format!(
@@ -426,8 +430,7 @@ pub fn compile_workspace_package(
                     error.code, error.message
                 ),
             )
-        },
-    )
+        })
 }
 
 fn verify_one_package(
@@ -498,9 +501,8 @@ mod tests {
         fs::create_dir_all(&pkg).expect("pkg dir");
         let main = format!("world {project_name}\n\nweave main [] -> Whole:\n  yield {exit}\n");
         fs::write(pkg.join("main.ae"), main).expect("main");
-        let digest = crate::project::sha256_hex(
-            fs::read(pkg.join("main.ae")).expect("read").as_slice(),
-        );
+        let digest =
+            crate::project::sha256_hex(fs::read(pkg.join("main.ae")).expect("read").as_slice());
         let project = format!(
             r#"{{
   "schema": "aether.project/v1",
