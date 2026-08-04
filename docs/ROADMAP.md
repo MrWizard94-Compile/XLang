@@ -6,6 +6,12 @@
 milestone still requires its own versioned specification, evidence, and
 constitution gate.
 
+**Mainstream maturity program (multi-epoch):** see
+[ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md) for the full
+plan to reach Rust/C++/Go/Java/Python/TS **class** (niche systems + AI-first),
+including epochs E0–E7, M11–M40, gates, risks, and law forks. This file remains
+the near-term milestone ledger.
+
 ## Completion targets (P0 freeze, 2026-08-04)
 
 Human-approved under AGENTS Constitution + SOP:
