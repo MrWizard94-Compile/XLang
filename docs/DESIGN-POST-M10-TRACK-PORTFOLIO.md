@@ -87,7 +87,8 @@ Host I/O must **not** start from happy-path `read_file` examples. Required first
 1. ~~M11 modules~~ **Done (0.15)**  
 2. ~~M12 fine-grained edits~~ **Done (0.16)**  
 3. ~~M13 bounded LSP (a+b)~~ **Done (0.18)**  
-4. **Next:** T-HOST threat model v2 design (before host I/O), or human override  
+4. ~~M14 host I/O design + threat v2~~ **Done (ADR-018)**  
+5. **Next:** implement M14 grant-backed host I/O per ADR-018  
 
 ---
 

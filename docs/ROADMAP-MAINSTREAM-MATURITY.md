@@ -935,10 +935,9 @@ Accepted by:
 ## 26. Immediate next actions (this week / next sprint)
 
 1. Mainstream maturity roadmap committed.  
-2. **M11 modules complete** (0.15).  
-3. **M12 fine-grained edits complete** (0.16).  
-4. **M13 bounded LSP designed** (ADR-017); **next: implement `aether lsp` (M13a)**.  
-5. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table (can wait).
+2. **M11–M13 complete** (modules, edits, LSP through 0.18).  
+3. **M14 host I/O designed** (threat model v2 + ADR-018); **next: implement grants**.  
+4. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table (can wait).
 
 ---
 

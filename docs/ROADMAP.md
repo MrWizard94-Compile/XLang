@@ -77,6 +77,7 @@ invalid-source diagnostic parity.
 | M11 | Language modules | M10 | `import unit` / `export weave` / qualified calls; lib without main; project build; phased seed proof. | Matrix green; bootstrap multi-module (M11a); seed dual-compare before seed authority (M11b). | **Implemented (0.15): M11a+M11b** |
 | M12 | Fine-grained structural edits | M3, M11 | `aether.edit/v7` statement-level replace/insert/delete under weave bodies; seed-before-write. | Matrix green; no expression-atom paths; v7 protocol. | **Implemented in package 0.16** |
 | M13 | Bounded offline LSP | M12 | `aether lsp` stdio: diagnostics, symbols, format, hover, definition; project-aware imports (M13b). | Matrix green; bootstrap diagnostics honesty; no AETH from LSP. | **Implemented 0.18 (M13a+M13b)** |
+| M14 | Capability host I/O | M8 + threat v2 | Grant-backed read/write/env host weaves; deny-by-default; no shell/network. | Threat model v2; matrix path-jail negatives; pure run unchanged. | **Designed (ADR-018); implementation pending** |
 
 ## Milestone detail
 
@@ -224,15 +225,21 @@ M13 is specified by [DESIGN-M13-BOUNDED-LSP.md](DESIGN-M13-BOUNDED-LSP.md),
 with diagnostics/symbols/format/hover/definition. **M13b:** project-aware
 imports. Implementation is the next engineering increment.
 
+### M14 — capability host I/O (designed)
+
+M14 is specified by [THREAT_MODEL-v2-CAPABLE-HOST.md](THREAT_MODEL-v2-CAPABLE-HOST.md),
+[DESIGN-M14-HOST-IO-CAPABILITIES.md](DESIGN-M14-HOST-IO-CAPABILITIES.md),
+[ADR-018](ADR-018-m14-host-io-capabilities.md), and
+[M14 validation matrix](M14-VALIDATION-MATRIX.md). Implementation is the next
+engineering increment after this design freeze.
+
 ### Remaining research / completion program
 
-TP-1, TP-2, and M10 tooling are delivered. Post-M10 growth is governed by
-[ADR-014](ADR-014-post-m10-track-portfolio.md) and
-[DESIGN-POST-M10-TRACK-PORTFOLIO.md](DESIGN-POST-M10-TRACK-PORTFOLIO.md).
+Post-M10 growth is governed by [ADR-014](ADR-014-post-m10-track-portfolio.md).
 Mainstream multi-epoch plan:
 [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next implementation:** **M13a** bounded LSP per ADR-017.
+**Default next implementation:** **M14** host I/O per ADR-018 + threat model v2.
 
 Ordered backlog: modules → fine-grained edits → bounded LSP → comptime →
 resource↔effect → host I/O (threat rewrite first) → C/FFI → multi-package.
