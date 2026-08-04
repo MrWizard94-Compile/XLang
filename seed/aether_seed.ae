@@ -944,93 +944,117 @@ weave compile [borrow source: Text] -> Bytes:
                     revise v45 <- 3
                     revise v42 <- bright
                   otherwise:
-                    choose same borrow v11 "yield":
-                      revise v18 <- sum v10 1
+                    choose same borrow v11 "release":
+                      revise v15 <- sum v10 1
                       revise v29 <- measure borrow v7
-                      revise v19 <- cut borrow v7 v18 v29
-                      revise v45 <- 4
-                      revise v42 <- bright
+                      revise v17 <- cut borrow v7 v15 v29
+                      revise v50 <- -1
+                      revise v61 <- 0
+                      revise v63 <- extent borrow v67
+                      while less v61 v63:
+                        revise v64 <- octet borrow v67 v61
+                        revise v61 <- sum v61 1
+                        revise v28 <- sum v61 v64
+                        revise v47 <- slice borrow v67 v61 v28
+                        revise v22 <- decode borrow v47
+                        revise v61 <- v28
+                        revise v48 <- unpack16 borrow v67 v61
+                        revise v61 <- sum v61 2
+                        choose same borrow v22 borrow v17:
+                          revise v50 <- v48
+                          revise v61 <- v63
+                      revise v1 <- append borrow v1 66
+                      revise v47 <- pack16 v50
+                      revise v1 <- fuse borrow v1 borrow v47
+                      revise v42 <- dim
                     otherwise:
-                      choose same borrow v11 "raise":
+                      choose same borrow v11 "yield":
                         revise v18 <- sum v10 1
                         revise v29 <- measure borrow v7
                         revise v19 <- cut borrow v7 v18 v29
-                        revise v45 <- 7
-                        revise v89 <- 53
+                        revise v45 <- 4
                         revise v42 <- bright
                       otherwise:
-                        choose same borrow v11 "forward":
+                        choose same borrow v11 "raise":
                           revise v18 <- sum v10 1
                           revise v29 <- measure borrow v7
                           revise v19 <- cut borrow v7 v18 v29
                           revise v45 <- 7
-                          revise v89 <- 54
+                          revise v89 <- 53
                           revise v42 <- bright
                         otherwise:
-                          choose same borrow v11 "handle":
+                          choose same borrow v11 "forward":
                             revise v18 <- sum v10 1
                             revise v29 <- measure borrow v7
                             revise v19 <- cut borrow v7 v18 v29
-                            revise v21 <- seek borrow v19 " otherwise error into " 0
-                            revise v15 <- sum v21 22
-                            revise v29 <- measure borrow v19
-                            revise v88 <- cut borrow v19 v15 v29
-                            revise v20 <- cut borrow v19 0 v21
-                            revise v21 <- seek borrow v20 " into " 0
-                            revise v15 <- sum v21 6
-                            revise v29 <- measure borrow v20
-                            revise v87 <- cut borrow v20 v15 v29
-                            revise v19 <- cut borrow v20 0 v21
                             revise v45 <- 7
-                            revise v89 <- 55
+                            revise v89 <- 54
                             revise v42 <- bright
                           otherwise:
-                            choose same borrow v11 "while":
+                            choose same borrow v11 "handle":
                               revise v18 <- sum v10 1
                               revise v29 <- measure borrow v7
-                              revise v28 <- difference v29 1
-                              revise v19 <- cut borrow v7 v18 v28
-                              revise v37 <- extent borrow v1
-                              revise v45 <- 5
+                              revise v19 <- cut borrow v7 v18 v29
+                              revise v21 <- seek borrow v19 " otherwise error into " 0
+                              revise v15 <- sum v21 22
+                              revise v29 <- measure borrow v19
+                              revise v88 <- cut borrow v19 v15 v29
+                              revise v20 <- cut borrow v19 0 v21
+                              revise v21 <- seek borrow v20 " into " 0
+                              revise v15 <- sum v21 6
+                              revise v29 <- measure borrow v20
+                              revise v87 <- cut borrow v20 v15 v29
+                              revise v19 <- cut borrow v20 0 v21
+                              revise v45 <- 7
+                              revise v89 <- 55
                               revise v42 <- bright
                             otherwise:
-                              choose same borrow v11 "choose":
+                              choose same borrow v11 "while":
                                 revise v18 <- sum v10 1
                                 revise v29 <- measure borrow v7
                                 revise v28 <- difference v29 1
                                 revise v19 <- cut borrow v7 v18 v28
                                 revise v37 <- extent borrow v1
-                                revise v45 <- 6
+                                revise v45 <- 5
                                 revise v42 <- bright
                               otherwise:
-                                choose same borrow v11 "together:":
-                                  revise v1 <- append borrow v1 62
-                                  revise v1 <- append borrow v1 0
-                                  revise v101 <- extent borrow v1
-                                  revise v101 <- difference v101 1
-                                  revise v100 <- 0
-                                  revise v3 <- append borrow v3 6
-                                  revise v3 <- append borrow v3 v13
-                                  revise v47 <- pack32 v101
-                                  revise v3 <- fuse borrow v3 borrow v47
-                                  revise v47 <- pack32 0
-                                  revise v3 <- fuse borrow v3 borrow v47
-                                  revise v47 <- pack32 0
-                                  revise v3 <- fuse borrow v3 borrow v47
-                                  revise v42 <- dim
+                                choose same borrow v11 "choose":
+                                  revise v18 <- sum v10 1
+                                  revise v29 <- measure borrow v7
+                                  revise v28 <- difference v29 1
+                                  revise v19 <- cut borrow v7 v18 v28
+                                  revise v37 <- extent borrow v1
+                                  revise v45 <- 6
+                                  revise v42 <- bright
                                 otherwise:
-                                  choose same borrow v11 "spawn":
-                                    revise v18 <- sum v10 1
-                                    revise v29 <- measure borrow v7
-                                    revise v19 <- cut borrow v7 v18 v29
-                                    revise v21 <- seek borrow v19 " into " 0
-                                    revise v15 <- sum v21 6
-                                    revise v29 <- measure borrow v19
-                                    revise v102 <- cut borrow v19 v15 v29
-                                    revise v19 <- cut borrow v19 0 v21
-                                    revise v45 <- 9
-                                    revise v89 <- 63
-                                    revise v42 <- bright
+                                  choose same borrow v11 "together:":
+                                    revise v1 <- append borrow v1 62
+                                    revise v1 <- append borrow v1 0
+                                    revise v101 <- extent borrow v1
+                                    revise v101 <- difference v101 1
+                                    revise v100 <- 0
+                                    revise v3 <- append borrow v3 6
+                                    revise v3 <- append borrow v3 v13
+                                    revise v47 <- pack32 v101
+                                    revise v3 <- fuse borrow v3 borrow v47
+                                    revise v47 <- pack32 0
+                                    revise v3 <- fuse borrow v3 borrow v47
+                                    revise v47 <- pack32 0
+                                    revise v3 <- fuse borrow v3 borrow v47
+                                    revise v42 <- dim
+                                  otherwise:
+                                    choose same borrow v11 "spawn":
+                                      revise v18 <- sum v10 1
+                                      revise v29 <- measure borrow v7
+                                      revise v19 <- cut borrow v7 v18 v29
+                                      revise v21 <- seek borrow v19 " into " 0
+                                      revise v15 <- sum v21 6
+                                      revise v29 <- measure borrow v19
+                                      revise v102 <- cut borrow v19 v15 v29
+                                      revise v19 <- cut borrow v19 0 v21
+                                      revise v45 <- 9
+                                      revise v89 <- 63
+                                      revise v42 <- bright
               revise v37 <- extent borrow v1
               choose v42:
                 revise v21 <- seek borrow v19 " " 0

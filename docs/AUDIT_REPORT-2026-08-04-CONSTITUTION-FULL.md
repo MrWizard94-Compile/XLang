@@ -20,7 +20,7 @@ CORE_CLAIMS. No network. No release packaging (TP-2 full package not re-run).
 | `cargo test -p aether-core --lib` | **PASS** (78) |
 | `cargo test -p aether-cli` | **PASS** (13) |
 | Seed compile `welcome.ae` | **PASS** |
-| Seed compile `release-raise.ae` | **FAIL (expected)** — seed does not emit RELEASE |
+| Seed compile `release-raise.ae` | **PASS** (follow-up: seed emit + dual-compare closed same day) |
 | Bootstrap compile+run `release-raise.ae` | **PASS** exit 9 |
 | `aether test examples/tests` | **PASS** 3/3 |
 | `workspace verify examples/workspace` | **PASS** |
@@ -40,7 +40,7 @@ CORE_CLAIMS. No network. No release packaging (TP-2 full package not re-run).
 
 | ID | Severity | Finding | Disposition |
 | --- | --- | --- | --- |
-| R1 | Major product gap | Seed does not emit `RELEASE` (66); default `aether compile` fails closed on `release` programs | **Documented** in MANIFEST, AETHER_0.25, CORE_CLAIMS CLM-032; bootstrap path proven. Seed emission attempted in audit; nested indent risk to `aether_seed.ae` — **not force-merged**. Follow-up: seed engineer dual-compare. |
+| R1 | Major product gap | Seed does not emit `RELEASE` (66); default `aether compile` fails closed on `release` programs | **Closed** same day: seed inline emit of OP 66 + dual-compare green for `examples/release-raise.ae`; checked-in `seed/aether_seed.aeth` rebuilt. |
 | R2 | Process | Full `aether-gate -Mode full` (seed self-host rebuild pole) not re-run this audit | Day-to-day quick gate + targeted tests green; full gate before release/TP package |
 | R3 | Scope | FFI still design-blocked (ADR-025); nursery×resource deferred (ADR-023) | Correct under law |
 
@@ -58,7 +58,7 @@ CORE_CLAIMS. No network. No release packaging (TP-2 full package not re-run).
 | Issues found fixed or honestly residual | Yes |
 | Zero-warning + fmt clean | Yes (after fix) |
 | Claims not overstated | Yes (README/AGENTS/`release` honesty) |
-| Seed dual-compare for M19a | Residual R1 — not falsely claimed Done |
+| Seed dual-compare for M19a | **Done** — R1 closed; product path claims updated |
 
 ## Commands re-run after fixes
 

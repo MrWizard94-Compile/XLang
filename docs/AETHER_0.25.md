@@ -19,7 +19,7 @@ After release, abortive `raise`/`forward` may pass the clean boundary.
 | Path | `release` |
 | --- | --- |
 | Bootstrap (`compile --bootstrap`) | **Supported** |
-| Seed default `compile` | **Not yet** (seed does not emit RELEASE) |
+| Seed default `compile` | **Supported** (seed≡bootstrap for `examples/release-raise.ae`) |
 
 ## Example
 
@@ -27,6 +27,6 @@ After release, abortive `raise`/`forward` may pass the clean boundary.
 
 ## Non-goals
 
-Nursery×resource, free-on-raise, user destructors, seed dual-compare (follow-up).
+Nursery×resource, free-on-raise, user destructors.
 
 *End of AETHER_0.25.md*

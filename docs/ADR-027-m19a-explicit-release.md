@@ -1,6 +1,6 @@
 # ADR-027: explicit `release` end-of-life (M19a)
 
-**Status:** Accepted — **bootstrap implemented in 0.25.0**; seed dual-compare follow-up  
+**Status:** Accepted — **implemented in 0.25.0** (bootstrap + seed dual-compare)  
 **Date:** 2026-08-04  
 **Related Rule IDs:** `CONST-DEP-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`, `RND-INVAR-001`  
 **Supersedes for foundation:** ADR-023 “next is release” — this is that slice  

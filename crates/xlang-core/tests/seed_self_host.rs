@@ -31,6 +31,7 @@ const M4_ERROR_EFFECT_SOURCE: &str = include_str!("../../../examples/error-effec
 const M5_COMPTIME_SOURCE: &str = include_str!("../../../examples/comptime.ae");
 const M15_COMPTIME_CHAIN_SOURCE: &str = include_str!("../../../examples/comptime-chain.ae");
 const M16_RESOURCE_HANDLE_SOURCE: &str = include_str!("../../../examples/resource-handle.ae");
+const M19A_RELEASE_RAISE_SOURCE: &str = include_str!("../../../examples/release-raise.ae");
 const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae");
 const M7_NURSERY_TOTAL_SOURCE: &str = include_str!("../../../examples/nursery-total.ae");
 const M7_NURSERY_CANCEL_SOURCE: &str = include_str!("../../../examples/nursery-cancel.ae");
@@ -76,9 +77,11 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
         "the second self-hosting generation must match"
     );
 
+    // Insert a fresh unused local so the variant differs without colliding with
+    // the seed's existing high-numbered slots (v103/v104 already bound).
     let variant = SEED_SOURCE.replacen(
         "  bind mutable v65 <- 0\n",
-        "  bind mutable v65 <- 0\n  bind mutable v103 <- 0\n",
+        "  bind mutable v65 <- 0\n  bind mutable v105 <- 0\n",
         1,
     );
     assert_ne!(
@@ -267,6 +270,32 @@ fn seed_profile_compiler_forges_m15_comptime_chain_byte_identically() {
             .exit_code,
         288,
         "cell=64 row=256 header=32 total=288"
+    );
+}
+
+#[test]
+fn seed_profile_compiler_forges_m19a_release_raise_byte_identically() {
+    let bootstrap = compile_to_bytecode(M19A_RELEASE_RAISE_SOURCE)
+        .expect("M19a release-raise must bootstrap")
+        .bytecode;
+    let seeded = compile_with_seed(M19A_RELEASE_RAISE_SOURCE)
+        .expect("M19a release-raise must seed-compile")
+        .bytecode;
+    verify_bytecode(&seeded).expect("M19a seed artifact must verify");
+    assert_eq!(
+        seeded, bootstrap,
+        "M19a release-raise must match bootstrap byte-for-byte"
+    );
+    assert!(
+        seeded.iter().any(|byte| *byte == 66),
+        "seed path must emit OP_RELEASE (66)"
+    );
+    assert_eq!(
+        run_bytecode(&seeded)
+            .expect("M19a seed artifact must run")
+            .exit_code,
+        9,
+        "handled raise after release should exit 9"
     );
 }
 

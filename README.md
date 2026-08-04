@@ -12,9 +12,8 @@ original meanings; new compilation emits v11.
 
 ## Seed-hosted compile path, resources, effects, comptime, and layout
 
-**Default compilation is seed-hosted for user programs** (except forms the seed
-does not yet emit — currently M19a `release`, which requires
-`compile --bootstrap` until seed dual-compare lands).
+**Default compilation is seed-hosted for user programs**, including M19a
+`release` (seed≡bootstrap proven for the release corpus).
 
 - `aether compile` invokes the **Aether-written seed compiler**
   (`seed/aether_seed.aeth`, embedded as `SEED_COMPILER_ARTIFACT`) through the
@@ -22,14 +21,15 @@ does not yet emit — currently M19a `release`, which requires
 - The Rust core remains the **bootstrap**: rebuild the seed (`compile --bootstrap`),
   produce the AST for `check`, and verify seed output against bootstrap in tests.
 - The seed self-hosts, and the documented dual-compare corpus (shipped examples
-  on the seed path, M2–M8 fixtures, modules via elaboration, etc.) produces
-  bytecode **byte-identical** to the Rust bootstrap where claimed in tests.
+  on the seed path, M2–M8 fixtures, M19a release, modules via elaboration, etc.)
+  produces bytecode **byte-identical** to the Rust bootstrap where claimed in
+  tests.
 
 Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
 M6 layout, M7 nurseries, and M8 pure host weaves. Toolchain packages through
 **0.25** add offline projects/modules/LSP, grant-backed host I/O, comptime name
 chaining, resource+handle, `aether test`, workspaces, stdlib layer 0,
-cross-package imports, and bootstrap `release`. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
+cross-package imports, and product-path `release`. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
 [docs/AETHER_0.25.md](docs/AETHER_0.25.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether

@@ -1,6 +1,6 @@
 # M19a explicit release validation matrix
 
-**Status:** Bootstrap implementation green (package 0.25.0); **seed dual-compare pending**  
+**Status:** Product path green (package 0.25.0); seed≡bootstrap for release corpus  
 **Date:** 2026-08-04  
 **ADR:** [ADR-027](ADR-027-m19a-explicit-release.md)
 
@@ -10,18 +10,19 @@
 | N1 | release Whole | AE-RESOURCE-001 |
 | N2 | double release | AE-RESOURCE-001 |
 | N3 | raise without release of Text | AE-EFFECT-003 |
-| P3 | seed≡bootstrap | **Pending** seed emission of RELEASE |
+| P3 | seed≡bootstrap | `seed_profile_compiler_forges_m19a_release_raise_byte_identically` |
 
 ## Honesty
 
-Default `aether compile` (seed) does **not** yet emit `RELEASE`. Use
-`compile --bootstrap` for release programs until seed dual-compare lands.
+Default `aether compile` (seed) emits `RELEASE` (66) for root `release <name>`.
+Corpus: `examples/release-raise.ae` matches bootstrap byte-for-byte.
 
 ## Checklist
 
 - [x] Parse/format  
 - [x] Validate + emit + VM (bootstrap)  
 - [x] Verifier  
-- [ ] Seed emission dual-compare  
-- [x] Tests (bootstrap)  
-- [x] DOC-SYNC 0.25 (honest seed note)  
+- [x] Seed emission dual-compare  
+- [x] Tests (bootstrap + seed)  
+- [x] DOC-SYNC 0.25 (seed product path)  
+

@@ -84,7 +84,7 @@ invalid-source diagnostic parity.
 | M17 | Offline test runner (T-TEST) | M9, seed compile | `aether test` discovers `*_test.ae`, seed-compiles, pure-runs; pass = exit 0. | Matrix green; empty discovery fails closed; examples/tests pass. | **Implemented in package 0.22 (ADR-021)** |
 | M18 | Offline workspace (T-PKG) | M9–M11 | `aether.workspace/v1` multi-package path graph + `workspace verify`; acyclic `depends_on`; nested project verify. | Matrix green; cycle/escape negatives; no registry/linking claim. | **Implemented in package 0.23 (ADR-022)** |
 | M19 | Deeper T-RX | M16 | Destruction model before abortive+resource / nursery+resource. | Design only. | **Direction ADR-023** |
-| M19a | Explicit `release` | M19 | `release name` + OP_RELEASE; raise-after-cleanup. | Bootstrap green; seed dual-compare pending. | **Bootstrap in 0.25 (ADR-027)** |
+| M19a | Explicit `release` | M19 | `release name` + OP_RELEASE; raise-after-cleanup. | Matrix green; seed≡bootstrap for release corpus. | **Implemented in package 0.25 (ADR-027)** |
 | M20 | Stdlib layer 0 | M11 | Pure Whole helper modules under `stdlib/`. | Project build + tests. | **Implemented in package 0.24 (ADR-024)** |
 | M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Threat+design only. | **Designed (ADR-025); implementation blocked** |
 | M22 | Cross-package import | M11, M18 | `import unit "…" from package name as alias` + `workspace build --package`. | Matrix green; depends_on jail. | **Implemented in package 0.24 (ADR-026)** |

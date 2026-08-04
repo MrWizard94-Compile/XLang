@@ -119,6 +119,7 @@ Supported forms:
 | `comptime bind name <- op whole whole` | Root-only immutable literal `Whole` result; `op` is `sum`, `difference`, `product`, `quotient`, or `remainder` |
 | `revise name <- expression` | Same-type replacement |
 | `speak expression` | Expression must be `Text` |
+| `release name` | Root-only logical destruction of a live unique/resource owner; emits `RELEASE` (66) |
 | `yield expression` | Root-only; result type must match the weave |
 | `raise whole-atom` | Root-only terminal exit from a `raises Whole` weave |
 | `forward call weave args...` | Root-only terminal propagation from a `raises Whole` weave |
