@@ -88,6 +88,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Technical preview threat model | [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md) |
 | Technical preview notes | [docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md](docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md) |
 | M10 multi-unit projects | [docs/AETHER_0.13.md](docs/AETHER_0.13.md), [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md), [docs/ADR-013-m10-multi-unit-projects.md](docs/ADR-013-m10-multi-unit-projects.md), [docs/M10-VALIDATION-MATRIX.md](docs/M10-VALIDATION-MATRIX.md) |
+| Post-M10 track portfolio | [docs/ADR-014-post-m10-track-portfolio.md](docs/ADR-014-post-m10-track-portfolio.md), [docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md](docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md) |
 | Legacy intake | [docs/LEGACY.md](docs/LEGACY.md) |
 
 ### Stack pins

@@ -1,6 +1,6 @@
 # Aether Language Development Roadmap
 
-**Status:** M0–M10 complete (language through 0.11; tooling through 0.13); TP-1/TP-2 delivered
+**Status:** M0–M10 complete (language through 0.11; tooling through 0.13); TP-1/TP-2 delivered; post-M10 portfolio ADR-014
 **Date:** 2026-08-04
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
@@ -195,9 +195,18 @@ compilation units** (no import/module system). See
 
 ### Remaining research / completion program
 
-TP-1, TP-2, and M10 tooling are delivered. Expanded packages, language modules,
-LSP, C interop, and native backends remain large interaction surfaces. Each
-begins with the falsifiable spike described in
+TP-1, TP-2, and M10 tooling are delivered. Post-M10 growth is governed by
+[ADR-014](ADR-014-post-m10-track-portfolio.md) and
+[DESIGN-POST-M10-TRACK-PORTFOLIO.md](DESIGN-POST-M10-TRACK-PORTFOLIO.md).
+
+**Default next design (not code):** **T-MOD language modules** → implementable
+ADR-015 + M11 matrix before any parser/seed/VM work.
+
+Ordered backlog: modules → fine-grained edits → bounded LSP → comptime →
+resource↔effect → host I/O (threat rewrite first) → C/FFI → multi-package.
+Native/LLVM and network registries remain blocked without law change.
+
+Each track begins with the falsifiable spike discipline in
 [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
 No milestone advances merely because its happy path works.
 
@@ -207,15 +216,18 @@ No milestone advances merely because its happy path works.
 | --- | --- | --- |
 | Exact mutable-value / borrowing / copying vocabulary | It determines source compatibility, diagnostics, IR, and every future ownership guarantee. | M1 |
 | Allocator capability form and OOM contract | It governs every dynamic collection, FFI boundary, and resource cleanup. | M1/M2 |
-| Fine-grained structural-edit vocabulary beyond top-level declarations | It must preserve transparent ownership/resource invariants without turning JSON paths into a second unsafe language. | Post-M3 |
+| Fine-grained structural-edit vocabulary beyond top-level declarations | It must preserve transparent ownership/resource invariants without turning JSON paths into a second unsafe language. | Post-M3 / **T-EDIT** |
 | General error/effect representation and inference boundary beyond `Error[Whole]` | It affects function types, handlers, cancellation, and compile-time rules. The M4 initial abortive representation is decided in ADR-007; generalization remains open. | Post-M4 |
-| Any expansion beyond M5 literal comptime | Calls, control flow, type computation, or source generation would change determinism, denial-of-service resistance, and host authority. | Post-M5 |
+| Any expansion beyond M5 literal comptime | Calls, control flow, type computation, or source generation would change determinism, denial-of-service resistance, and host authority. | Post-M5 / **T-CT** |
 | Generic shape and layout semantics | It affects ABI, correctness, performance claims, and debuggability. | M6 |
 | Task model and cancellation semantics | It affects resource lifetime, scheduler behavior, and failure propagation. | M7 |
-| Foreign interface scope, including any C-header strategy | It affects ownership, hostile input handling, portability, and host capability boundaries. | M8 |
-| Any native/LLVM backend | It conflicts with current AETH-only project law and therefore requires explicit law/ADR change before design work. | Outside this roadmap unless approved |
-| Language modules / cross-file weave resolution | Changes seed surface and ownership/diagnostics; cannot be implied by multi-unit project files alone. | Post-M10 (separate ADR) |
-| Lib units without standalone `main` | Requires language + seed definition of non-entry units. | Post-M10 language ADR |
+| Foreign interface scope, including any C-header strategy | It affects ownership, hostile input handling, portability, and host capability boundaries. | M8 / **T-FFI** (after pure host; ADR-014) |
+| Any native/LLVM backend | It conflicts with current AETH-only project law and therefore requires explicit law/ADR change before design work. | Outside this roadmap unless approved (**T-NATIVE**) |
+| Language modules / cross-file weave resolution | Changes seed surface and ownership/diagnostics; cannot be implied by multi-unit project files alone. | **T-MOD** — default next design; implementable ADR-015 required ([ADR-014](ADR-014-post-m10-track-portfolio.md)) |
+| Lib units without standalone `main` | Requires language + seed definition of non-entry units. | With **T-MOD** |
+| Host I/O beyond pure fixtures | Expands guest-visible host authority; TP threat model must be revised first. | **T-HOST** (ADR-014; not default next) |
+| Bounded LSP | Must not become second compiler authority; offline-first. | **T-LSP** (after T-EDIT preferred) |
+| Post-M10 portfolio order override | Only human may reorder tracks; agents must not invent parallel mega-features. | [ADR-014](ADR-014-post-m10-track-portfolio.md) |
 
 ## Universal acceptance gate for a language milestone
 
