@@ -12,9 +12,12 @@ Human-approved under AGENTS Constitution + SOP:
 
 | Target | Definition | Delivery |
 | --- | --- | --- |
-| **TP-1** Integrity Complete | Claim/docs sync, formal audit, automated offline gate, clean product tree | No public binary |
-| **TP-2** Technical Preview | TP-1 + harden + local `dist/` package + SHA-256SUMS + consumer verify | Local folder + checksums only |
+| **TP-1** Integrity Complete | Claim/docs sync, formal audit, automated offline gate, clean product tree | Done (audit report) |
+| **TP-2** Technical Preview | TP-1 + threat model + local `dist/` package + SHA-256SUMS + consumer verify | Local folder + checksums only |
 | **P4.1** Multi-unit offline projects | Extend M9 after TP-2; full SOP design → ADR → matrix before code | Feature track (not 1.0) |
+
+Threat model freeze: [THREAT_MODEL-TECHNICAL-PREVIEW.md](THREAT_MODEL-TECHNICAL-PREVIEW.md).  
+Package helpers: `tools/package-preview.ps1`, `tools/verify-preview.ps1`.
 
 **Out of scope unless new ADR:** C/FFI, native/LLVM, network registry, full LSP, ambient host I/O.
 

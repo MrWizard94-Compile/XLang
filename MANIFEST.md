@@ -208,8 +208,8 @@ See [docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md).
 ## Quality Gate
 
 Preferred offline entry (when present): `pwsh -File tools/aether-gate.ps1`
-(`--quick` for day-to-day; `--full` before technical preview, includes seed
-forge identity).
+(`-Mode quick` for day-to-day; `-Mode full` before technical preview, includes
+seed forge identity).
 
 Manual equivalent: pack `verify-pack.ps1`, Rust format, Clippy `-D warnings`,
 core/CLI/seed tests, CLI seed-compile of examples (dual-compare), forge
@@ -218,3 +218,13 @@ fixture. A technical-preview package also requires
 `cargo build --release -p aether-cli`, forge contract verification, inspection
 of the release binary, SHA-256SUMS, and a successful launch on the target
 Windows system (local folder delivery unless human directs otherwise).
+
+Local technical preview helpers:
+
+```powershell
+pwsh -File .\tools\package-preview.ps1
+pwsh -File .\dist\aether-0.12.0-tp\verify-preview.ps1
+```
+
+Threat model freeze: [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md).  
+Delivery report: [docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md](docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md).
