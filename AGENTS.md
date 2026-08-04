@@ -90,6 +90,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Post-M10 track portfolio | [docs/ADR-014-post-m10-track-portfolio.md](docs/ADR-014-post-m10-track-portfolio.md), [docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md](docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md) |
 | M11 language modules | [docs/AETHER_0.12-MODULES.md](docs/AETHER_0.12-MODULES.md), [docs/DESIGN-M11-LANGUAGE-MODULES.md](docs/DESIGN-M11-LANGUAGE-MODULES.md), [docs/ADR-015-m11-language-modules.md](docs/ADR-015-m11-language-modules.md), [docs/M11-VALIDATION-MATRIX.md](docs/M11-VALIDATION-MATRIX.md) |
 | M12 fine-grained edits | [docs/AETHER_AUTHORING_PROTOCOL_v7.md](docs/AETHER_AUTHORING_PROTOCOL_v7.md), [docs/DESIGN-M12-FINE-GRAINED-EDITS.md](docs/DESIGN-M12-FINE-GRAINED-EDITS.md), [docs/ADR-016-m12-fine-grained-edits.md](docs/ADR-016-m12-fine-grained-edits.md), [docs/M12-VALIDATION-MATRIX.md](docs/M12-VALIDATION-MATRIX.md) |
+| M13 bounded LSP (designed) | [docs/DESIGN-M13-BOUNDED-LSP.md](docs/DESIGN-M13-BOUNDED-LSP.md), [docs/ADR-017-m13-bounded-lsp.md](docs/ADR-017-m13-bounded-lsp.md), [docs/M13-VALIDATION-MATRIX.md](docs/M13-VALIDATION-MATRIX.md) |
 | Mainstream maturity roadmap | [docs/ROADMAP-MAINSTREAM-MATURITY.md](docs/ROADMAP-MAINSTREAM-MATURITY.md) |
 | Legacy intake | [docs/LEGACY.md](docs/LEGACY.md) |
 

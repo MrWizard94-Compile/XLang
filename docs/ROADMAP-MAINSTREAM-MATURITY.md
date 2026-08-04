@@ -935,9 +935,9 @@ Accepted by:
 ## 26. Immediate next actions (this week / next sprint)
 
 1. Mainstream maturity roadmap committed.  
-2. **M11 modules complete** (0.15: elaborate + seed dual-compare).  
-3. **M12 fine-grained edits designed** (ADR-016); **next: implement v7 apply-edit**.  
-4. Keep gates green; do not regress M10/M11.  
+2. **M11 modules complete** (0.15).  
+3. **M12 fine-grained edits complete** (0.16).  
+4. **M13 bounded LSP designed** (ADR-017); **next: implement `aether lsp` (M13a)**.  
 5. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table (can wait).
 
 ---
