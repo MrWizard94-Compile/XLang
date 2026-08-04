@@ -1,8 +1,8 @@
 # Aether Migration Audit
 
-Date: 2026-08-03 (Aether 0.10: Stage 7 bounded resources, M3–M7 authoring,
+Date: 2026-08-04 (Aether 0.10: Stage 7 bounded resources, M3–M7 authoring,
 typed-error baseline, deterministic literal comptime, dual-layout tables, and
-structured nurseries; active Studio retirement)
+structured nurseries; active Studio retirement; DOC-SYNC audit remediation)
 
 ## Legacy Intake
 
@@ -52,28 +52,29 @@ hidden host exception route or macro expansion path.
 
 ## Strategic Design Boundary
 
-This audit records the implemented Aether 0.8 migration/product boundary. The
+This audit records the implemented Aether 0.10 migration/product boundary. The
 separate AI-first language direction is evidence-gated rather than represented
 as completed feature work: [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
 [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
-General effects/resumptions, broader compile-time execution, structured
-concurrency, data-layout/generic work, C interop, and fine-grained
-arbitrary-node structural AI edits are future research/design items. M3/M4/M5's
-implemented bounded protocols must not be reported as arbitrary text editing,
-general metaprogramming, or a host-capability expansion, and must not weaken
-AETH-only execution, verification, seed proof, or local-first authority.
+General effects/resumptions, broader compile-time execution, OS-thread
+parallelism, general generics, C interop, and fine-grained arbitrary-node
+structural AI edits remain future research/design items. M3–M7's implemented
+bounded protocols must not be reported as arbitrary text editing, general
+metaprogramming, host-capability expansion, or parallel speedup, and must not
+weaken AETH-only execution, verification, seed proof, or local-first authority.
 
 ## Seed-Profile Self-Hosting Boundary
 
 `seed/aether_seed.ae` is source in Aether. It parses the complete documented
-canonical Aether 0.8 surface and emits v8 through ordinary language
+canonical Aether 0.10 surface and emits v10 through ordinary language
 operations. The regression tests prove bootstrap, first forge, and second forge
 match the checked-in artifact; a distinct source variant produces a different
 verified artifact; and multi-weave + `call`, records, every shipped example,
-the documented M2 corpus, the bounded M4 error-effect corpus, and the bounded
-M5 comptime corpus match bootstrap.
+the documented M2 corpus, the bounded M4 error-effect corpus, the bounded M5
+comptime corpus, the M6 layout corpus, and the M7 nursery corpus match
+bootstrap.
 
-This is canonical Aether 0.8 source-emission self-hosting. Rust remains the
+This is canonical Aether 0.10 source-emission self-hosting. Rust remains the
 bootstrap and invalid-source diagnostic authority; full diagnostic parity is not
 claimed. Scope: [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
@@ -119,11 +120,27 @@ v1 and v2 remain historical compatibility documentation.
 
 ## M5 Deterministic Compile-Time Evaluation
 
-Aether 0.8 admits root-only immutable `comptime bind` for one literal
+Aether admits root-only immutable `comptime bind` for one literal
 signed-`Whole` arithmetic operation under a fixed 1,024-directive budget.
-Results lower to AETH v8 `COMPTIME_WHOLE` provenance and ordinary local
-storage. The design, decision, validation matrix, and delivery evidence are
+Results lower to AETH `COMPTIME_WHOLE` provenance and ordinary local storage
+(current default emission is AETH v10). The design, decision, validation
+matrix, and delivery evidence are
 [docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md](docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md),
 [docs/ADR-008-m5-deterministic-comptime.md](docs/ADR-008-m5-deterministic-comptime.md),
 [docs/M5-VALIDATION-MATRIX.md](docs/M5-VALIDATION-MATRIX.md), and
 [docs/DELIVERY_REPORT-2026-08-03-M5-DETERMINISTIC-COMPTIME.md](docs/DELIVERY_REPORT-2026-08-03-M5-DETERMINISTIC-COMPTIME.md).
+
+## M6 Dual-Layout Tables
+
+Explicit `shape` declarations and `table Shape layout rows|columns` with closed
+allocate/store/load, semantic equivalence, and seed byte identity are recorded
+in [docs/ADR-009-m6-explicit-layout-shapes.md](docs/ADR-009-m6-explicit-layout-shapes.md)
+and [docs/DELIVERY_REPORT-2026-08-03-M6-EXPLICIT-LAYOUT.md](docs/DELIVERY_REPORT-2026-08-03-M6-EXPLICIT-LAYOUT.md).
+
+## M7 Structured Nurseries
+
+Lexical `together`/`spawn` with cooperative source-order execution and
+first-failure cancel of remaining unstarted spawns is recorded in
+[docs/ADR-010-m7-structured-concurrency.md](docs/ADR-010-m7-structured-concurrency.md)
+and [docs/DELIVERY_REPORT-2026-08-03-M7-STRUCTURED-CONCURRENCY.md](docs/DELIVERY_REPORT-2026-08-03-M7-STRUCTURED-CONCURRENCY.md).
+No OS-thread parallelism is claimed.

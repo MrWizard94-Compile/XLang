@@ -92,14 +92,15 @@ weaves keep the M4 clean resource boundary; `main` remains total.
 
 Every 0.10 compilation emits AETH v10 with an arena-capacity header field, a
 possibly empty bounded record table, a shape table, and a function `effect_tag`.
-v9 preserves prior verified forms and adds `COMPTIME_WHOLE` (56) plus table
-opcodes `TABLE` (57), `TABLE_ALLOCATE` (58), `TABLE_STORE` (59), `TABLE_LOAD`
-(60), and `TABLE_COUNT` (61). AETH v4/v5/v6/v7/v8/v9 remain accepted with their
+v10 preserves prior verified forms and adds `COMPTIME_WHOLE` (56), table opcodes
+`TABLE` (57), `TABLE_ALLOCATE` (58), `TABLE_STORE` (59), `TABLE_LOAD` (60),
+`TABLE_COUNT` (61), and nursery opcodes `NURSERY_BEGIN` (62), `NURSERY_SPAWN`
+(63), and `NURSERY_END` (64). AETH v4/v5/v6/v7/v8/v9 remain accepted with their
 original bytes and meanings; earlier and unknown versions are rejected.
 
 ## Structural authoring boundary
 
-`aether.ast/v5` describes successfully parsed Aether 0.9 source after
+`aether.ast/v5` describes successfully parsed Aether 0.10 source after
 formatter canonicalization. `aether.edit/v5` accepts only a matching complete
 canonical `baseSource` and bounded typed top-level Record/Shape/Weave
 `replace`/`insertAfter`/`delete` operations. The bootstrap revalidates the
@@ -109,10 +110,10 @@ AI/model service, change artifact bytes, or grant a guest capability.
 
 Stable `aether.diagnostic/v5` code/span envelopes make source and edit failures
 machine-readable, including `AE-EFFECT-001` through `AE-EFFECT-004`,
-`AE-COMPTIME-001` through `AE-COMPTIME-003`, and `AE-LAYOUT-001` through
-`AE-LAYOUT-003`. Every `Bind` node must state `stage: "runtime"` or
-`stage: "comptime"`. The exact schemas, limits, operation vocabulary, and
-compatibility policy are in
+`AE-COMPTIME-001` through `AE-COMPTIME-003`, `AE-LAYOUT-001` through
+`AE-LAYOUT-003`, and `AE-TASK-001` through `AE-TASK-003`. Every `Bind` node must
+state `stage: "runtime"` or `stage: "comptime"`. The exact schemas, limits,
+operation vocabulary, and compatibility policy are in
 [docs/AETHER_AUTHORING_PROTOCOL_v5.md](docs/AETHER_AUTHORING_PROTOCOL_v5.md).
 
 ## Compile Path Boundary

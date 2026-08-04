@@ -1,7 +1,7 @@
 # Forge Contract
 
-Status: implemented host ABI for Aether 0.8.0 Stage 7/M4/M5. Supports complete
-canonical Aether 0.8 Seed Profile self-hosting proofs; does not grant host
+Status: implemented host ABI for Aether 0.10.0 Stage 7/M4–M7. Supports complete
+canonical Aether 0.10 Seed Profile self-hosting proofs; does not grant host
 capabilities to artifacts.
 
 ## Command
@@ -13,8 +13,8 @@ services, a shell, or another compiler.
 
 ## Required Compiler Artifact
 
-The compiler artifact must first pass normal supported AETH v4, v5, v6, v7, or
-v8 verification. That includes
+The compiler artifact must first pass normal supported AETH v4, v5, v6, v7, v8,
+v9, or v10 verification. That includes
 the required runnable weave `main [] -> Whole:`. The forge bridge then locates a
 named weave `compile` and requires this exact type and ownership shape:
 
@@ -28,47 +28,26 @@ artifact, or unsupported AETH version is rejected before the weave executes.
 ## Invocation Sequence
 
 1. Read the compiler artifact and source file locally.
-2. Verify the compiler artifact as supported AETH v4, v5, v6, v7, or v8.
+2. Verify the compiler artifact as supported AETH v4 through v10.
 3. Check the compile weave ABI.
 4. Invoke compile with the complete source file as one bounded Text argument.
 5. Preserve any compiler weave stdout as diagnostic text on standard error.
 6. Require the returned value to be Bytes.
-7. Verify those Bytes as a complete supported AETH v4, v5, v6, v7, or v8 artifact.
+7. Verify those Bytes as a complete supported AETH v4 through v10 artifact.
 8. Confirm the output directory exists and write the verified artifact.
 
 The host never parses, transforms, or generates the supplied source during forge
 invocation. It only transports source Text in and verified artifact Bytes out.
 
-## Capabilities
+## Capability Boundary
 
-The invoked Aether artifact has no direct file, process, network, model,
-shell, or artifact-writing capability. Its observable effect is only
-stdout and its typed yield value. The host owns input reading and final artifact
-writing after verification.
+The invoked compiler artifact has no file, process, network, shell, or ambient
+host authority. Forge owns all host I/O after verification. This contract is
+unchanged by M2 resources, M4 effects, M5 comptime, M6 layout tables, or M7
+nurseries: guest code cannot open those capabilities through forge.
 
-## Seed-Profile Use
+## Seed Profile relationship
 
-Stage 7/M4/M5 uses this contract for the checked-in seed compiler:
-
-1. Bootstrap-compile `seed/aether_seed.ae` with the Rust core.
-2. Forge that artifact against the same source.
-3. Require byte-identical output and successful verification.
-4. Forge a second generation and a distinct source variant (regression test).
-5. Forge multi-weave Seed Profile programs with `call` and require
-   byte-identical bootstrap match plus a successful run.
-6. Compare the prior canonical surface, the complete documented Aether 0.6 M2
-   resource corpus, the Aether 0.7 M4 effect corpus, and the Aether 0.8 M5
-   literal comptime corpus against bootstrap,
-   including immutable records, text
-   escapes, a final source line without a terminator, arena exhaustion, buffer
-   full, lookup fallback, Truth elements, and an access-bound helper.
-
-Matching bytes under this ABI is the only accepted self-hosting evidence for the
-Seed Profile. See [SEED_PROFILE.md](SEED_PROFILE.md).
-
-## Current Limitation
-
-Canonical Aether 0.8 source-emission parity is proven under this contract. This
-does not claim parity for invalid-source diagnostics: the Rust bootstrap remains
-the diagnostic authority. Any future language extension must meet the same
-reproducible comparison standard before it joins the seed product path.
+Product compilation embeds the checked-in seed artifact and uses this forge ABI
+through `compile_with_seed`. Seed self-host proofs require multi-generation
+byte identity under forge. See [SEED_PROFILE.md](SEED_PROFILE.md).

@@ -109,31 +109,48 @@ the handled, forwarded, rejected, clean-boundary, and total-entry claims.
 The design deliberately prohibits continuation capture/resumption, effect
 inference, generic error payloads, owner/loan/resource crossings, resource
 outcome mixing, host error exits, and a v6 reinterpretation. The M4 increment
-remains Aether 0.7/AETH v7 semantics; Aether 0.8 preserves it inside AETH v8
-plus `aether.ast/v3`, `aether.edit/v3`, and `aether.diagnostic/v3`. Broader
+remains Aether 0.7/AETH v7 semantics; Aether 0.10 preserves it inside AETH v10
+plus `aether.ast/v5`, `aether.edit/v5`, and `aether.diagnostic/v5`. Broader
 effects still require a new decision and proof.
 
 ### M5 — implemented deterministic compile-time evaluator
 
 M5 is specified by [DESIGN-M5-DETERMINISTIC-COMPTIME.md](DESIGN-M5-DETERMINISTIC-COMPTIME.md),
 [ADR-008](ADR-008-m5-deterministic-comptime.md), and
-[M5 validation matrix](M5-VALIDATION-MATRIX.md). Aether 0.8 admits only
+[M5 validation matrix](M5-VALIDATION-MATRIX.md). Aether admits only
 root-level immutable `comptime bind` with one literal signed-`Whole` `sum`,
 `difference`, `product`, `quotient`, or `remainder`. It has one fixed
 evaluation unit per directive, a program-wide 1,024-directive cap, checked VM
-arithmetic, no host authority, and v8 `COMPTIME_WHOLE` provenance.
+arithmetic, no host authority, and `COMPTIME_WHOLE` provenance in current AETH
+output.
 
 The bootstrap parser/validator/emitter/verifier/VM, Aether-written seed,
-authoring v3, pure M5 reference model, hostile source/artifact tests, self-host
-rebuild, and shipped example dual-compare prove the bounded slice. M5 does not
-settle compile-time names, calls, control flow, type computation, code
-generation, macros, or build scripts; each remains a new research decision.
+authoring contracts, pure M5 reference model, hostile source/artifact tests,
+self-host rebuild, and shipped example dual-compare prove the bounded slice.
+M5 does not settle compile-time names, calls, control flow, type computation,
+code generation, macros, or build scripts; each remains a new research decision.
 
-### M6 through M8 — controlled experiments, not feature pile-on
+### M6 — implemented dual-layout tables
 
-Effects, compile-time execution, layouts/generics, structured concurrency, and
-foreign interfaces have large interaction surfaces. Each begins with the
-falsifiable spike described in
+M6 is specified by [DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md](DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md),
+[ADR-009](ADR-009-m6-explicit-layout-shapes.md), and
+[M6 validation matrix](M6-VALIDATION-MATRIX.md). Aether 0.9/0.10 admit Whole-only
+`shape` declarations and `table Shape layout rows|columns` with closed allocate/
+store/load, semantic equivalence, and a published layout harness.
+
+### M7 — implemented structured nurseries
+
+M7 is specified by [DESIGN-M7-STRUCTURED-CONCURRENCY.md](DESIGN-M7-STRUCTURED-CONCURRENCY.md),
+[ADR-010](ADR-010-m7-structured-concurrency.md), and
+[M7 validation matrix](M7-VALIDATION-MATRIX.md). Aether 0.10 admits lexical
+`together`/`spawn` nurseries with cooperative source-order execution and
+first-failure cancel of remaining unstarted spawns. No OS-thread parallelism is
+claimed.
+
+### M8 — controlled experiment, not feature pile-on
+
+Foreign interfaces and remaining research items have large interaction surfaces.
+Each begins with the falsifiable spike described in
 [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
 No milestone advances merely because its happy path works.
 

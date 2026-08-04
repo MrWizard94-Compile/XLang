@@ -3,10 +3,10 @@
 ~~~mermaid
 flowchart LR
     CLI["aether CLI"] -->|"compile"| SeedPath["compile_with_seed"]
-    CLI -->|"structure / apply-edit"| Authoring["aether.ast/v3 + aether.edit/v3"]
+    CLI -->|"structure / apply-edit"| Authoring["aether.ast/v5 + aether.edit/v5"]
     Authoring -->|"canonical validated source"| SeedPath
-    SeedPath --> SeedArt["embedded seed AETH v8 compiler"]
-    SeedArt --> Artifact["Verified AETH v4, v5, v6, v7, or v8 artifact"]
+    SeedPath --> SeedArt["embedded seed AETH v10 compiler"]
+    SeedArt --> Artifact["Verified AETH v4 through v10 artifact"]
     Artifact --> VM["Aether VM"]
     VM --> Result["stdout and exit value"]
     Check["aether check"] --> Bootstrap["Rust bootstrap AST"]
@@ -18,24 +18,25 @@ flowchart LR
 
 ## Scope and Future-Design Boundary
 
-This document describes the implemented Aether 0.8 architecture. The broader
+This document describes the implemented Aether 0.10 architecture. The broader
 AI-first systems-language direction is documented separately in
 [NORTH_STAR.md](NORTH_STAR.md), [CORE_CLAIMS.md](CORE_CLAIMS.md), and
 [ROADMAP.md](ROADMAP.md). The accepted M1 direction is
 [DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md);
 the executable bounded M2 subset is [ADR-004](ADR-004-aeth-v6-bounded-resources.md).
-In particular, Aether 0.8 has one bounded `Error[Whole]` effect and one literal
-Whole-only compile-time evaluator, but no general effects, structured
-concurrency, generic shape folding, SoA lowering, C-header ingestion,
-fine-grained arbitrary-node structural edits, or native backend.
-M4's visible `raises Whole`, terminal `raise`/`forward`/`handle` forms and clean
-ownership boundary are specified in
-[DESIGN-M4-TYPED-ERROR-EFFECTS.md](DESIGN-M4-TYPED-ERROR-EFFECTS.md). The
-bounded top-level structural authoring protocol is
-[AETHER_AUTHORING_PROTOCOL_v3.md](AETHER_AUTHORING_PROTOCOL_v3.md).
-Aether source
-continues to emit AETH only; future designs may not bypass verifier, forge, or
-host-capability boundaries.
+Aether 0.10 includes bounded `Error[Whole]`, literal `comptime bind`, dual-layout
+Whole tables, and structured nurseries. It still has no general effects,
+OS-thread parallelism, generic type parameters, C-header ingestion,
+fine-grained arbitrary-node structural edits, or a native backend.
+M4/M5/M6/M7 designs are
+[DESIGN-M4-TYPED-ERROR-EFFECTS.md](DESIGN-M4-TYPED-ERROR-EFFECTS.md),
+[DESIGN-M5-DETERMINISTIC-COMPTIME.md](DESIGN-M5-DETERMINISTIC-COMPTIME.md),
+[DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md](DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md), and
+[DESIGN-M7-STRUCTURED-CONCURRENCY.md](DESIGN-M7-STRUCTURED-CONCURRENCY.md).
+The current structural authoring protocol is
+[AETHER_AUTHORING_PROTOCOL_v5.md](AETHER_AUTHORING_PROTOCOL_v5.md).
+Aether source continues to emit AETH only; future designs may not bypass
+verifier, forge, or host-capability boundaries.
 
 ## Compiler Boundary
 
@@ -43,8 +44,8 @@ The Rust bootstrap core uses pinned `serde`/`serde_json` only for strict local
 M3 JSON parsing and deterministic structural-document serialization. It parses
 UTF-8 Aether source, validates names, types, mutation, `Text` and `Bytes` move state, and
 structured control flow, serializes a deterministic AST, builds typed M2
-resource and M4 effect validation plans plus the M5 literal evaluator, and
-emits AETH v8 bytecode. The bytecode verifier runs
+resource, M4 effect, M5 comptime, M6 layout, and M7 nursery validation plans,
+and emits AETH v10 bytecode. The bytecode verifier runs
 before the VM. The compiler does not call a
 model, evaluate JavaScript, contact a network service, or persist source.
 
@@ -123,15 +124,16 @@ bounded error effect, and literal compile-time Whole evaluation:
 - CLI `compile --bootstrap` and `check` still use the Rust bootstrap for seed
   rebuild and AST diagnostics.
 
-The Seed Profile emits the complete documented canonical Aether 0.8 source
+The Seed Profile emits the complete documented canonical Aether 0.10 source
 surface: all statement and shallow expression families, named locals/params,
 `borrow`/`move`/`access`, multi-weave `call` (including forward callees), hex
 `bytes` literals, UTF-8 text constants with all defined escapes, LF/CRLF input
-with or without a final line terminator, immutable records, and closed M2
-resource forms plus `raises Whole`, `raise`, `forward`, terminal `handle`, and
-root-only literal `comptime bind`. It emits v8 with an arena capacity field,
-optional record table, effect metadata, and `COMPTIME_WHOLE` provenance.
-Self-host, shipped-example, prior canonical-surface, M2, M4, and M5
+with or without a final line terminator, immutable records, closed M2 resource
+forms, dual-layout tables, `raises Whole`, `raise`, `forward`, terminal
+`handle`, root-only literal `comptime bind`, and structured `together`/`spawn`
+nurseries. It emits v10 with an arena capacity field, optional record and shape
+tables, effect metadata, `COMPTIME_WHOLE` provenance, and nursery opcodes.
+Self-host, shipped-example, prior canonical-surface, M2, M4, M5, M6, and M7
 dual-compare proofs live in `seed_self_host.rs` and the core resource corpus.
 See
 [SEED_PROFILE.md](SEED_PROFILE.md).
@@ -141,9 +143,9 @@ diagnostic path, and dual-checks proofs. Product bytecode is seed-produced.
 
 ## Structural Authoring Boundary
 
-M3/M4/M5 have current local wire contracts: `aether.ast/v3` exports the fully
-validated formatter-canonical semantic tree, and `aether.edit/v3` carries an exact
-canonical base source plus typed top-level Record/Weave `replace`,
+M3–M7 have current local wire contracts: `aether.ast/v5` exports the fully
+validated formatter-canonical semantic tree, and `aether.edit/v5` carries an exact
+canonical base source plus typed top-level Record/Shape/Weave `replace`,
 `insertAfter`, or `delete` operations. Strict parsing rejects duplicate JSON
 keys, unknown fields, unsupported versions, invalid shapes, excessive depth,
 and bounded-input violations before an edit can affect a Program. Existing
