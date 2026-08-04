@@ -111,13 +111,14 @@ their original bytes and meanings; earlier and unknown versions are rejected.
 
 ## Structural authoring boundary
 
-`aether.ast/v5` describes successfully parsed Aether 0.10 source after
-formatter canonicalization. `aether.edit/v5` accepts only a matching complete
-canonical `baseSource` and bounded typed top-level Record/Shape/Weave
-`replace`/`insertAfter`/`delete` operations. The bootstrap revalidates the
-formatter-owned result; the CLI seed-compiles it before writing source to the
-requested output path. It cannot execute code, write a file by itself, contact an
-AI/model service, change artifact bytes, or grant a guest capability.
+`aether.ast/v6` describes successfully parsed Aether 0.11 source after
+formatter canonicalization. `aether.edit/v6` accepts only a matching complete
+canonical `baseSource` and bounded typed top-level declaration
+`replace`/`insertAfter`/`delete` operations (records, shapes, weaves, host
+weaves as contracted). The bootstrap revalidates the formatter-owned result; the
+CLI seed-compiles it before writing source to the requested output path. It
+cannot execute code, write a file by itself, contact an AI/model service, change
+artifact bytes, or grant a guest capability.
 
 Stable `aether.diagnostic/v5` code/span envelopes make source and edit failures
 machine-readable, including `AE-EFFECT-001` through `AE-EFFECT-004`,
@@ -140,16 +141,18 @@ The seed artifact is checked in at `seed/aether_seed.aeth` and embedded as
 
 ## Seed-Profile Self Hosting
 
-`seed/aether_seed.ae` parses the complete documented canonical Aether 0.10
-surface: all statement and shallow expression forms, named locals/params,
-`borrow`/`move`/`access`, multi-weave `call` including forward callees, hex bytes
-literals, UTF-8 text constants with the five defined escapes, and LF/CRLF input
-with or without a final line terminator. It also emits the bounded immutable
-record declaration, constructor, and projection surface plus `arena`,
-Whole/Truth buffers, closed resource outcomes, the v9 resource and shape
-headers, the bounded M4 effect metadata/instructions, M5 literal `comptime bind`
-/`COMPTIME_WHOLE`, and M6 shape/table dual-layout emission through ordinary
-`Bytes` operations with no host parser callback.
+`seed/aether_seed.ae` parses the complete documented canonical Aether **0.11**
+language surface (package 0.12 tooling): all statement and shallow expression
+forms, named locals/params, `borrow`/`move`/`access`, multi-weave `call`
+including forward callees, hex bytes literals, UTF-8 text constants with the
+five defined escapes, and LF/CRLF input with or without a final line terminator.
+It also emits the bounded immutable record declaration, constructor, and
+projection surface plus `arena`, Whole/Truth buffers, closed resource outcomes,
+shape/table dual-layout emission, the bounded M4 effect metadata/instructions,
+M5 literal `comptime bind` / `COMPTIME_WHOLE`, M7 nursery forms, and M8
+`host weave` / `HOST_CALL` emission through ordinary `Bytes` operations with no
+host parser callback. Offline project documents (`aether.project/v1`) are host
+CLI tooling (M9), not seed surface.
 
 Proofs in `crates/xlang-core/tests/seed_self_host.rs`:
 
@@ -170,11 +173,16 @@ Proofs in `crates/xlang-core/tests/seed_self_host.rs`:
    and runs with its expected outcome
 10. The shipped M7 nursery fixtures match bootstrap byte-for-byte, verify, and
    run with their expected outcomes
+11. The shipped M8 `host-pilot` fixture matches bootstrap byte-for-byte, verifies,
+    and runs with its expected pure-host outcome
+12. Offline M9 project verify/format is exercised by core/CLI tests on the
+    shipped `examples/project` fixture (host tooling, not seed emission)
 
-This is full canonical Aether 0.10 source-emission parity for the documented
-surface, self-hosting of the seed, and seed-hosted compilation of the shipped
-example corpus. It is **not** a claim of full invalid-source diagnostic parity or of parity for future language
-features without the same proof.
+This is full canonical Aether **0.11** source-emission parity for the documented
+language surface, self-hosting of the seed, and seed-hosted compilation of the
+shipped example corpus, plus offline M9 project integrity on the host CLI. It is
+**not** a claim of full invalid-source diagnostic parity or of parity for future
+language features without the same proof.
 
 ## Product Interface Boundary
 
@@ -199,8 +207,14 @@ See [docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md).
 
 ## Quality Gate
 
-Rust format, Clippy `-D warnings`, core/CLI/seed tests, CLI seed-compile of
-examples, forge self-host hash check, and `aether project verify` on the
-shipped project fixture are required. A release also requires
+Preferred offline entry (when present): `pwsh -File tools/aether-gate.ps1`
+(`--quick` for day-to-day; `--full` before technical preview, includes seed
+forge identity).
+
+Manual equivalent: pack `verify-pack.ps1`, Rust format, Clippy `-D warnings`,
+core/CLI/seed tests, CLI seed-compile of examples (dual-compare), forge
+self-host hash check, and `aether project verify` on the shipped project
+fixture. A technical-preview package also requires
 `cargo build --release -p aether-cli`, forge contract verification, inspection
-of the release binary, and a successful launch on the target Windows system.
+of the release binary, SHA-256SUMS, and a successful launch on the target
+Windows system (local folder delivery unless human directs otherwise).

@@ -110,27 +110,21 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 From repository root `C:\WPAI\Software\XLang` (or equivalent checkout):
 
 ```powershell
-# Pack law
+# Preferred offline gate (TP-1 / day-to-day)
+pwsh -File .\tools\aether-gate.ps1 -Mode quick
+
+# Technical preview / release-blocking (includes seed forge identity)
+pwsh -File .\tools\aether-gate.ps1 -Mode full
+
+# Manual pack law (also invoked by the gate when pack is found)
 pwsh -File "../../AGENTS Constitution/tools/verify-pack.ps1"
-
-# Core + CLI + seed self-host proof
-cargo fmt --all -- --check
-cargo test -p aether-core
-cargo test -p aether-cli
-cargo clippy -p aether-core -p aether-cli -- -D warnings
-
-# Stage examples
-cargo run -p aether-cli -- check (Resolve-Path .\examples\welcome.ae)
-cargo run -p aether-cli -- compile (Resolve-Path .\examples\welcome.ae) --output .\target\welcome.aeth
-cargo run -p aether-cli -- run .\target\welcome.aeth
-
-# Seed forge reproducibility
-cargo run -p aether-cli -- compile .\seed\aether_seed.ae --output .\target\aether_seed.aeth --bootstrap
-cargo run -p aether-cli -- forge .\target\aether_seed.aeth .\seed\aether_seed.ae --output .\target\aether_seed.forged.aeth
-
+# Fallback if pack is vendored in-tree (untracked dump; not a product commit):
+# pwsh -File ".\AGENTS Constitution\tools\verify-pack.ps1"
 ```
 
-Release additionally requires a release CLI binary build, forge contract verification, and binary inspection/launch before delivery — see [MANIFEST.md](MANIFEST.md).
+Release / technical preview additionally requires `cargo build --release -p aether-cli`,
+SHA-256SUMS, forge contract verification, binary inspection/launch, and delivery
+report — see [MANIFEST.md](MANIFEST.md).
 
 ### Overrides
 

@@ -18,3 +18,11 @@
 # Accidental pack working copy; binding pack is ../../AGENTS Constitution/
 /AGENTS Constitution Human workspace/
 
+# Untracked constitution dumps (never commit; keep local copies usable)
+/AGENTS Constitution/
+/AGENTS Constitution.zip
+/.grok/AGENTS Constitution/
+
+# Technical preview build output (local package; do not commit binaries)
+/dist/
+
