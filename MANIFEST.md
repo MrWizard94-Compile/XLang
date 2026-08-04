@@ -2,14 +2,15 @@
 
 ## Contract
 
-Aether **0.21.0** (base language **0.11** plus M11–M16 tooling and semantics,
+Aether **0.22.0** (base language **0.11** plus M11–M17 tooling and semantics,
 AETH **v11**) accepts Aether source, returns a canonical AST from the Rust
 bootstrap for tooling, and **emits AETH v11 bytecode primarily through the
 Aether-written seed compiler** (forge ABI). Single-file `compile` is seed-hosted.
 Multi-module `project build` elaborates the import DAG, dual-compares
 bootstrap≡seed, and writes seed artifacts. Authoring uses `aether.ast/v7` and
 `aether.edit/v7`. The CLI provides offline project verify/format,
-`aether lsp [--project …]`, and `aether run` with optional `--grant-*` (M14).
+`aether lsp [--project …]`, `aether run` with optional `--grant-*` (M14), and
+`aether test` (M17 offline discovery of `*_test.ae`, pure run, exit 0 = pass).
 `comptime bind` may chain prior comptime Whole names (M15). Total weaves may
 own arenas/buffers/tables and terminal-`handle` pure `Error[Whole]` callees
 (M16); abortive raise/forward and nurseries remain resource-incompatible.
@@ -18,8 +19,8 @@ an existing language.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.21 product contract (0.11 core language,
-M9–M16 tooling/host/comptime/resource-handle). It intentionally
+This manifest is the executable Aether 0.22 product contract (0.11 core language,
+M9–M17 tooling including offline tests). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -127,6 +128,10 @@ terminal `handle call` against a resource-free copy-only `Error[Whole]` callee.
 Live Arena/Buffer/table/Text/Bytes/record owners may span the handle; exclusive
 `access` loans may not. Abortive `raise`/`forward` and nurseries remain
 incompatible with resource ownership in the same weave.
+
+M17 (package 0.22) adds offline `aether test [path...]`: discover `*_test.ae`
+under directories (or run explicit `.ae` files), seed-compile, pure-run without
+grants, pass when `main` yields Whole **0**. Empty discovery fails closed.
 
 Every 0.11 compilation emits AETH v11 with an arena-capacity header field, a
 possibly empty bounded record table, a shape table, a function `effect_tag`, and

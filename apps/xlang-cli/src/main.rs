@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod lsp;
+mod test_runner;
 
 use aether_core::{
     apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
@@ -16,7 +17,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -416,6 +417,23 @@ fn run() -> Result<(), String> {
             let grants = parse_run_grants(&mut arguments)?;
             execute_artifact(Path::new(&artifact), grants)
         }
+        "test" => {
+            let mut paths = Vec::new();
+            for argument in arguments.by_ref() {
+                paths.push(PathBuf::from(argument));
+            }
+            let report = test_runner::run_tests(&paths)?;
+            test_runner::print_report(&report);
+            if report.all_passed() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "test suite failed: {} passed; {} failed",
+                    report.passed(),
+                    report.failed()
+                ))
+            }
+        }
         "format" => {
             let source = next_argument(&mut arguments, "source file")?;
             let mut output = None;
@@ -528,8 +546,14 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            usage();
-            eprintln!("{LANGUAGE_NAME} failed: {error}");
+            // Test suite failures already printed a report; avoid dumping full usage.
+            if error.starts_with("test suite failed:") || error.starts_with("no test sources found")
+            {
+                eprintln!("{LANGUAGE_NAME} failed: {error}");
+            } else {
+                usage();
+                eprintln!("{LANGUAGE_NAME} failed: {error}");
+            }
             ExitCode::FAILURE
         }
     }
@@ -669,5 +693,46 @@ mod tests {
 
         let denied = execute_artifact(&artifact_path, HostGrantConfig::default());
         assert!(denied.is_err(), "run without grant must fail closed");
+    }
+
+    #[test]
+    fn test_runner_passes_zero_exit_and_fails_nonzero() {
+        let temporary = TemporaryDirectory::create();
+        let pass_path = temporary.path.join("ok_test.ae");
+        let fail_path = temporary.path.join("bad_test.ae");
+        fs::write(&pass_path, "world ok\n\nweave main [] -> Whole:\n  yield 0\n")
+            .expect("pass fixture");
+        fs::write(
+            &fail_path,
+            "world bad\n\nweave main [] -> Whole:\n  yield 1\n",
+        )
+        .expect("fail fixture");
+
+        let report = test_runner::run_tests(&[temporary.path.clone()]).expect("discover tests");
+        assert_eq!(report.results.len(), 2);
+        assert_eq!(report.passed(), 1);
+        assert_eq!(report.failed(), 1);
+        assert!(!report.all_passed());
+
+        let single = test_runner::run_one_test(&pass_path);
+        assert!(single.ok, "explicit pass: {}", single.detail);
+
+        let empty = temporary.path.join("empty");
+        fs::create_dir_all(&empty).expect("empty dir");
+        let err = test_runner::collect_test_sources(&[empty]).expect_err("empty fails closed");
+        assert!(err.contains("no test sources"), "{err}");
+    }
+
+    #[test]
+    fn shipped_examples_tests_directory_passes() {
+        let tests_dir =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/tests");
+        let report = test_runner::run_tests(&[tests_dir]).expect("examples/tests should run");
+        assert!(
+            report.all_passed(),
+            "shipped example tests must pass: {:?}",
+            report.results
+        );
+        assert!(report.passed() >= 2);
     }
 }

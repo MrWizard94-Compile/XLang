@@ -1,0 +1,10 @@
+world arithmetic_test
+
+weave main [] -> Whole:
+  comptime bind value <- sum 2 3
+  bind mutable code <- 1
+  choose same value 5:
+    revise code <- 0
+  otherwise:
+    revise code <- 1
+  yield code
