@@ -1,7 +1,8 @@
 # M13 bounded LSP validation matrix
 
-**Status:** M13a implemented (0.17.0) —
-[DELIVERY_REPORT-2026-08-04-M13A-BOUNDED-LSP.md](DELIVERY_REPORT-2026-08-04-M13A-BOUNDED-LSP.md)  
+**Status:** M13a + M13b implemented (0.18.0) —
+[DELIVERY_REPORT-2026-08-04-M13A-BOUNDED-LSP.md](DELIVERY_REPORT-2026-08-04-M13A-BOUNDED-LSP.md),
+[DELIVERY_REPORT-2026-08-04-M13B-PROJECT-LSP.md](DELIVERY_REPORT-2026-08-04-M13B-PROJECT-LSP.md)  
 **Date:** 2026-08-04  
 **Design:** [DESIGN-M13-BOUNDED-LSP.md](DESIGN-M13-BOUNDED-LSP.md)  
 **ADR:** [ADR-017](ADR-017-m13-bounded-lsp.md)
@@ -60,8 +61,9 @@
 
 ### M13b
 
-- [ ] Project-aware imports  
-- [ ] Cross-file definition  
+- [x] Project-aware imports  
+- [x] Cross-file definition (exported only)  
+- [x] Path jail via project units  
 
 ## Sign-off
 
@@ -69,4 +71,4 @@
 | --- | --- |
 | Design + ADR-017 | **Accepted** |
 | M13a implementation | **Done** (0.17.0) |
-| M13b | Optional follow-on |
+| M13b | **Done** (0.18.0) |

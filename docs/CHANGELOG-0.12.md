@@ -3,6 +3,12 @@
 Honest user-facing deltas from the bounded resource core through the technical
 preview package. This is **not** a claim of 1.0 completeness.
 
+## 0.18.0 — project-aware LSP imports (M13b)
+
+- `aether lsp --project <aether.project.json>` (or `initializationOptions.projectFile`).
+- Definition/hover for `call alias.weave` resolve **exported** weaves under project path jail.
+- Private weaves do not resolve; module files get informational AE-MOD-007 in the editor.
+
 ## 0.17.0 — bounded offline LSP (M13a)
 
 - `aether lsp` stdio JSON-RPC Language Server.
