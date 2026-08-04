@@ -1,7 +1,9 @@
 # ADR-014: post-M10 track portfolio (modules, host I/O, LSP, and related)
 
-**Status:** Accepted (portfolio / process decision) — **no implementation authorized**  
-**Date:** 2026-08-04  
+**Status:** Accepted (portfolio / process decision) — tracks complete through **M14**;
+**M15/T-CT designed** ([ADR-019](ADR-019-m15-comptime-expansion.md)); portfolio itself
+authorizes no code without per-track ADRs  
+**Date:** 2026-08-04 (status refreshed after M14)  
 **Decision makers:** Product direction under AGENTS Constitution; agent authors portfolio ADR after M10 Done  
 **Related Rule IDs:** `DOC-ADR-001`, `DOC-SYNC-001`, `CONST-DEP-001`, `CONST-COMPLETE-001`, `SEC-INPUT-001`, `TEST-BEHAVIOR-001`, `CONST-CONTRACT-001`  
 
@@ -11,7 +13,8 @@ Aether has completed:
 
 - Language pilots **M0–M8** (surface **0.11** / AETH **v11**)  
 - Tooling **M9–M10** (package **0.13**: offline multi-unit projects, independent compile)  
-- Product completion **TP-1** (integrity) and **TP-2** (local technical preview)
+- Product completion **TP-1** (integrity) and **TP-2** (local technical preview)  
+- Post-M10 queue through **M11 modules, M12 edits, M13 LSP, M14 host I/O** (package **0.19**)
 
 The next growth surface is large. Candidates include **language modules**, **host
 I/O capabilities**, **bounded LSP**, fine-grained structural edits, comptime
@@ -68,10 +71,13 @@ Human may reorder with an explicit written override (ROADMAP or superseding ADR)
 
 Unless the human redirects:
 
-1. **Next design work = T-MOD (language modules)** — design doc + implementable
-   ADR + validation matrix only.  
-2. **Do not** implement host I/O or LSP in the same delivery as modules.  
-3. **Do not** claim multi-file linking until T-MOD is Implemented and dual-compared.
+1. **Historical default after M10:** T-MOD → T-EDIT → T-LSP → T-CT → T-RX →
+   T-HOST → T-FFI → T-PKG (T-HOST was completed as M14 after T-LSP).  
+2. **Current default next implementation:** **T-CT / M15** per
+   [ADR-019](ADR-019-m15-comptime-expansion.md) (name chaining).  
+3. **Do not** start T-RX, T-FFI, or T-PKG in the same delivery as M15.  
+4. **Do not** claim full comptime metaprogramming until later T-CT slices have
+   their own ADRs.
 
 ### D5 — Entry criteria shared by every track
 

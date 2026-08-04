@@ -87,6 +87,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | Technical preview threat model | [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md) |
 | Capable host threat model v2 | [docs/THREAT_MODEL-v2-CAPABLE-HOST.md](docs/THREAT_MODEL-v2-CAPABLE-HOST.md) |
 | M14 host I/O (implemented 0.19) | [docs/AETHER_0.19.md](docs/AETHER_0.19.md), [docs/DESIGN-M14-HOST-IO-CAPABILITIES.md](docs/DESIGN-M14-HOST-IO-CAPABILITIES.md), [docs/ADR-018-m14-host-io-capabilities.md](docs/ADR-018-m14-host-io-capabilities.md), [docs/M14-VALIDATION-MATRIX.md](docs/M14-VALIDATION-MATRIX.md) |
+| M15 comptime expansion (designed) | [docs/DESIGN-M15-COMPTIME-EXPANSION.md](docs/DESIGN-M15-COMPTIME-EXPANSION.md), [docs/ADR-019-m15-comptime-expansion.md](docs/ADR-019-m15-comptime-expansion.md), [docs/M15-VALIDATION-MATRIX.md](docs/M15-VALIDATION-MATRIX.md) |
 | Technical preview notes | [docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md](docs/RELEASE_NOTES-TECHNICAL-PREVIEW.md) |
 | M10 multi-unit projects | [docs/AETHER_0.13.md](docs/AETHER_0.13.md), [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md), [docs/ADR-013-m10-multi-unit-projects.md](docs/ADR-013-m10-multi-unit-projects.md), [docs/M10-VALIDATION-MATRIX.md](docs/M10-VALIDATION-MATRIX.md) |
 | Post-M10 track portfolio | [docs/ADR-014-post-m10-track-portfolio.md](docs/ADR-014-post-m10-track-portfolio.md), [docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md](docs/DESIGN-POST-M10-TRACK-PORTFOLIO.md) |

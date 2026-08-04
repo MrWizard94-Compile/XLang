@@ -1,6 +1,7 @@
 # Aether Language Development Roadmap
 
-**Status:** M0–M10 complete (language through 0.11; tooling through 0.13); TP-1/TP-2 delivered; post-M10 portfolio ADR-014
+**Status:** M0–M14 complete (language 0.11; package through 0.19 host I/O); M15
+comptime expansion **designed** (ADR-019); TP-1/TP-2 delivered; portfolio ADR-014
 **Date:** 2026-08-04
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
@@ -78,6 +79,7 @@ invalid-source diagnostic parity.
 | M12 | Fine-grained structural edits | M3, M11 | `aether.edit/v7` statement-level replace/insert/delete under weave bodies; seed-before-write. | Matrix green; no expression-atom paths; v7 protocol. | **Implemented in package 0.16** |
 | M13 | Bounded offline LSP | M12 | `aether lsp` stdio: diagnostics, symbols, format, hover, definition; project-aware imports (M13b). | Matrix green; bootstrap diagnostics honesty; no AETH from LSP. | **Implemented 0.18 (M13a+M13b)** |
 | M14 | Capability host I/O | M8 + threat v2 | Grant-backed read/write/env host weaves; deny-by-default; no shell/network. | Threat model v2; matrix path-jail negatives; pure run unchanged. | **Implemented in package 0.19 (ADR-018)** |
+| M15 | Comptime expansion (T-CT) | M5 | Prior root-level comptime Whole **name chaining** as operands; still one op/directive, 1,024 fuel, pure, no calls/control/host. | Matrix green; seed dual-compare chain corpus; M5 programs unchanged. | **Designed (ADR-019); implementation pending** |
 
 ## Milestone detail
 
@@ -239,11 +241,13 @@ Post-M10 growth is governed by [ADR-014](ADR-014-post-m10-track-portfolio.md).
 Mainstream multi-epoch plan:
 [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next implementation:** **M14** host I/O per ADR-018 + threat model v2.
+**Default next implementation:** **M15** comptime name chaining per ADR-019
+(T-CT). M11–M14 are implemented.
 
-Ordered backlog: modules → fine-grained edits → bounded LSP → comptime →
-resource↔effect → host I/O (threat rewrite first) → C/FFI → multi-package.
-Native/LLVM and network registries remain blocked without law change.
+Ordered backlog remaining: comptime expansion (M15 design ready) →
+resource↔effect (T-RX) → C/FFI → multi-package → optional stdlib/test runner
+per maturity roadmap. Native/LLVM and network registries remain blocked without
+law change.
 
 Each track begins with the falsifiable spike discipline in
 [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
@@ -257,7 +261,7 @@ No milestone advances merely because its happy path works.
 | Allocator capability form and OOM contract | It governs every dynamic collection, FFI boundary, and resource cleanup. | M1/M2 |
 | Fine-grained structural-edit vocabulary beyond top-level declarations | It must preserve transparent ownership/resource invariants without turning JSON paths into a second unsafe language. | Post-M3 / **T-EDIT** |
 | General error/effect representation and inference boundary beyond `Error[Whole]` | It affects function types, handlers, cancellation, and compile-time rules. The M4 initial abortive representation is decided in ADR-007; generalization remains open. | Post-M4 |
-| Any expansion beyond M5 literal comptime | Calls, control flow, type computation, or source generation would change determinism, denial-of-service resistance, and host authority. | Post-M5 / **T-CT** |
+| Any expansion beyond M5 literal comptime | Calls, control flow, type computation, or source generation would change determinism, denial-of-service resistance, and host authority. | **M15 / T-CT** name chaining designed ([ADR-019](ADR-019-m15-comptime-expansion.md)); further slices still need new ADRs |
 | Generic shape and layout semantics | It affects ABI, correctness, performance claims, and debuggability. | M6 |
 | Task model and cancellation semantics | It affects resource lifetime, scheduler behavior, and failure propagation. | M7 |
 | Foreign interface scope, including any C-header strategy | It affects ownership, hostile input handling, portability, and host capability boundaries. | M8 / **T-FFI** (after pure host; ADR-014) |
