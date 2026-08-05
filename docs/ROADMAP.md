@@ -97,6 +97,7 @@ invalid-source diagnostic parity.
 | M20b | Stdlib layer 1 | M20 | Expand pure Whole helpers; add Truth + Text modules; multi-import demo. | Project build dual-compare; `aether test`; exit 42 demo. | **Implemented in package 0.27 (ADR-029)** |
 | M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Matrix green; human residual-risk accepted; seed≡bootstrap foreign corpus. | **Pilot implemented in package 0.31 (ADR-025); seed dual-compare proven** |
 | M22 | Cross-package import | M11, M18 | `import unit "…" from package name as alias` + `workspace build --package`. | Matrix green; depends_on jail. | **Implemented in package 0.24 (ADR-026)** |
+| M23 | Pure comptime weave calls (T-CT) | M15 | `comptime bind <- call` pure total Whole helpers; COMPTIME_WHOLE fold. | Matrix green; seed≡bootstrap; no host/effect/resource callees. | **Design + ADR-039 ready; implement next** |
 
 ## Milestone detail
 
@@ -320,9 +321,9 @@ M21 foreign pilot already on the seed path. Institutional progress report and
 DOC-SYNC honesty pass (2026-08-05) refresh NORTH_STAR / maturity baseline pins.
 **Blocked without new ADR / law:** mid-frame cancel destroy, expanded FFI
 signatures, native/LLVM, network registry.
-**Law forks (design packages ready; not authorized):** F-NATIVE and F-REGISTRY —
-see [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) and
-[HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md). Agents must not
-implement either without the exact §3 phrase.
-**Other lawful designs:** deeper T-CT, offline package polish, mid-frame cancel
-(only with a full cancel model ADR) — each with design→ADR→matrix.
+**Human backlog (2026-08-05):** see [BACKLOG-HUMAN-2026-08-05.md](BACKLOG-HUMAN-2026-08-05.md).  
+1. **T-CT** — ADR-039 pure comptime calls **design complete**; implement on direction.  
+2. Offline package polish.  
+3. Ownership + destroy + mid-frame cancel (full T-RX ADR).  
+4. Law forks F-NATIVE / F-REGISTRY — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) /
+   [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md) (§3 phrase required).
