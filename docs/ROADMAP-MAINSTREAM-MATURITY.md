@@ -133,15 +133,16 @@ requires ecosystem depth, language surface growth, and optional law forks.
 5. Canonical text + versioned structure for AI/human dual authoring  
 6. Honest claims register (under-claim over hype)
 
-### 1.4 Law forks (human must decide later)
+### 1.4 Law forks (human decision packages — 2026-08-05)
 
-| Fork | If yes | If no (default law) |
-| --- | --- | --- |
-| **F-NATIVE** | AETH + optional native/LLVM backend after law rewrite | Stay AETH-VM forever; performance via better VM/JIT still allowed if not “transpile source” |
-| **F-REGISTRY** | Signed offline-first registry + threat model | Offline path/URL-none packages only |
-| **F-AMBIENT** | Rejected under current philosophy | Keep deny-by-default host grants |
+| Fork | If yes | If no (default law) | Decision package |
+| --- | --- | --- | --- |
+| **F-NATIVE** | Optional **verified AETH → native**; VM default/reference; no source transpile | Stay AETH-VM; optional future JIT under separate ADR | [ADR-037](ADR-037-f-native-law-fork.md), [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) |
+| **F-REGISTRY** | Signed offline-first registry; explicit host fetch; guest still offline | Path/workspace packages only (M18/M22) | [ADR-038](ADR-038-f-registry-law-fork.md), [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md) |
+| **F-AMBIENT** | Rejected under current philosophy | Keep deny-by-default host grants | Not offered |
 
-This plan assumes **default law** unless a section is marked **Law fork required**.
+This plan assumes **default law** until a human posts the exact authorize phrase.
+Decision packages are design-only; they are **not** implement authorization.
 
 ---
 
@@ -948,8 +949,9 @@ Accepted by:
 4. **Next lawful designs (pick one track):** M19d option-3 spawn-scoped arena;
    deeper T-CT (calls/control need ADR); offline package polish; no theater on
    Policy B or expanded FFI without design→ADR→matrix.  
-5. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table
-   (can wait; law-fork required).
+5. **F-NATIVE / F-REGISTRY decision packages delivered** (2026-08-05): human may
+   authorize via HUMAN-AUTHORIZE-NATIVE / HUMAN-AUTHORIZE-REGISTRY §3 phrases;
+   until then product remains VM-only + offline path packages.
 
 ---
 

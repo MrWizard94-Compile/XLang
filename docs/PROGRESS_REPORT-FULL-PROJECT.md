@@ -55,7 +55,7 @@ are evidence-linked and deliberately non-marketing (CLM-011 prohibited).
 | Foreign weave pilot (M21) | **Product-usable** (Whole-only; not sandboxed) |
 | Multi-weave arenas / resourceful total spawn (M19d) | **Product-usable** |
 | Cooperative Policy B (M19c) | **Bounded claim only** (no mid-frame cancel) |
-| Network registry / ambient I/O / native backend | **Blocked** without law/ADR change |
+| Network registry / ambient I/O / native backend | **Blocked** — F-NATIVE/F-REGISTRY decision packages ready; need human §3 authorize |
 | “Better than all languages” | **Prohibited claim** |
 
 ### 1.2 What changed since the prior full report (0.12)
@@ -473,8 +473,8 @@ and law-gated.
 | --- | --- |
 | Mid-frame cancel destroy | Needs cancel model beyond cooperative M7 |
 | Expanded FFI (Text/Bytes, headers, callbacks) | New threat + ADR |
-| Native / LLVM backend | Law fork (F-NATIVE) |
-| Network registry | Law fork (F-REGISTRY) |
+| Native / LLVM backend | Law fork F-NATIVE — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) |
+| Network registry | Law fork F-REGISTRY — [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md) |
 | Ambient guest capabilities | Rejected under current philosophy |
 | Free-on-raise | Forbidden (M19-INV-004) |
 
@@ -482,11 +482,12 @@ and law-gated.
 
 Pick **one track** at a time (ADR-014):
 
-1. **Deeper T-CT** — comptime calls/control (new ADR; fuel/DoS story).  
-2. **Offline package polish** — richer workspace/stdlib without registry.  
-3. **Mid-frame cancel** — only after full ownership + destroy design.  
-4. **Authoring/LSP depth** — still offline; seed remains compile authority.  
-5. **Human law forks** — F-NATIVE / F-REGISTRY only with explicit acceptance.
+1. **Human law-fork authorize** — post F-NATIVE and/or F-REGISTRY §3 phrase, then
+   vertical ADR (not free-form implement).  
+2. **Deeper T-CT** — comptime calls/control (new ADR; fuel/DoS story).  
+3. **Offline package polish** — richer workspace/stdlib without registry.  
+4. **Mid-frame cancel** — only after full ownership + destroy design.  
+5. **Authoring/LSP depth** — still offline; seed remains compile authority.
 
 ### 14.3 DOC-SYNC debt
 

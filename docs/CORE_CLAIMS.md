@@ -1,7 +1,7 @@
 # Aether Core Claims Register
 
 **Status:** Claim-control document
-**Date:** 2026-08-05 (Aether 0.32 / M19d multi-weave arenas + M21 foreign pilot; DOC-SYNC honesty)
+**Date:** 2026-08-05 (Aether 0.32; F-NATIVE/F-REGISTRY law-fork packages design-only)
 **Purpose:** Keep implemented facts, accepted directions, and research hypotheses
 separate so the project can be ambitious without overstating evidence.
 
@@ -49,8 +49,10 @@ separate so the project can be ambitious without overstating evidence.
 | CLM-008 | Further generic/data-layout expansion beyond M6 dual-layout tables may use additional layouts and shape-aware folding only where equivalence and performance are demonstrated. | **Research hypothesis (M6 core proven)** | Odin study, [synthesis stop conditions](research/03-synthesis-and-evidence.md), M6 delivery evidence. | Layout/ABI extension design, expanded equivalence corpus, benchmark harness, counterexamples. |
 | CLM-009 | A broader C/foreign interface beyond the M8 pure host pilot must remain narrow, typed, capability-mediated, and ownership-aware. | **Accepted direction (M8 pilot proven)** | [AETHER_0.11.md](AETHER_0.11.md), [ADR-011](ADR-011-m8-host-abi-pilot.md), pure fixture tests. | Threat model, ownership mapping, fixture libraries, and invalid-input/capability tests for any I/O or C ABI expansion. |
 | CLM-016 | Aether admits capability-closed pure host weaves (`host weave` + `HOST_CALL`) with product fixtures `whole_inc` and `text_extent` without grants; missing services fail closed; no ambient I/O. | **Proven now, bounded M8 scope** | [AETHER_0.11.md](AETHER_0.11.md), [M8 design](DESIGN-M8-HOST-ABI-PILOT.md), [ADR-011](ADR-011-m8-host-abi-pilot.md), [M8 validation matrix](M8-VALIDATION-MATRIX.md), host-pilot and seed tests. | I/O-bearing hosts are covered by CLM-023/M14; still require a new ADR for C headers, libloading, or erroring host weaves. |
-| CLM-010 | Aether source is not translated to C, Rust, JavaScript, LLVM, or another language. | **Prohibited now** | Project-local AGENTS law and [NORTH_STAR.md](NORTH_STAR.md). | Explicit human direction plus project-law/ADR/security/artifact-model change before reconsideration. |
+| CLM-010 | Aether source is not translated to C, Rust, JavaScript, LLVM, or another language as a product compiler path. Optional **verified AETH → native** remains **law-fork blocked** (F-NATIVE / ADR-037) until human authorize. | **Prohibited now** (source transpile); F-NATIVE open only after [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) | AGENTS law, [NORTH_STAR.md](NORTH_STAR.md), [ADR-037](ADR-037-f-native-law-fork.md). | Human F-NATIVE phrase + vertical native ADR before any product native path. |
 | CLM-011 | Aether is “better than all other languages.” | **Prohibited as a blanket claim** | No finite comparative evidence can establish this. | Replace only with scoped claims that pass the scorecard below. |
+| CLM-034 | Optional signed offline-first package registry with host-only network fetch (F-REGISTRY) is a human law fork, not product. Default remains path/workspace offline packages (M18/M22). | **Accepted direction (law fork only); not implemented** | [ADR-038](ADR-038-f-registry-law-fork.md), [DESIGN-LAW-FORK-F-REGISTRY.md](DESIGN-LAW-FORK-F-REGISTRY.md), [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md), [THREAT_MODEL-v5-PACKAGE-REGISTRY.md](THREAT_MODEL-v5-PACKAGE-REGISTRY.md). | Human F-REGISTRY phrase + vertical registry ADR before network client. |
+| CLM-035 | Optional native backend from **verified AETH** (F-NATIVE), VM default/reference, no source transpile, is a human law fork, not product. | **Accepted direction (law fork only); not implemented** | [ADR-037](ADR-037-f-native-law-fork.md), [DESIGN-LAW-FORK-F-NATIVE.md](DESIGN-LAW-FORK-F-NATIVE.md), [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md), [THREAT_MODEL-v4-NATIVE-BACKEND.md](THREAT_MODEL-v4-NATIVE-BACKEND.md). | Human F-NATIVE phrase + vertical native ADR before codegen. |
 
 ## Claim scorecard for scoped comparisons
 

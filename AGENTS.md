@@ -99,6 +99,7 @@ byte-for-byte. Full diagnostic parity is not claimed for the seed.
 | M12 fine-grained edits | [docs/AETHER_AUTHORING_PROTOCOL_v7.md](docs/AETHER_AUTHORING_PROTOCOL_v7.md), [docs/DESIGN-M12-FINE-GRAINED-EDITS.md](docs/DESIGN-M12-FINE-GRAINED-EDITS.md), [docs/ADR-016-m12-fine-grained-edits.md](docs/ADR-016-m12-fine-grained-edits.md), [docs/M12-VALIDATION-MATRIX.md](docs/M12-VALIDATION-MATRIX.md) |
 | M13 bounded LSP | [docs/DESIGN-M13-BOUNDED-LSP.md](docs/DESIGN-M13-BOUNDED-LSP.md), [docs/ADR-017-m13-bounded-lsp.md](docs/ADR-017-m13-bounded-lsp.md), [docs/M13-VALIDATION-MATRIX.md](docs/M13-VALIDATION-MATRIX.md) |
 | Mainstream maturity roadmap | [docs/ROADMAP-MAINSTREAM-MATURITY.md](docs/ROADMAP-MAINSTREAM-MATURITY.md) |
+| Law forks F-NATIVE / F-REGISTRY (design only; human authorize) | [docs/HUMAN-AUTHORIZE-NATIVE.md](docs/HUMAN-AUTHORIZE-NATIVE.md), [docs/HUMAN-AUTHORIZE-REGISTRY.md](docs/HUMAN-AUTHORIZE-REGISTRY.md), [docs/ADR-037-f-native-law-fork.md](docs/ADR-037-f-native-law-fork.md), [docs/ADR-038-f-registry-law-fork.md](docs/ADR-038-f-registry-law-fork.md), [docs/DELIVERY_REPORT-2026-08-05-LAW-FORKS-F-NATIVE-F-REGISTRY.md](docs/DELIVERY_REPORT-2026-08-05-LAW-FORKS-F-NATIVE-F-REGISTRY.md) |
 | Legacy intake | [docs/LEGACY.md](docs/LEGACY.md) |
 
 ### Stack pins

@@ -320,5 +320,9 @@ M21 foreign pilot already on the seed path. Institutional progress report and
 DOC-SYNC honesty pass (2026-08-05) refresh NORTH_STAR / maturity baseline pins.
 **Blocked without new ADR / law:** mid-frame cancel destroy, expanded FFI
 signatures, native/LLVM, network registry.
-**Lawful next designs:** deeper T-CT, offline package polish, or mid-frame cancel
+**Law forks (design packages ready; not authorized):** F-NATIVE and F-REGISTRY —
+see [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) and
+[HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md). Agents must not
+implement either without the exact §3 phrase.
+**Other lawful designs:** deeper T-CT, offline package polish, mid-frame cancel
 (only with a full cancel model ADR) — each with design→ADR→matrix.

@@ -44,8 +44,8 @@ any named track.
 
 | Track | Status under current law |
 | --- | --- |
-| Native / LLVM / transpile-to-other-language | **Blocked** until Level-4 project law + ADR rewrite |
-| Network package registry | **Blocked** until offline-first threat model rewrite + ADR |
+| Native / LLVM / transpile-to-other-language | **Blocked** until F-NATIVE human authorize ([ADR-037](ADR-037-f-native-law-fork.md)); source transpile remains forbidden even if fork opens |
+| Network package registry | **Blocked** until F-REGISTRY human authorize ([ADR-038](ADR-038-f-registry-law-fork.md)) |
 | Ambient guest file/process/network/shell | **Blocked** |
 | Blanket “better than all languages” | **Prohibited claim** |
 
