@@ -40,6 +40,7 @@ const M8_HOST_PILOT_SOURCE: &str = include_str!("../../../examples/host-pilot.ae
 const M14_HOST_IO_READ_SOURCE: &str = include_str!("../../../examples/host-io-read.ae");
 const M14_HOST_IO_WRITE_SOURCE: &str = include_str!("../../../examples/host-io-write.ae");
 const M21_FOREIGN_PILOT_SOURCE: &str = include_str!("../../../examples/foreign-pilot.ae");
+const M21_FOREIGN_SUM_SOURCE: &str = include_str!("../../../examples/foreign-sum.ae");
 
 const M4_NORMAL_EFFECT_SOURCE: &str = concat!(
     "world normal_effect\n",
@@ -460,27 +461,32 @@ fn seed_profile_compiler_forges_m14_host_io_declarations_byte_identically() {
 fn seed_profile_compiler_forges_m21_foreign_pilot_byte_identically() {
     // Compile/dual-compare + deny without library grant. Granted run needs the
     // pilot cdylib path (covered by CLI/core M21 integration tests).
-    let bootstrap = compile_to_bytecode(M21_FOREIGN_PILOT_SOURCE)
-        .expect("M21 foreign-pilot fixture must bootstrap")
-        .bytecode;
-    let seeded = compile_with_seed(M21_FOREIGN_PILOT_SOURCE)
-        .expect("M21 foreign-pilot fixture must seed-compile")
-        .bytecode;
-    assert_eq!(
-        seeded, bootstrap,
-        "M21 foreign-pilot seed-hosted compile must match bootstrap byte-for-byte"
-    );
-    verify_bytecode(&seeded).expect("M21 seed-produced artifact must verify");
-    assert!(
-        seeded.iter().any(|byte| *byte == 65),
-        "M21 foreign-pilot must emit HOST_CALL opcode 65"
-    );
-    let denied = run_bytecode(&seeded).expect_err("M21 foreign without grant fails closed");
-    assert!(
-        denied.message.contains("AE-FFI-003"),
-        "M21 foreign deny without grant: {}",
-        denied.message
-    );
+    for (name, source) in [
+        ("foreign-pilot", M21_FOREIGN_PILOT_SOURCE),
+        ("foreign-sum", M21_FOREIGN_SUM_SOURCE),
+    ] {
+        let bootstrap = compile_to_bytecode(source)
+            .unwrap_or_else(|error| panic!("M21 {name} must bootstrap: {error}"))
+            .bytecode;
+        let seeded = compile_with_seed(source)
+            .unwrap_or_else(|error| panic!("M21 {name} must seed-compile: {error}"))
+            .bytecode;
+        assert_eq!(
+            seeded, bootstrap,
+            "M21 {name} seed-hosted compile must match bootstrap byte-for-byte"
+        );
+        verify_bytecode(&seeded).expect("M21 seed-produced artifact must verify");
+        assert!(
+            seeded.iter().any(|byte| *byte == 65),
+            "M21 {name} must emit HOST_CALL opcode 65"
+        );
+        let denied = run_bytecode(&seeded).expect_err("M21 foreign without grant fails closed");
+        assert!(
+            denied.message.contains("AE-FFI-003"),
+            "M21 {name} deny without grant: {}",
+            denied.message
+        );
+    }
 }
 
 #[test]

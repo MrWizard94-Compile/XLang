@@ -1,7 +1,7 @@
 # Aether Language Development Roadmap
 
-**Status:** M0–M18, M20, M22 product; M19/M21 designed only; package **0.24**;
-TP-1/TP-2 delivered; portfolio ADR-014
+**Status:** M0–M18, M19a/b, M20/M20b, M17b–d, M21, M22 product; M19c/d design-only;
+package **0.31**; TP-1/TP-2 delivered; portfolio ADR-014
 **Date:** 2026-08-04
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
@@ -93,7 +93,7 @@ invalid-source diagnostic parity.
 | M19d | Resourceful-spawn precondition | M19c, M2 | Design minimum ownership model before Policy B code. | Design gate only. | **Design only (ADR-034); impl blocked** |
 | M20 | Stdlib layer 0 | M11 | Pure Whole helper modules under `stdlib/`. | Project build + tests. | **Implemented in package 0.24 (ADR-024)** |
 | M20b | Stdlib layer 1 | M20 | Expand pure Whole helpers; add Truth + Text modules; multi-import demo. | Project build dual-compare; `aether test`; exit 42 demo. | **Implemented in package 0.27 (ADR-029)** |
-| M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Matrix green; human residual-risk accepted; bootstrap compile. | **Pilot implemented in package 0.31 (ADR-025)** |
+| M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Matrix green; human residual-risk accepted; seed≡bootstrap foreign corpus. | **Pilot implemented in package 0.31 (ADR-025); seed dual-compare proven** |
 | M22 | Cross-package import | M11, M18 | `import unit "…" from package name as alias` + `workspace build --package`. | Matrix green; depends_on jail. | **Implemented in package 0.24 (ADR-026)** |
 
 ## Milestone detail
@@ -314,5 +314,8 @@ Every implementation increment must provide, as applicable:
 ## Immediate next action
 
 Package **0.31** ships M21 foreign weave pilot (Whole-only, `--grant-lib`) after
-human residual-risk acceptance. Seed dual-compare for foreign and Policy B
-product code remain open. Native/registry remain law-fork gated.
+human residual-risk acceptance with **seed≡bootstrap** for the documented foreign
+corpus. **Blocked without new ADR / law:** Policy B product code (needs M19d
+precondition product ADR), expanded FFI signatures, native/LLVM, network registry.
+**Lawful next designs:** M19d option-3 spawn-scoped arena (T-RX depth), deeper
+T-CT, or offline package polish — each with its own design→ADR→matrix cycle.

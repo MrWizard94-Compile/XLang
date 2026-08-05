@@ -15313,6 +15313,27 @@ weave main [] -> Whole:
                 || error.to_string().contains("owned Whole"),
             "{error}"
         );
+
+        let sum_source = r#"world foreign_sum
+
+foreign weave whole_sum_f [left: Whole, right: Whole] -> Whole from "pilot" symbol "aether_whole_sum"
+
+weave main [] -> Whole:
+  yield call whole_sum_f 17 25
+"#;
+        let sum = compile_with_seed(sum_source).expect("two-arg foreign should seed-compile");
+        let bootstrap_sum = compile_to_bytecode(sum_source).expect("two-arg foreign bootstrap");
+        assert_eq!(
+            sum.bytecode, bootstrap_sum.bytecode,
+            "two-arg foreign seed≡bootstrap"
+        );
+        let mut grants = HostGrantConfig::default();
+        grants
+            .library_grants
+            .insert("pilot".to_owned(), m21_pilot_library_path());
+        let run = run_bytecode_with_grants(&sum.bytecode, grants)
+            .expect("granted two-arg foreign should run");
+        assert_eq!(run.exit_code, 42);
     }
 
     #[test]

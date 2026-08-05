@@ -13,11 +13,11 @@ Human phrase (session):
 - `foreign weave … from "key" symbol "name"` (Whole-only pilot)  
 - Runtime libloading with `--grant-lib KEY=PATH`  
 - Pilot cdylib `aether-ffi-pilot` (`aether_whole_inc`, `aether_whole_sum`)  
-- Example `examples/foreign-pilot.ae`  
-- Core tests P1/N1/N2/N3  
+- Example `examples/foreign-pilot.ae` (1-arg) and `examples/foreign-sum.ae` (2-arg)  
+- Core tests P1/P3/N1/N2/N3  
 - **Seed parse+emit of foreign weaves** with encoded `\x1eF\x1e…` host names  
-- **Seed≡bootstrap** dual-compare for foreign-pilot (product default compile)  
-- Package **0.31.0**  
+- **Seed≡bootstrap** dual-compare for foreign corpus (product default compile)  
+- Package **0.31.0** (pilot crate version aligned)  
 
 ## Not shipped
 

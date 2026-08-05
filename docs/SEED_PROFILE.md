@@ -61,8 +61,9 @@ profile does not expand that language surface.
 15. Parses body-less `foreign weave` declarations (M21 Whole-only pilot) and
     emits host-kind function entries whose AETH names use the encoded foreign
     marker (`\x1eF\x1e` + library + `\x1e` + symbol + `\x1e` + user name),
-    matching bootstrap byte-for-byte for `examples/foreign-pilot.ae`. Runtime
-    load still requires operator `--grant-lib`; the seed does not load libraries.
+    matching bootstrap byte-for-byte for `examples/foreign-pilot.ae` and
+    `examples/foreign-sum.ae`. Runtime load still requires operator
+    `--grant-lib`; the seed does not load libraries.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
@@ -237,8 +238,8 @@ All three SHA-256 digests must match. The regression tests also forge:
 9. The M6 layout fixture, including `examples/layout-table.ae`.
 10. The M7 nursery fixtures, including `examples/nursery-total.ae` and
     `examples/nursery-cancel.ae`.
-11. The M21 foreign-pilot fixture (`examples/foreign-pilot.ae`) dual-compares
-    and fails closed without a library grant.
+11. The M21 foreign fixtures (`examples/foreign-pilot.ae`,
+    `examples/foreign-sum.ae`) dual-compare and fail closed without a library grant.
 
 ## Authority
 

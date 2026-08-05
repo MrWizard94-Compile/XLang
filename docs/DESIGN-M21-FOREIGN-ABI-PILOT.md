@@ -36,9 +36,10 @@ aether run out.aeth --grant-lib pilot=/absolute/or/relative/file.dll
 
 ## 4. Compile / seed honesty
 
-- Bootstrap parses and emits foreign weaves (`compile --bootstrap`).  
-- Default seed-hosted `compile` fails closed until seed dual-compare for foreign
-  is proven (seed does not parse `foreign weave` yet).  
+- Bootstrap and seed both parse/emit foreign weaves.  
+- Product default `compile` is seed-hosted; dual-compare is proven for the
+  documented foreign corpus (`examples/foreign-pilot.ae`, `examples/foreign-sum.ae`).  
+- `compile --bootstrap` remains for seed rebuild and diagnostic authority.  
 
 ## 5. Runtime
 

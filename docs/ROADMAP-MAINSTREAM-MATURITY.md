@@ -935,16 +935,17 @@ Accepted by:
 ## 26. Immediate next actions (this week / next sprint)
 
 1. Mainstream maturity roadmap committed.  
-2. **M11–M13 complete** (modules, edits, LSP through 0.18).  
-3. **M14 host I/O implemented** (package 0.19; threat model v2 + ADR-018 grants).  
-4. **M15 comptime expansion implemented** (package 0.20; ADR-019 name chaining).  
-5. **M16 resource↔handle implemented** (package 0.21; ADR-020 T-RX first slice).  
-6. **M17 offline `aether test` implemented** (package 0.22; ADR-021).  
-7. **M18 offline workspace implemented** (package 0.23; ADR-022 T-PKG).  
-8. **M20 stdlib layer 0 + M22 cross-package import** (package 0.24).  
-9. **M19/M21 design-only** (deeper T-RX deferred; FFI blocked on threat).  
-10. **Next:** destruction model (M19 foundation) or human-authorized FFI.  
-4. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table (can wait).
+2. **M11–M22 portfolio largely product** through package **0.31** (modules, edits,
+   LSP, host I/O, comptime chain, resource↔handle, tests/reports, workspace,
+   stdlib L0/L1, cross-package import, M19a/b release+Policy A, M21 foreign pilot
+   with seed dual-compare).  
+3. **M19c/M19d remain design-only** (Policy B / resourceful spawn blocked until a
+   product precondition ADR chooses spawn-scoped ownership).  
+4. **Next lawful designs (pick one track):** M19d option-3 spawn-scoped arena;
+   deeper T-CT (calls/control need ADR); offline package polish; no theater on
+   Policy B or expanded FFI without design→ADR→matrix.  
+5. Human chooses whether **F-NATIVE** or **F-REGISTRY** will ever be on the table
+   (can wait; law-fork required).
 
 ---
 

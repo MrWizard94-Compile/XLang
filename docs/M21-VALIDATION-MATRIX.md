@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | P1 | foreign Whole→Whole with grant runs | `m21_foreign_whole_inc_requires_lib_grant_and_runs` exit 42 |
 | P2 | seed≡bootstrap foreign-pilot | `seed_profile_compiler_forges_m21_foreign_pilot_byte_identically` |
+| P3 | two-arg foreign sum seed≡bootstrap + grant | `examples/foreign-sum.ae` dual-compare; exit 42 |
 | N1 | missing `--grant-lib` | AE-FFI-003 |
 | N2 | missing symbol | AE-FFI-003 |
 | N3 | non-Whole foreign param | AE-FFI-001 |
