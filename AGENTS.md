@@ -56,14 +56,14 @@ JavaScript, LLVM, or another language.
 M6 (explicit layout shapes and dual-layout tables), M7 (structured nurseries),
 and M8 (capability-closed pure host ABI pilot) are implemented on the
 seed-hosted product compile path in Aether 0.11 / AETH v11. Toolchain package
-0.12 added offline project verify and format (M9); package **0.13** adds multi-unit nested project integrity (M10); package **0.18** completes modules (M11), fine-grained edits (M12), and bounded offline LSP M13a+M13b (`aether lsp [--project …]`); package **0.19** adds grant-backed host I/O (M14); package **0.20** adds comptime Whole name chaining (M15); package **0.21** allows terminal handle over live resources (M16); package **0.22** adds offline `aether test` (M17); package **0.23** adds offline multi-package workspaces (M18); package **0.24** adds stdlib layer 0 (M20) and cross-package imports (M22); package **0.25** adds product-path `release` (M19a; seed≡bootstrap proven); package **0.26** adds nursery×resource Policy A (M19b); package **0.27** expands pure stdlib layer 1 (M20b); package **0.28** adds project `role: test` / `aether project test` (M17b); package **0.29** adds optional grants on tests (M17c); package **0.30** adds structured test reports (M17d); package **0.31** adds M21 foreign weave pilot (Whole-only; `--grant-lib`; human residual-risk accepted; seed≡bootstrap proven for foreign-pilot). Policy B cancel-destroy remains design-blocked.
+0.12 added offline project verify and format (M9); package **0.13** adds multi-unit nested project integrity (M10); package **0.18** completes modules (M11), fine-grained edits (M12), and bounded offline LSP M13a+M13b (`aether lsp [--project …]`); package **0.19** adds grant-backed host I/O (M14); package **0.20** adds comptime Whole name chaining (M15); package **0.21** allows terminal handle over live resources (M16); package **0.22** adds offline `aether test` (M17); package **0.23** adds offline multi-package workspaces (M18); package **0.24** adds stdlib layer 0 (M20) and cross-package imports (M22); package **0.25** adds product-path `release` (M19a; seed≡bootstrap proven); package **0.26** adds nursery×resource Policy A (M19b); package **0.27** expands pure stdlib layer 1 (M20b); package **0.28** adds project `role: test` / `aether project test` (M17b); package **0.29** adds optional grants on tests (M17c); package **0.30** adds structured test reports (M17d); package **0.31** adds M21 foreign weave pilot (Whole-only; `--grant-lib`; human residual-risk accepted; seed≡bootstrap proven for foreign-pilot); package **0.32** adds M19d multi-weave arenas and Policy A+ resourceful total spawn callees with cooperative Policy B bounds (ADR-035/036).
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), `check` AST, and
 proof dual-compare. Seed Profile self-host, all shipped seed-path examples,
 the complete prior canonical surface (including records), the documented M2–M8
-corpora, the M19a release corpus, the M19b nursery-resource corpus, and the
-M21 foreign-pilot corpus match bootstrap byte-for-byte. Full diagnostic parity
-is not claimed for the seed.
+corpora, the M19a release corpus, the M19b nursery-resource corpus, the M19d
+spawn-arena corpus, and the M21 foreign-pilot corpus match bootstrap
+byte-for-byte. Full diagnostic parity is not claimed for the seed.
 
 ### Product docs (Level 4)
 
@@ -106,10 +106,10 @@ is not claimed for the seed.
 | Layer | Pin |
 |-------|-----|
 | Language / package | Rust workspace, edition 2021, `rust-version = "1.88"` |
-| Core crate | `aether-core` at `crates/xlang-core` (package version 0.31.0) |
-| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.31.0) |
-| Artifact format | AETH **v4–v10** compatibility input + deterministic **v11** output with shape table, dual-layout tables, structured nurseries, effect metadata, host function kind, `HOST_CALL`, `COMPTIME_WHOLE`, and `RELEASE` (66; M19a/M19b seed≡bootstrap proven) (earlier/unknown versions rejected) |
-| Product compile | Seed-hosted for the documented seed surface, including M21 foreign weave pilot (seed≡bootstrap for foreign-pilot) |
+| Core crate | `aether-core` at `crates/xlang-core` (package version 0.32.0) |
+| CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` 0.32.0) |
+| Artifact format | AETH **v4–v10** compatibility input + deterministic **v11** output with shape table, dual-layout tables, structured nurseries, effect metadata, host function kind, `HOST_CALL`, `COMPTIME_WHOLE`, and `RELEASE` (66; M19a/M19b/M19d seed≡bootstrap proven) (earlier/unknown versions rejected) |
+| Product compile | Seed-hosted for the documented seed surface, including M21 foreign weave pilot and M19d multi-weave arenas |
 | Foreign ABI (M21) | Whole-only pilot; `--grant-lib KEY=PATH`; host load after verify; residual native risk accepted by human; seed dual-compare proven |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |
 | Seed compiler | `seed/aether_seed.ae` + checked-in `seed/aether_seed.aeth` |
@@ -119,7 +119,7 @@ is not claimed for the seed.
 1. **Seed-hosted product compile** — CLI default compile uses the Aether-written seed; bootstrap is not the product compiler path.
 2. **Verify before run / write** — VM and forge only accept verified supported AETH v4, v5, v6, v7, v8, v9, v10, or v11.
 3. **No ambient host capability leak** — default run installs only pure fixtures; grant-backed I/O (M14) requires explicit operator `--grant-*` roots/names and path jail; no shell/network; forge host owns I/O after verification.
-4. **Honest self-host claims** — Seed Profile, shipped seed-path examples, the complete documented prior canonical surface (including immutable records), and the documented M2 arena/buffer, M4 error-effect, M5 comptime, M6 layout, M7 nursery, M8 host-pilot, M19a release, M19b nursery-resource, and M21 foreign-pilot corpora match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
+4. **Honest self-host claims** — Seed Profile, shipped seed-path examples, the complete documented prior canonical surface (including immutable records), and the documented M2 arena/buffer, M4 error-effect, M5 comptime, M6 layout, M7 nursery, M8 host-pilot, M19a release, M19b nursery-resource, M19d spawn-arena, and M21 foreign-pilot corpora match bootstrap in tests; do not claim full diagnostic parity or parity for future language extensions without proof.
 5. **CLI authority boundary** — the CLI reads only caller-selected local files and writes source or artifacts only to an explicit output path after the required validation/seed-compile path; it has no model or network integration.
 6. **Legacy is reference only** — `legacy/` is never a production build input.
 7. **Zero-warning gate** — workspace Clippy `all = "deny"`; `unsafe_code = "deny"` (scoped `allow` only for M21 `ffi` load path after human residual-risk acceptance).

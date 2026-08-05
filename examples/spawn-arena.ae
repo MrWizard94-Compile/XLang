@@ -1,0 +1,23 @@
+world spawn_arena
+
+weave worker [] -> Whole:
+  bind memory <- arena 32
+  bind mutable values <- buffer Whole
+  bind mutable observed <- 0
+  choose allocate access memory move values 1 into values:
+    choose append move values 7 into values:
+      choose at borrow values 0 into observed:
+        yield observed
+      otherwise:
+        yield -3
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1
+
+weave main [] -> Whole:
+  bind parent <- arena 16
+  bind mutable out <- 0
+  together:
+    spawn call worker into out
+  yield out

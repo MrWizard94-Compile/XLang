@@ -64,6 +64,8 @@ profile does not expand that language surface.
     matching bootstrap byte-for-byte for `examples/foreign-pilot.ae` and
     `examples/foreign-sum.ae`. Runtime load still requires operator
     `--grant-lib`; the seed does not load libraries.
+16. Accepts multi-weave total `arena N` declarations (M19d) and sums capacities
+    into the AETH header, matching bootstrap for `examples/spawn-arena.ae`.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
@@ -240,6 +242,8 @@ All three SHA-256 digests must match. The regression tests also forge:
     `examples/nursery-cancel.ae`.
 11. The M21 foreign fixtures (`examples/foreign-pilot.ae`,
     `examples/foreign-sum.ae`) dual-compare and fail closed without a library grant.
+12. The M19d spawn-arena fixture (`examples/spawn-arena.ae`) dual-compares with
+    header capacity equal to the sum of arena declarations.
 
 ## Authority
 
@@ -247,3 +251,4 @@ All three SHA-256 digests must match. The regression tests also forge:
 - Host forge ABI: [FORGE_CONTRACT.md](FORGE_CONTRACT.md)
 - Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Product gate: [../MANIFEST.md](../MANIFEST.md)
+

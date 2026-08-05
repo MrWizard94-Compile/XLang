@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "aether-cli"
-version = "0.31.0"
+version = "0.32.0"
 dependencies = [
  "aether-core",
  "serde",
@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "aether-core"
-version = "0.31.0"
+version = "0.32.0"
 dependencies = [
  "aether-ffi-pilot",
  "libloading",
@@ -24,7 +24,7 @@ dependencies = [
 
 [[package]]
 name = "aether-ffi-pilot"
-version = "0.31.0"
+version = "0.32.0"
 
 [[package]]
 name = "block-buffer"

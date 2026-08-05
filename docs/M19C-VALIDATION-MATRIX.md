@@ -1,16 +1,16 @@
-# M19c Policy B validation matrix (design gate only)
+# M19c Policy B cooperative validation matrix
 
-**Status:** Design-only — **no implementation**  
+**Status:** Bounded product with package 0.32 (after M19d)  
 **Date:** 2026-08-04  
-**ADR:** [ADR-032](ADR-032-m19c-policy-b-design.md)
+**ADR:** [ADR-036](ADR-036-m19c-policy-b-cooperative.md)
 
-| Gate | Status |
-| --- | --- |
-| Design + ADR-032 | Ready (direction) |
-| Preconditions (resourceful spawn callees) | **Open** |
-| Implementation | **Blocked** |
-| Dual-compare corpus | N/A until implementable |
+| ID | Case | Evidence |
+| --- | --- | --- |
+| P1 | Resourceful total spawn runs | `examples/spawn-arena.ae` exit 7 |
+| P2 | Unstarted cancel has no spawn-local owners | Cooperative M7 + total callees (by construction) |
+| N1 | Resource spawn arguments | AE-TASK-003 |
+| N2 | Mid-frame cancel | **Not claimed** |
 
 ## Honesty
 
-Do not claim product Policy B. M19b Policy A remains the nursery×resource product rule.
+No free-on-raise. No mid-frame cancel engine.

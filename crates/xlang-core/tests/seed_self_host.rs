@@ -33,6 +33,7 @@ const M15_COMPTIME_CHAIN_SOURCE: &str = include_str!("../../../examples/comptime
 const M16_RESOURCE_HANDLE_SOURCE: &str = include_str!("../../../examples/resource-handle.ae");
 const M19A_RELEASE_RAISE_SOURCE: &str = include_str!("../../../examples/release-raise.ae");
 const M19B_NURSERY_RESOURCE_SOURCE: &str = include_str!("../../../examples/nursery-resource.ae");
+const M19D_SPAWN_ARENA_SOURCE: &str = include_str!("../../../examples/spawn-arena.ae");
 const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae");
 const M7_NURSERY_TOTAL_SOURCE: &str = include_str!("../../../examples/nursery-total.ae");
 const M7_NURSERY_CANCEL_SOURCE: &str = include_str!("../../../examples/nursery-cancel.ae");
@@ -574,6 +575,7 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
         ("nursery-total", M7_NURSERY_TOTAL_SOURCE, Some(7)),
         ("nursery-cancel", M7_NURSERY_CANCEL_SOURCE, Some(9)),
         ("nursery-resource", M19B_NURSERY_RESOURCE_SOURCE, Some(7)),
+        ("spawn-arena", M19D_SPAWN_ARENA_SOURCE, Some(7)),
         ("release-raise", M19A_RELEASE_RAISE_SOURCE, Some(9)),
         ("host-pilot", M8_HOST_PILOT_SOURCE, Some(48)),
     ];

@@ -63,7 +63,7 @@ pub use workspace::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.31.0";
+pub const LANGUAGE_VERSION: &str = "0.32.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
@@ -2783,12 +2783,9 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
         for instruction in decode_code(&function.code, artifact.version)? {
             match instruction.instruction {
                 Instruction::Arena => {
-                    if function_index != main_index {
-                        return Err(BytecodeError::new(
-                            instruction.offset,
-                            "the AETH v6 arena declaration must occur in main",
-                        ));
-                    }
+                    // M19d: OP_ARENA may appear in any function (self-owned arena).
+                    let _ = function_index;
+                    let _ = main_index;
                     arena_declarations += 1;
                     resource_instruction_seen = true;
                 }
@@ -2830,16 +2827,16 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
             "AETH v6/v7/v8 resource instructions require a nonzero arena resource plan",
         ));
     }
-    if artifact.arena_capacity > 0 && arena_declarations != 1 {
+    if artifact.arena_capacity > 0 && arena_declarations == 0 {
         return Err(BytecodeError::new(
             0,
-            "AETH v6/v7/v8 nonzero arena plan requires exactly one main arena declaration",
+            "AETH v6 through v11 nonzero arena plan requires at least one arena declaration",
         ));
     }
     if artifact.arena_capacity == 0 && arena_declarations != 0 {
         return Err(BytecodeError::new(
             0,
-            "AETH v6/v7/v8 zero arena plan cannot declare an Arena capability",
+            "AETH v6 through v11 zero arena plan cannot declare an Arena capability",
         ));
     }
     Ok(())
@@ -5188,18 +5185,13 @@ fn validate_resource_plan(program: &Program) -> Result<SemanticResourcePlan, Com
             &mut resource_operations,
         );
     }
-    if arenas.len() > 1 {
-        return Err(CompilerError::new(
-            arenas[1].1.span,
-            "Aether M2 permits exactly one arena declaration per invocation",
-        ));
-    }
-    let mut plan = SemanticResourcePlan::empty();
-    if let Some((weave, arena)) = arenas.first() {
-        if weave != "main" {
+    // M19d: at most one arena per weave; multiple weaves may each declare one.
+    let mut seen_weaves = BTreeSet::new();
+    for (weave_name, arena) in &arenas {
+        if !seen_weaves.insert(weave_name.clone()) {
             return Err(CompilerError::new(
                 arena.span,
-                "the M2 arena declaration must be a root binding in weave main",
+                "AE-RESOURCE-001: Aether permits at most one arena declaration per weave",
             ));
         }
         if arena.name.is_empty() {
@@ -5208,12 +5200,38 @@ fn validate_resource_plan(program: &Program) -> Result<SemanticResourcePlan, Com
                 "the M2 arena declaration requires a named root binding",
             ));
         }
-        plan.arena = Some(arena.clone());
     }
-    if resource_operations && arenas.len() != 1 {
+    let mut plan = SemanticResourcePlan::empty();
+    if let Some((_, first)) = arenas.first() {
+        let mut total = 0_u32;
+        for (_, arena) in &arenas {
+            total = total.checked_add(arena.capacity).ok_or_else(|| {
+                CompilerError::new(
+                    arena.span,
+                    format!(
+                        "AE-RESOURCE-001: combined arena capacity exceeds the M2 safety limit of {MAX_ARENA_BYTES}"
+                    ),
+                )
+            })?;
+            if total > MAX_ARENA_BYTES {
+                return Err(CompilerError::new(
+                    arena.span,
+                    format!(
+                        "AE-RESOURCE-001: combined arena capacity exceeds the M2 safety limit of {MAX_ARENA_BYTES}"
+                    ),
+                ));
+            }
+        }
+        plan.arena = Some(SemanticArena {
+            name: first.name.clone(),
+            capacity: total,
+            span: first.span,
+        });
+    }
+    if resource_operations && arenas.is_empty() {
         return Err(CompilerError::new(
             Span::synthetic(),
-            "M2 resource operations require one named arena declaration in weave main",
+            "M2 resource operations require at least one named arena declaration in a total weave",
         ));
     }
     Ok(plan)
@@ -5381,10 +5399,11 @@ fn validate_block(
                 }
                 let mut resource = resource_state_for_expression(value, scope, shapes)?;
                 if matches!(value.kind, ExpressionKind::Arena { .. }) {
-                    if weave.name != "main" {
+                    // M19d: any total weave may declare a self-owned arena.
+                    if weave.effect != Effect::Total {
                         return Err(CompilerError::new(
                             *span,
-                            "the M2 arena declaration must appear in weave main",
+                            "AE-EFFECT-003: a weave that raises Whole cannot declare an arena",
                         ));
                     }
                     if let ResourceBindingState::Arena { name: arena_name } = &mut resource {
@@ -5728,14 +5747,42 @@ fn validate_block(
                 }
                 let mut destinations = BTreeMap::new();
                 for spawn in spawns {
+                    // M19d Policy A+: total resourceful callees allowed when they
+                    // do not take resource parameters (self-owned arena only).
                     if resource_using_weaves.contains(&spawn.weave) {
-                        return Err(CompilerError::new(
-                            spawn.span,
-                            format!(
-                                "AE-TASK-003: nursery spawn callee {} cannot use arena, Buffer, access, table, or resource outcomes",
-                                spawn.weave
-                            ),
-                        ));
+                        let Some(signature) = signatures.get(&spawn.weave) else {
+                            return Err(CompilerError::new(
+                                spawn.span,
+                                format!("spawn call {} targets an unknown weave", spawn.weave),
+                            ));
+                        };
+                        if signature.effect != Effect::Total {
+                            return Err(CompilerError::new(
+                                spawn.span,
+                                format!(
+                                    "AE-TASK-003: nursery spawn callee {} cannot raise Whole while using arena, Buffer, access, table, or resource outcomes",
+                                    spawn.weave
+                                ),
+                            ));
+                        }
+                        if signature.parameters.iter().any(|parameter| {
+                            matches!(
+                                parameter.value_type,
+                                ValueType::Arena
+                                    | ValueType::AccessArena
+                                    | ValueType::BufferWhole
+                                    | ValueType::BufferTruth
+                                    | ValueType::Table(_)
+                            ) || parameter.mode == ParameterMode::Access
+                        }) {
+                            return Err(CompilerError::new(
+                                spawn.span,
+                                format!(
+                                    "AE-TASK-003: nursery spawn callee {} cannot take arena, Buffer, access, or table parameters",
+                                    spawn.weave
+                                ),
+                            ));
+                        }
                     }
                     validate_spawn(spawn, scope, signatures, &mut destinations)?;
                 }
@@ -14496,10 +14543,22 @@ mod tests {
             .expect_err("resource outcomes must be handled as terminal choices");
         assert!(error.message.contains("final statement"));
 
-        let helper_arena = "world invalid\n\nweave helper [] -> Whole:\n  bind memory <- arena 64\n  yield 0\n\nweave main [] -> Whole:\n  yield 0\n";
-        let error = compile_source(helper_arena)
-            .expect_err("a local helper cannot manufacture an escaping arena region");
-        assert!(error.message.contains("weave main"));
+        // M19d: total helpers may declare self-owned arenas.
+        let helper_arena = "world helper_arena\n\nweave helper [] -> Whole:\n  bind memory <- arena 64\n  yield 0\n\nweave main [] -> Whole:\n  yield call helper\n";
+        let helper = compile_to_bytecode(helper_arena).expect("total helper arena is legal");
+        assert_eq!(
+            run_bytecode(&helper.bytecode)
+                .expect("helper arena program runs")
+                .exit_code,
+            0
+        );
+
+        let two_arenas_one_weave = "world invalid\n\nweave main [] -> Whole:\n  bind a <- arena 8\n  bind b <- arena 8\n  yield 0\n";
+        let error = compile_source(two_arenas_one_weave).expect_err("at most one arena per weave");
+        assert!(
+            error.message.contains("one arena") || error.diagnostic().code == "AE-RESOURCE-001",
+            "{error}"
+        );
 
         let revise_buffer = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable values <- buffer Whole\n  revise values <- buffer Whole\n  yield 0\n";
         let error = compile_source(revise_buffer)
@@ -15104,10 +15163,29 @@ mod tests {
         assert_eq!(error.diagnostic().code, "AE-TASK-001");
 
         // M19b: resourceful spawn *callee* is still forbidden (main uses resources).
-        let resource_callee = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable a <- 0\n  together:\n    spawn call main into a\n  yield a\n";
-        let error =
-            compile_source(resource_callee).expect_err("resourceful spawn callee must fail");
+        // Resource spawn arguments remain forbidden (Policy A+).
+        let resource_arg = "world invalid\n\nweave worker [access memory: Arena] -> Whole:\n  yield 0\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable a <- 0\n  together:\n    spawn call worker access memory into a\n  yield a\n";
+        let error = compile_source(resource_arg).expect_err("resource spawn args fail");
         assert_eq!(error.diagnostic().code, "AE-TASK-003");
+
+        let worker = include_str!("../../../examples/spawn-arena.ae");
+        let compiled = compile_to_bytecode(worker).expect("spawn-arena should compile");
+        assert_eq!(
+            run_bytecode(&compiled.bytecode)
+                .expect("spawn-arena should run")
+                .exit_code,
+            7
+        );
+        let seeded = compile_with_seed(worker).expect("spawn-arena seed path");
+        assert_eq!(
+            seeded.bytecode, compiled.bytecode,
+            "spawn-arena seed≡bootstrap"
+        );
+        // Header capacity = 32 + 16 = 48.
+        assert_eq!(
+            u32::from_le_bytes(compiled.bytecode[5..9].try_into().unwrap()),
+            48
+        );
     }
 
     #[test]

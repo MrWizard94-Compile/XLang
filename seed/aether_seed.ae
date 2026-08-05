@@ -1599,7 +1599,8 @@ weave compile [borrow source: Text] -> Bytes:
                                                                                     revise v24 <- 0
                                                                                     revise v25 <- 45
                                                                                     revise v26 <- 6
-                                                                                    revise v82 <- number borrow v20
+                                                                                    revise v28 <- number borrow v20
+                                                                                    revise v82 <- sum v82 v28
                                                                                 otherwise:
                                                                                   choose same borrow v22 "buffer":
                                                                                     revise v29 <- measure borrow v20

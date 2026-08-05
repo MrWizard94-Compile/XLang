@@ -21,19 +21,20 @@ original meanings; new compilation emits v11.
 - The Rust core remains the **bootstrap**: rebuild the seed (`compile --bootstrap`),
   produce the AST for `check`, and verify seed output against bootstrap in tests.
 - The seed self-hosts, and the documented dual-compare corpus (shipped examples
-  on the seed path, M2–M8 fixtures, M19a release, M19b nursery+resource, M21
-  foreign-pilot, modules via elaboration, etc.) produces bytecode
-  **byte-identical** to the Rust bootstrap where claimed in tests.
+  on the seed path, M2–M8 fixtures, M19a release, M19b nursery+resource, M19d
+  multi-weave arenas, M21 foreign-pilot, modules via elaboration, etc.) produces
+  bytecode **byte-identical** to the Rust bootstrap where claimed in tests.
 
 Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
 M6 layout, M7 nurseries, and M8 pure host weaves. Toolchain packages through
-**0.31** add offline projects/modules/LSP, grant-backed host I/O, a **bounded
+**0.32** add offline projects/modules/LSP, grant-backed host I/O, a **bounded
 foreign weave pilot** (Whole-only, explicit library grant; not sandboxed),
 comptime name chaining, resource+handle, `aether test` / `aether project test`
 (optional grants and reports), workspaces, stdlib layer 1, cross-package
-imports, product-path `release`, and nursery×resource Policy A. See
+imports, product-path `release`, nursery×resource Policy A+, multi-weave arenas,
+and cooperative Policy B bounds. See
 [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
-[docs/AETHER_0.31.md](docs/AETHER_0.31.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+[docs/AETHER_0.32.md](docs/AETHER_0.32.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:
