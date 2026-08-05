@@ -845,4 +845,22 @@ mod tests {
         let run = run_bytecode(&artifact).expect("run");
         assert_eq!(run.exit_code, 42);
     }
+
+    #[test]
+    fn shipped_stdlib_layer1_project_builds_and_runs() {
+        let temporary = TemporaryDirectory::create();
+        let project =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../stdlib/aether.project.json");
+        let output = temporary.path.join("stdlib.aeth");
+        project_build(&project, &output).expect("stdlib project build");
+        let artifact = fs::read(&output).expect("artifact");
+        verify_bytecode(&artifact).expect("verify");
+        let run = run_bytecode(&artifact).expect("run");
+        assert_eq!(run.exit_code, 42, "double 21 via layer1 multi-import graph");
+
+        let test_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../stdlib/whole_test.ae");
+        let report = test_runner::run_tests(&[test_path]).expect("stdlib whole_test");
+        assert!(report.all_passed(), "{:?}", report.results);
+    }
 }

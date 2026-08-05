@@ -1,0 +1,8 @@
+world text_lib
+
+export weave text_len [value: Text] -> Whole:
+  yield measure borrow value
+
+export weave text_empty [value: Text] -> Truth:
+  bind length <- measure borrow value
+  yield same length 0

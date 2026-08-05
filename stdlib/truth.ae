@@ -1,0 +1,10 @@
+world truth_lib
+
+export weave invert [value: Truth] -> Truth:
+  yield not value
+
+export weave both [a: Truth, b: Truth] -> Truth:
+  bind mutable result <- dim
+  choose a:
+    revise result <- b
+  yield result

@@ -1,6 +1,14 @@
 world stdlib_entry
 
 import unit "whole.ae" as wh
+import unit "truth.ae" as tr
+import unit "text.ae" as tx
 
 weave main [] -> Whole:
-  yield call wh.double 21
+  bind mutable answer <- call wh.double 21
+  bind empty <- call tx.text_empty ""
+  bind still_empty <- call tr.both empty empty
+  bind mutable code <- 0
+  choose still_empty:
+    revise code <- answer
+  yield code

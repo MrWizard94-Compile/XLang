@@ -1,0 +1,16 @@
+world whole_test
+
+weave main [] -> Whole:
+  bind d <- product 21 2
+  bind i <- sum 41 1
+  bind a <- sum 2 3
+  bind mutable code <- 3
+  choose same d 42:
+    choose same i 42:
+      choose same a 5:
+        revise code <- 0
+      otherwise:
+        revise code <- 1
+    otherwise:
+      revise code <- 2
+  yield code

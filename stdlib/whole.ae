@@ -6,5 +6,34 @@ export weave double [value: Whole] -> Whole:
 export weave inc [value: Whole] -> Whole:
   yield sum value 1
 
+export weave dec [value: Whole] -> Whole:
+  yield difference value 1
+
 export weave is_zero [value: Whole] -> Truth:
   yield same value 0
+
+export weave abs [value: Whole] -> Whole:
+  bind mutable result <- value
+  choose less value 0:
+    revise result <- difference 0 value
+  yield result
+
+export weave max [a: Whole, b: Whole] -> Whole:
+  bind mutable result <- a
+  choose less a b:
+    revise result <- b
+  yield result
+
+export weave min [a: Whole, b: Whole] -> Whole:
+  bind mutable result <- a
+  choose less a b:
+    revise result <- b
+  otherwise:
+    revise result <- a
+  yield result
+
+export weave clamp_nonneg [value: Whole] -> Whole:
+  bind mutable result <- value
+  choose less value 0:
+    revise result <- 0
+  yield result

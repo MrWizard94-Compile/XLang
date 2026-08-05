@@ -87,6 +87,7 @@ invalid-source diagnostic parity.
 | M19a | Explicit `release` | M19 | `release name` + OP_RELEASE; raise-after-cleanup. | Matrix green; seed≡bootstrap for release corpus. | **Implemented in package 0.25 (ADR-027)** |
 | M19b | Nursery × resource Policy A | M19a, M7 | Parent may own resources with pure spawn callees; nursery site allows live owners, not access loans. | Matrix green; seed≡bootstrap mix corpus. | **Implemented in package 0.26 (ADR-028)** |
 | M20 | Stdlib layer 0 | M11 | Pure Whole helper modules under `stdlib/`. | Project build + tests. | **Implemented in package 0.24 (ADR-024)** |
+| M20b | Stdlib layer 1 | M20 | Expand pure Whole helpers; add Truth + Text modules; multi-import demo. | Project build dual-compare; `aether test`; exit 42 demo. | **Implemented in package 0.27 (ADR-029)** |
 | M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Threat+design only. | **Designed (ADR-025); implementation blocked** |
 | M22 | Cross-package import | M11, M18 | `import unit "…" from package name as alias` + `workspace build --package`. | Matrix green; depends_on jail. | **Implemented in package 0.24 (ADR-026)** |
 
@@ -250,8 +251,8 @@ Post-M10 growth is governed by [ADR-014](ADR-014-post-m10-track-portfolio.md).
 Mainstream multi-epoch plan:
 [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next:** deeper T-RX Policy B only with cancel-destroy design; or
-stdlib expansion; FFI only after human authorize ADR-025 threat residual.
+**Default next:** deeper T-RX Policy B only with cancel-destroy design; further
+stdlib depth; FFI only after human authorize ADR-025 threat residual.
 
 Native/LLVM and network registries remain blocked without law change.
 
@@ -307,6 +308,6 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Package **0.26** ships M19b nursery×resource Policy A on the seed path. Next
-honest product slices: stdlib depth, or human-authorized FFI (ADR-025). Policy B
-cancel-destroy and native/registry remain design-gated.
+Package **0.27** ships M20b pure stdlib layer 1 (Whole/Truth/Text). Next honest
+product slices: further offline tooling depth, or human-authorized FFI
+(ADR-025). Policy B cancel-destroy and native/registry remain design-gated.

@@ -1,9 +1,11 @@
 {
   "schema": "aether.project/v1",
-  "name": "aether_stdlib_layer0",
-  "version": "0.1.0",
+  "name": "aether_stdlib_layer1",
+  "version": "0.2.0",
   "units": [
     { "path": "main.ae", "role": "main" },
-    { "path": "whole.ae", "role": "lib" }
+    { "path": "whole.ae", "role": "lib" },
+    { "path": "truth.ae", "role": "lib" },
+    { "path": "text.ae", "role": "lib" }
   ]
 }
