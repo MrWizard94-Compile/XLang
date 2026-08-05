@@ -4,7 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use aether_core::{
-    compile_with_seed, run_bytecode, verify_bytecode, LANGUAGE_NAME, LANGUAGE_VERSION,
+    compile_with_seed, run_bytecode, run_bytecode_with_grants, verify_bytecode, HostGrantConfig,
+    LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,8 +128,9 @@ fn walk_test_dir(root: &Path, dir: &Path, collected: &mut Vec<PathBuf>) -> Resul
     Ok(())
 }
 
-/// Seed-compile, verify, and pure-run one test source.
-pub fn run_one_test(source_path: &Path) -> TestResult {
+/// Seed-compile, verify, and run one test with optional M14 grants (M17c).
+/// Empty grants install pure fixtures only.
+pub fn run_one_test_with_grants(source_path: &Path, grants: HostGrantConfig) -> TestResult {
     let path = source_path.to_path_buf();
     let source = match fs::read_to_string(source_path) {
         Ok(source) => source,
@@ -157,7 +159,15 @@ pub fn run_one_test(source_path: &Path) -> TestResult {
             detail: format!("verify failed: {error}"),
         };
     }
-    match run_bytecode(&compiled.bytecode) {
+    let run_result = if grants.read_roots.is_empty()
+        && grants.write_roots.is_empty()
+        && grants.env_names.is_empty()
+    {
+        run_bytecode(&compiled.bytecode)
+    } else {
+        run_bytecode_with_grants(&compiled.bytecode, grants)
+    };
+    match run_result {
         Ok(output) if output.exit_code == 0 => TestResult {
             path,
             ok: true,
@@ -176,9 +186,16 @@ pub fn run_one_test(source_path: &Path) -> TestResult {
     }
 }
 
-pub fn run_tests(paths: &[PathBuf]) -> Result<TestReport, String> {
+/// Discover and run tests with optional grants (M17c). Empty grants = pure.
+pub fn run_tests_with_grants(
+    paths: &[PathBuf],
+    grants: HostGrantConfig,
+) -> Result<TestReport, String> {
     let sources = collect_test_sources(paths)?;
-    let results = sources.iter().map(|path| run_one_test(path)).collect();
+    let results = sources
+        .iter()
+        .map(|path| run_one_test_with_grants(path, grants.clone()))
+        .collect();
     Ok(TestReport { results })
 }
 

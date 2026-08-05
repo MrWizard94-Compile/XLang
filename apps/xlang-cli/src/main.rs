@@ -11,14 +11,15 @@ use aether_core::{
     apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
     compile_to_bytecode, compile_with_seed, compile_workspace_package, forge_bytecode,
     format_project, format_source, multi_module_authority_note, parse_project_document,
-    parse_workspace_document, run_bytecode, run_bytecode_with_grants, run_project_tests,
-    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
-    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    parse_workspace_document, run_bytecode, run_bytecode_with_grants,
+    run_project_tests_with_grants, structural_document_json, unit_artifact_file_name,
+    verify_bytecode, verify_project, verify_workspace, HostGrantConfig, InvocationValue,
+    LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* same as run (M17c).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* same as run (M17c).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -176,51 +177,85 @@ fn require_existing_grant_root(path: &Path, kind: &str) -> Result<PathBuf, Strin
     })
 }
 
+fn parse_one_grant_flag(
+    flag: &str,
+    arguments: &mut impl Iterator<Item = OsString>,
+    grants: &mut HostGrantConfig,
+) -> Result<bool, String> {
+    match flag {
+        "--grant-read" => {
+            let root = next_argument(arguments, "--grant-read directory")?;
+            grants
+                .read_roots
+                .push(require_existing_grant_root(Path::new(&root), "read")?);
+            Ok(true)
+        }
+        "--grant-write" => {
+            let root = next_argument(arguments, "--grant-write directory")?;
+            grants
+                .write_roots
+                .push(require_existing_grant_root(Path::new(&root), "write")?);
+            Ok(true)
+        }
+        "--grant-env" => {
+            let name = next_argument(arguments, "--grant-env NAME")?;
+            let name = name
+                .into_string()
+                .map_err(|_| "grant-env NAME must be valid UTF-8".to_owned())?;
+            if name.is_empty() || name.len() > 256 {
+                return Err("grant-env NAME must be non-empty and at most 256 bytes".to_owned());
+            }
+            if !name
+                .bytes()
+                .all(|byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_'))
+            {
+                return Err(
+                    "grant-env NAME may contain only ASCII letters, digits, and underscore"
+                        .to_owned(),
+                );
+            }
+            grants.env_names.push(name);
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
 fn parse_run_grants(
     arguments: &mut impl Iterator<Item = OsString>,
 ) -> Result<HostGrantConfig, String> {
     let mut grants = HostGrantConfig::default();
     while let Some(flag) = arguments.next() {
-        match flag.to_string_lossy().as_ref() {
-            "--grant-read" => {
-                let root = next_argument(arguments, "--grant-read directory")?;
-                grants
-                    .read_roots
-                    .push(require_existing_grant_root(Path::new(&root), "read")?);
-            }
-            "--grant-write" => {
-                let root = next_argument(arguments, "--grant-write directory")?;
-                grants
-                    .write_roots
-                    .push(require_existing_grant_root(Path::new(&root), "write")?);
-            }
-            "--grant-env" => {
-                let name = next_argument(arguments, "--grant-env NAME")?;
-                let name = name
-                    .into_string()
-                    .map_err(|_| "grant-env NAME must be valid UTF-8".to_owned())?;
-                if name.is_empty() || name.len() > 256 {
-                    return Err("grant-env NAME must be non-empty and at most 256 bytes".to_owned());
-                }
-                if !name
-                    .bytes()
-                    .all(|byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_'))
-                {
-                    return Err(
-                        "grant-env NAME may contain only ASCII letters, digits, and underscore"
-                            .to_owned(),
-                    );
-                }
-                grants.env_names.push(name);
-            }
-            other => {
-                return Err(format!(
-                    "run accepts optional --grant-read/--grant-write/--grant-env after the artifact; unknown flag {other}"
-                ));
-            }
+        let flag = flag.to_string_lossy().into_owned();
+        if parse_one_grant_flag(&flag, arguments, &mut grants)? {
+            continue;
         }
+        return Err(format!(
+            "run accepts optional --grant-read/--grant-write/--grant-env after the artifact; unknown flag {flag}"
+        ));
     }
     Ok(grants)
+}
+
+/// Parse remaining CLI args as test paths and optional M17c grants (flags may interleave).
+fn parse_test_args(
+    arguments: &mut impl Iterator<Item = OsString>,
+) -> Result<(Vec<PathBuf>, HostGrantConfig), String> {
+    let mut paths = Vec::new();
+    let mut grants = HostGrantConfig::default();
+    while let Some(argument) = arguments.next() {
+        let text = argument.to_string_lossy().into_owned();
+        if parse_one_grant_flag(&text, arguments, &mut grants)? {
+            continue;
+        }
+        if text.starts_with("--") {
+            return Err(format!(
+                "test accepts paths and optional --grant-read/--grant-write/--grant-env; unknown flag {text}"
+            ));
+        }
+        paths.push(PathBuf::from(argument));
+    }
+    Ok((paths, grants))
 }
 
 fn format_file(source_path: &Path, output_path: Option<&Path>) -> Result<(), String> {
@@ -328,11 +363,12 @@ fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), 
     Ok(())
 }
 
-fn project_test(project_path: &Path) -> Result<(), String> {
+fn project_test(project_path: &Path, grants: HostGrantConfig) -> Result<(), String> {
     let json = read_source(project_path)?;
     let document = parse_project_document(&json).map_err(|error| error.to_string())?;
     let root = project_root_for(project_path);
-    let report = run_project_tests(root, &document).map_err(|error| error.to_string())?;
+    let report = run_project_tests_with_grants(root, &document, grants)
+        .map_err(|error| error.to_string())?;
     for result in &report.results {
         if result.ok {
             println!("ok   {}", result.path);
@@ -489,11 +525,8 @@ fn run() -> Result<(), String> {
             execute_artifact(Path::new(&artifact), grants)
         }
         "test" => {
-            let mut paths = Vec::new();
-            for argument in arguments.by_ref() {
-                paths.push(PathBuf::from(argument));
-            }
-            let report = test_runner::run_tests(&paths)?;
+            let (paths, grants) = parse_test_args(&mut arguments)?;
+            let report = test_runner::run_tests_with_grants(&paths, grants)?;
             test_runner::print_report(&report);
             if report.all_passed() {
                 Ok(())
@@ -580,10 +613,10 @@ fn run() -> Result<(), String> {
                 }
                 "test" => {
                     let project = next_argument(&mut arguments, "project file")?;
-                    if arguments.next().is_some() {
-                        return Err("project test accepts exactly one project file".to_owned());
-                    }
-                    project_test(Path::new(&project))
+                    let grants = parse_run_grants(&mut arguments).map_err(|error| {
+                        error.replacen("run accepts", "project test accepts", 1)
+                    })?;
+                    project_test(Path::new(&project), grants)
                 }
                 _ => Err("project accepts verify, format, build, or test subcommands".to_owned()),
             }
@@ -833,13 +866,17 @@ mod tests {
         )
         .expect("fail fixture");
 
-        let report = test_runner::run_tests(&[temporary.path.clone()]).expect("discover tests");
+        let report = test_runner::run_tests_with_grants(
+            &[temporary.path.clone()],
+            HostGrantConfig::default(),
+        )
+        .expect("discover tests");
         assert_eq!(report.results.len(), 2);
         assert_eq!(report.passed(), 1);
         assert_eq!(report.failed(), 1);
         assert!(!report.all_passed());
 
-        let single = test_runner::run_one_test(&pass_path);
+        let single = test_runner::run_one_test_with_grants(&pass_path, HostGrantConfig::default());
         assert!(single.ok, "explicit pass: {}", single.detail);
 
         let empty = temporary.path.join("empty");
@@ -851,7 +888,8 @@ mod tests {
     #[test]
     fn shipped_examples_tests_directory_passes() {
         let tests_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/tests");
-        let report = test_runner::run_tests(&[tests_dir]).expect("examples/tests should run");
+        let report = test_runner::run_tests_with_grants(&[tests_dir], HostGrantConfig::default())
+            .expect("examples/tests should run");
         assert!(
             report.all_passed(),
             "shipped example tests must pass: {:?}",
@@ -894,7 +932,8 @@ mod tests {
 
         let test_path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../stdlib/whole_test.ae");
-        let report = test_runner::run_tests(&[test_path]).expect("stdlib whole_test");
+        let report = test_runner::run_tests_with_grants(&[test_path], HostGrantConfig::default())
+            .expect("stdlib whole_test");
         assert!(report.all_passed(), "{:?}", report.results);
     }
 
@@ -902,6 +941,52 @@ mod tests {
     fn shipped_stdlib_project_test_imports_lib() {
         let project =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../stdlib/aether.project.json");
-        project_test(&project).expect("stdlib project test role units");
+        project_test(&project, HostGrantConfig::default()).expect("stdlib project test role units");
+    }
+
+    #[test]
+    fn test_runner_optional_grants_for_host_io() {
+        let temporary = TemporaryDirectory::create();
+        let fixture = temporary.path.join("config.txt");
+        fs::write(&fixture, "Aether").expect("config");
+        // Exit 0 when measure of granted read equals 6 ("Aether").
+        let source = r#"world host_io_grant_test
+
+host weave read_text [borrow path: Text] -> Text
+
+host weave text_extent [borrow message: Text] -> Whole
+
+weave main [] -> Whole:
+  bind path <- "config.txt"
+  bind cfg <- call read_text borrow path
+  bind n <- call text_extent borrow cfg
+  bind mutable code <- 1
+  choose same n 6:
+    revise code <- 0
+  yield code
+"#;
+        let test_path = temporary.path.join("host_io_grant_test.ae");
+        fs::write(&test_path, source).expect("write test");
+
+        let denied = test_runner::run_one_test_with_grants(&test_path, HostGrantConfig::default());
+        assert!(
+            !denied.ok,
+            "empty grants must fail closed: {}",
+            denied.detail
+        );
+
+        let granted = test_runner::run_one_test_with_grants(
+            &test_path,
+            HostGrantConfig {
+                read_roots: vec![temporary.path.clone()],
+                write_roots: Vec::new(),
+                env_names: Vec::new(),
+            },
+        );
+        assert!(
+            granted.ok,
+            "grant-read must allow host-io test: {}",
+            granted.detail
+        );
     }
 }

@@ -24,8 +24,8 @@ pub use modules::{
     compile_project_modules_with_packages, elaborate_project_entry,
     elaborate_project_entry_with_packages, elaborate_project_modules,
     elaborate_project_modules_with_packages, mangle_weave, multi_module_authority_note,
-    run_project_tests, source_requires_project_modules, validate_lib_module_source,
-    ProjectTestReport, ProjectTestResult,
+    run_project_tests, run_project_tests_with_grants, source_requires_project_modules,
+    validate_lib_module_source, ProjectTestReport, ProjectTestResult,
 };
 pub use project::{
     format_project, format_source, parse_project_document, resolve_unit_path, sha256_hex,
@@ -41,7 +41,7 @@ pub use workspace::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.28.0";
+pub const LANGUAGE_VERSION: &str = "0.29.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(

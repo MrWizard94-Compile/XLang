@@ -12,8 +12,8 @@ use crate::project::{
     resolve_unit_path, validate_unit_path, ProjectDocument, ProjectError, ProjectUnitRole,
 };
 use crate::{
-    compile_to_bytecode, compile_with_seed, verify_bytecode, CompileOutput, LANGUAGE_NAME,
-    LANGUAGE_VERSION,
+    compile_to_bytecode, compile_with_seed, run_bytecode, run_bytecode_with_grants,
+    verify_bytecode, CompileOutput, HostGrantConfig, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -960,8 +960,15 @@ pub fn run_project_tests(
     project_root: &Path,
     document: &ProjectDocument,
 ) -> Result<ProjectTestReport, ProjectError> {
-    use crate::run_bytecode;
+    run_project_tests_with_grants(project_root, document, HostGrantConfig::default())
+}
 
+/// M17b/M17c: compile and run every `role: test` unit with optional grants.
+pub fn run_project_tests_with_grants(
+    project_root: &Path,
+    document: &ProjectDocument,
+    grants: HostGrantConfig,
+) -> Result<ProjectTestReport, ProjectError> {
     let tests: Vec<_> = document
         .units
         .iter()
@@ -973,6 +980,9 @@ pub fn run_project_tests(
             "project test requires at least one unit with role test",
         ));
     }
+    let pure = grants.read_roots.is_empty()
+        && grants.write_roots.is_empty()
+        && grants.env_names.is_empty();
     let mut results = Vec::new();
     for unit in tests {
         let compiled = compile_project_entry(project_root, document, &unit.path)?;
@@ -982,7 +992,12 @@ pub fn run_project_tests(
                 format!("test unit {} produced invalid artifact: {error}", unit.path),
             )
         })?;
-        match run_bytecode(&compiled.bytecode) {
+        let run_result = if pure {
+            run_bytecode(&compiled.bytecode)
+        } else {
+            run_bytecode_with_grants(&compiled.bytecode, grants.clone())
+        };
+        match run_result {
             Ok(output) if output.exit_code == 0 => results.push(ProjectTestResult {
                 path: unit.path.clone(),
                 ok: true,

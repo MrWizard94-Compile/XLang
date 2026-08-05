@@ -1,7 +1,7 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and CLI toolchain for
-deterministic, AI-primary authorship. Aether toolchain package **0.28.0**
+deterministic, AI-primary authorship. Aether toolchain package **0.29.0**
 (language surface **0.11**, AETH **v11**) parses only Aether source, emits
 deterministic AETH bytecode, verifies every artifact, and runs it in the Aether
 VM. It never translates source to Rust, C, JavaScript, LLVM, or another
@@ -27,11 +27,12 @@ original meanings; new compilation emits v11.
 
 Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
 M6 layout, M7 nurseries, and M8 pure host weaves. Toolchain packages through
-**0.28** add offline projects/modules/LSP, grant-backed host I/O, comptime name
-chaining, resource+handle, `aether test` / `aether project test`, workspaces,
-stdlib layer 1 (pure Whole/Truth/Text), cross-package imports, product-path
-`release`, and nursery×resource Policy A. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
-[docs/AETHER_0.28.md](docs/AETHER_0.28.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+**0.29** add offline projects/modules/LSP, grant-backed host I/O, comptime name
+chaining, resource+handle, `aether test` / `aether project test` (optional
+grants), workspaces, stdlib layer 1 (pure Whole/Truth/Text), cross-package
+imports, product-path `release`, and nursery×resource Policy A. See
+[docs/AETHER_0.11.md](docs/AETHER_0.11.md),
+[docs/AETHER_0.29.md](docs/AETHER_0.29.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:
