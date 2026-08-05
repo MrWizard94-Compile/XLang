@@ -10,10 +10,12 @@ foreign weave whole_inc_f [value: Whole] -> Whole from "pilot" symbol "aether_wh
 ```
 
 - **Pilot only:** owned `Whole` parameters and `Whole` result (no Text pointers).  
-- **Load:** host-side after AETH verify; not via seed compile path.  
+- **Load:** host-side after AETH verify.  
 - **Grant:** `aether run … --grant-lib pilot=C:\path\to\aether_ffi_pilot.dll`  
   (explicit file path; no PATH search).  
-- **Compile:** `aether compile --bootstrap` for foreign programs (seed does not yet emit foreign).  
+- **Compile:** default seed-hosted product compile; seed≡bootstrap proven for
+  `examples/foreign-pilot.ae` (encoded foreign host name + `HOST_CALL`).  
+- **Run without grant:** fails closed (`AE-FFI-003`).  
 
 ## Residual risk (honest)
 
@@ -22,6 +24,7 @@ sandbox foreign code and does **not** claim memory safety of the foreign library
 
 ## Non-goals (v1)
 
-C headers, bindgen, callbacks into Aether, Text/Bytes C pointers, seed dual-compare.
+C headers, bindgen, callbacks into Aether, Text/Bytes C pointers, expanded
+arity/signatures beyond the Whole pilot without a new ADR.
 
 *End of AETHER_0.31.md*

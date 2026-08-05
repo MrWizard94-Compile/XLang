@@ -14,7 +14,8 @@ blocked until a human accepted residual risk and issued the authorize phrase in
 
 1. Adopt [DESIGN-M21-FOREIGN-ABI-PILOT.md](DESIGN-M21-FOREIGN-ABI-PILOT.md).  
 2. **Implement** a Whole-only foreign weave pilot with explicit `--grant-lib KEY=PATH`.  
-3. Host-side load after AETH verify; seed product path does not emit foreign yet.  
+3. Host-side load after AETH verify; seed product path parses/emits foreign weaves
+   with encoded host names and dual-compares to bootstrap for the pilot corpus.  
 4. Scoped `unsafe` only in `crates/xlang-core/src/ffi.rs` for libloading (workspace
    `unsafe_code` is `deny`, not `forbid`, for this reason).  
 5. Pure host (M8) and grant I/O (M14) remain the default host surfaces.  
@@ -35,7 +36,6 @@ blocked until a human accepted residual risk and issued the authorize phrase in
 ### Costs
 
 - Residual native-code risk on the host process  
-- Bootstrap-only compile for foreign sources until seed dual-compare  
 - Scoped unsafe for libloading  
 
 ### Risks
@@ -44,7 +44,7 @@ blocked until a human accepted residual risk and issued the authorize phrase in
 | --- | --- |
 | Hostile library | Explicit path grant; residual risk documented |
 | PATH search | Forbidden |
-| Seed/bootstrap drift | Foreign not seed-emitted until dual-compare |
+| Seed/bootstrap drift | Dual-compare test for foreign-pilot corpus |
 
 ## Links
 

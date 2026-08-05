@@ -21,9 +21,9 @@ original meanings; new compilation emits v11.
 - The Rust core remains the **bootstrap**: rebuild the seed (`compile --bootstrap`),
   produce the AST for `check`, and verify seed output against bootstrap in tests.
 - The seed self-hosts, and the documented dual-compare corpus (shipped examples
-  on the seed path, M2–M8 fixtures, M19a release, M19b nursery+resource, modules
-  via elaboration, etc.) produces bytecode **byte-identical** to the Rust
-  bootstrap where claimed in tests.
+  on the seed path, M2–M8 fixtures, M19a release, M19b nursery+resource, M21
+  foreign-pilot, modules via elaboration, etc.) produces bytecode
+  **byte-identical** to the Rust bootstrap where claimed in tests.
 
 Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
 M6 layout, M7 nurseries, and M8 pure host weaves. Toolchain packages through

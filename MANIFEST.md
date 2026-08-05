@@ -6,8 +6,8 @@ Aether **0.31.0** (base language **0.11** plus M11–M18, M19a, M19b, M20/M20b,
 M17b–M17d, M21 pilot, M22 tooling and semantics, AETH **v11** with `RELEASE` 66)
 accepts Aether source, returns a canonical AST from the Rust bootstrap for
 tooling, and **emits AETH v11 bytecode primarily through the Aether-written seed
-compiler** (forge ABI) for the documented seed surface. Foreign weave programs
-require `compile --bootstrap` until seed dual-compare for foreign. Multi-module
+compiler** (forge ABI) for the documented seed surface, including the M21
+foreign weave pilot (`examples/foreign-pilot.ae` seed≡bootstrap). Multi-module
 and workspace build elaborate then seed-compile. Authoring uses `aether.ast/v7`
 and `aether.edit/v7`. The CLI provides offline project/workspace verify,
 `aether test` / `aether project test` (optional grants/reports), `aether lsp`,
@@ -154,7 +154,8 @@ M17d (package 0.30) adds optional `--report` (JSON `aether.test-report/v1`) and
 
 M21 (package 0.31) adds `foreign weave` (Whole-only pilot) with host-side
 libloading after `--grant-lib KEY=PATH`. Human residual-risk acceptance recorded;
-seed dual-compare for foreign is not claimed.
+seed-hosted product compile dual-compares to bootstrap for the foreign-pilot
+corpus.
 
 M22 (package 0.24) adds `import unit "path" from package name as alias` and
 `aether workspace build --package` for depends_on-authorized cross-package lib
