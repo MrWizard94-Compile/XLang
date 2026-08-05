@@ -1,6 +1,7 @@
 # M19a Design: explicit `release` (resource end-of-life foundation)
 
-**Status:** Accepted design for ADR-027 — bootstrap implemented 0.25.0; seed dual-compare pending  
+**Status:** Accepted design for ADR-027 — seed product path proven 0.25.0+  
+
 **Date:** 2026-08-04  
 **Depends on:** ADR-023 (deeper T-RX needs destruction model), M2 resources, M4 effects  
 **Rule IDs:** `CONST-DEP-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`, `RND-INVAR-001`

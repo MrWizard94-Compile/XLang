@@ -1,0 +1,16 @@
+world nursery_resource
+
+weave left [] -> Whole:
+  yield 3
+
+weave right [] -> Whole:
+  yield 4
+
+weave main [] -> Whole:
+  bind memory <- arena 64
+  bind mutable a <- 0
+  bind mutable b <- 0
+  together:
+    spawn call left into a
+    spawn call right into b
+  yield sum a b

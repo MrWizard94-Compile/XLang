@@ -1,7 +1,7 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and CLI toolchain for
-deterministic, AI-primary authorship. Aether toolchain package **0.25.0**
+deterministic, AI-primary authorship. Aether toolchain package **0.26.0**
 (language surface **0.11**, AETH **v11**) parses only Aether source, emits
 deterministic AETH bytecode, verifies every artifact, and runs it in the Aether
 VM. It never translates source to Rust, C, JavaScript, LLVM, or another
@@ -13,7 +13,7 @@ original meanings; new compilation emits v11.
 ## Seed-hosted compile path, resources, effects, comptime, and layout
 
 **Default compilation is seed-hosted for user programs**, including M19a
-`release` (seed≡bootstrap proven for the release corpus).
+`release` and M19b nursery×resource Policy A (seed≡bootstrap proven).
 
 - `aether compile` invokes the **Aether-written seed compiler**
   (`seed/aether_seed.aeth`, embedded as `SEED_COMPILER_ARTIFACT`) through the
@@ -21,16 +21,17 @@ original meanings; new compilation emits v11.
 - The Rust core remains the **bootstrap**: rebuild the seed (`compile --bootstrap`),
   produce the AST for `check`, and verify seed output against bootstrap in tests.
 - The seed self-hosts, and the documented dual-compare corpus (shipped examples
-  on the seed path, M2–M8 fixtures, M19a release, modules via elaboration, etc.)
-  produces bytecode **byte-identical** to the Rust bootstrap where claimed in
-  tests.
+  on the seed path, M2–M8 fixtures, M19a release, M19b nursery+resource, modules
+  via elaboration, etc.) produces bytecode **byte-identical** to the Rust
+  bootstrap where claimed in tests.
 
 Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
 M6 layout, M7 nurseries, and M8 pure host weaves. Toolchain packages through
-**0.25** add offline projects/modules/LSP, grant-backed host I/O, comptime name
+**0.26** add offline projects/modules/LSP, grant-backed host I/O, comptime name
 chaining, resource+handle, `aether test`, workspaces, stdlib layer 0,
-cross-package imports, and product-path `release`. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
-[docs/AETHER_0.25.md](docs/AETHER_0.25.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+cross-package imports, product-path `release`, and nursery×resource Policy A.
+See [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
+[docs/AETHER_0.26.md](docs/AETHER_0.26.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

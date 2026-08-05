@@ -50,9 +50,7 @@ enum ModelError {
 
 fn validate(program: &Program) -> Result<(), ModelError> {
     for weave in &program.weaves {
-        if weave.resourceful && !weave.spawns.is_empty() {
-            return Err(ModelError::ResourceBoundary);
-        }
+        // M19b Policy A: parent may be resourceful; spawn callees must not be.
         if weave.spawns.is_empty() {
             continue;
         }
@@ -69,6 +67,9 @@ fn validate(program: &Program) -> Result<(), ModelError> {
                 .iter()
                 .find(|candidate| candidate.name == spawn.name)
                 .ok_or(ModelError::MissingChild)?;
+            if child.resourceful {
+                return Err(ModelError::ResourceBoundary);
+            }
             if !child.spawns.is_empty() {
                 return Err(ModelError::NestedNursery);
             }
@@ -232,7 +233,8 @@ fn first_failure_cancels_remaining_unstarted_spawns() {
 
 #[test]
 fn nursery_rejects_resource_boundary_and_total_parent_errors() {
-    let resourceful = Program {
+    // Resourceful spawn callee (self-spawn of resourceful main) is rejected.
+    let resourceful_callee = Program {
         weaves: vec![Weave {
             name: "main",
             effect: Effect::Total,
@@ -245,7 +247,36 @@ fn nursery_rejects_resource_boundary_and_total_parent_errors() {
             resourceful: true,
         }],
     };
-    assert_eq!(validate(&resourceful), Err(ModelError::ResourceBoundary));
+    assert_eq!(
+        validate(&resourceful_callee),
+        Err(ModelError::ResourceBoundary)
+    );
+
+    // Parent resourceful with pure child is admitted (M19b Policy A).
+    let parent_resource_pure_child = Program {
+        weaves: vec![
+            Weave {
+                name: "leaf",
+                effect: Effect::Total,
+                result: 1,
+                raises: None,
+                spawns: Vec::new(),
+                resourceful: false,
+            },
+            Weave {
+                name: "main",
+                effect: Effect::Total,
+                result: 0,
+                raises: None,
+                spawns: vec![Spawn {
+                    name: "leaf",
+                    destination: 0,
+                }],
+                resourceful: true,
+            },
+        ],
+    };
+    assert_eq!(validate(&parent_resource_pure_child), Ok(()));
 
     let total_parent = Program {
         weaves: vec![

@@ -32,6 +32,7 @@ const M5_COMPTIME_SOURCE: &str = include_str!("../../../examples/comptime.ae");
 const M15_COMPTIME_CHAIN_SOURCE: &str = include_str!("../../../examples/comptime-chain.ae");
 const M16_RESOURCE_HANDLE_SOURCE: &str = include_str!("../../../examples/resource-handle.ae");
 const M19A_RELEASE_RAISE_SOURCE: &str = include_str!("../../../examples/release-raise.ae");
+const M19B_NURSERY_RESOURCE_SOURCE: &str = include_str!("../../../examples/nursery-resource.ae");
 const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae");
 const M7_NURSERY_TOTAL_SOURCE: &str = include_str!("../../../examples/nursery-total.ae");
 const M7_NURSERY_CANCEL_SOURCE: &str = include_str!("../../../examples/nursery-cancel.ae");
@@ -300,6 +301,27 @@ fn seed_profile_compiler_forges_m19a_release_raise_byte_identically() {
 }
 
 #[test]
+fn seed_profile_compiler_forges_m19b_nursery_resource_byte_identically() {
+    let bootstrap = compile_to_bytecode(M19B_NURSERY_RESOURCE_SOURCE)
+        .expect("M19b nursery-resource must bootstrap")
+        .bytecode;
+    let seeded = compile_with_seed(M19B_NURSERY_RESOURCE_SOURCE)
+        .expect("M19b nursery-resource must seed-compile")
+        .bytecode;
+    verify_bytecode(&seeded).expect("M19b seed artifact must verify");
+    assert_eq!(
+        seeded, bootstrap,
+        "M19b nursery-resource must match bootstrap byte-for-byte"
+    );
+    assert_eq!(
+        run_bytecode(&seeded)
+            .expect("M19b seed artifact must run")
+            .exit_code,
+        7
+    );
+}
+
+#[test]
 fn seed_profile_compiler_forges_bounded_m6_layout_tables_byte_identically() {
     let bootstrap_seed = compile_to_bytecode(SEED_SOURCE)
         .expect("the checked-in Aether seed source must bootstrap")
@@ -517,6 +539,8 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
         ("layout-table", M6_LAYOUT_SOURCE, Some(10)),
         ("nursery-total", M7_NURSERY_TOTAL_SOURCE, Some(7)),
         ("nursery-cancel", M7_NURSERY_CANCEL_SOURCE, Some(9)),
+        ("nursery-resource", M19B_NURSERY_RESOURCE_SOURCE, Some(7)),
+        ("release-raise", M19A_RELEASE_RAISE_SOURCE, Some(9)),
         ("host-pilot", M8_HOST_PILOT_SOURCE, Some(48)),
     ];
     for (name, source, expected_exit_code) in examples {

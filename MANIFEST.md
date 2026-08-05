@@ -2,22 +2,22 @@
 
 ## Contract
 
-Aether **0.25.0** (base language **0.11** plus M11–M18, M19a, M20, M22 tooling
-and semantics, AETH **v11** with `RELEASE` 66) accepts Aether source, returns a
-canonical AST from the Rust bootstrap for tooling, and **emits AETH v11 bytecode
-primarily through the Aether-written seed compiler** (forge ABI) for the
-documented seed surface, including M19a `release`. Single-file `compile` is
-seed-hosted; multi-module and workspace build elaborate then seed-compile.
-Authoring uses `aether.ast/v7` and `aether.edit/v7`. The CLI provides offline
-project/workspace verify, `aether test`, `aether lsp`, and `aether run` with
-optional `--grant-*`. Stdlib layer 0 is under `stdlib/`. Verified AETH v4–v10
-remain compatibility inputs. Foreign/C ABI is **not** product surface (M21
-design-only).
+Aether **0.26.0** (base language **0.11** plus M11–M18, M19a, M19b, M20, M22
+tooling and semantics, AETH **v11** with `RELEASE` 66) accepts Aether source,
+returns a canonical AST from the Rust bootstrap for tooling, and **emits AETH
+v11 bytecode primarily through the Aether-written seed compiler** (forge ABI)
+for the documented seed surface, including M19a `release` and M19b nursery×
+resource Policy A. Single-file `compile` is seed-hosted; multi-module and
+workspace build elaborate then seed-compile. Authoring uses `aether.ast/v7` and
+`aether.edit/v7`. The CLI provides offline project/workspace verify, `aether
+test`, `aether lsp`, and `aether run` with optional `--grant-*`. Stdlib layer 0
+is under `stdlib/`. Verified AETH v4–v10 remain compatibility inputs. Foreign/C
+ABI is **not** product surface (M21 design-only).
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.25 product contract (0.11 core language,
-M9–M18/M19a/M20/M22 tooling with honest seed limits). It intentionally
+This manifest is the executable Aether 0.26 product contract (0.11 core language,
+M9–M18/M19a/M19b/M20/M22 tooling with honest seed limits). It intentionally
 does not promote long-range research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
@@ -144,6 +144,10 @@ imports.
 M19a (package 0.25) adds root `release <name>` and AETH `RELEASE` (66) on the
 seed-hosted product path so abortive raise may follow cleanup. Seed≡bootstrap
 for `examples/release-raise.ae` is proven.
+
+M19b (package 0.26) admits parent M2/M6 resource ownership with structured
+nurseries when spawn callees are resource-free (Policy A). Seed≡bootstrap for
+`examples/nursery-resource.ae` is proven.
 
 Every 0.11 compilation emits AETH v11 with an arena-capacity header field, a
 possibly empty bounded record table, a shape table, a function `effect_tag`, and

@@ -38,7 +38,7 @@ pub use workspace::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.25.0";
+pub const LANGUAGE_VERSION: &str = "0.26.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
@@ -4529,6 +4529,14 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         ));
     }
 
+    // M19b: spawn callees must not use M2/M6 resource forms (Policy A).
+    let resource_using_weaves: BTreeSet<String> = program
+        .weaves
+        .iter()
+        .filter(|weave| weave_uses_resource(weave))
+        .map(|weave| weave.name.clone())
+        .collect();
+
     for weave in &program.weaves {
         validate_value_type(weave.result, &program.records, weave.span)?;
         validate_resource_signature(weave)?;
@@ -4537,16 +4545,12 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         // owners; site-level clean boundary enforces liveness. Erroring weaves
         // still cannot *declare* arena/buffer/table resource forms (main-owned
         // arena plan + M2). Terminal handle may coexist with live resources (M16).
+        // M19b: parent resource ownership may coexist with nurseries when spawn
+        // callees are resource-free (Policy A); no weave-level nursery ban.
         if weave.effect == Effect::ErrorWhole && weave_uses_resource(weave) {
             return Err(CompilerError::new(
                 weave.span,
                 "AE-EFFECT-003: a weave that raises Whole cannot declare arena, Buffer, access, table, or resource outcomes",
-            ));
-        }
-        if weave_uses_resource(weave) && weave_uses_nursery(weave) {
-            return Err(CompilerError::new(
-                weave.span,
-                "AE-TASK-003: Aether M7 nursery control cannot share a weave with M2 arena, Buffer, access, table, or resource outcomes",
             ));
         }
         let access_arena = weave
@@ -4584,6 +4588,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
             true,
             &mut resource_plan,
             &mut comptime_env,
+            &resource_using_weaves,
         )?;
     }
     Ok(resource_plan)
@@ -5014,29 +5019,6 @@ fn weave_uses_resource(weave: &Weave) -> bool {
     block_uses_resource(&weave.body)
 }
 
-fn weave_uses_nursery(weave: &Weave) -> bool {
-    fn block_uses_nursery(statements: &[Statement]) -> bool {
-        statements.iter().any(|statement| match statement {
-            Statement::Together { .. } => true,
-            Statement::Choose {
-                when_bright,
-                when_dim,
-                ..
-            } => block_uses_nursery(when_bright) || block_uses_nursery(when_dim),
-            Statement::While { body, .. } => block_uses_nursery(body),
-            Statement::Bind { .. }
-            | Statement::Revise { .. }
-            | Statement::Speak { .. }
-            | Statement::Release { .. }
-            | Statement::Yield { .. }
-            | Statement::Raise { .. }
-            | Statement::Forward { .. }
-            | Statement::Handle { .. } => false,
-        })
-    }
-    block_uses_nursery(&weave.body)
-}
-
 fn nursery_may_raise(spawns: &[Spawn], signatures: &BTreeMap<String, FunctionSignature>) -> bool {
     spawns.iter().any(|spawn| {
         signatures
@@ -5068,6 +5050,7 @@ fn validate_block(
     root: bool,
     resource_plan: &mut SemanticResourcePlan,
     comptime_env: &mut BTreeMap<String, i64>,
+    resource_using_weaves: &BTreeSet<String>,
 ) -> Result<(), CompilerError> {
     for (index, statement) in statements.iter().enumerate() {
         match statement {
@@ -5378,6 +5361,7 @@ fn validate_block(
                     false,
                     resource_plan,
                     comptime_env,
+                    resource_using_weaves,
                 )?;
                 let mut dim_scope = original.clone();
                 if !when_dim.is_empty() {
@@ -5391,6 +5375,7 @@ fn validate_block(
                         false,
                         resource_plan,
                         comptime_env,
+                        resource_using_weaves,
                     )?;
                 }
                 merge_scope(scope, &bright_scope, &dim_scope, statement.span())?;
@@ -5418,6 +5403,7 @@ fn validate_block(
                     false,
                     resource_plan,
                     comptime_env,
+                    resource_using_weaves,
                 )?;
                 merge_scope(scope, &before_loop, &body_scope, statement.span())?;
             }
@@ -5430,13 +5416,9 @@ fn validate_block(
                         ),
                     ));
                 }
-                if weave_uses_resource(weave) {
-                    return Err(CompilerError::new(
-                        *span,
-                        "AE-TASK-003: nursery control cannot share a weave with arena, Buffer, access, table, or resource outcomes",
-                    ));
-                }
-                validate_effect_boundary(scope, *span)?;
+                // M19b Policy A: live resource/unique owners may remain across a
+                // nursery; exclusive access loans may not (handle-family boundary).
+                validate_nursery_boundary(scope, *span)?;
                 let may_raise = nursery_may_raise(spawns, signatures);
                 if may_raise {
                     if weave.effect != Effect::ErrorWhole {
@@ -5454,6 +5436,15 @@ fn validate_block(
                 }
                 let mut destinations = BTreeMap::new();
                 for spawn in spawns {
+                    if resource_using_weaves.contains(&spawn.weave) {
+                        return Err(CompilerError::new(
+                            spawn.span,
+                            format!(
+                                "AE-TASK-003: nursery spawn callee {} cannot use arena, Buffer, access, table, or resource outcomes",
+                                spawn.weave
+                            ),
+                        ));
+                    }
                     validate_spawn(spawn, scope, signatures, &mut destinations)?;
                 }
             }
@@ -5605,7 +5596,7 @@ fn validate_spawn(
     Ok(())
 }
 
-/// Full clean boundary for abortive effect and nurseries (M4/M7).
+/// Full clean boundary for abortive effect control (M4/M19a raise/forward).
 fn validate_effect_boundary(scope: &BindingScope, span: Span) -> Result<(), CompilerError> {
     let Some((name, _)) = scope.iter().find(|(_, binding)| {
         !binding.moved
@@ -5635,6 +5626,20 @@ fn validate_handle_boundary(scope: &BindingScope, span: Span) -> Result<(), Comp
     Err(CompilerError::new(
         span,
         format!("AE-EFFECT-003: handle cannot cross live exclusive access loan {name}"),
+    ))
+}
+
+/// M19b nursery boundary: same as handle — live owners may remain; access loans may not.
+fn validate_nursery_boundary(scope: &BindingScope, span: Span) -> Result<(), CompilerError> {
+    let Some((name, _)) = scope
+        .iter()
+        .find(|(_, binding)| !binding.moved && binding.value_type == ValueType::AccessArena)
+    else {
+        return Ok(());
+    };
+    Err(CompilerError::new(
+        span,
+        format!("AE-EFFECT-003: nursery control cannot cross live exclusive access loan {name}"),
     ))
 }
 
@@ -14801,12 +14806,33 @@ mod tests {
         let error = compile_source(empty).expect_err("empty together must fail");
         assert_eq!(error.diagnostic().code, "AE-TASK-001");
 
-        let resources = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable a <- 0\n  together:\n    spawn call main into a\n  yield a\n";
-        let error = compile_source(resources).expect_err("nursery+resource must fail");
-        assert!(
-            error.diagnostic().code == "AE-TASK-003"
-                || error.diagnostic().code == "AE-EFFECT-003"
-                || error.diagnostic().code == "AE-TASK-002"
+        // M19b: resourceful spawn *callee* is still forbidden (main uses resources).
+        let resource_callee = "world invalid\n\nweave main [] -> Whole:\n  bind memory <- arena 64\n  bind mutable a <- 0\n  together:\n    spawn call main into a\n  yield a\n";
+        let error =
+            compile_source(resource_callee).expect_err("resourceful spawn callee must fail");
+        assert_eq!(error.diagnostic().code, "AE-TASK-003");
+    }
+
+    #[test]
+    fn compiles_verifies_and_runs_m19b_nursery_with_parent_resource() {
+        let source = include_str!("../../../examples/nursery-resource.ae");
+        let output = compile_to_bytecode(source).expect("M19b nursery+parent arena should compile");
+        verify_bytecode(&output.bytecode).expect("M19b artifact should verify");
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("M19b mix should run")
+                .exit_code,
+            7
+        );
+        assert_eq!(
+            format_program(&output.program),
+            source.replace("\r\n", "\n")
+        );
+
+        let seeded = compile_with_seed(source).expect("M19b must seed-compile");
+        assert_eq!(
+            seeded.bytecode, output.bytecode,
+            "M19b mix must match bootstrap byte-for-byte"
         );
     }
 

@@ -85,6 +85,7 @@ invalid-source diagnostic parity.
 | M18 | Offline workspace (T-PKG) | M9–M11 | `aether.workspace/v1` multi-package path graph + `workspace verify`; acyclic `depends_on`; nested project verify. | Matrix green; cycle/escape negatives; no registry/linking claim. | **Implemented in package 0.23 (ADR-022)** |
 | M19 | Deeper T-RX | M16 | Destruction model before abortive+resource / nursery+resource. | Design only. | **Direction ADR-023** |
 | M19a | Explicit `release` | M19 | `release name` + OP_RELEASE; raise-after-cleanup. | Matrix green; seed≡bootstrap for release corpus. | **Implemented in package 0.25 (ADR-027)** |
+| M19b | Nursery × resource Policy A | M19a, M7 | Parent may own resources with pure spawn callees; nursery site allows live owners, not access loans. | Matrix green; seed≡bootstrap mix corpus. | **Implemented in package 0.26 (ADR-028)** |
 | M20 | Stdlib layer 0 | M11 | Pure Whole helper modules under `stdlib/`. | Project build + tests. | **Implemented in package 0.24 (ADR-024)** |
 | M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Threat+design only. | **Designed (ADR-025); implementation blocked** |
 | M22 | Cross-package import | M11, M18 | `import unit "…" from package name as alias` + `workspace build --package`. | Matrix green; depends_on jail. | **Implemented in package 0.24 (ADR-026)** |
@@ -249,7 +250,7 @@ Post-M10 growth is governed by [ADR-014](ADR-014-post-m10-track-portfolio.md).
 Mainstream multi-epoch plan:
 [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next:** M19 foundation (`release`/destruction) if pursuing T-RX; or
+**Default next:** deeper T-RX Policy B only with cancel-destroy design; or
 stdlib expansion; FFI only after human authorize ADR-025 threat residual.
 
 Native/LLVM and network registries remain blocked without law change.
@@ -306,9 +307,6 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Stabilize the implemented M5 release surface, collect measured performance and
-reliability evidence, then begin only the research-gated M6 shape/layout design
-work. Any expansion of M2/M4/M5 interaction must first specify first-class
-outcome propagation, cross-weave resource ownership, destruction, cancellation,
-and compile-time authority without weakening the Aether 0.8 verifier or seed
-proof boundary.
+Package **0.26** ships M19b nursery×resource Policy A on the seed path. Next
+honest product slices: stdlib depth, or human-authorized FFI (ADR-025). Policy B
+cancel-destroy and native/registry remain design-gated.
