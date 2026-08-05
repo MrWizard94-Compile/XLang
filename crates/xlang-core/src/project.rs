@@ -69,6 +69,8 @@ pub struct ProjectUnit {
 pub enum ProjectUnitRole {
     Main,
     Lib,
+    /// M17b: total program with main; may import project lib units; not product entry.
+    Test,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -425,12 +427,14 @@ pub fn verify_project(
                 && !source.lines().any(|line| {
                     let t = line.trim_start();
                     t.starts_with("weave main ") || t.starts_with("export weave main ")
-                }));
+                }))
+            || unit.role == ProjectUnitRole::Test;
         let artifact_bytes = if module_surface {
             if unit.role == ProjectUnitRole::Lib {
                 validate_lib_module_source(&unit.path, &source)?;
-            } else if source_requires_project_modules(&source) {
-                // Entry with imports: full graph check deferred to project build.
+            } else if unit.role == ProjectUnitRole::Test || source_requires_project_modules(&source)
+            {
+                // Main/test with imports: full graph check deferred to project build/test.
                 if !source.lines().any(|line| {
                     let t = line.trim_start();
                     t.starts_with("weave main ") || t.starts_with("export weave main ")

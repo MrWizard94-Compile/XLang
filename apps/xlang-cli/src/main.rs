@@ -11,14 +11,14 @@ use aether_core::{
     apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
     compile_to_bytecode, compile_with_seed, compile_workspace_package, forge_bytecode,
     format_project, format_source, multi_module_authority_note, parse_project_document,
-    parse_workspace_document, run_bytecode, run_bytecode_with_grants, structural_document_json,
-    unit_artifact_file_name, verify_bytecode, verify_project, verify_workspace, HostGrantConfig,
-    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    parse_workspace_document, run_bytecode, run_bytecode_with_grants, run_project_tests,
+    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
+    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -318,6 +318,7 @@ fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), 
         let role = match unit.role {
             aether_core::ProjectUnitRole::Main => "main",
             aether_core::ProjectUnitRole::Lib => "lib",
+            aether_core::ProjectUnitRole::Test => "test",
         };
         println!(
             "  [{role}] {} sha256={} artifact_bytes={}",
@@ -325,6 +326,32 @@ fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), 
         );
     }
     Ok(())
+}
+
+fn project_test(project_path: &Path) -> Result<(), String> {
+    let json = read_source(project_path)?;
+    let document = parse_project_document(&json).map_err(|error| error.to_string())?;
+    let root = project_root_for(project_path);
+    let report = run_project_tests(root, &document).map_err(|error| error.to_string())?;
+    for result in &report.results {
+        if result.ok {
+            println!("ok   {}", result.path);
+        } else {
+            println!("FAIL {}: {}", result.path, result.detail);
+        }
+    }
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} project {}@{} test: {} passed; {} failed",
+        document.name,
+        document.version,
+        report.passed(),
+        report.failed()
+    );
+    if report.all_passed() {
+        Ok(())
+    } else {
+        Err("project test suite failed".to_owned())
+    }
 }
 
 fn project_build(project_path: &Path, output_path: &Path) -> Result<(), String> {
@@ -551,7 +578,14 @@ fn run() -> Result<(), String> {
                     }
                     project_build(Path::new(&project), Path::new(&output))
                 }
-                _ => Err("project accepts verify, format, or build subcommands".to_owned()),
+                "test" => {
+                    let project = next_argument(&mut arguments, "project file")?;
+                    if arguments.next().is_some() {
+                        return Err("project test accepts exactly one project file".to_owned());
+                    }
+                    project_test(Path::new(&project))
+                }
+                _ => Err("project accepts verify, format, build, or test subcommands".to_owned()),
             }
         }
         "workspace" => {
@@ -862,5 +896,12 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../stdlib/whole_test.ae");
         let report = test_runner::run_tests(&[test_path]).expect("stdlib whole_test");
         assert!(report.all_passed(), "{:?}", report.results);
+    }
+
+    #[test]
+    fn shipped_stdlib_project_test_imports_lib() {
+        let project =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../stdlib/aether.project.json");
+        project_test(&project).expect("stdlib project test role units");
     }
 }

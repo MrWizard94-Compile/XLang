@@ -1,6 +1,6 @@
 # M17 offline test runner validation matrix
 
-**Status:** Implementation green (package 0.22.0)  
+**Status:** Implementation green (package 0.22.0); project tests continue in [M17B-VALIDATION-MATRIX.md](M17B-VALIDATION-MATRIX.md)  
 **Date:** 2026-08-04  
 **Design:** [DESIGN-M17-OFFLINE-TEST-RUNNER.md](DESIGN-M17-OFFLINE-TEST-RUNNER.md)  
 **ADR:** [ADR-021](ADR-021-m17-offline-test-runner.md)

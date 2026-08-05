@@ -1,0 +1,10 @@
+world import_whole_test
+
+import unit "whole.ae" as wh
+
+weave main [] -> Whole:
+  bind result <- call wh.double 21
+  bind mutable code <- 1
+  choose same result 42:
+    revise code <- 0
+  yield code

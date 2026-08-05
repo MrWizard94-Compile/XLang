@@ -12,7 +12,8 @@ use crate::project::{
     resolve_unit_path, validate_unit_path, ProjectDocument, ProjectError, ProjectUnitRole,
 };
 use crate::{
-    compile_to_bytecode, compile_with_seed, CompileOutput, LANGUAGE_NAME, LANGUAGE_VERSION,
+    compile_to_bytecode, compile_with_seed, verify_bytecode, CompileOutput, LANGUAGE_NAME,
+    LANGUAGE_VERSION,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,7 +164,7 @@ fn parse_module_source(
 
     let has_main = weaves.contains_key("main");
     match role {
-        ProjectUnitRole::Main => {
+        ProjectUnitRole::Main | ProjectUnitRole::Test => {
             if !has_main {
                 return Err(module_error(
                     "AE-MOD-006",
@@ -522,10 +523,17 @@ fn closed_cone(
                 ));
             }
             let target = &modules[&target_key];
-            if target.role == ProjectUnitRole::Main {
+            if target.role == ProjectUnitRole::Main || target.role == ProjectUnitRole::Test {
                 return Err(module_error(
                     "AE-MOD-002",
-                    format!("module {path} cannot import the main unit {target_key}"),
+                    format!(
+                        "module {path} cannot import the {} unit {target_key}",
+                        match target.role {
+                            ProjectUnitRole::Main => "main",
+                            ProjectUnitRole::Test => "test",
+                            ProjectUnitRole::Lib => "lib",
+                        }
+                    ),
                 ));
             }
             dfs(&target_key, modules, visiting, visited, order)?;
@@ -693,13 +701,58 @@ pub fn elaborate_project_modules_with_packages(
     package_roots: &BTreeMap<String, PathBuf>,
     allowed_packages: &BTreeSet<String>,
 ) -> Result<String, ProjectError> {
-    let modules = load_graph(project_root, document, package_roots, allowed_packages)?;
     let entry = document
         .units
         .iter()
         .find(|unit| unit.role == ProjectUnitRole::Main)
         .ok_or_else(|| module_error("AE-MOD-006", "project has no main unit"))?;
-    let order = closed_cone(&entry.path, &modules)?;
+    elaborate_project_entry_with_packages(
+        project_root,
+        document,
+        &entry.path,
+        package_roots,
+        allowed_packages,
+    )
+}
+
+/// Elaborate a specific entry unit's import cone (main or M17b test).
+pub fn elaborate_project_entry(
+    project_root: &Path,
+    document: &ProjectDocument,
+    entry_path: &str,
+) -> Result<String, ProjectError> {
+    elaborate_project_entry_with_packages(
+        project_root,
+        document,
+        entry_path,
+        &BTreeMap::new(),
+        &BTreeSet::new(),
+    )
+}
+
+/// Elaborate a selectable entry unit with optional workspace package roots.
+pub fn elaborate_project_entry_with_packages(
+    project_root: &Path,
+    document: &ProjectDocument,
+    entry_path: &str,
+    package_roots: &BTreeMap<String, PathBuf>,
+    allowed_packages: &BTreeSet<String>,
+) -> Result<String, ProjectError> {
+    let modules = load_graph(project_root, document, package_roots, allowed_packages)?;
+    if !modules.contains_key(entry_path) {
+        return Err(module_error(
+            "AE-MOD-002",
+            format!("entry unit {entry_path} is not a project unit"),
+        ));
+    }
+    let entry_role = modules[entry_path].role;
+    if entry_role != ProjectUnitRole::Main && entry_role != ProjectUnitRole::Test {
+        return Err(module_error(
+            "AE-MOD-006",
+            format!("entry unit {entry_path} must have role main or test"),
+        ));
+    }
+    let order = closed_cone(entry_path, &modules)?;
 
     // World uniqueness
     let mut worlds = BTreeSet::new();
@@ -791,7 +844,7 @@ pub fn elaborate_project_modules_with_packages(
         }
     }
 
-    let entry_world = modules[&entry.path].world.clone();
+    let entry_world = modules[entry_path].world.clone();
     let mut elaborated = format!("world {entry_world}\n");
 
     // Emit libs first (order is post-order: deps before dependents), then entry last pieces
@@ -837,9 +890,47 @@ pub fn compile_project_modules_with_packages(
     package_roots: &BTreeMap<String, PathBuf>,
     allowed_packages: &BTreeSet<String>,
 ) -> Result<CompileOutput, ProjectError> {
-    let source = elaborate_project_modules_with_packages(
+    let entry = document
+        .units
+        .iter()
+        .find(|unit| unit.role == ProjectUnitRole::Main)
+        .ok_or_else(|| module_error("AE-MOD-006", "project has no main unit"))?;
+    compile_project_entry_with_packages(
         project_root,
         document,
+        &entry.path,
+        package_roots,
+        allowed_packages,
+    )
+}
+
+/// Compile a selectable main/test entry with M11b dual-compare.
+pub fn compile_project_entry(
+    project_root: &Path,
+    document: &ProjectDocument,
+    entry_path: &str,
+) -> Result<CompileOutput, ProjectError> {
+    compile_project_entry_with_packages(
+        project_root,
+        document,
+        entry_path,
+        &BTreeMap::new(),
+        &BTreeSet::new(),
+    )
+}
+
+/// Compile a selectable entry with workspace package roots.
+pub fn compile_project_entry_with_packages(
+    project_root: &Path,
+    document: &ProjectDocument,
+    entry_path: &str,
+    package_roots: &BTreeMap<String, PathBuf>,
+    allowed_packages: &BTreeSet<String>,
+) -> Result<CompileOutput, ProjectError> {
+    let source = elaborate_project_entry_with_packages(
+        project_root,
+        document,
+        entry_path,
         package_roots,
         allowed_packages,
     )?;
@@ -862,6 +953,85 @@ pub fn compile_project_modules_with_packages(
         ));
     }
     Ok(seed)
+}
+
+/// M17b: compile and pure-run every `role: test` unit; require exit code 0.
+pub fn run_project_tests(
+    project_root: &Path,
+    document: &ProjectDocument,
+) -> Result<ProjectTestReport, ProjectError> {
+    use crate::run_bytecode;
+
+    let tests: Vec<_> = document
+        .units
+        .iter()
+        .filter(|unit| unit.role == ProjectUnitRole::Test)
+        .collect();
+    if tests.is_empty() {
+        return Err(module_error(
+            "AE-PROJECT-001",
+            "project test requires at least one unit with role test",
+        ));
+    }
+    let mut results = Vec::new();
+    for unit in tests {
+        let compiled = compile_project_entry(project_root, document, &unit.path)?;
+        verify_bytecode(&compiled.bytecode).map_err(|error| {
+            module_error(
+                "AE-PROJECT-004",
+                format!("test unit {} produced invalid artifact: {error}", unit.path),
+            )
+        })?;
+        match run_bytecode(&compiled.bytecode) {
+            Ok(output) if output.exit_code == 0 => results.push(ProjectTestResult {
+                path: unit.path.clone(),
+                ok: true,
+                detail: "exit 0".to_owned(),
+            }),
+            Ok(output) => results.push(ProjectTestResult {
+                path: unit.path.clone(),
+                ok: false,
+                detail: format!("exit {}", output.exit_code),
+            }),
+            Err(error) => results.push(ProjectTestResult {
+                path: unit.path.clone(),
+                ok: false,
+                detail: format!("run failed: {error}"),
+            }),
+        }
+    }
+    Ok(ProjectTestReport { results })
+}
+
+/// One project test unit outcome (M17b).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectTestResult {
+    pub path: String,
+    pub ok: bool,
+    pub detail: String,
+}
+
+/// Aggregate project test report (M17b).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectTestReport {
+    pub results: Vec<ProjectTestResult>,
+}
+
+impl ProjectTestReport {
+    #[must_use]
+    pub fn all_passed(&self) -> bool {
+        !self.results.is_empty() && self.results.iter().all(|result| result.ok)
+    }
+
+    #[must_use]
+    pub fn passed(&self) -> usize {
+        self.results.iter().filter(|result| result.ok).count()
+    }
+
+    #[must_use]
+    pub fn failed(&self) -> usize {
+        self.results.iter().filter(|result| !result.ok).count()
+    }
 }
 
 /// Human-readable note for CLI.
@@ -887,6 +1057,45 @@ mod tests {
             std::env::temp_dir().join(format!("aether-modules-{}-{sequence}", std::process::id()));
         fs::create_dir_all(&path).expect("temp");
         path
+    }
+
+    #[test]
+    fn project_test_entry_imports_lib_and_requires_exit_zero() {
+        let root = temp_dir();
+        fs::create_dir_all(root.join("lib")).unwrap();
+        let math = "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n";
+        let main = "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield call math.double 21\n";
+        let test = "world lib_test\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  bind r <- call math.double 21\n  bind mutable code <- 1\n  choose same r 42:\n    revise code <- 0\n  yield code\n";
+        fs::write(root.join("lib/math.ae"), math).unwrap();
+        fs::write(root.join("main.ae"), main).unwrap();
+        fs::write(root.join("lib_test.ae"), test).unwrap();
+        let project = r#"{
+  "schema": "aether.project/v1",
+  "name": "t",
+  "version": "1",
+  "units": [
+    { "path": "main.ae", "role": "main" },
+    { "path": "lib/math.ae", "role": "lib" },
+    { "path": "lib_test.ae", "role": "test" }
+  ]
+}"#;
+        let document = parse_project_document(project).unwrap();
+        let report = run_project_tests(&root, &document).expect("project tests");
+        assert!(report.all_passed(), "{:?}", report.results);
+
+        let empty = r#"{
+  "schema": "aether.project/v1",
+  "name": "t",
+  "version": "1",
+  "units": [
+    { "path": "main.ae", "role": "main" },
+    { "path": "lib/math.ae", "role": "lib" }
+  ]
+}"#;
+        let document = parse_project_document(empty).unwrap();
+        let err = run_project_tests(&root, &document).expect_err("zero tests fail closed");
+        assert!(err.message.contains("role test"), "{err}");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

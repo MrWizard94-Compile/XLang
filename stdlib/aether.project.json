@@ -6,6 +6,7 @@
     { "path": "main.ae", "role": "main" },
     { "path": "whole.ae", "role": "lib" },
     { "path": "truth.ae", "role": "lib" },
-    { "path": "text.ae", "role": "lib" }
+    { "path": "text.ae", "role": "lib" },
+    { "path": "import_whole_test.ae", "role": "test" }
   ]
 }
