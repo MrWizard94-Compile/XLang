@@ -1,7 +1,8 @@
 # Human authorization checklist — M21 foreign ABI (T-FFI)
 
-**Status:** Decision aid — **not product implementation**  
+**Status:** Decision aid — pilot **authorized and implemented** in package 0.31.0  
 **Date:** 2026-08-04  
+
 **Law:** [ADR-025](ADR-025-m21-foreign-abi-pilot.md), [THREAT_MODEL-v3-FOREIGN-ABI.md](THREAT_MODEL-v3-FOREIGN-ABI.md), [DESIGN-M21](DESIGN-M21-FOREIGN-ABI-PILOT.md)  
 **Constitution:** Agents **must not** implement FFI until this checklist is
 explicitly completed by a human in writing (chat or commit message is enough).

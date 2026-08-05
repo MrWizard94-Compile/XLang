@@ -2,27 +2,26 @@
 
 ## Contract
 
-Aether **0.30.0** (base language **0.11** plus M11–M18, M19a, M19b, M20/M20b,
-M17b/M17c/M17d, M22 tooling and semantics, AETH **v11** with `RELEASE` 66)
+Aether **0.31.0** (base language **0.11** plus M11–M18, M19a, M19b, M20/M20b,
+M17b–M17d, M21 pilot, M22 tooling and semantics, AETH **v11** with `RELEASE` 66)
 accepts Aether source, returns a canonical AST from the Rust bootstrap for
 tooling, and **emits AETH v11 bytecode primarily through the Aether-written seed
-compiler** (forge ABI) for the documented seed surface, including M19a
-`release`, M19b nursery×resource Policy A, pure stdlib layer 1, project
-`role: test`, optional test grants, and optional structured test reports.
-Single-file `compile` is seed-hosted; multi-module and workspace build elaborate
-then seed-compile. Authoring uses `aether.ast/v7` and `aether.edit/v7`. The CLI
-provides offline project/workspace verify, `aether test` / `aether project
-test` (optional `--grant-*`, `--report`, `--report-junit`), `aether lsp`, and
-`aether run` with optional `--grant-*`. Stdlib layer 1 is under `stdlib/`.
-Verified AETH v4–v10 remain compatibility inputs. Foreign/C ABI is **not**
-product surface (M21 design-blocked). Policy B cancel-destroy is design-only.
+compiler** (forge ABI) for the documented seed surface. Foreign weave programs
+require `compile --bootstrap` until seed dual-compare for foreign. Multi-module
+and workspace build elaborate then seed-compile. Authoring uses `aether.ast/v7`
+and `aether.edit/v7`. The CLI provides offline project/workspace verify,
+`aether test` / `aether project test` (optional grants/reports), `aether lsp`,
+and `aether run` with optional `--grant-*` including M21 `--grant-lib KEY=PATH`.
+Stdlib layer 1 is under `stdlib/`. Verified AETH v4–v10 remain compatibility
+inputs. M21 foreign pilot is Whole-only under explicit library grant; native
+code is **not** sandboxed. Policy B cancel-destroy remains design-only.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.30 product contract (0.11 core language,
-M9–M18/M19a/M19b/M20/M20b/M17b–M17d/M22 tooling with honest seed limits). It
-intentionally does not promote long-range research directions to implemented
-behavior. The
+This manifest is the executable Aether 0.31 product contract (0.11 core language,
+M9–M18/M19a/M19b/M20/M20b/M17b–M17d/M21 pilot/M22 tooling with honest seed
+limits). It intentionally does not promote long-range research directions to
+implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
 [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -152,6 +151,10 @@ on `aether test` and `aether project test` (default empty = pure).
 
 M17d (package 0.30) adds optional `--report` (JSON `aether.test-report/v1`) and
 `--report-junit` (offline JUnit-compatible XML) on both test runners.
+
+M21 (package 0.31) adds `foreign weave` (Whole-only pilot) with host-side
+libloading after `--grant-lib KEY=PATH`. Human residual-risk acceptance recorded;
+seed dual-compare for foreign is not claimed.
 
 M22 (package 0.24) adds `import unit "path" from package name as alias` and
 `aether workspace build --package` for depends_on-authorized cross-package lib

@@ -1,0 +1,6 @@
+world foreign_pilot
+
+foreign weave whole_inc_f [value: Whole] -> Whole from "pilot" symbol "aether_whole_inc"
+
+weave main [] -> Whole:
+  yield call whole_inc_f 41

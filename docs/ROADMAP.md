@@ -93,7 +93,7 @@ invalid-source diagnostic parity.
 | M19d | Resourceful-spawn precondition | M19c, M2 | Design minimum ownership model before Policy B code. | Design gate only. | **Design only (ADR-034); impl blocked** |
 | M20 | Stdlib layer 0 | M11 | Pure Whole helper modules under `stdlib/`. | Project build + tests. | **Implemented in package 0.24 (ADR-024)** |
 | M20b | Stdlib layer 1 | M20 | Expand pure Whole helpers; add Truth + Text modules; multi-import demo. | Project build dual-compare; `aether test`; exit 42 demo. | **Implemented in package 0.27 (ADR-029)** |
-| M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Threat+design only. | **Designed (ADR-025); implementation blocked** |
+| M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Matrix green; human residual-risk accepted; bootstrap compile. | **Pilot implemented in package 0.31 (ADR-025)** |
 | M22 | Cross-package import | M11, M18 | `import unit "…" from package name as alias` + `workspace build --package`. | Matrix green; depends_on jail. | **Implemented in package 0.24 (ADR-026)** |
 
 ## Milestone detail
@@ -313,6 +313,6 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Package **0.30** ships M17d structured test reports. M19c/M19d Policy B path is
-design-only. FFI remains blocked without the human authorize phrase in
-`docs/HUMAN-AUTHORIZE-FFI.md`. Native/registry remain law-fork gated.
+Package **0.31** ships M21 foreign weave pilot (Whole-only, `--grant-lib`) after
+human residual-risk acceptance. Seed dual-compare for foreign and Policy B
+product code remain open. Native/registry remain law-fork gated.

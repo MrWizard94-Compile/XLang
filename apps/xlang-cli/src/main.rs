@@ -19,7 +19,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nForeign weave programs require compile --bootstrap until seed dual-compare for foreign (M21).\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics / foreign weaves)."
     );
 }
 
@@ -146,10 +146,11 @@ fn forge(compiler_path: &Path, source_path: &Path, output_path: &Path) -> Result
 
 fn execute_artifact(artifact_path: &Path, grants: HostGrantConfig) -> Result<(), String> {
     let artifact = read_artifact(artifact_path)?;
-    let output = if grants.read_roots.is_empty()
+    let pure = grants.read_roots.is_empty()
         && grants.write_roots.is_empty()
         && grants.env_names.is_empty()
-    {
+        && grants.library_grants.is_empty();
+    let output = if pure {
         run_bytecode(&artifact).map_err(|error| error.to_string())?
     } else {
         run_bytecode_with_grants(&artifact, grants).map_err(|error| error.to_string())?
@@ -215,6 +216,43 @@ fn parse_one_grant_flag(
                 );
             }
             grants.env_names.push(name);
+            Ok(true)
+        }
+        "--grant-lib" => {
+            let binding = next_argument(arguments, "--grant-lib KEY=PATH")?;
+            let binding = binding
+                .into_string()
+                .map_err(|_| "grant-lib KEY=PATH must be valid UTF-8".to_owned())?;
+            let Some((key, path)) = binding.split_once('=') else {
+                return Err(
+                    "grant-lib requires KEY=PATH where KEY matches foreign from \"KEY\"".to_owned(),
+                );
+            };
+            if key.is_empty() || key.len() > 128 {
+                return Err("grant-lib KEY must be 1..=128 characters".to_owned());
+            }
+            if !key.bytes().all(
+                |byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-'),
+            ) {
+                return Err(
+                    "grant-lib KEY may contain only letters, digits, underscore, dot, and hyphen"
+                        .to_owned(),
+                );
+            }
+            let path = PathBuf::from(path);
+            if !path.is_file() {
+                return Err(format!(
+                    "grant-lib PATH must be an existing library file: {}",
+                    path.display()
+                ));
+            }
+            let absolute = path.canonicalize().map_err(|error| {
+                format!(
+                    "could not resolve grant-lib path {}: {error}",
+                    path.display()
+                )
+            })?;
+            grants.library_grants.insert(key.to_owned(), absolute);
             Ok(true)
         }
         _ => Ok(false),
@@ -916,6 +954,7 @@ mod tests {
                 read_roots: vec![temporary.path.clone()],
                 write_roots: Vec::new(),
                 env_names: Vec::new(),
+                library_grants: Default::default(),
             },
         )
         .expect("granted run should succeed");
@@ -1080,6 +1119,7 @@ weave main [] -> Whole:
                 read_roots: vec![temporary.path.clone()],
                 write_roots: Vec::new(),
                 env_names: Vec::new(),
+                library_grants: Default::default(),
             },
         );
         assert!(

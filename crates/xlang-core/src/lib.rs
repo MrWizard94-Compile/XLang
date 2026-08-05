@@ -4,15 +4,37 @@
 //! the checked-in seed compiler artifact. Default program compilation uses that
 //! Aether-written seed artifact through the forge ABI (`compile_with_seed`).
 
-#![forbid(unsafe_code)]
+// Workspace default is deny. M21 human-authorized foreign ABI load path lives
+// in `ffi` with a scoped allow; the rest of the crate must not use unsafe.
+#![deny(unsafe_code)]
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 
 mod authoring;
+mod ffi;
 mod modules;
 mod project;
 mod workspace;
+
+/// AETH-encoded marker for M21 foreign host function names.
+const FOREIGN_FUNCTION_NAME_PREFIX: &str = "\u{1e}F\u{1e}";
+
+fn encode_foreign_function_name(user: &str, library: &str, symbol: &str) -> String {
+    format!("{FOREIGN_FUNCTION_NAME_PREFIX}{library}\u{1e}{symbol}\u{1e}{user}")
+}
+
+fn decode_foreign_function_name(name: &str) -> Option<(&str, &str, &str)> {
+    let rest = name.strip_prefix(FOREIGN_FUNCTION_NAME_PREFIX)?;
+    let mut parts = rest.split('\u{1e}');
+    let library = parts.next()?;
+    let symbol = parts.next()?;
+    let user = parts.next()?;
+    if parts.next().is_some() || library.is_empty() || symbol.is_empty() || user.is_empty() {
+        return None;
+    }
+    Some((library, symbol, user))
+}
 
 pub use authoring::{
     apply_structural_edit, diagnostic_json, structural_document_json, StructuralEditError,
@@ -41,7 +63,7 @@ pub use workspace::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.30.0";
+pub const LANGUAGE_VERSION: &str = "0.31.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
@@ -500,12 +522,26 @@ impl Program {
 }
 
 /// A total host weave: external pure service signature with no Aether body.
+///
+/// When [`HostWeave::foreign`] is set, this is an M21 foreign weave: host-side
+/// libloading after an explicit library path grant (not a pure fixture).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostWeave {
     pub name: String,
     pub parameters: Vec<Parameter>,
     pub result: ValueType,
     pub span: Span,
+    /// M21: library key + C symbol; `None` for ordinary pure/grant host weaves.
+    pub foreign: Option<ForeignAbi>,
+}
+
+/// Pinned foreign library key and symbol for M21 pilot weaves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignAbi {
+    /// Logical library name from `from "key"` (not a filesystem path).
+    pub library: String,
+    /// Exact C symbol name from `symbol "name"`.
+    pub symbol: String,
 }
 
 /// An immutable nominal aggregate declaration. Its index in [`Program::records`]
@@ -1482,14 +1518,18 @@ struct NurseryFrame {
     seen: u8,
 }
 
-/// Operator-selected host grants for capability-mediated I/O (M14 / ADR-018).
+/// Operator-selected host grants for capability-mediated I/O (M14 / ADR-018)
+/// and foreign library paths (M21 / ADR-025).
 ///
 /// Empty grants install only pure fixtures (`whole_inc`, `text_extent`).
+/// Foreign weaves require an explicit `library_grants` entry matching `from "key"`.
 #[derive(Clone, Debug, Default)]
 pub struct HostGrantConfig {
     pub read_roots: Vec<std::path::PathBuf>,
     pub write_roots: Vec<std::path::PathBuf>,
     pub env_names: Vec<String>,
+    /// Map from foreign `from "key"` to an absolute library file path (no PATH search).
+    pub library_grants: BTreeMap<String, std::path::PathBuf>,
 }
 
 const HOST_IO_MAX_BYTES: usize = 1_000_000;
@@ -1498,6 +1538,8 @@ const HOST_IO_MAX_BYTES: usize = 1_000_000;
 #[derive(Clone, Default)]
 struct HostServices {
     names: BTreeMap<String, HostServiceKind>,
+    foreign: BTreeMap<String, ForeignService>,
+    library_grants: BTreeMap<String, std::path::PathBuf>,
     read_roots: Vec<std::path::PathBuf>,
     write_roots: Vec<std::path::PathBuf>,
     env_names: BTreeSet<String>,
@@ -1514,6 +1556,13 @@ enum HostServiceKind {
     EnvGet,
 }
 
+#[derive(Clone, Debug)]
+struct ForeignService {
+    library: String,
+    symbol: String,
+    arity: usize,
+}
+
 impl HostServices {
     /// Product pure fixture: only `whole_inc` and `text_extent`.
     fn pure_fixture() -> Self {
@@ -1522,18 +1571,21 @@ impl HostServices {
         names.insert("text_extent".to_owned(), HostServiceKind::TextExtent);
         Self {
             names,
+            foreign: BTreeMap::new(),
+            library_grants: BTreeMap::new(),
             read_roots: Vec::new(),
             write_roots: Vec::new(),
             env_names: BTreeSet::new(),
         }
     }
 
-    /// Pure fixtures plus grant-backed I/O services when roots/names are non-empty.
+    /// Pure fixtures plus grant-backed I/O and optional foreign library grants.
     fn with_grants(config: HostGrantConfig) -> Self {
         let mut services = Self::pure_fixture();
         services.read_roots = config.read_roots;
         services.write_roots = config.write_roots;
         services.env_names = config.env_names.into_iter().collect();
+        services.library_grants = config.library_grants;
         if !services.read_roots.is_empty() {
             services
                 .names
@@ -1564,6 +1616,18 @@ impl HostServices {
         arguments: &[RuntimeValue],
         offset: usize,
     ) -> Result<RuntimeValue, BytecodeError> {
+        // M21: foreign host functions store lib+symbol+user name in the AETH name.
+        if let Some((library, symbol, _user)) = decode_foreign_function_name(name) {
+            let foreign = ForeignService {
+                library: library.to_owned(),
+                symbol: symbol.to_owned(),
+                arity: arguments.len(),
+            };
+            return self.invoke_foreign(&foreign, arguments, offset);
+        }
+        if let Some(foreign) = self.foreign.get(name) {
+            return self.invoke_foreign(foreign, arguments, offset);
+        }
         let Some(kind) = self.names.get(name) else {
             return Err(BytecodeError::new(
                 offset,
@@ -1764,6 +1828,43 @@ impl HostServices {
                 Ok(RuntimeValue::Text(value))
             }
         }
+    }
+
+    fn invoke_foreign(
+        &self,
+        foreign: &ForeignService,
+        arguments: &[RuntimeValue],
+        offset: usize,
+    ) -> Result<RuntimeValue, BytecodeError> {
+        if arguments.len() != foreign.arity {
+            return Err(BytecodeError::new(
+                offset,
+                format!(
+                    "AE-FFI-002: foreign service requires {} Whole argument(s)",
+                    foreign.arity
+                ),
+            ));
+        }
+        let Some(path) = self.library_grants.get(&foreign.library) else {
+            return Err(BytecodeError::new(
+                offset,
+                format!(
+                    "AE-FFI-003: foreign library key {} is not granted; pass --grant-lib {}=<path>",
+                    foreign.library, foreign.library
+                ),
+            ));
+        };
+        if !path.is_file() {
+            return Err(BytecodeError::new(
+                offset,
+                format!(
+                    "AE-FFI-003: foreign library grant for {} is not a file: {}",
+                    foreign.library,
+                    path.display()
+                ),
+            ));
+        }
+        ffi::invoke_whole_symbol(path, &foreign.symbol, arguments, offset)
     }
 }
 
@@ -2170,15 +2271,22 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
     }
     let record_types = record_type_map(&records)?;
     let mut host_weaves = Vec::new();
-    while index < lines.len() && lines[index].content.starts_with("host weave ") {
+    while index < lines.len()
+        && (lines[index].content.starts_with("host weave ")
+            || lines[index].content.starts_with("foreign weave "))
+    {
         let line = lines[index];
         if line.indentation != 0 {
             return Err(CompilerError::new(
                 line.span(1),
-                "AE-HOST-001: a host weave declaration must begin at indentation level zero",
+                "AE-HOST-001: a host or foreign weave declaration must begin at indentation level zero",
             ));
         }
-        host_weaves.push(parse_host_weave_header(line, &record_types)?);
+        if line.content.starts_with("foreign weave ") {
+            host_weaves.push(parse_foreign_weave_header(line, &record_types)?);
+        } else {
+            host_weaves.push(parse_host_weave_header(line, &record_types)?);
+        }
         index += 1;
     }
     let mut weaves = Vec::new();
@@ -2202,16 +2310,22 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
                 "shape declarations must appear after records and before every weave",
             ));
         }
-        if line.content.starts_with("host weave ") {
+        if line.content.starts_with("host weave ") || line.content.starts_with("foreign weave ") {
             return Err(CompilerError::new(
                 line.span(1),
-                "AE-HOST-001: host weave declarations must appear after shapes and before every ordinary weave",
+                "AE-HOST-001: host/foreign weave declarations must appear after shapes and before every ordinary weave",
             ));
         }
         if line.content.starts_with("host ") {
             return Err(CompilerError::new(
                 line.span(1),
                 "AE-HOST-001: host declarations must use the form host weave name [params] -> Type",
+            ));
+        }
+        if line.content.starts_with("foreign ") {
+            return Err(CompilerError::new(
+                line.span(1),
+                "AE-FFI-001: foreign declarations must use foreign weave name [params] -> Type from \"lib\" symbol \"name\"",
             ));
         }
         if line.content.starts_with("import unit ") {
@@ -2320,7 +2434,11 @@ pub fn format_program(program: &Program) -> String {
     }
     for host in &program.host_weaves {
         formatted.push('\n');
-        formatted.push_str("host weave ");
+        if host.foreign.is_some() {
+            formatted.push_str("foreign weave ");
+        } else {
+            formatted.push_str("host weave ");
+        }
         formatted.push_str(&host.name);
         formatted.push_str(" [");
         for (index, parameter) in host.parameters.iter().enumerate() {
@@ -2338,6 +2456,13 @@ pub fn format_program(program: &Program) -> String {
         }
         formatted.push_str("] -> ");
         formatted.push_str(&format_value_type(host.result, &program.records));
+        if let Some(foreign) = &host.foreign {
+            formatted.push_str(" from \"");
+            formatted.push_str(&foreign.library);
+            formatted.push_str("\" symbol \"");
+            formatted.push_str(&foreign.symbol);
+            formatted.push('"');
+        }
         formatted.push('\n');
     }
     for weave in &program.weaves {
@@ -3034,7 +3159,167 @@ fn parse_host_weave_header(
         parameters,
         result,
         span: line.span(1),
+        foreign: None,
     })
+}
+
+fn parse_foreign_weave_header(
+    line: SourceLine<'_>,
+    record_types: &BTreeMap<String, u16>,
+) -> Result<HostWeave, CompilerError> {
+    if line.content.ends_with(':') {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: foreign weaves declare an external signature only and cannot open a body block",
+        ));
+    }
+    let Some(rest) = line.content.strip_prefix("foreign weave ") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: expected foreign weave declaration",
+        ));
+    };
+    if rest.contains(" raises ") {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: foreign weaves are total and cannot raise Whole",
+        ));
+    }
+    let Some(opening) = rest.find('[') else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: foreign weave parameters must be enclosed by square brackets",
+        ));
+    };
+    let name = rest[..opening].trim_end();
+    validate_name(name, line.span(15), "foreign weave name", true)?;
+    let after_opening = &rest[opening + 1..];
+    let Some(closing) = after_opening.find(']') else {
+        return Err(CompilerError::new(
+            line.span(15 + opening + 1),
+            "AE-FFI-001: foreign weave parameter list is missing its closing bracket",
+        ));
+    };
+    let parameters = parse_parameters(&after_opening[..closing], line, record_types)?;
+    let after_parameters = after_opening[closing + 1..].trim();
+    // -> Type from "lib" symbol "sym"
+    let Some(after_arrow) = after_parameters.strip_prefix("-> ") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: foreign weave result must use -> Type from \"lib\" symbol \"name\"",
+        ));
+    };
+    let Some(from_idx) = after_arrow.find(" from \"") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: foreign weave requires from \"library_key\"",
+        ));
+    };
+    let result_text = after_arrow[..from_idx].trim_end();
+    if result_text.is_empty() || result_text.trim() != result_text {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: foreign weave result type must follow -> with a single space",
+        ));
+    }
+    let result = parse_value_type(result_text, line.span(line.content.len()), record_types)?;
+    let after_from = &after_arrow[from_idx + " from \"".len()..];
+    let Some(lib_end) = after_from.find('"') else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: foreign library key string is not closed",
+        ));
+    };
+    let library = &after_from[..lib_end];
+    let after_lib = after_from[lib_end + 1..].trim_start();
+    let Some(after_symbol) = after_lib.strip_prefix("symbol \"") else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: foreign weave requires symbol \"c_name\"",
+        ));
+    };
+    let Some(sym_end) = after_symbol.find('"') else {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: foreign symbol string is not closed",
+        ));
+    };
+    if !after_symbol[sym_end + 1..].trim().is_empty() {
+        return Err(CompilerError::new(
+            line.span(1),
+            "AE-FFI-001: unexpected tokens after foreign symbol",
+        ));
+    }
+    let symbol = &after_symbol[..sym_end];
+    validate_foreign_abi_types(&parameters, result, line.span(1))?;
+    validate_foreign_ident(library, line.span(1), "library key")?;
+    validate_foreign_ident(symbol, line.span(1), "symbol")?;
+    Ok(HostWeave {
+        name: name.to_owned(),
+        parameters,
+        result,
+        span: line.span(1),
+        foreign: Some(ForeignAbi {
+            library: library.to_owned(),
+            symbol: symbol.to_owned(),
+        }),
+    })
+}
+
+fn validate_foreign_ident(value: &str, span: Span, label: &str) -> Result<(), CompilerError> {
+    if value.is_empty() || value.len() > 128 {
+        return Err(CompilerError::new(
+            span,
+            format!("AE-FFI-001: foreign {label} must be 1..=128 characters"),
+        ));
+    }
+    if !value
+        .bytes()
+        .all(|byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-'))
+    {
+        return Err(CompilerError::new(
+            span,
+            format!(
+                "AE-FFI-001: foreign {label} may contain only letters, digits, underscore, dot, and hyphen"
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// M21 pilot: Whole-only parameters and result (no pointers / Text / resources).
+fn validate_foreign_abi_types(
+    parameters: &[Parameter],
+    result: ValueType,
+    span: Span,
+) -> Result<(), CompilerError> {
+    if parameters.len() > ffi::MAX_FOREIGN_WHOLE_ARGS {
+        return Err(CompilerError::new(
+            span,
+            format!(
+                "AE-FFI-001: foreign pilot supports at most {} parameters",
+                ffi::MAX_FOREIGN_WHOLE_ARGS
+            ),
+        ));
+    }
+    for parameter in parameters {
+        if parameter.mode != ParameterMode::Own || parameter.value_type != ValueType::Whole {
+            return Err(CompilerError::new(
+                parameter.span,
+                format!(
+                    "AE-FFI-001: foreign pilot parameter {} must be owned Whole",
+                    parameter.name
+                ),
+            ));
+        }
+    }
+    if result != ValueType::Whole {
+        return Err(CompilerError::new(
+            span,
+            "AE-FFI-001: foreign pilot result must be Whole",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_host_abi_types(
@@ -4465,7 +4750,11 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
 
     let mut signatures = BTreeMap::new();
     for host in &program.host_weaves {
-        validate_host_abi_types(&host.parameters, host.result, host.span)?;
+        if host.foreign.is_some() {
+            validate_foreign_abi_types(&host.parameters, host.result, host.span)?;
+        } else {
+            validate_host_abi_types(&host.parameters, host.result, host.span)?;
+        }
         if host.name == "main" {
             return Err(CompilerError::new(
                 host.span,
@@ -7383,11 +7672,16 @@ fn emit_bytecode_with_resource_plan(
         })?,
     );
     for (host, locals) in compiled_hosts {
-        let name_length = u8::try_from(host.name.len()).map_err(|_| {
+        let encoded_name = if let Some(foreign) = &host.foreign {
+            encode_foreign_function_name(&host.name, &foreign.library, &foreign.symbol)
+        } else {
+            host.name.clone()
+        };
+        let name_length = u8::try_from(encoded_name.len()).map_err(|_| {
             CompilerError::new(host.span, "host weave name exceeds the AETH name limit")
         })?;
         bytecode.push(name_length);
-        bytecode.extend_from_slice(host.name.as_bytes());
+        bytecode.extend_from_slice(encoded_name.as_bytes());
         let parameter_count = u8::try_from(host.parameters.len()).map_err(|_| {
             CompilerError::new(host.span, "host weave has too many parameters for AETH")
         })?;
@@ -14928,6 +15222,99 @@ mod tests {
         );
     }
 
+    fn m21_pilot_library_path() -> std::path::PathBuf {
+        // Prefer CARGO_TARGET_DIR layout; search common debug locations.
+        let target = std::env::var_os("CARGO_TARGET_TMPDIR")
+            .map(std::path::PathBuf::from)
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target")
+            });
+        let name = if cfg!(windows) {
+            "aether_ffi_pilot.dll"
+        } else if cfg!(target_os = "macos") {
+            "libaether_ffi_pilot.dylib"
+        } else {
+            "libaether_ffi_pilot.so"
+        };
+        for dir in [
+            target.join("debug"),
+            target.join("debug/deps"),
+            target.join("debug/examples"),
+        ] {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return candidate.canonicalize().expect("pilot lib path");
+            }
+        }
+        panic!(
+            "M21 pilot library {name} not found under {}; build aether-ffi-pilot first",
+            target.display()
+        );
+    }
+
+    #[test]
+    fn m21_foreign_whole_inc_requires_lib_grant_and_runs() {
+        let source = r#"world foreign_pilot
+
+foreign weave whole_inc_f [value: Whole] -> Whole from "pilot" symbol "aether_whole_inc"
+
+weave main [] -> Whole:
+  yield call whole_inc_f 41
+"#;
+        let compiled = compile_to_bytecode(source).expect("foreign weave should bootstrap-compile");
+        assert!(
+            compiled.program.host_weaves[0].foreign.is_some(),
+            "foreign metadata on host weave"
+        );
+        assert_eq!(
+            format_program(&compiled.program).contains("foreign weave whole_inc_f"),
+            true
+        );
+
+        let denied = run_bytecode(&compiled.bytecode).expect_err("missing grant-lib fails closed");
+        assert!(
+            denied.message.contains("AE-FFI-003") || denied.message.contains("not granted"),
+            "{denied}"
+        );
+
+        let mut grants = HostGrantConfig::default();
+        grants
+            .library_grants
+            .insert("pilot".to_owned(), m21_pilot_library_path());
+        let run = run_bytecode_with_grants(&compiled.bytecode, grants)
+            .expect("granted pilot library should run");
+        assert_eq!(run.exit_code, 42);
+
+        let bad_symbol = r#"world foreign_bad
+
+foreign weave missing [value: Whole] -> Whole from "pilot" symbol "no_such_symbol"
+
+weave main [] -> Whole:
+  yield call missing 1
+"#;
+        let bad = compile_to_bytecode(bad_symbol).expect("compile");
+        let mut grants = HostGrantConfig::default();
+        grants
+            .library_grants
+            .insert("pilot".to_owned(), m21_pilot_library_path());
+        let err = run_bytecode_with_grants(&bad.bytecode, grants)
+            .expect_err("missing symbol fails closed");
+        assert!(
+            err.message.contains("AE-FFI-003") || err.message.contains("missing"),
+            "{err}"
+        );
+
+        let text_param = "world bad\n\nforeign weave t [borrow s: Text] -> Whole from \"pilot\" symbol \"aether_whole_inc\"\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(text_param).expect_err("Text param not in pilot");
+        assert!(
+            error.diagnostic().code == "AE-FFI-001"
+                || error.to_string().contains("AE-FFI-001")
+                || error.to_string().contains("owned Whole"),
+            "{error}"
+        );
+    }
+
     #[test]
     fn host_invoke_still_rejects_resources_at_the_boundary() {
         let source = "world boundary\n\nweave main [] -> Whole:\n  yield 0\n\nweave helper [value: Whole] -> Whole:\n  yield value\n";
@@ -14999,6 +15386,7 @@ mod tests {
                 read_roots: vec![root.clone()],
                 write_roots: Vec::new(),
                 env_names: Vec::new(),
+                library_grants: Default::default(),
             },
         )
         .expect("granted read_text should succeed");
@@ -15014,6 +15402,7 @@ mod tests {
                 read_roots: vec![root.clone()],
                 write_roots: Vec::new(),
                 env_names: Vec::new(),
+                library_grants: Default::default(),
             },
         )
         .expect_err("path escape must fail");
@@ -15033,6 +15422,7 @@ mod tests {
                 read_roots: vec![root.clone()],
                 write_roots: Vec::new(),
                 env_names: Vec::new(),
+                library_grants: Default::default(),
             },
         )
         .expect_err("absolute guest path must fail");
@@ -15061,6 +15451,7 @@ mod tests {
                 read_roots: Vec::new(),
                 write_roots: vec![root.clone()],
                 env_names: Vec::new(),
+                library_grants: Default::default(),
             },
         )
         .expect("granted write_text should succeed");
@@ -15081,6 +15472,7 @@ mod tests {
                 read_roots: Vec::new(),
                 write_roots: Vec::new(),
                 env_names: vec!["OTHER_NAME".to_owned()],
+                library_grants: Default::default(),
             },
         )
         .expect_err("ungranted env name fails");
@@ -15091,6 +15483,7 @@ mod tests {
                 read_roots: Vec::new(),
                 write_roots: Vec::new(),
                 env_names: vec!["AETHER_M14_TEST_VAR".to_owned()],
+                library_grants: Default::default(),
             },
         )
         .expect("granted env_get succeeds");
@@ -15114,6 +15507,7 @@ mod tests {
                 read_roots: vec![root.clone()],
                 write_roots: Vec::new(),
                 env_names: Vec::new(),
+                library_grants: Default::default(),
             },
         )
         .expect("read_bytes under grant");
@@ -15131,6 +15525,7 @@ mod tests {
                 read_roots: vec![root.clone()],
                 write_roots: Vec::new(),
                 env_names: Vec::new(),
+                library_grants: Default::default(),
             },
         )
         .expect_err("oversize read fails");

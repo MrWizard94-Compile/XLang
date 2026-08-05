@@ -1,11 +1,11 @@
 # Aether in XLang
 
 This repository hosts Aether, a new local-first language and CLI toolchain for
-deterministic, AI-primary authorship. Aether toolchain package **0.30.0**
+deterministic, AI-primary authorship. Aether toolchain package **0.31.0**
 (language surface **0.11**, AETH **v11**) parses only Aether source, emits
 deterministic AETH bytecode, verifies every artifact, and runs it in the Aether
 VM. It never translates source to Rust, C, JavaScript, LLVM, or another
-language. Verified AETH v4–v10 artifacts remain compatible inputs with their
+language. Verified AETH v4–v10 artifacts remain compatibility inputs with their
 original meanings; new compilation emits v11.
 
 **Executable contract:** [MANIFEST.md](MANIFEST.md) · **Claims:** [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) · **Law:** [AGENTS.md](AGENTS.md)
@@ -27,12 +27,13 @@ original meanings; new compilation emits v11.
 
 Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
 M6 layout, M7 nurseries, and M8 pure host weaves. Toolchain packages through
-**0.30** add offline projects/modules/LSP, grant-backed host I/O, comptime name
-chaining, resource+handle, `aether test` / `aether project test` (optional
-grants and structured reports), workspaces, stdlib layer 1 (pure
-Whole/Truth/Text), cross-package imports, product-path `release`, and
-nursery×resource Policy A. See [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
-[docs/AETHER_0.30.md](docs/AETHER_0.30.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+**0.31** add offline projects/modules/LSP, grant-backed host I/O, a **bounded
+foreign weave pilot** (Whole-only, explicit library grant; not sandboxed),
+comptime name chaining, resource+handle, `aether test` / `aether project test`
+(optional grants and reports), workspaces, stdlib layer 1, cross-package
+imports, product-path `release`, and nursery×resource Policy A. See
+[docs/AETHER_0.11.md](docs/AETHER_0.11.md),
+[docs/AETHER_0.31.md](docs/AETHER_0.31.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

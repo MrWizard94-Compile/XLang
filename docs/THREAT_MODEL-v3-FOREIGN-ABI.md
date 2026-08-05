@@ -1,6 +1,6 @@
 # Threat Model v3 — foreign / C ABI pilot (draft for T-FFI)
 
-**Status:** Draft — **not product freeze until ADR-025 Accepted and human confirm**  
+**Status:** Accepted for pilot residual risk (human authorize 2026-08-04); product pilot 0.31  
 **Date:** 2026-08-04  
 **Supersedes for FFI only:** does not replace TP pure freeze or host I/O v2  
 

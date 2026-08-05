@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/xlang-core",
+    "crates/aether-ffi-pilot",
     "apps/xlang-cli",
 ]
 resolver = "2"
@@ -12,7 +13,9 @@ license = "UNLICENSED"
 authors = ["Wizard Productions AI Studio"]
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# Default deny (not forbid) so the human-authorized M21 FFI load path in
+# aether-core may use a tightly scoped allow. All other crates keep deny.
+unsafe_code = "deny"
 unused_must_use = "deny"
 
 [workspace.lints.clippy]

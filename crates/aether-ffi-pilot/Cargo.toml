@@ -1,0 +1,16 @@
+[package]
+name = "aether-ffi-pilot"
+version = "0.30.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Tiny C-ABI pilot library for Aether M21 foreign weave tests (not a product dependency)."
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+name = "aether_ffi_pilot"
+
+[lints]
+workspace = true

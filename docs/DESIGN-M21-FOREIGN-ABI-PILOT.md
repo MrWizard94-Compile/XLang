@@ -1,37 +1,60 @@
 # M21 Design: narrow foreign ABI pilot (T-FFI)
 
-**Status:** Design only — **blocked on threat model v3 acceptance + human implement go**  
+**Status:** Accepted design — **implemented pilot in package 0.31.0** after human
+authorize (ADR-025 residual risk)  
 **Date:** 2026-08-04  
 **Decision record:** [ADR-025](ADR-025-m21-foreign-abi-pilot.md)  
 **Threat:** [THREAT_MODEL-v3-FOREIGN-ABI.md](THREAT_MODEL-v3-FOREIGN-ABI.md)  
+**Authorize:** [HUMAN-AUTHORIZE-FFI.md](HUMAN-AUTHORIZE-FFI.md)  
 
 ---
 
 ## 1. Purpose
 
-Define the **smallest** typed foreign call surface beyond pure M8/M14 host
-weaves — without C header ingestion.
+Smallest typed foreign call surface beyond pure M8/M14 host weaves — without C
+header ingestion.
 
-## 2. Proposed source form (future)
+## 2. Source form (pilot)
 
 ```aether
-foreign weave c_strlen [borrow s: Text] -> Whole from "libc" symbol "strlen"
+foreign weave whole_inc_f [value: Whole] -> Whole from "pilot" symbol "aether_whole_inc"
 ```
 
-## 3. Non-goals (v1)
+- `from "key"` is a **logical** library key (not a path).  
+- `symbol "name"` is a pinned C symbol.  
+- Pilot ABI: 0..=4 owned `Whole` parameters, `Whole` result.
 
-Header parse, bindgen, callbacks into Aether, threads, async.
+## 3. Host grant
 
-## 4. Stop conditions
+```text
+aether run out.aeth --grant-lib pilot=/absolute/or/relative/file.dll
+```
+
+- KEY must match `from "key"`.  
+- PATH must be an **existing library file** (canonicalize; no PATH search).  
+- Missing grant → `AE-FFI-003`.  
+
+## 4. Compile / seed honesty
+
+- Bootstrap parses and emits foreign weaves (`compile --bootstrap`).  
+- Default seed-hosted `compile` fails closed until seed dual-compare for foreign
+  is proven (seed does not parse `foreign weave` yet).  
+
+## 5. Runtime
+
+1. Verify AETH.  
+2. On `HOST_CALL` to a foreign-encoded host function, require library grant.  
+3. `libloading` load + symbol resolve + C call (scoped `unsafe` in `ffi` module).  
+
+## 6. Non-goals (v1)
+
+Header parse, bindgen, callbacks into Aether, threads, async, Text/Bytes C ABI.
+
+## 7. Stop conditions
 
 - libloading without explicit path grant  
-- void* as ambient escape  
+- void* ambient escape  
 - Claiming memory safety of foreign code  
-
-## 5. Implementation
-
-**None in this delivery.** Code requires ADR-025 Accepted **and** explicit
-human “implement FFI” instruction after threat review.
 
 ---
 
