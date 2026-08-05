@@ -60,9 +60,11 @@ cross internal weave calls, and remain outside the primitive-only host invoke
 ABI. Root bindings receive fixed slots; nested blocks may revise but cannot
 introduce bindings.
 
-The bounded M2 surface adds exactly one positive `arena` root binding in
-`main`, `buffer Whole` / `buffer Truth` owner placeholders, and operation-scoped
-`access`. `allocate`, resource `append`, and `at` appear only as terminal
+The bounded M2 surface adds positive `arena N` root bindings (originally
+main-only; **M19d / package 0.32** allows one arena per **total** weave),
+`buffer Whole` / `buffer Truth` owner placeholders, and operation-scoped
+`access`. AETH header capacity is the **sum** of all arena declarations
+(≤ 1_000_000). `allocate`, resource `append`, and `at` appear only as terminal
 closed `choose` conditions with explicit bright/dim branches. Allocation and
 append restore the same moved mutable Buffer owner; lookup updates its mutable
 copy destination only when bright. Resource owners cannot be revised or weave

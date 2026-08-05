@@ -1,9 +1,9 @@
 # Aether North Star
 
-**Status:** Human-approved product direction; not a language-version contract
-**Date:** 2026-08-04 (Aether 0.10 M7 update)
+**Status:** Human-approved product direction; not a language-version contract  
+**Date:** 2026-08-05 (pins refreshed for package 0.32)  
 **Current executable contract:** [MANIFEST.md](../MANIFEST.md) and
-[AETHER_0.10.md](AETHER_0.10.md)
+[AETHER_0.32.md](AETHER_0.32.md) (language keyword surface remains **0.11** forms)
 
 ## Vision
 
@@ -21,10 +21,10 @@ execution, and capability-constrained integration.
 
 | Level | What it means | Authoritative documents |
 | --- | --- | --- |
-| **Implemented Aether 0.10** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.10.md](AETHER_0.10.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md) |
-| **North-star direction** | A planned design hypothesis and ordered research program. It is not an implementation claim or syntax promise. | This document, [CORE_CLAIMS.md](CORE_CLAIMS.md), [ROADMAP.md](ROADMAP.md), and [research/](research/) |
+| **Implemented Aether (package 0.32)** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.32.md](AETHER_0.32.md), [AETHER_0.11.md](AETHER_0.11.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md), [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md) |
+| **North-star direction** | A planned design hypothesis and ordered research program. It is not an implementation claim or syntax promise. | This document, [CORE_CLAIMS.md](CORE_CLAIMS.md), [ROADMAP.md](ROADMAP.md), [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md), and [research/](research/) |
 
-No future-facing paragraph in this document changes Aether 0.10 behavior. A
+No future-facing paragraph in this document changes the executable contract. A
 feature becomes part of the product only when its specification, ADR where
 material, implementation, seed proof, tests, documentation, and constitution
 gate all agree.
@@ -79,20 +79,24 @@ flowchart LR
     Semantic -. future, separately approved .-> Interop["Narrow foreign/host interfaces"]
 ~~~
 
-The current 0.10 implementation covers a deliberately small portion of this:
-canonical source formatting, bounded value semantics, a bootstrap canonical-AST
-path, AETH v4–v9 compatibility and v10 verification, seed-hosted product
-compilation, a narrow forge ABI, a capability-free VM, one explicit bounded
-arena with closed Whole/Truth buffer outcomes, dual-layout Whole tables, and
-cooperative structured nurseries. M3–M7 add local `aether.ast/v5` structure,
-diagnostic codes/spans, bounded top-level `aether.edit/v5` operations, one
-abortive terminal `Error[Whole]` route, one fixed-budget literal `comptime bind`
-evaluator, explicit layout tables, and lexical `together`/`spawn` nurseries;
-see [AETHER_AUTHORING_PROTOCOL_v5.md](AETHER_AUTHORING_PROTOCOL_v5.md) and
-[AETHER_0.10.md](AETHER_0.10.md). It does **not** yet provide general typed
-effects or resumptions, OS-thread parallelism, generic type parameters,
-automatic AoS→SoA rewriting, C-header ingestion, a native backend, first-class
-resource outcomes, Buffer weave results, or fine-grained arbitrary-node edits.
+The **implemented product (package 0.32)** covers a much larger portion of the
+stack than early pilots, while remaining deliberately bounded:
+
+- Seed-hosted product compile + dual-compare for the documented corpus  
+- AETH **v11** emit; verified **v4–v10** compatibility inputs  
+- Bounded resources (multi-weave total arenas under M19d), dual-layout tables,
+  cooperative nurseries, `Error[Whole]`, literal + chained comptime  
+- Pure host pilot, grant-backed host I/O (M14), Whole-only foreign pilot (M21)  
+- Authoring `aether.ast/edit/diagnostic` **v7**; offline project/workspace/test/LSP  
+- Stdlib layer 1; offline cross-package import  
+
+See [AETHER_0.32.md](AETHER_0.32.md), [AETHER_AUTHORING_PROTOCOL_v7.md](AETHER_AUTHORING_PROTOCOL_v7.md),
+and [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md).
+
+It does **not** yet provide general typed effects/resumptions, OS-thread
+parallelism, generic type parameters, automatic AoS→SoA rewriting, C-header
+ingestion, a native backend, first-class resource outcomes, Buffer weave
+results, mid-frame cancel destroy, network registries, or ambient guest I/O.
 
 ## Explicit non-goals and constraints
 

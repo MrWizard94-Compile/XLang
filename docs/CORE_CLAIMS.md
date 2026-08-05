@@ -1,7 +1,7 @@
 # Aether Core Claims Register
 
 **Status:** Claim-control document
-**Date:** 2026-08-04 (Aether 0.32 / M19d multi-weave arenas + M21 foreign pilot)
+**Date:** 2026-08-05 (Aether 0.32 / M19d multi-weave arenas + M21 foreign pilot; DOC-SYNC honesty)
 **Purpose:** Keep implemented facts, accepted directions, and research hypotheses
 separate so the project can be ambitious without overstating evidence.
 

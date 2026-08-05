@@ -1,17 +1,20 @@
-# ADR-032: nursery Policy B cancel-destroy is design-only
+# ADR-032: nursery Policy B cancel-destroy (historical design gate)
 
-**Status:** Accepted (direction) — **implementation blocked**  
+**Status:** Accepted (direction) — **superseded for cooperative product by ADR-036 (0.32)**  
 **Date:** 2026-08-04  
 **Related Rule IDs:** `CONST-DEP-001`, `DOC-ADR-001`, `RND-INVAR-001`  
-**Related:** ADR-023, ADR-027, ADR-028  
+**Related:** ADR-023, ADR-027, ADR-028, ADR-035, ADR-036  
 
 ## Decision
 
 1. Adopt [DESIGN-M19C-POLICY-B-CANCEL-DESTROY.md](DESIGN-M19C-POLICY-B-CANCEL-DESTROY.md).  
-2. **Do not implement** Policy B product code in this cycle.  
+2. Historical: do **not** implement general free-on-cancel product theater.  
 3. Record honest preconditions (resourceful spawn callees / ownership transfer).  
-4. Keep M19b Policy A as the product nursery×resource rule.  
-5. No free-on-raise.
+4. Keep M19b Policy A until M19d Policy A+.  
+5. No free-on-raise.  
+6. **Follow-on:** ADR-035 admits multi-weave arenas; ADR-036 claims only
+   **cooperative** Policy B (unstarted cancel / return-end). Mid-frame cancel
+   remains out of product scope.
 
 ## Rationale
 

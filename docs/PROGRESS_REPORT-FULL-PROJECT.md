@@ -488,18 +488,20 @@ Pick **one track** at a time (ADR-014):
 4. **Authoring/LSP depth** — still offline; seed remains compile authority.  
 5. **Human law forks** — F-NATIVE / F-REGISTRY only with explicit acceptance.
 
-### 14.3 DOC-SYNC debt (known soft spots)
+### 14.3 DOC-SYNC debt
 
-Some historical docs still lag narrative freshness (e.g. NORTH_STAR “current
-executable contract” still cites older pins in places; maturity roadmap baseline
-tables still describe early 0.13-era scorecards). **Product truth** is always:
+Primary product pins were refreshed in the 2026-08-05 DOC-SYNC honesty pass
+(NORTH_STAR, maturity baseline scorecard, MANIFEST M2 arena wording, Agents
+portfolio row, ADR-032 supersession note). **Product truth** remains:
 
 1. `MANIFEST.md`  
 2. `AGENTS.md` stack pins  
 3. `CORE_CLAIMS.md`  
 4. Latest `AETHER_0.32.md` + relevant ADR/matrix  
+5. This progress report  
 
-This progress report is synchronized to package **0.32** / HEAD `c23f6dd`.
+Any remaining historical AETHER_0.x “current package” footers on older contracts
+are intentional history; current package is always the highest `AETHER_0.y`.
 
 ---
 

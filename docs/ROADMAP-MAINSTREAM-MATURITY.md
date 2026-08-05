@@ -2,9 +2,10 @@
 
 **Document ID:** ROADMAP-MAINSTREAM-001  
 **Status:** Strategic plan (Level 4 product doc) — **not** a promise of schedule or superiority  
-**Date:** 2026-08-04  
-**Baseline product:** package **0.13.0** / language surface **0.11** / AETH **v11**  
-**Branch pin (at authoring):** `codex/xlang-local-first-studio`  
+**Date:** 2026-08-05 (baseline refreshed to package 0.32)  
+**Baseline product:** package **0.32.0** / language surface **0.11** forms / AETH **v11**  
+**Branch pin:** `codex/xlang-local-first-studio`  
+**Full status:** [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md)  
 **Binding law:** AGENTS Constitution + project `AGENTS.md` + `MANIFEST.md`  
 **Process law:** SOP phases 1–10 per increment (`SOP-PHASE-001`, `SOP-GATE-001`)  
 **Portfolio law:** [ADR-014](ADR-014-post-m10-track-portfolio.md)  
@@ -79,46 +80,49 @@ Constitution). Calendar time expands with review rigor and seed self-host cost.
 
 ### 1.1 Product pin
 
-| Layer | Today |
+| Layer | Today (package 0.32) |
 | --- | --- |
-| Language surface | **0.11** |
-| Toolchain package | **0.13.0** |
+| Language surface | **0.11** keyword forms (+ M19/M21 toolchain semantics) |
+| Toolchain package | **0.32.0** |
 | Artifact | AETH **v11** default; v4–v10 compatibility inputs |
-| Compile path | Seed-hosted product; Rust bootstrap rebuild/diagnostics |
-| Runtime | Aether VM; pure host fixtures only |
-| Projects | Multi-unit offline integrity; **independent** units (no modules) |
-| Authoring | Top-level structural AST/edit/diagnostic **v6** |
+| Compile path | Seed-hosted product; Rust bootstrap rebuild/diagnostics/dual-compare |
+| Runtime | Aether VM; pure fixtures + optional grant I/O + optional grant-lib FFI |
+| Projects | Multi-unit + modules + offline workspace + cross-package import |
+| Authoring | Structural AST/edit/diagnostic **v7**; bounded offline LSP |
 | Distribution | Local technical preview package + checksums |
-| Ecosystem | None outside repo |
+| Ecosystem | Offline stdlib layer 1; no network registry |
 
 ### 1.2 Maturity scorecard vs mainstream (0–5 scale)
 
 Scale: **0** absent · **1** research/spike · **2** pilot proven · **3** usable for
 small real projects · **4** competitive for domain · **5** mainstream-class.
 
-| Dimension | Rust | C++ | Go | Java | Python | TS | **Aether now** | Target end-state |
+Scores below are **honest 0.32 self-assessment** (not peer marketing). Historical
+0.13-era scores were lower on modules/I/O/FFI/tooling.
+
+| Dimension | Rust | C++ | Go | Java | Python | TS | **Aether now (0.32)** | Target end-state |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Multi-file modules | 5 | 5 | 5 | 5 | 5 | 5 | **1** (files only) | **4–5** |
-| Type system depth | 5 | 5 | 3 | 4 | 2–3 | 4 | **2** (small typed surface) | **4** |
-| Memory/resource model | 5 | 3–4 | 2 | 2 | 1 | 1 | **2** (bounded pilot) | **4** |
-| Concurrency | 5 | 4 | 5 | 4 | 3 | 3 | **2** (cooperative nursery) | **3–4** |
-| Error/effect model | 4 | 3 | 3 | 3 | 2 | 3 | **2** (Error[Whole]) | **3–4** |
-| Comptime/meta | 4 | 5 | 2 | 2 | 2 | 3 | **1–2** (literal only) | **3** |
-| Host I/O | 5 | 5 | 5 | 5 | 5 | 5 | **0–1** (pure fixtures) | **4** |
-| FFI / interop | 5 | 5 | 4 | 4 | 4 | 3 | **1** | **3–4** |
-| Package ecosystem | 5 | 4 | 5 | 5 | 5 | 5 | **0** | **3–4** offline-first |
-| LSP / IDE | 5 | 4 | 5 | 5 | 5 | 5 | **0–1** | **4** |
-| Test tooling | 5 | 3 | 5 | 5 | 5 | 5 | **1** (cargo-side) | **4** |
-| Build/package graph | 5 | 4 | 5 | 5 | 5 | 5 | **2** (offline project) | **4** |
-| Perf / deploy | 5 | 5 | 4 | 4 | 2 | 3 | **1** (small VM) | **3–4** *or* 5 if law allows native |
-| Spec stability | 4 | 3 | 4 | 5 | 3 | 4 | **2** | **4** |
+| Multi-file modules | 5 | 5 | 5 | 5 | 5 | 5 | **3** (modules + workspace offline) | **4–5** |
+| Type system depth | 5 | 5 | 3 | 4 | 2–3 | 4 | **2–3** (small typed surface) | **4** |
+| Memory/resource model | 5 | 3–4 | 2 | 2 | 1 | 1 | **3** (bounded multi-weave arenas) | **4** |
+| Concurrency | 5 | 4 | 5 | 4 | 3 | 3 | **2–3** (cooperative nursery) | **3–4** |
+| Error/effect model | 4 | 3 | 3 | 3 | 2 | 3 | **2–3** (Error[Whole]) | **3–4** |
+| Comptime/meta | 4 | 5 | 2 | 2 | 2 | 3 | **2** (literal + name chain) | **3** |
+| Host I/O | 5 | 5 | 5 | 5 | 5 | 5 | **3** (grant-mediated) | **4** |
+| FFI / interop | 5 | 5 | 4 | 4 | 4 | 3 | **2** (Whole-only pilot) | **3–4** |
+| Package ecosystem | 5 | 4 | 5 | 5 | 5 | 5 | **2** (offline stdlib + xpkg) | **3–4** offline-first |
+| LSP / IDE | 5 | 4 | 5 | 5 | 5 | 5 | **3** (bounded offline LSP) | **4** |
+| Test tooling | 5 | 3 | 5 | 5 | 5 | 5 | **3** (`aether test` / project test) | **4** |
+| Build/package graph | 5 | 4 | 5 | 5 | 5 | 5 | **3** (project + workspace offline) | **4** |
+| Perf / deploy | 5 | 5 | 4 | 4 | 2 | 3 | **1–2** (small VM) | **3–4** *or* 5 if law allows native |
+| Spec stability | 4 | 3 | 4 | 5 | 3 | 4 | **3** (versioned AETH/docs) | **4** |
 | Artifact verification | 2–3 | 1–2 | 2 | 2 | 1 | 2 | **4–5** (Aether strength) | **5** (keep lead) |
-| AI structural authoring | 1–2 | 1 | 1 | 1 | 1 | 2 | **3** (top-level) | **5** (north star) |
+| AI structural authoring | 1–2 | 1 | 1 | 1 | 1 | 2 | **3** (v7 structure/edits) | **5** (north star) |
 | Local-first / no cloud authority | 3 | 3 | 3 | 2 | 2 | 2 | **5** | **5** (keep) |
 
-**Interpretation:** Aether today is a **high-trust, low-surface pilot**. The
-journey to “mainstream level” is primarily **surface, systems, tooling, and
-ecosystem** expansion while **preserving** verification and capability discipline.
+**Interpretation:** Aether 0.32 is a **high-trust offline systems + AI-tooling
+pilot** usable for small real projects in-bounds. Peer-class maturity still
+requires ecosystem depth, language surface growth, and optional law forks.
 
 ### 1.3 Asymmetric advantages to preserve (never trade away)
 

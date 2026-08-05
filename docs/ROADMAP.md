@@ -26,7 +26,9 @@ Human-approved under AGENTS Constitution + SOP:
 Threat model freeze: [THREAT_MODEL-TECHNICAL-PREVIEW.md](THREAT_MODEL-TECHNICAL-PREVIEW.md).  
 Package helpers: `tools/package-preview.ps1`, `tools/verify-preview.ps1`.
 
-**Out of scope unless new ADR:** C/FFI, native/LLVM, network registry, full LSP, ambient host I/O.
+**Out of scope unless new ADR / law fork:** expanded FFI beyond M21 Whole pilot,
+native/LLVM, network registry, ambient host I/O, mid-frame cancel destroy.
+(Bounded LSP, grant I/O, and Whole foreign pilot are already product.)
 
 ## Current baseline
 
@@ -314,7 +316,9 @@ Every implementation increment must provide, as applicable:
 ## Immediate next action
 
 Package **0.32** ships M19d multi-weave arenas + cooperative Policy B bounds, with
-M21 foreign pilot already on the seed path. **Blocked without new ADR / law:**
-mid-frame cancel destroy, expanded FFI signatures, native/LLVM, network registry.
+M21 foreign pilot already on the seed path. Institutional progress report and
+DOC-SYNC honesty pass (2026-08-05) refresh NORTH_STAR / maturity baseline pins.
+**Blocked without new ADR / law:** mid-frame cancel destroy, expanded FFI
+signatures, native/LLVM, network registry.
 **Lawful next designs:** deeper T-CT, offline package polish, or mid-frame cancel
 (only with a full cancel model ADR) — each with design→ADR→matrix.
