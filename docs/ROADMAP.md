@@ -84,11 +84,13 @@ invalid-source diagnostic parity.
 | M17 | Offline test runner (T-TEST) | M9, seed compile | `aether test` discovers `*_test.ae`, seed-compiles, pure-runs; pass = exit 0. | Matrix green; empty discovery fails closed; examples/tests pass. | **Implemented in package 0.22 (ADR-021)** |
 | M17b | Project test units | M17, M11 | `role: test` + `aether project test` elaborates each test entry with libs. | Matrix green; zero tests fail closed; stdlib import test. | **Implemented in package 0.28 (ADR-030)** |
 | M17c | Grants-in-tests | M17, M14 | Optional `--grant-*` on `aether test` / `project test`; default pure. | Matrix green; host-io grant test. | **Implemented in package 0.29 (ADR-031)** |
+| M17d | Structured test reports | M17 | Optional `--report` JSON + `--report-junit` XML. | Matrix green; CLI unit tests. | **Implemented in package 0.30 (ADR-033)** |
 | M18 | Offline workspace (T-PKG) | M9–M11 | `aether.workspace/v1` multi-package path graph + `workspace verify`; acyclic `depends_on`; nested project verify. | Matrix green; cycle/escape negatives; no registry/linking claim. | **Implemented in package 0.23 (ADR-022)** |
 | M19 | Deeper T-RX | M16 | Destruction model before abortive+resource / nursery+resource. | Design only. | **Direction ADR-023** |
 | M19a | Explicit `release` | M19 | `release name` + OP_RELEASE; raise-after-cleanup. | Matrix green; seed≡bootstrap for release corpus. | **Implemented in package 0.25 (ADR-027)** |
 | M19b | Nursery × resource Policy A | M19a, M7 | Parent may own resources with pure spawn callees; nursery site allows live owners, not access loans. | Matrix green; seed≡bootstrap mix corpus. | **Implemented in package 0.26 (ADR-028)** |
 | M19c | Nursery Policy B cancel-destroy | M19b, M2 expansion | Design for cancel-time destroy of spawn-local owners. | Preconditions open (no resourceful spawn callees yet). | **Design only (ADR-032); impl blocked** |
+| M19d | Resourceful-spawn precondition | M19c, M2 | Design minimum ownership model before Policy B code. | Design gate only. | **Design only (ADR-034); impl blocked** |
 | M20 | Stdlib layer 0 | M11 | Pure Whole helper modules under `stdlib/`. | Project build + tests. | **Implemented in package 0.24 (ADR-024)** |
 | M20b | Stdlib layer 1 | M20 | Expand pure Whole helpers; add Truth + Text modules; multi-import demo. | Project build dual-compare; `aether test`; exit 42 demo. | **Implemented in package 0.27 (ADR-029)** |
 | M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Threat+design only. | **Designed (ADR-025); implementation blocked** |
@@ -311,6 +313,6 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Package **0.29** ships M17c optional grants on tests; M19c Policy B is design-only.
-FFI remains blocked without human authorize (ADR-025). Native/registry remain
-law-fork gated.
+Package **0.30** ships M17d structured test reports. M19c/M19d Policy B path is
+design-only. FFI remains blocked without the human authorize phrase in
+`docs/HUMAN-AUTHORIZE-FFI.md`. Native/registry remain law-fork gated.

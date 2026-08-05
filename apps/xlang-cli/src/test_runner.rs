@@ -213,3 +213,115 @@ pub fn print_report(report: &TestReport) {
         report.failed()
     );
 }
+
+/// Native structured report schema id (M17d).
+pub const TEST_REPORT_SCHEMA: &str = "aether.test-report/v1";
+
+fn json_escape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 8);
+    for ch in value.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\u{:04x}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn xml_escape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 8);
+    for ch in value.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Serialize the suite as `aether.test-report/v1` JSON (M17d).
+#[must_use]
+pub fn format_report_json(report: &TestReport) -> String {
+    let mut body = String::new();
+    body.push_str("{\n");
+    body.push_str(&format!(
+        "  \"schema\": \"{TEST_REPORT_SCHEMA}\",\n  \"language\": \"{LANGUAGE_NAME}\",\n  \"version\": \"{LANGUAGE_VERSION}\",\n"
+    ));
+    body.push_str(&format!(
+        "  \"passed\": {},\n  \"failed\": {},\n  \"results\": [\n",
+        report.passed(),
+        report.failed()
+    ));
+    for (index, result) in report.results.iter().enumerate() {
+        if index > 0 {
+            body.push_str(",\n");
+        }
+        let path = json_escape(&result.path.display().to_string());
+        let detail = json_escape(&result.detail);
+        let ok = if result.ok { "true" } else { "false" };
+        body.push_str(&format!(
+            "    {{\"path\": \"{path}\", \"ok\": {ok}, \"detail\": \"{detail}\"}}"
+        ));
+    }
+    body.push_str("\n  ]\n}\n");
+    body
+}
+
+/// Serialize the suite as a bounded JUnit-compatible XML document (M17d).
+#[must_use]
+pub fn format_report_junit(report: &TestReport) -> String {
+    let mut body = String::new();
+    body.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    body.push_str(&format!(
+        "<testsuite name=\"aether-test\" tests=\"{}\" failures=\"{}\" errors=\"0\">\n",
+        report.results.len(),
+        report.failed()
+    ));
+    for result in &report.results {
+        let name = xml_escape(&result.path.display().to_string());
+        if result.ok {
+            body.push_str(&format!("  <testcase name=\"{name}\"/>\n"));
+        } else {
+            let message = xml_escape(&result.detail);
+            body.push_str(&format!(
+                "  <testcase name=\"{name}\">\n    <failure message=\"{message}\"/>\n  </testcase>\n"
+            ));
+        }
+    }
+    body.push_str("</testsuite>\n");
+    body
+}
+
+/// Write structured reports to explicit paths (M17d). Parent dirs must exist.
+pub fn write_structured_reports(
+    report: &TestReport,
+    json_path: Option<&Path>,
+    junit_path: Option<&Path>,
+) -> Result<(), String> {
+    if let Some(path) = json_path {
+        fs::write(path, format_report_json(report)).map_err(|error| {
+            format!(
+                "could not write JSON test report {}: {error}",
+                path.display()
+            )
+        })?;
+    }
+    if let Some(path) = junit_path {
+        fs::write(path, format_report_junit(report)).map_err(|error| {
+            format!(
+                "could not write JUnit test report {}: {error}",
+                path.display()
+            )
+        })?;
+    }
+    Ok(())
+}

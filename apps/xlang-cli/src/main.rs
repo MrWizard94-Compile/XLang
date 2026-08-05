@@ -19,7 +19,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* same as run (M17c).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* same as run (M17c).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources.\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants install capability-mediated host I/O (M14): relative guest paths under grant roots only; empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics)."
     );
 }
 
@@ -237,25 +237,72 @@ fn parse_run_grants(
     Ok(grants)
 }
 
-/// Parse remaining CLI args as test paths and optional M17c grants (flags may interleave).
+#[derive(Default)]
+struct TestCliOptions {
+    paths: Vec<PathBuf>,
+    grants: HostGrantConfig,
+    report_json: Option<PathBuf>,
+    report_junit: Option<PathBuf>,
+}
+
+/// Parse remaining CLI args as test paths, optional M17c grants, and M17d reports.
 fn parse_test_args(
     arguments: &mut impl Iterator<Item = OsString>,
-) -> Result<(Vec<PathBuf>, HostGrantConfig), String> {
-    let mut paths = Vec::new();
+) -> Result<TestCliOptions, String> {
+    let mut options = TestCliOptions::default();
+    while let Some(argument) = arguments.next() {
+        let text = argument.to_string_lossy().into_owned();
+        if parse_one_grant_flag(&text, arguments, &mut options.grants)? {
+            continue;
+        }
+        match text.as_str() {
+            "--report" => {
+                let path = next_argument(arguments, "--report file")?;
+                options.report_json = Some(PathBuf::from(path));
+            }
+            "--report-junit" => {
+                let path = next_argument(arguments, "--report-junit file")?;
+                options.report_junit = Some(PathBuf::from(path));
+            }
+            other if other.starts_with("--") => {
+                return Err(format!(
+                    "test accepts paths, optional --grant-*, --report, and --report-junit; unknown flag {other}"
+                ));
+            }
+            _ => options.paths.push(PathBuf::from(argument)),
+        }
+    }
+    Ok(options)
+}
+
+fn parse_project_test_tail(
+    arguments: &mut impl Iterator<Item = OsString>,
+) -> Result<(HostGrantConfig, Option<PathBuf>, Option<PathBuf>), String> {
     let mut grants = HostGrantConfig::default();
+    let mut report_json = None;
+    let mut report_junit = None;
     while let Some(argument) = arguments.next() {
         let text = argument.to_string_lossy().into_owned();
         if parse_one_grant_flag(&text, arguments, &mut grants)? {
             continue;
         }
-        if text.starts_with("--") {
-            return Err(format!(
-                "test accepts paths and optional --grant-read/--grant-write/--grant-env; unknown flag {text}"
-            ));
+        match text.as_str() {
+            "--report" => {
+                let path = next_argument(arguments, "--report file")?;
+                report_json = Some(PathBuf::from(path));
+            }
+            "--report-junit" => {
+                let path = next_argument(arguments, "--report-junit file")?;
+                report_junit = Some(PathBuf::from(path));
+            }
+            other => {
+                return Err(format!(
+                    "project test accepts optional --grant-*, --report, and --report-junit; unknown flag {other}"
+                ));
+            }
         }
-        paths.push(PathBuf::from(argument));
     }
-    Ok((paths, grants))
+    Ok((grants, report_json, report_junit))
 }
 
 fn format_file(source_path: &Path, output_path: Option<&Path>) -> Result<(), String> {
@@ -363,7 +410,12 @@ fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), 
     Ok(())
 }
 
-fn project_test(project_path: &Path, grants: HostGrantConfig) -> Result<(), String> {
+fn project_test(
+    project_path: &Path,
+    grants: HostGrantConfig,
+    report_json: Option<&Path>,
+    report_junit: Option<&Path>,
+) -> Result<(), String> {
     let json = read_source(project_path)?;
     let document = parse_project_document(&json).map_err(|error| error.to_string())?;
     let root = project_root_for(project_path);
@@ -383,6 +435,19 @@ fn project_test(project_path: &Path, grants: HostGrantConfig) -> Result<(), Stri
         report.passed(),
         report.failed()
     );
+    // Reuse test_runner serialization for a uniform on-disk schema.
+    let adapted = test_runner::TestReport {
+        results: report
+            .results
+            .iter()
+            .map(|result| test_runner::TestResult {
+                path: PathBuf::from(&result.path),
+                ok: result.ok,
+                detail: result.detail.clone(),
+            })
+            .collect(),
+    };
+    test_runner::write_structured_reports(&adapted, report_json, report_junit)?;
     if report.all_passed() {
         Ok(())
     } else {
@@ -525,9 +590,14 @@ fn run() -> Result<(), String> {
             execute_artifact(Path::new(&artifact), grants)
         }
         "test" => {
-            let (paths, grants) = parse_test_args(&mut arguments)?;
-            let report = test_runner::run_tests_with_grants(&paths, grants)?;
+            let options = parse_test_args(&mut arguments)?;
+            let report = test_runner::run_tests_with_grants(&options.paths, options.grants)?;
             test_runner::print_report(&report);
+            test_runner::write_structured_reports(
+                &report,
+                options.report_json.as_deref(),
+                options.report_junit.as_deref(),
+            )?;
             if report.all_passed() {
                 Ok(())
             } else {
@@ -613,10 +683,14 @@ fn run() -> Result<(), String> {
                 }
                 "test" => {
                     let project = next_argument(&mut arguments, "project file")?;
-                    let grants = parse_run_grants(&mut arguments).map_err(|error| {
-                        error.replacen("run accepts", "project test accepts", 1)
-                    })?;
-                    project_test(Path::new(&project), grants)
+                    let (grants, report_json, report_junit) =
+                        parse_project_test_tail(&mut arguments)?;
+                    project_test(
+                        Path::new(&project),
+                        grants,
+                        report_json.as_deref(),
+                        report_junit.as_deref(),
+                    )
                 }
                 _ => Err("project accepts verify, format, build, or test subcommands".to_owned()),
             }
@@ -941,7 +1015,32 @@ mod tests {
     fn shipped_stdlib_project_test_imports_lib() {
         let project =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../stdlib/aether.project.json");
-        project_test(&project, HostGrantConfig::default()).expect("stdlib project test role units");
+        project_test(&project, HostGrantConfig::default(), None, None)
+            .expect("stdlib project test role units");
+    }
+
+    #[test]
+    fn test_runner_writes_structured_reports() {
+        let temporary = TemporaryDirectory::create();
+        let pass_path = temporary.path.join("ok_test.ae");
+        fs::write(
+            &pass_path,
+            "world ok\n\nweave main [] -> Whole:\n  yield 0\n",
+        )
+        .expect("pass");
+        let report =
+            test_runner::run_tests_with_grants(&[pass_path.clone()], HostGrantConfig::default())
+                .expect("run");
+        let json_path = temporary.path.join("report.json");
+        let junit_path = temporary.path.join("report.xml");
+        test_runner::write_structured_reports(&report, Some(&json_path), Some(&junit_path))
+            .expect("write reports");
+        let json = fs::read_to_string(&json_path).expect("read json");
+        assert!(json.contains(test_runner::TEST_REPORT_SCHEMA), "{json}");
+        assert!(json.contains("\"passed\": 1"), "{json}");
+        let junit = fs::read_to_string(&junit_path).expect("read junit");
+        assert!(junit.contains("<testsuite"), "{junit}");
+        assert!(junit.contains("<testcase"), "{junit}");
     }
 
     #[test]
