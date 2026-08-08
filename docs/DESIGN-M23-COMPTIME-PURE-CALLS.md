@@ -1,7 +1,7 @@
 # M23 Design: pure comptime weave calls (T-CT)
 
-**Status:** Accepted implementable design — **awaiting vertical implementation**  
-**Date:** 2026-08-05  
+**Status:** Implemented in package **0.33.0**
+**Accepted:** 2026-08-05; **implemented:** 2026-08-07
 **Decision record:** [ADR-039](ADR-039-m23-comptime-pure-calls.md)  
 **Validation:** [M23-VALIDATION-MATRIX.md](M23-VALIDATION-MATRIX.md)  
 **Depends on:** M5 ([ADR-008](ADR-008-m5-deterministic-comptime.md)), M15 ([ADR-019](ADR-019-m15-comptime-expansion.md))  
@@ -149,11 +149,13 @@ Compile-time purity is independent of run-time grants (same as M15 D5).
 
 ### D8 — Seed plan
 
-- Seed must evaluate eligible pure calls or product path uses bootstrap
-  validate + seed emit with dual-compare (prefer full seed eval for honesty).  
+- Product path uses bootstrap validation/evaluation, then materializes each
+  accepted call into an equivalent M5 literal directive for seed emission; the
+  product artifact must dual-compare to direct bootstrap output.
 - Dual-compare corpus: chain-of-calls example + M5/M15 regressions.  
-- Fail closed: if seed cannot eval calls, **do not** claim product default until
-  seed catches up (same as prior T-CT discipline).
+- Honest boundary: the checked-in seed does not independently evaluate raw M23
+  source. The default product path is seed-emitted **after** bootstrap
+  materialization; no direct-seed-evaluator claim is made.
 
 ### D9 — Diagnostics
 
@@ -206,12 +208,13 @@ weave bad [v: Whole] -> Whole:
 
 ## 5. Implementation sketch (for engineers; not authorization alone)
 
-1. Bootstrap: classify `comptime-pure` weaves; evaluate `call` RHS in
-   `evaluate_comptime_whole` (or sibling) with a Whole local frame.  
-2. Reject host/foreign/effect/resource callees.  
-3. Seed: mirror eval or dual-compare-gated path.  
-4. Tests: positives + negatives + dual-compare.  
-5. Package **0.33.0** at ship; DOC-SYNC AETHER_0.33 + CLM update.
+1. ✅ Bootstrap: classify `comptime-pure` weaves; evaluate `call` RHS with a
+   Whole local frame.
+2. ✅ Reject host/foreign/effect/resource/control callees.
+3. ✅ Seed-emitted path: materialize eligible calls into M5 literals and
+   dual-compare.
+4. ✅ Positives, negatives, structural-authoring, and product-path parity.
+5. ✅ Package **0.33.0** + AETHER_0.33, matrix, and delivery report.
 
 ---
 

@@ -9,10 +9,13 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::modules::compile_project_modules_with_packages;
-use crate::project::{parse_project_document, verify_project, ProjectError, ProjectVerifyReport};
+use crate::project::{
+    parse_project_document, sha256_hex, verify_project, ProjectDocument, ProjectError,
+    ProjectVerifyReport,
+};
 use crate::{CompileOutput, LANGUAGE_NAME, LANGUAGE_VERSION};
 
 pub const WORKSPACE_SCHEMA_VERSION: &str = "aether.workspace/v1";
@@ -58,22 +61,42 @@ impl From<ProjectError> for WorkspaceError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkspaceDocument {
     pub schema: String,
     pub name: String,
     pub version: String,
     pub packages: Vec<WorkspacePackage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock: Option<WorkspaceLock>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkspacePackage {
     pub name: String,
     pub path: String,
     #[serde(default)]
     pub depends_on: Vec<String>,
+}
+
+/// Complete local package identity pins for one `aether.workspace/v1` document.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkspaceLock {
+    pub packages: Vec<WorkspaceLockPackage>,
+}
+
+/// One package's project-manifest identity inside a [`WorkspaceLock`].
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkspaceLockPackage {
+    pub name: String,
+    pub path: String,
+    pub project_name: String,
+    pub project_version: String,
+    pub project_sha256: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,6 +214,86 @@ fn validate_workspace_document(document: &WorkspaceDocument) -> Result<(), Works
         }
     }
     let _ = topological_package_order(document)?;
+    if let Some(lock) = &document.lock {
+        validate_workspace_lock(document, lock)?;
+    }
+    Ok(())
+}
+
+fn validate_workspace_lock(
+    document: &WorkspaceDocument,
+    lock: &WorkspaceLock,
+) -> Result<(), WorkspaceError> {
+    if lock.packages.len() != document.packages.len() {
+        return Err(WorkspaceError::new(
+            "AE-WORKSPACE-005",
+            "workspace lock must list every workspace package exactly once",
+        ));
+    }
+    let declared: BTreeMap<&str, &WorkspacePackage> = document
+        .packages
+        .iter()
+        .map(|package| (package.name.as_str(), package))
+        .collect();
+    let mut seen = BTreeSet::new();
+    for entry in &lock.packages {
+        if !seen.insert(entry.name.as_str()) {
+            return Err(WorkspaceError::new(
+                "AE-WORKSPACE-005",
+                format!("workspace lock lists package {} more than once", entry.name),
+            ));
+        }
+        let package = declared.get(entry.name.as_str()).ok_or_else(|| {
+            WorkspaceError::new(
+                "AE-WORKSPACE-005",
+                format!("workspace lock names unknown package {}", entry.name),
+            )
+        })?;
+        if entry.path != package.path {
+            return Err(WorkspaceError::new(
+                "AE-WORKSPACE-005",
+                format!(
+                    "workspace lock path {} for package {} does not match declared path {}",
+                    entry.path, entry.name, package.path
+                ),
+            ));
+        }
+        if !is_safe_project_ident(&entry.project_name) {
+            return Err(WorkspaceError::new(
+                "AE-WORKSPACE-005",
+                format!(
+                    "workspace lock project_name for package {} must be a lowercase ASCII identifier",
+                    entry.name
+                ),
+            ));
+        }
+        if entry.project_version.is_empty() {
+            return Err(WorkspaceError::new(
+                "AE-WORKSPACE-005",
+                format!(
+                    "workspace lock project_version for package {} must be non-empty",
+                    entry.name
+                ),
+            ));
+        }
+        if !is_sha256_hex(&entry.project_sha256) {
+            return Err(WorkspaceError::new(
+                "AE-WORKSPACE-005",
+                format!(
+                    "workspace lock project_sha256 for package {} must be 64 lowercase hex characters",
+                    entry.name
+                ),
+            ));
+        }
+    }
+    for package in &document.packages {
+        if !seen.contains(package.name.as_str()) {
+            return Err(WorkspaceError::new(
+                "AE-WORKSPACE-005",
+                format!("workspace lock is missing package {}", package.name),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -202,6 +305,20 @@ fn is_safe_workspace_ident(name: &str) -> bool {
         }
         _ => false,
     }
+}
+
+fn is_safe_project_ident(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+}
+
+fn is_sha256_hex(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 fn validate_package_dir_path(path: &str) -> Result<(), WorkspaceError> {
@@ -281,6 +398,199 @@ pub fn resolve_package_path(
     Ok(resolved)
 }
 
+struct LoadedWorkspaceProject {
+    package_root: PathBuf,
+    project_bytes: Vec<u8>,
+    project: ProjectDocument,
+}
+
+fn resolve_workspace_project_file(
+    package_root: &Path,
+    package: &WorkspacePackage,
+) -> Result<PathBuf, WorkspaceError> {
+    let candidate = package_root.join(WORKSPACE_PROJECT_FILE);
+    let resolved = candidate.canonicalize().map_err(|error| {
+        WorkspaceError::new(
+            "AE-WORKSPACE-004",
+            format!(
+                "package {} path {} is missing {WORKSPACE_PROJECT_FILE}: {error}",
+                package.name, package.path
+            ),
+        )
+    })?;
+    require_project_manifest_within_package_root(package_root, &resolved, package)?;
+    if !resolved.is_file() {
+        return Err(WorkspaceError::new(
+            "AE-WORKSPACE-004",
+            format!(
+                "package {} path {} is missing {WORKSPACE_PROJECT_FILE}",
+                package.name, package.path
+            ),
+        ));
+    }
+    Ok(resolved)
+}
+
+/// Enforce post-canonicalization containment so a manifest symlink cannot make
+/// a declared package read an `aether.project.json` outside that package.
+fn require_project_manifest_within_package_root(
+    package_root: &Path,
+    resolved: &Path,
+    package: &WorkspacePackage,
+) -> Result<(), WorkspaceError> {
+    if resolved.starts_with(package_root) {
+        return Ok(());
+    }
+    Err(WorkspaceError::new(
+        "AE-WORKSPACE-002",
+        format!(
+            "package {} project manifest escapes package root",
+            package.name
+        ),
+    ))
+}
+
+fn load_workspace_project(
+    workspace_root: &Path,
+    package: &WorkspacePackage,
+) -> Result<LoadedWorkspaceProject, WorkspaceError> {
+    let package_root = resolve_package_path(workspace_root, &package.path)?;
+    let project_file = resolve_workspace_project_file(&package_root, package)?;
+    let project_bytes = fs::read(&project_file).map_err(|error| {
+        WorkspaceError::new(
+            "AE-WORKSPACE-004",
+            format!(
+                "could not read {} for package {}: {error}",
+                project_file.display(),
+                package.name
+            ),
+        )
+    })?;
+    let project_text = String::from_utf8(project_bytes.clone()).map_err(|_| {
+        WorkspaceError::new(
+            "AE-WORKSPACE-004",
+            format!(
+                "could not read {} for package {}: project manifest is not valid UTF-8",
+                project_file.display(),
+                package.name
+            ),
+        )
+    })?;
+    let project = parse_project_document(&project_text)?;
+    Ok(LoadedWorkspaceProject {
+        package_root,
+        project_bytes,
+        project,
+    })
+}
+
+fn verify_workspace_lock_entry(
+    package: &WorkspacePackage,
+    entry: &WorkspaceLockPackage,
+    loaded: &LoadedWorkspaceProject,
+) -> Result<(), WorkspaceError> {
+    let observed_digest = sha256_hex(&loaded.project_bytes);
+    if entry.project_sha256 != observed_digest {
+        return Err(WorkspaceError::new(
+            "AE-WORKSPACE-005",
+            format!(
+                "workspace lock project manifest digest mismatch for package {}: expected {}, observed {}",
+                package.name,
+                entry.project_sha256,
+                observed_digest
+            ),
+        ));
+    }
+    if entry.project_name != loaded.project.name {
+        return Err(WorkspaceError::new(
+            "AE-WORKSPACE-005",
+            format!(
+                "workspace lock project name mismatch for package {}: expected {}, observed {}",
+                package.name, entry.project_name, loaded.project.name
+            ),
+        ));
+    }
+    if entry.project_version != loaded.project.version {
+        return Err(WorkspaceError::new(
+            "AE-WORKSPACE-005",
+            format!(
+                "workspace lock project version mismatch for package {}: expected {}, observed {}",
+                package.name, entry.project_version, loaded.project.version
+            ),
+        ));
+    }
+    if loaded.project.lock.is_none() {
+        return Err(WorkspaceError::new(
+            "AE-WORKSPACE-005",
+            format!(
+                "workspace lock requires package {} project manifest to carry a complete project lock",
+                package.name
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// Refresh all package identity entries for a workspace without writing files.
+///
+/// Package projects must already carry complete project unit locks. This keeps
+/// workspace refresh a one-document operation: callers explicitly refresh
+/// project documents first, then write the returned workspace document only if
+/// they requested that mutation.
+pub fn refresh_workspace_lock(
+    workspace_root: &Path,
+    document: &WorkspaceDocument,
+) -> Result<WorkspaceDocument, WorkspaceError> {
+    validate_workspace_document(document)?;
+    let order = topological_package_order(document)?;
+    let by_name: BTreeMap<&str, &WorkspacePackage> = document
+        .packages
+        .iter()
+        .map(|package| (package.name.as_str(), package))
+        .collect();
+    let mut packages = Vec::with_capacity(order.len());
+    for name in order {
+        let package = by_name.get(name.as_str()).expect("package in order");
+        let loaded = load_workspace_project(workspace_root, package)?;
+        if loaded.project.lock.is_none() {
+            return Err(WorkspaceError::new(
+                "AE-WORKSPACE-005",
+                format!(
+                    "workspace lock requires package {} project manifest to carry a complete project lock",
+                    package.name
+                ),
+            ));
+        }
+        let _ = verify_project(&loaded.package_root, &loaded.project)?;
+        packages.push(WorkspaceLockPackage {
+            name: package.name.clone(),
+            path: package.path.clone(),
+            project_name: loaded.project.name,
+            project_version: loaded.project.version,
+            project_sha256: sha256_hex(&loaded.project_bytes),
+        });
+    }
+    let mut refreshed = document.clone();
+    refreshed.lock = Some(WorkspaceLock { packages });
+    validate_workspace_document(&refreshed)?;
+    Ok(refreshed)
+}
+
+/// Render a validated workspace document as canonical local JSON.
+pub fn serialize_workspace_document(
+    document: &WorkspaceDocument,
+) -> Result<String, WorkspaceError> {
+    validate_workspace_document(document)?;
+    serde_json::to_string_pretty(document)
+        .map(|json| format!("{json}\n"))
+        .map_err(|error| {
+            WorkspaceError::new(
+                "AE-WORKSPACE-001",
+                format!("could not serialize aether.workspace/v1 document: {error}"),
+            )
+        })
+}
+
 /// Topological order: dependencies before dependents.
 pub fn topological_package_order(
     document: &WorkspaceDocument,
@@ -348,22 +658,44 @@ pub fn verify_workspace(
         .iter()
         .map(|package| (package.name.as_str(), package))
         .collect();
+    let locked_by_name: Option<BTreeMap<&str, &WorkspaceLockPackage>> =
+        document.lock.as_ref().map(|lock| {
+            lock.packages
+                .iter()
+                .map(|entry| (entry.name.as_str(), entry))
+                .collect()
+        });
 
     let mut packages = Vec::with_capacity(order.len());
     let mut failures = Vec::new();
     for name in order {
         let package = by_name.get(name.as_str()).expect("package in order");
-        match verify_one_package(workspace_root, package) {
+        let lock_entry = locked_by_name
+            .as_ref()
+            .and_then(|entries| entries.get(package.name.as_str()).copied());
+        match verify_one_package(workspace_root, package, lock_entry) {
             Ok(report) => packages.push(report),
-            Err(error) => failures.push(format!("{}: {error}", package.name)),
+            Err(error) => failures.push((package.name.clone(), error)),
         }
     }
     if !failures.is_empty() {
+        let code = if failures
+            .iter()
+            .any(|(_, error)| error.code == "AE-WORKSPACE-005")
+        {
+            "AE-WORKSPACE-005"
+        } else {
+            "AE-WORKSPACE-004"
+        };
         return Err(WorkspaceError::new(
-            "AE-WORKSPACE-004",
+            code,
             format!(
                 "workspace package verification failed: {}",
-                failures.join("; ")
+                failures
+                    .iter()
+                    .map(|(name, error)| format!("{name}: {error}"))
+                    .collect::<Vec<_>>()
+                    .join("; ")
             ),
         ));
     }
@@ -381,6 +713,9 @@ pub fn compile_workspace_package(
     package_name: &str,
 ) -> Result<CompileOutput, WorkspaceError> {
     validate_workspace_document(document)?;
+    if document.lock.is_some() {
+        let _ = verify_workspace(workspace_root, document)?;
+    }
     let package = document
         .packages
         .iter()
@@ -391,19 +726,9 @@ pub fn compile_workspace_package(
                 format!("workspace has no package named {package_name}"),
             )
         })?;
-    let package_root = resolve_package_path(workspace_root, &package.path)?;
-    let project_file = package_root.join(WORKSPACE_PROJECT_FILE);
-    let json = fs::read_to_string(&project_file).map_err(|error| {
-        WorkspaceError::new(
-            "AE-WORKSPACE-004",
-            format!(
-                "could not read {} for package {}: {error}",
-                project_file.display(),
-                package.name
-            ),
-        )
-    })?;
-    let project = parse_project_document(&json)?;
+    let loaded = load_workspace_project(workspace_root, package)?;
+    let package_root = loaded.package_root;
+    let project = loaded.project;
 
     let mut package_roots = BTreeMap::new();
     let mut allowed = BTreeSet::new();
@@ -436,30 +761,13 @@ pub fn compile_workspace_package(
 fn verify_one_package(
     workspace_root: &Path,
     package: &WorkspacePackage,
+    lock_entry: Option<&WorkspaceLockPackage>,
 ) -> Result<WorkspacePackageReport, WorkspaceError> {
-    let package_root = resolve_package_path(workspace_root, &package.path)?;
-    let project_file = package_root.join(WORKSPACE_PROJECT_FILE);
-    if !project_file.is_file() {
-        return Err(WorkspaceError::new(
-            "AE-WORKSPACE-004",
-            format!(
-                "package {} path {} is missing {WORKSPACE_PROJECT_FILE}",
-                package.name, package.path
-            ),
-        ));
+    let loaded = load_workspace_project(workspace_root, package)?;
+    if let Some(entry) = lock_entry {
+        verify_workspace_lock_entry(package, entry, &loaded)?;
     }
-    let json = fs::read_to_string(&project_file).map_err(|error| {
-        WorkspaceError::new(
-            "AE-WORKSPACE-004",
-            format!(
-                "could not read {} for package {}: {error}",
-                project_file.display(),
-                package.name
-            ),
-        )
-    })?;
-    let project = parse_project_document(&json)?;
-    let report = verify_project(&package_root, &project)?;
+    let report = verify_project(&loaded.package_root, &loaded.project)?;
     Ok(WorkspacePackageReport {
         name: package.name.clone(),
         path: package.path.clone(),
@@ -510,6 +818,22 @@ mod tests {
   "version": "0.1.0",
   "units": [{{ "path": "main.ae", "role": "main" }}],
   "lock": {{ "units": [{{ "path": "main.ae", "sha256": "{digest}" }}] }}
+}}"#
+        );
+        fs::write(pkg.join("aether.project.json"), project).expect("project");
+    }
+
+    fn write_unlocked_pkg(root: &Path, dir: &str, project_name: &str, exit: i64) {
+        let pkg = root.join(dir);
+        fs::create_dir_all(&pkg).expect("pkg dir");
+        let main = format!("world {project_name}\n\nweave main [] -> Whole:\n  yield {exit}\n");
+        fs::write(pkg.join("main.ae"), main).expect("main");
+        let project = format!(
+            r#"{{
+  "schema": "aether.project/v1",
+  "name": "{project_name}",
+  "version": "0.1.0",
+  "units": [{{ "path": "main.ae", "role": "main" }}]
 }}"#
         );
         fs::write(pkg.join("aether.project.json"), project).expect("project");
@@ -572,5 +896,137 @@ mod tests {
         let document = parse_workspace_document(missing).expect("parse missing");
         let error = verify_workspace(&temp.path, &document).expect_err("missing project");
         assert_eq!(error.code, "AE-WORKSPACE-004");
+    }
+
+    #[test]
+    fn project_manifest_containment_guard_rejects_an_escaped_canonical_target() {
+        let temp = TempDir::create();
+        let package = WorkspacePackage {
+            name: "app".to_owned(),
+            path: "app".to_owned(),
+            depends_on: Vec::new(),
+        };
+        let package_root = temp.path.join("app");
+        let escaped_manifest = temp.path.join("outside").join(WORKSPACE_PROJECT_FILE);
+
+        let error = require_project_manifest_within_package_root(
+            &package_root,
+            &escaped_manifest,
+            &package,
+        )
+        .expect_err("canonical manifest target outside package must fail closed");
+
+        assert_eq!(error.code, "AE-WORKSPACE-002");
+        assert!(
+            error.message.contains("escapes package root"),
+            "{}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn refreshes_complete_workspace_lock_and_detects_manifest_or_unit_drift() {
+        let temp = TempDir::create();
+        write_pkg(&temp.path, "util", "util_pkg", 0);
+        write_pkg(&temp.path, "app", "app_pkg", 42);
+        let workspace = r#"{
+  "schema": "aether.workspace/v1",
+  "name": "locked_demo",
+  "version": "0.1.0",
+  "packages": [
+    { "name": "app", "path": "app", "depends_on": ["util"] },
+    { "name": "util", "path": "util" }
+  ]
+}"#;
+        let document = parse_workspace_document(workspace).expect("parse unlocked workspace");
+        let refreshed = refresh_workspace_lock(&temp.path, &document).expect("refresh lock");
+        let lock = refreshed.lock.as_ref().expect("workspace lock");
+        assert_eq!(
+            lock.packages
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["util", "app"]
+        );
+        assert_eq!(lock.packages[0].project_name, "util_pkg");
+        assert_eq!(lock.packages[1].project_version, "0.1.0");
+        verify_workspace(&temp.path, &refreshed).expect("fresh workspace lock verifies");
+
+        let rendered = serialize_workspace_document(&refreshed).expect("serialize workspace");
+        assert!(rendered.ends_with('\n'));
+        let reparsed = parse_workspace_document(&rendered).expect("parse canonical workspace");
+        verify_workspace(&temp.path, &reparsed).expect("canonical workspace verifies");
+
+        let mut stale = refreshed.clone();
+        stale.lock.as_mut().expect("stale lock").packages[0].project_sha256 = "0".repeat(64);
+        let repaired = refresh_workspace_lock(&temp.path, &stale).expect("stale lock refreshes");
+        assert_eq!(repaired, refreshed);
+
+        let app_project = temp.path.join("app").join(WORKSPACE_PROJECT_FILE);
+        let original_manifest = fs::read(&app_project).expect("app project manifest");
+        let changed_whitespace = String::from_utf8(original_manifest.clone())
+            .expect("project UTF-8")
+            .replace('\n', "\r\n");
+        fs::write(&app_project, changed_whitespace).expect("mutate manifest bytes");
+        let error = verify_workspace(&temp.path, &refreshed).expect_err("manifest drift fails");
+        assert_eq!(error.code, "AE-WORKSPACE-005");
+        fs::write(&app_project, original_manifest).expect("restore manifest bytes");
+
+        let util_source = temp.path.join("util").join("main.ae");
+        fs::write(
+            &util_source,
+            "world util_pkg\n\nweave main [] -> Whole:\n  yield 9\n",
+        )
+        .expect("mutate locked source");
+        let error = verify_workspace(&temp.path, &refreshed).expect_err("unit drift fails");
+        assert_eq!(error.code, "AE-WORKSPACE-004");
+        assert!(
+            error.message.contains("AE-PROJECT-003"),
+            "{}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_or_incomplete_workspace_lock_and_requires_project_locks() {
+        let digest = "0".repeat(64);
+        for workspace in [
+            r#"{
+  "schema": "aether.workspace/v1",
+  "name": "bad_lock",
+  "version": "0.1.0",
+  "packages": [{ "name": "app", "path": "app" }],
+  "lock": { "packages": [] }
+}"#
+            .to_owned(),
+            format!(
+                r#"{{
+  "schema": "aether.workspace/v1",
+  "name": "bad_lock",
+  "version": "0.1.0",
+  "packages": [{{ "name": "app", "path": "app" }}],
+  "lock": {{ "packages": [{{
+    "name": "app", "path": "other", "project_name": "app_pkg",
+    "project_version": "0.1.0", "project_sha256": "{digest}"
+  }}] }}
+}}"#
+            ),
+        ] {
+            let error = parse_workspace_document(&workspace).expect_err("invalid lock rejected");
+            assert_eq!(error.code, "AE-WORKSPACE-005");
+        }
+
+        let temp = TempDir::create();
+        write_unlocked_pkg(&temp.path, "app", "app_pkg", 0);
+        let workspace = r#"{
+  "schema": "aether.workspace/v1",
+  "name": "unlocked_project",
+  "version": "0.1.0",
+  "packages": [{ "name": "app", "path": "app" }]
+}"#;
+        let document = parse_workspace_document(workspace).expect("parse workspace");
+        let error =
+            refresh_workspace_lock(&temp.path, &document).expect_err("project lock required");
+        assert_eq!(error.code, "AE-WORKSPACE-005");
     }
 }

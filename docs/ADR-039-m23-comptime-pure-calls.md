@@ -1,7 +1,8 @@
 # ADR-039: pure comptime weave calls (M23 / T-CT)
 
-**Status:** Accepted (implementable) — **not yet product-implemented**  
-**Date:** 2026-08-05  
+**Status:** Implemented — package **0.33.0**
+**Accepted:** 2026-08-05
+**Implemented:** 2026-08-07
 **Decision makers:** Human ordered backlog (T-CT first); AGENTS Constitution  
 **Related Rule IDs:** `CONST-DEP-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`, `SEC-INPUT-001`, `RND-INVAR-001`, `CONST-COMPLETE-001`  
 **Portfolio:** ADR-014 **T-CT**
@@ -21,7 +22,7 @@ opening host I/O, effects, resources, or general control-flow metaprogramming.
 3. Arguments: Whole literals or prior comptime names only.  
 4. Fold to existing `COMPTIME_WHOLE` (56); no new opcode; AETH v11.  
 5. Keep 1,024 `comptime bind` budget; purity vs M14/M21 unchanged.  
-6. **Require** seed≡bootstrap before Proven-now / default product claim.  
+6. **Require** seed-emitted product output ≡ bootstrap before Proven-now / default product claim.
 7. Suggested package at ship: **0.33.0**.  
 8. **Reject for M23:** recursion, comptime control flow, host/foreign callees,
    multi-op nested trees, Text/Bytes/Truth comptime values.
@@ -37,7 +38,8 @@ opening host I/O, effects, resources, or general control-flow metaprogramming.
 ### Costs
 
 - Comptime interpreter for restricted callee bodies  
-- Seed eval complexity  
+- Explicit bootstrap materialization before seed emission (the checked-in seed
+  does not independently evaluate raw M23 source)
 - Authors must split logic into tiny pure weaves  
 
 ### Risks
@@ -63,6 +65,16 @@ opening host I/O, effects, resources, or general control-flow metaprogramming.
 3. Vertical slice + negatives  
 4. Seed dual-compare green  
 5. DOC-SYNC + delivery report  
+
+## Implementation record
+
+Package 0.33 implements the restricted bootstrap evaluator and materializes
+accepted call directives into equivalent M5 literal directives before forge.
+The seed emits the resulting v11 artifact; `compile_with_seed` is
+byte-identical to direct bootstrap output for the M23 corpus. This satisfies the
+design's bootstrap-validate + seed-emit path without claiming direct raw-M23
+seed evaluation. See [AETHER_0.33.md](AETHER_0.33.md) and the M23 delivery
+report.
 
 ## Links
 

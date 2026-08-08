@@ -1,0 +1,16 @@
+world comptime_calls
+
+weave double [value: Whole] -> Whole:
+  bind mutable doubled <- product value 2
+  revise doubled <- sum doubled 0
+  yield doubled
+
+weave area [width: Whole, height: Whole] -> Whole:
+  bind product_value <- product width height
+  yield product_value
+
+weave main [] -> Whole:
+  comptime bind cell <- product 8 8
+  comptime bind wide <- call double cell
+  comptime bind total <- call area wide 4
+  yield total

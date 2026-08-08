@@ -1,6 +1,6 @@
 # Aether 0.27 Toolchain Contract (M20b stdlib layer 1)
 
-**Status:** Historical package 0.27 — language **0.11** / AETH **v11** + stdlib layer 1; current package is [AETHER_0.28.md](AETHER_0.28.md)  
+**Status:** Historical package 0.27 — language **0.11** / AETH **v11** + stdlib layer 1; current package is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** ADR-029, M20, M11  
 
 ## Surface

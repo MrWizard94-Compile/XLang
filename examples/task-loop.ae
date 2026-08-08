@@ -1,0 +1,15 @@
+world task_loop
+
+task weave count [limit: Whole] -> Whole:
+  bind mutable current <- 0
+  while less current limit:
+    checkpoint
+    revise current <- sum current 1
+  checkpoint
+  yield current
+
+weave main [] -> Whole:
+  bind mutable result <- 0
+  together:
+    spawn call count 3 into result
+  yield result

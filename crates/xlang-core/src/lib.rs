@@ -50,20 +50,22 @@ pub use modules::{
     validate_lib_module_source, ProjectTestReport, ProjectTestResult,
 };
 pub use project::{
-    format_project, format_source, parse_project_document, resolve_unit_path, sha256_hex,
-    unit_artifact_file_name, validate_unit_path, verify_project, ProjectDocument, ProjectError,
-    ProjectFormatReport, ProjectFormatUnit, ProjectLock, ProjectLockUnit, ProjectUnit,
-    ProjectUnitReport, ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
+    format_project, format_source, parse_project_document, refresh_project_lock, resolve_unit_path,
+    serialize_project_document, sha256_hex, unit_artifact_file_name, validate_unit_path,
+    verify_project, ProjectDocument, ProjectError, ProjectFormatReport, ProjectFormatUnit,
+    ProjectLock, ProjectLockUnit, ProjectUnit, ProjectUnitReport, ProjectUnitRole,
+    ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
 };
 pub use workspace::{
-    compile_workspace_package, parse_workspace_document, resolve_package_path,
-    topological_package_order, verify_workspace, WorkspaceDocument, WorkspaceError,
+    compile_workspace_package, parse_workspace_document, refresh_workspace_lock,
+    resolve_package_path, serialize_workspace_document, topological_package_order,
+    verify_workspace, WorkspaceDocument, WorkspaceError, WorkspaceLock, WorkspaceLockPackage,
     WorkspacePackage, WorkspacePackageReport, WorkspaceVerifyReport, WORKSPACE_PROJECT_FILE,
     WORKSPACE_SCHEMA_VERSION,
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.32.0";
+pub const LANGUAGE_VERSION: &str = "0.36.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(
@@ -80,6 +82,8 @@ const ARTIFACT_VERSION_V8: u8 = 8;
 const ARTIFACT_VERSION_V9: u8 = 9;
 const ARTIFACT_VERSION_V10: u8 = 10;
 const ARTIFACT_VERSION_V11: u8 = 11;
+/// AETH v12 adds verified task-frame metadata and cooperative checkpoints.
+const ARTIFACT_VERSION_V12: u8 = 12;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 const MAX_FUNCTIONS: usize = 256;
 const MAX_LOCALS: usize = u16::MAX as usize;
@@ -164,11 +168,15 @@ const OP_NURSERY_END: u8 = 64;
 const OP_HOST_CALL: u8 = 65;
 /// Logical destruction of a live owner local (M19a explicit `release`).
 const OP_RELEASE: u8 = 66;
+/// AETH v12 verifier-approved cooperative task suspension point.
+const OP_TASK_CHECKPOINT: u8 = 67;
 
 /// Function-table kind for AETH v11: ordinary guest weave.
 const FUNCTION_KIND_GUEST: u8 = 0;
 /// Function-table kind for AETH v11: host weave (empty guest code).
 const FUNCTION_KIND_HOST: u8 = 1;
+/// AETH v12 function flag marking a verifier-approved resumable task frame.
+const FUNCTION_FLAG_TASK_FRAME: u8 = 0x01;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -240,8 +248,12 @@ fn diagnostic_code(message: &str) -> &'static str {
         || normalized.contains("host call")
     {
         "AE-HOST-001"
+    } else if normalized.contains("ae-task-005") {
+        "AE-TASK-005"
     } else if normalized.contains("ae-task-003") {
         "AE-TASK-003"
+    } else if normalized.contains("ae-task-004") {
+        "AE-TASK-004"
     } else if normalized.contains("ae-task-002") {
         "AE-TASK-002"
     } else if normalized.contains("ae-task-001")
@@ -280,6 +292,8 @@ fn diagnostic_code(message: &str) -> &'static str {
         "AE-EFFECT-002"
     } else if normalized.contains("ae-effect-001") || normalized.contains("raises whole") {
         "AE-EFFECT-001"
+    } else if normalized.contains("ae-resource-004") {
+        "AE-RESOURCE-004"
     } else if normalized.contains("arena")
         || normalized.contains("buffer")
         || normalized.contains("table")
@@ -472,13 +486,14 @@ impl ParameterMode {
                     | ARTIFACT_VERSION_V9
                     | ARTIFACT_VERSION_V10
                     | ARTIFACT_VERSION_V11
+                    | ARTIFACT_VERSION_V12
             ) =>
             {
                 Ok(Self::Access)
             }
             3 => Err(BytecodeError::new(
                 offset,
-                "access parameters are valid only in AETH v6, v7 through v11 artifacts",
+                "access parameters are valid only in AETH v6 through v12 artifacts",
             )),
             _ => Err(BytecodeError::new(offset, "unknown Aether parameter mode")),
         }
@@ -616,6 +631,9 @@ pub struct Weave {
     pub parameters: Vec<Parameter>,
     pub result: ValueType,
     pub effect: Effect,
+    /// `true` only for an explicit `task weave` declaration. This is semantic
+    /// metadata, not a naming convention or advisory annotation.
+    pub task: bool,
     pub body: Vec<Statement>,
     pub span: Span,
 }
@@ -657,6 +675,10 @@ pub enum Statement {
     /// M19a: logical destruction of a live unique or resource owner.
     Release {
         name: String,
+        span: Span,
+    },
+    /// M19e: verifier-approved cooperative suspension boundary for a task.
+    Checkpoint {
         span: Span,
     },
     Yield {
@@ -703,6 +725,7 @@ impl Statement {
             | Self::Revise { span, .. }
             | Self::Speak { span, .. }
             | Self::Release { span, .. }
+            | Self::Checkpoint { span }
             | Self::Yield { span, .. }
             | Self::Raise { span, .. }
             | Self::Forward { span, .. }
@@ -1075,6 +1098,9 @@ struct ResourceValidationContext<'a> {
 #[derive(Clone)]
 struct SemanticResourcePlan {
     arena: Option<SemanticArena>,
+    /// Direct root arena capacity indexed by guest weave. v12 uses these
+    /// verified values to size main and task-private regions independently.
+    arenas_by_weave: BTreeMap<String, SemanticArena>,
     outcomes: BTreeMap<(usize, usize), SemanticResourceOperation>,
 }
 
@@ -1130,6 +1156,7 @@ impl SemanticResourcePlan {
     const fn empty() -> Self {
         Self {
             arena: None,
+            arenas_by_weave: BTreeMap::new(),
             outcomes: BTreeMap::new(),
         }
     }
@@ -1139,6 +1166,12 @@ impl SemanticResourcePlan {
             Some(arena) => arena.capacity,
             None => 0,
         }
+    }
+
+    fn direct_arena_capacity(&self, weave: &str) -> u32 {
+        self.arenas_by_weave
+            .get(weave)
+            .map_or(0, |arena| arena.capacity)
     }
 
     fn record_outcome(
@@ -1302,6 +1335,7 @@ struct FunctionSignature {
     result: ValueType,
     effect: Effect,
     is_host: bool,
+    is_task: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -1325,6 +1359,11 @@ struct ArtifactFunction {
     effect: Effect,
     /// AETH v11: guest (0) or host (1). Pre-v11 artifacts are always guest.
     kind: u8,
+    /// AETH v12 task-frame authority flags. Earlier artifact versions encode
+    /// no flags and therefore always carry zero.
+    flags: u8,
+    /// AETH v12 direct arena capacity for main or one task frame.
+    frame_arena_capacity: u32,
     locals: Vec<LocalDescriptor>,
     code: Vec<u8>,
 }
@@ -1332,6 +1371,10 @@ struct ArtifactFunction {
 impl ArtifactFunction {
     const fn is_host(&self) -> bool {
         self.kind == FUNCTION_KIND_HOST
+    }
+
+    const fn is_task(&self) -> bool {
+        self.flags & FUNCTION_FLAG_TASK_FRAME != 0
     }
 }
 
@@ -1366,6 +1409,7 @@ struct ArtifactShape {
 struct NurseryVerification {
     expected: u8,
     seen: u8,
+    targets: Vec<usize>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -1381,6 +1425,7 @@ struct VerificationState {
 /// ever-growing parameter list as the verified instruction set evolves.
 struct VerificationContext<'a> {
     function_index: usize,
+    version: u8,
     function: &'a ArtifactFunction,
     functions: &'a [ArtifactFunction],
     records: &'a [ArtifactRecord],
@@ -1462,8 +1507,97 @@ impl VerificationStack {
 }
 
 #[derive(Debug, Clone)]
+struct RuntimeText {
+    value: String,
+    ascii: bool,
+}
+
+impl RuntimeText {
+    fn new(value: String) -> Self {
+        Self {
+            ascii: value.is_ascii(),
+            value,
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        &self.value
+    }
+
+    const fn byte_len(&self) -> usize {
+        self.value.len()
+    }
+
+    fn scalar_len(&self) -> usize {
+        if self.ascii {
+            self.value.len()
+        } else {
+            self.value.chars().count()
+        }
+    }
+
+    fn scalar_at(&self, index: usize) -> Option<char> {
+        if self.ascii {
+            self.value.as_bytes().get(index).copied().map(char::from)
+        } else {
+            self.value.chars().nth(index)
+        }
+    }
+
+    fn slice_scalars(&self, start: usize, end: usize) -> Option<Self> {
+        let start = self.scalar_byte_offset(start);
+        let end = self.scalar_byte_offset(end);
+        self.value.get(start..end).map(|value| Self {
+            value: value.to_owned(),
+            // An ASCII source can only produce an ASCII slice. A Unicode
+            // source may produce ASCII text, but retaining `false` is safe and
+            // preserves scalar behavior without a second scan.
+            ascii: self.ascii,
+        })
+    }
+
+    fn find_from_scalar(&self, needle: &Self, start: usize) -> i64 {
+        let start_byte = self.scalar_byte_offset(start);
+        let Some(tail) = self.value.get(start_byte..) else {
+            return -1;
+        };
+        let Some(offset) = tail.find(needle.as_str()) else {
+            return -1;
+        };
+        let found = start_byte + offset;
+        let scalar = if self.ascii {
+            found
+        } else {
+            self.value[..found].chars().count()
+        };
+        i64::try_from(scalar).unwrap_or(-1)
+    }
+
+    fn join(mut self, suffix: &Self) -> Self {
+        self.ascii = self.ascii && suffix.ascii;
+        self.value.push_str(suffix.as_str());
+        self
+    }
+
+    fn into_string(self) -> String {
+        self.value
+    }
+
+    fn scalar_byte_offset(&self, scalar_index: usize) -> usize {
+        if self.ascii {
+            scalar_index.min(self.value.len())
+        } else {
+            self.value
+                .char_indices()
+                .nth(scalar_index)
+                .map_or(self.value.len(), |(offset, _)| offset)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 enum RuntimeValue {
-    Text(String),
+    Text(RuntimeText),
     Whole(i64),
     Truth(bool),
     Bytes(Vec<u8>),
@@ -1493,6 +1627,88 @@ enum RuntimeValue {
 enum RuntimeExit {
     Return(RuntimeValue),
     ErrorWhole(i64),
+    /// A verified task has reached an empty-stack cancellation boundary.
+    Checkpoint(TaskFrame),
+    /// A task returns through the scheduler so its private lane can be revoked.
+    TaskReturn {
+        value: RuntimeValue,
+        frame: TaskFrame,
+    },
+}
+
+/// A fixed, private slice of the v12 nursery slab.  The lane is never exposed
+/// to guest code; resource values retain only offsets into the VM-owned arena.
+#[derive(Clone, Copy)]
+struct TaskArenaLane {
+    start: usize,
+    capacity: usize,
+    used: usize,
+}
+
+/// Complete suspension state for a task.  The task subset has no calls or
+/// nested nurseries, so one frame is sufficient to resume it deterministically.
+struct TaskFrame {
+    function_index: usize,
+    locals: Vec<Option<RuntimeValue>>,
+    stack: Vec<RuntimeValue>,
+    position: usize,
+    lane: TaskArenaLane,
+}
+
+/// Captured v12 nursery child arguments.  Capture happens at `NURSERY_SPAWN`;
+/// dispatch begins only after the complete nursery has passed admission at END.
+struct V12NurseryChild {
+    function: usize,
+    arguments: Vec<RuntimeValue>,
+    destination: usize,
+}
+
+struct V12NurseryFrame {
+    expected: u8,
+    seen: u8,
+    children: Vec<V12NurseryChild>,
+}
+
+enum V12SchedulerState {
+    Pending(Vec<RuntimeValue>),
+    Parked(TaskFrame),
+    Completed,
+    Failed,
+    Cancelled,
+    Running,
+}
+
+struct V12SchedulerChild {
+    function: usize,
+    destination: usize,
+    lane: Option<TaskArenaLane>,
+    state: V12SchedulerState,
+}
+
+/// Borrowed execution state for one complete v12 nursery. Grouping this state
+/// makes the scheduler boundary explicit while keeping parent ownership, output,
+/// VM state, and source offset together for every dispatch outcome.
+struct V12NurseryExecutionContext<'a> {
+    artifact: &'a Artifact,
+    parent: &'a ArtifactFunction,
+    parent_locals: &'a mut [Option<RuntimeValue>],
+    stdout: &'a mut String,
+    runtime_state: &'a mut RuntimeState,
+    depth: usize,
+    offset: usize,
+}
+
+/// Test-only evidence of the externally observable v12 scheduler lifecycle.
+/// Production cancellation remains deliberately unobservable to guest code;
+/// this trace makes the critical parked-frame destruction invariant directly
+/// regression-testable without adding a runtime introspection surface.
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TaskFrameTraceEvent {
+    Started(usize),
+    Parked(usize),
+    Completed(usize),
+    Cancelled(usize),
 }
 
 impl RuntimeValue {
@@ -1669,7 +1885,7 @@ impl HostServices {
                         "AE-HOST-002: host service text_extent requires Text",
                     ));
                 };
-                let len = i64::try_from(text.len()).map_err(|_| {
+                let len = i64::try_from(text.byte_len()).map_err(|_| {
                     BytecodeError::new(
                         offset,
                         "AE-HOST-003: host service text_extent length is outside Whole",
@@ -1698,7 +1914,7 @@ impl HostServices {
                         "AE-HOST-003: host service read_text requires UTF-8 file contents",
                     )
                 })?;
-                Ok(RuntimeValue::Text(text))
+                Ok(RuntimeValue::Text(RuntimeText::new(text)))
             }
             HostServiceKind::ReadBytes => {
                 let path = expect_one_text_path(arguments, offset, "read_bytes")?;
@@ -1736,23 +1952,23 @@ impl HostServices {
                         "AE-HOST-002: host service write_text body must be Text",
                     ));
                 };
-                if body.len() > HOST_IO_MAX_BYTES {
+                if body.byte_len() > HOST_IO_MAX_BYTES {
                     return Err(BytecodeError::new(
                         offset,
                         "AE-HOST-005: host service write_text exceeds the 1000000-byte safety limit",
                     ));
                 }
-                let full = resolve_under_roots(&self.write_roots, path, offset)?;
+                let full = resolve_under_roots(&self.write_roots, path.as_str(), offset)?;
                 if let Some(parent) = full.parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
-                std::fs::write(&full, body.as_bytes()).map_err(|error| {
+                std::fs::write(&full, body.as_str().as_bytes()).map_err(|error| {
                     BytecodeError::new(
                         offset,
                         format!("AE-HOST-003: host service write_text failed: {error}"),
                     )
                 })?;
-                let len = i64::try_from(body.len()).map_err(|_| {
+                let len = i64::try_from(body.byte_len()).map_err(|_| {
                     BytecodeError::new(
                         offset,
                         "AE-HOST-003: host service write_text length is outside Whole",
@@ -1785,7 +2001,7 @@ impl HostServices {
                         "AE-HOST-005: host service write_bytes exceeds the 1000000-byte safety limit",
                     ));
                 }
-                let full = resolve_under_roots(&self.write_roots, path, offset)?;
+                let full = resolve_under_roots(&self.write_roots, path.as_str(), offset)?;
                 if let Some(parent) = full.parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
@@ -1825,7 +2041,7 @@ impl HostServices {
                         ),
                     )
                 })?;
-                Ok(RuntimeValue::Text(value))
+                Ok(RuntimeValue::Text(RuntimeText::new(value)))
             }
         }
     }
@@ -1885,7 +2101,7 @@ fn expect_one_text_path(
             format!("AE-HOST-002: host service {service} requires Text"),
         ));
     };
-    Ok(path.clone())
+    Ok(path.as_str().to_owned())
 }
 
 fn resolve_under_roots(
@@ -2013,6 +2229,20 @@ fn validate_guest_io_path(path: &str, offset: usize) -> Result<(), BytecodeError
 struct RuntimeState {
     arena: ArenaState,
     nurseries: Vec<NurseryFrame>,
+    v12_nurseries: Vec<V12NurseryFrame>,
+    resumed_task: Option<TaskFrame>,
+    active_task_lane: Option<TaskArenaLane>,
+    #[cfg(test)]
+    task_frame_trace: Vec<TaskFrameTraceEvent>,
+    /// Test-only proof of deterministic task-local destruction order.  This is
+    /// deliberately unavailable to guest code and is populated only while a
+    /// real task frame is being torn down.
+    #[cfg(test)]
+    task_destroyed_local_slots: Vec<usize>,
+    /// Test-only snapshots proving that terminal handles do not implicitly
+    /// destroy parent-owned resources while their callee runs.
+    #[cfg(test)]
+    handle_live_resource_slots: Vec<Vec<usize>>,
     hosts: HostServices,
 }
 
@@ -2035,8 +2265,80 @@ impl RuntimeState {
         Ok(Self {
             arena: ArenaState { bytes, used: 0 },
             nurseries: Vec::new(),
+            v12_nurseries: Vec::new(),
+            resumed_task: None,
+            active_task_lane: None,
+            #[cfg(test)]
+            task_frame_trace: Vec::new(),
+            #[cfg(test)]
+            task_destroyed_local_slots: Vec::new(),
+            #[cfg(test)]
+            handle_live_resource_slots: Vec::new(),
             hosts,
         })
+    }
+
+    /// Reserve bytes in either the ordinary monotonic arena or the currently
+    /// executing task's pre-admitted private lane.  Returning `None` preserves
+    /// the existing M2 allocation-outcome behavior without leaking a sibling
+    /// lane or advancing a cursor on failure.
+    fn reserve_arena_bytes(&mut self, required: usize) -> Option<usize> {
+        if let Some(lane) = self.active_task_lane.as_mut() {
+            let lane_end = lane.used.checked_add(required)?;
+            if lane_end > lane.capacity {
+                return None;
+            }
+            let start = lane.start.checked_add(lane.used)?;
+            let end = start.checked_add(required)?;
+            if end > self.arena.bytes.len() {
+                return None;
+            }
+            lane.used = lane_end;
+            return Some(start);
+        }
+
+        let end = self.arena.used.checked_add(required)?;
+        if end > self.arena.bytes.len() {
+            return None;
+        }
+        let start = self.arena.used;
+        self.arena.used = end;
+        Some(start)
+    }
+
+    fn reserve_task_slab(
+        &mut self,
+        capacity: usize,
+        offset: usize,
+    ) -> Result<usize, BytecodeError> {
+        let start = self.arena.used;
+        let end = start
+            .checked_add(capacity)
+            .ok_or_else(|| BytecodeError::new(offset, "task nursery slab capacity overflowed"))?;
+        if end > self.arena.bytes.len() {
+            return Err(BytecodeError::new(
+                offset,
+                "AETH v12 task nursery admission exceeded its verified arena capacity",
+            ));
+        }
+        self.arena.used = end;
+        Ok(start)
+    }
+
+    fn zero_arena_range(
+        &mut self,
+        start: usize,
+        capacity: usize,
+        offset: usize,
+    ) -> Result<(), BytecodeError> {
+        let end = start
+            .checked_add(capacity)
+            .ok_or_else(|| BytecodeError::new(offset, "task arena lane range overflowed"))?;
+        let bytes = self.arena.bytes.get_mut(start..end).ok_or_else(|| {
+            BytecodeError::new(offset, "task arena lane lies outside the reserved arena")
+        })?;
+        bytes.fill(0);
+        Ok(())
     }
 }
 
@@ -2049,7 +2351,7 @@ fn runtime_from_invocation(value: &InvocationValue) -> Result<RuntimeValue, Byte
                     "invocation Text exceeds the Aether text safety limit",
                 ));
             }
-            Ok(RuntimeValue::Text(text.clone()))
+            Ok(RuntimeValue::Text(RuntimeText::new(text.clone())))
         }
         InvocationValue::Whole(value) => Ok(RuntimeValue::Whole(*value)),
         InvocationValue::Truth(value) => Ok(RuntimeValue::Truth(*value)),
@@ -2067,7 +2369,7 @@ fn runtime_from_invocation(value: &InvocationValue) -> Result<RuntimeValue, Byte
 
 fn invocation_from_runtime(value: RuntimeValue) -> Result<InvocationValue, BytecodeError> {
     match value {
-        RuntimeValue::Text(value) => Ok(InvocationValue::Text(value)),
+        RuntimeValue::Text(value) => Ok(InvocationValue::Text(value.into_string())),
         RuntimeValue::Whole(value) => Ok(InvocationValue::Whole(value)),
         RuntimeValue::Truth(value) => Ok(InvocationValue::Truth(value)),
         RuntimeValue::Bytes(value) => Ok(InvocationValue::Bytes(value)),
@@ -2188,6 +2490,8 @@ enum Instruction {
         destination: usize,
     },
     NurseryEnd,
+    /// AETH v12 cooperative task suspension point.
+    TaskCheckpoint,
     Call {
         function: usize,
         arguments: usize,
@@ -2334,7 +2638,7 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
                 "AE-MOD-001: import unit declarations must appear immediately after world",
             ));
         }
-        let (name, parameters, result, effect) = parse_weave_header(line, &record_types)?;
+        let (name, parameters, result, effect, task) = parse_weave_header(line, &record_types)?;
         index += 1;
         let body = parse_block(&lines, &mut index, 1)?;
         if body.is_empty() {
@@ -2348,6 +2652,7 @@ pub fn compile_source(source: &str) -> Result<Program, CompilerError> {
             parameters,
             result,
             effect,
+            task,
             body,
             span: line.span(1),
         });
@@ -2385,7 +2690,16 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 /// programs covered by self-host tests.
 pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
     let program = compile_source(source)?;
-    let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
+    // M23 is validated and folded by the bootstrap, then materialized into the
+    // existing literal M5 seed input. The seed remains the product emitter and
+    // the resulting artifact is required to match the direct bootstrap output.
+    // This bridge is deliberately narrow: only already-validated M23 call
+    // directives are rewritten, and no source, host, or runtime authority is
+    // exposed to compile-time evaluation.
+    let seed_source = lower_m23_comptime_calls_for_seed(&program)?
+        .map(|lowered| format_program(&lowered))
+        .unwrap_or_else(|| source.to_owned());
+    let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, &seed_source).map_err(|error| {
         CompilerError::new(Span::synthetic(), format!("seed compiler failed: {error}"))
     })?;
     let InvocationValue::Bytes(bytecode) = forged.value else {
@@ -2401,6 +2715,69 @@ pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
         )
     })?;
     Ok(CompileOutput { program, bytecode })
+}
+
+/// Materialize accepted M23 comptime calls into the literal M5 form understood
+/// by the checked-in seed compiler. This is an intentionally explicit product
+/// bridge, not a general source rewrite: the bootstrap has already validated
+/// the original program, the result is one `COMPTIME_WHOLE` immediate, and the
+/// original AST is retained for callers.
+fn lower_m23_comptime_calls_for_seed(program: &Program) -> Result<Option<Program>, CompilerError> {
+    let mut lowered = program.clone();
+    let mut changed = false;
+
+    for weave_index in 0..program.weaves.len() {
+        let original_weave = &program.weaves[weave_index];
+        let lowered_weave = &mut lowered.weaves[weave_index];
+        let mut comptime_env = BTreeMap::new();
+
+        for (original_statement, lowered_statement) in
+            original_weave.body.iter().zip(&mut lowered_weave.body)
+        {
+            let (
+                Statement::Bind {
+                    comptime: true,
+                    value: original_value,
+                    ..
+                },
+                Statement::Bind {
+                    value: lowered_value,
+                    ..
+                },
+            ) = (original_statement, lowered_statement)
+            else {
+                continue;
+            };
+
+            let folded = evaluate_comptime_whole(
+                original_value,
+                &comptime_env,
+                &program.weaves[..weave_index],
+            )?;
+            if matches!(&original_value.kind, ExpressionKind::Call { .. }) {
+                *lowered_value = Expression {
+                    kind: ExpressionKind::Binary {
+                        operation: BinaryOperation::Sum,
+                        left: Atom {
+                            kind: AtomKind::Whole(folded),
+                            span: original_value.span,
+                        },
+                        right: Atom {
+                            kind: AtomKind::Whole(0),
+                            span: original_value.span,
+                        },
+                    },
+                    span: original_value.span,
+                };
+                changed = true;
+            }
+            if let Statement::Bind { name, .. } = original_statement {
+                comptime_env.insert(name.clone(), folded);
+            }
+        }
+    }
+
+    Ok(changed.then_some(lowered))
 }
 
 #[must_use]
@@ -2467,7 +2844,11 @@ pub fn format_program(program: &Program) -> String {
     }
     for weave in &program.weaves {
         formatted.push('\n');
-        formatted.push_str("weave ");
+        if weave.task {
+            formatted.push_str("task weave ");
+        } else {
+            formatted.push_str("weave ");
+        }
         formatted.push_str(&weave.name);
         formatted.push_str(" [");
         for (index, parameter) in weave.parameters.iter().enumerate() {
@@ -2557,6 +2938,9 @@ pub fn canonical_ast(program: &Program) -> String {
             Effect::Total => "Total",
             Effect::ErrorWhole => "ErrorWhole",
         });
+        if weave.task {
+            output.push_str("#Task");
+        }
         output.push_str(")[");
         for (index, parameter) in weave.parameters.iter().enumerate() {
             if index > 0 {
@@ -2638,6 +3022,10 @@ pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
         ));
     }
 
+    if artifact.version == ARTIFACT_VERSION_V12 {
+        validate_v12_function_metadata(&artifact, main_index)?;
+    }
+
     verify_resource_plan(&artifact, main_index)?;
 
     for (function_index, function) in artifact.functions.iter().enumerate() {
@@ -2649,6 +3037,52 @@ pub fn verify_bytecode(bytecode: &[u8]) -> Result<(), BytecodeError> {
             &artifact.shapes,
             artifact.version,
         )?;
+    }
+    Ok(())
+}
+
+fn validate_v12_function_metadata(
+    artifact: &Artifact,
+    main_index: usize,
+) -> Result<(), BytecodeError> {
+    for (index, function) in artifact.functions.iter().enumerate() {
+        if function.is_host() {
+            if function.flags != 0 || function.frame_arena_capacity != 0 {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 host weave metadata must have zero flags and zero frame arena capacity",
+                ));
+            }
+            continue;
+        }
+        if function.is_task() {
+            if index == main_index
+                || function.effect != Effect::Total
+                || function.result != ValueType::Whole
+                || function.parameters.iter().any(|(value_type, mode)| {
+                    *mode != ParameterMode::Own
+                        || !matches!(value_type, ValueType::Whole | ValueType::Truth)
+                })
+            {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 task frame must be a non-main total Whole guest with owned Whole or Truth parameters",
+                ));
+            }
+        } else {
+            if function.flags != 0 {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 non-task guest weave has task-frame flags",
+                ));
+            }
+            if index != main_index && function.frame_arena_capacity != 0 {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 only main or a task frame may declare direct arena capacity",
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -2718,11 +3152,12 @@ fn validate_artifact_resource_signature(
                 | ARTIFACT_VERSION_V9
                 | ARTIFACT_VERSION_V10
                 | ARTIFACT_VERSION_V11
+                | ARTIFACT_VERSION_V12
         ) || access_count != 1)
     {
         return Err(BytecodeError::new(
             0,
-            "artifact Buffer signatures require exactly one AETH v6/v7/v8/v9 access Arena parameter",
+            "artifact Buffer signatures require exactly one AETH v6 through v12 access Arena parameter",
         ));
     }
     if function
@@ -2749,6 +3184,7 @@ fn validate_artifact_effect_signature(
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
             | ARTIFACT_VERSION_V11
+            | ARTIFACT_VERSION_V12
     ) && function.effect != Effect::Total
     {
         return Err(BytecodeError::new(
@@ -2777,11 +3213,14 @@ fn validate_artifact_effect_signature(
 }
 
 fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), BytecodeError> {
+    if artifact.version == ARTIFACT_VERSION_V12 {
+        return verify_v12_resource_plan(artifact, main_index);
+    }
     let mut arena_declarations = 0_usize;
     let mut resource_instruction_seen = false;
     for (function_index, function) in artifact.functions.iter().enumerate() {
         for instruction in decode_code(&function.code, artifact.version)? {
-            match instruction.instruction {
+            match &instruction.instruction {
                 Instruction::Arena => {
                     // M19d: OP_ARENA may appear in any function (self-owned arena).
                     let _ = function_index;
@@ -2812,6 +3251,7 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
             | ARTIFACT_VERSION_V11
+            | ARTIFACT_VERSION_V12
     ) {
         if artifact.arena_capacity != 0 || resource_instruction_seen {
             return Err(BytecodeError::new(
@@ -2837,6 +3277,223 @@ fn verify_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), By
         return Err(BytecodeError::new(
             0,
             "AETH v6 through v11 zero arena plan cannot declare an Arena capability",
+        ));
+    }
+    Ok(())
+}
+
+fn instruction_uses_resource(instruction: &Instruction) -> bool {
+    matches!(
+        instruction,
+        Instruction::Arena
+            | Instruction::Buffer(_)
+            | Instruction::Table { .. }
+            | Instruction::Access(_)
+            | Instruction::Allocate { .. }
+            | Instruction::BufferAppend { .. }
+            | Instruction::BufferAt { .. }
+            | Instruction::TableAllocate { .. }
+            | Instruction::TableStore { .. }
+            | Instruction::TableLoad { .. }
+            | Instruction::TableCount
+            | Instruction::Count
+    )
+}
+
+fn v12_companion_is_eligible(function: &ArtifactFunction, decoded: &[DecodedInstruction]) -> bool {
+    if function.is_host()
+        || function.is_task()
+        || function.result != ValueType::Whole
+        || function.parameters.iter().any(|(value_type, mode)| {
+            *mode != ParameterMode::Own
+                || !matches!(value_type, ValueType::Whole | ValueType::Truth)
+        })
+        || function
+            .locals
+            .iter()
+            .any(|local| !matches!(local.value_type, ValueType::Whole | ValueType::Truth))
+    {
+        return false;
+    }
+    decoded.iter().all(|instruction| {
+        matches!(
+            instruction.instruction,
+            Instruction::PushWhole(_)
+                | Instruction::PushTruth(_)
+                | Instruction::Store(_)
+                | Instruction::Load(_)
+                | Instruction::Move(_)
+                | Instruction::Revise(_)
+                | Instruction::Yield
+                | Instruction::Sum
+                | Instruction::Difference
+                | Instruction::Product
+                | Instruction::Quotient
+                | Instruction::Remainder
+                | Instruction::Less
+                | Instruction::Same
+                | Instruction::Not
+                | Instruction::JumpIfDim(_)
+                | Instruction::Jump(_)
+                | Instruction::Raise
+        )
+    })
+}
+
+fn verify_v12_resource_plan(artifact: &Artifact, main_index: usize) -> Result<(), BytecodeError> {
+    let mut decoded_functions = Vec::with_capacity(artifact.functions.len());
+    for function in &artifact.functions {
+        decoded_functions.push(decode_code(&function.code, artifact.version)?);
+    }
+
+    let mut main_capacity = 0_u32;
+    let mut nursery_capacity = 0_u32;
+    let task_declared = artifact.functions.iter().any(ArtifactFunction::is_task);
+
+    for (function_index, function) in artifact.functions.iter().enumerate() {
+        let decoded = &decoded_functions[function_index];
+        let arena_count = decoded
+            .iter()
+            .filter(|instruction| matches!(instruction.instruction, Instruction::Arena))
+            .count();
+        let uses_resource = decoded
+            .iter()
+            .any(|instruction| instruction_uses_resource(&instruction.instruction));
+
+        if function.is_host() {
+            continue;
+        }
+        if function_index == main_index {
+            main_capacity = function.frame_arena_capacity;
+            if (arena_count == 0) != (main_capacity == 0) {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 main frame arena capacity must agree with its direct Arena declaration",
+                ));
+            }
+            if arena_count > 1 {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 main may declare at most one direct Arena capability",
+                ));
+            }
+        } else if function.is_task() {
+            if (arena_count == 0) != (function.frame_arena_capacity == 0) {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 task frame arena capacity must agree with its direct Arena declaration",
+                ));
+            }
+            if arena_count > 1 {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 task frame may declare at most one direct Arena capability",
+                ));
+            }
+        } else {
+            if uses_resource {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 permits resource instructions outside main only in an isolated task frame",
+                ));
+            }
+            if function.frame_arena_capacity != 0 {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 non-task guest weave cannot declare frame arena capacity",
+                ));
+            }
+        }
+
+        if task_declared && function_index != main_index && !function.is_task() && uses_resource {
+            return Err(BytecodeError::new(
+                0,
+                "AETH v12 task artifacts cannot grant a non-main companion resource ownership",
+            ));
+        }
+
+        let mut nursery_targets: Option<Vec<usize>> = None;
+        for instruction in decoded {
+            match instruction.instruction {
+                Instruction::NurseryBegin { .. } => {
+                    if nursery_targets.replace(Vec::new()).is_some() {
+                        return Err(BytecodeError::new(
+                            instruction.offset,
+                            "AETH v12 cannot nest nursery regions",
+                        ));
+                    }
+                }
+                Instruction::NurserySpawn { function, .. } => {
+                    let Some(targets) = nursery_targets.as_mut() else {
+                        return Err(BytecodeError::new(
+                            instruction.offset,
+                            "AETH v12 NURSERY_SPAWN has no active nursery region",
+                        ));
+                    };
+                    targets.push(function);
+                }
+                Instruction::NurseryEnd => {
+                    let Some(targets) = nursery_targets.take() else {
+                        return Err(BytecodeError::new(
+                            instruction.offset,
+                            "AETH v12 NURSERY_END has no active nursery region",
+                        ));
+                    };
+                    let child_targets = targets
+                        .iter()
+                        .map(|target| {
+                            artifact.functions.get(*target).ok_or_else(|| {
+                                BytecodeError::new(
+                                    instruction.offset,
+                                    "AETH v12 nursery spawn references an unknown weave",
+                                )
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    if child_targets.iter().any(|target| target.is_task()) {
+                        let mut lane_sum = 0_u32;
+                        for (target, child) in targets.into_iter().zip(child_targets) {
+                            if child.is_task() {
+                                lane_sum = lane_sum
+                                    .checked_add(child.frame_arena_capacity)
+                                    .ok_or_else(|| {
+                                        BytecodeError::new(
+                                            instruction.offset,
+                                            "AETH v12 task lane capacity overflowed the M2 limit",
+                                        )
+                                    })?;
+                            } else if !v12_companion_is_eligible(child, &decoded_functions[target])
+                            {
+                                return Err(BytecodeError::new(
+                                    instruction.offset,
+                                    "AETH v12 checkpointed nursery child must be a task frame or Copy-only companion",
+                                ));
+                            }
+                        }
+                        nursery_capacity = nursery_capacity.max(lane_sum);
+                    }
+                }
+                _ => {}
+            }
+        }
+        if nursery_targets.is_some() {
+            return Err(BytecodeError::new(
+                0,
+                "AETH v12 nursery region is not closed",
+            ));
+        }
+    }
+
+    let required = main_capacity.checked_add(nursery_capacity).ok_or_else(|| {
+        BytecodeError::new(
+            0,
+            "AETH v12 concurrent frame capacity overflowed the M2 limit",
+        )
+    })?;
+    if required > MAX_ARENA_BYTES || artifact.arena_capacity != required {
+        return Err(BytecodeError::new(
+            0,
+            "AETH v12 header arena capacity must equal main direct capacity plus the largest checkpointed nursery lane sum",
         ));
     }
     Ok(())
@@ -2961,6 +3618,14 @@ fn invoke_artifact_with_hosts(
         .functions
         .get(function_index)
         .ok_or_else(|| BytecodeError::new(0, "artifact invocation index is invalid"))?;
+    if function.is_task() {
+        return Err(BytecodeError::new(
+            0,
+            format!(
+                "host invocation refuses task weave {weave_name}; task frames may run only inside a checkpointed nursery"
+            ),
+        ));
+    }
     if function.effect != Effect::Total {
         return Err(BytecodeError::new(
             0,
@@ -3135,7 +3800,7 @@ fn parse_host_weave_header(
             "AE-HOST-001: host weave parameter list is missing its closing bracket",
         ));
     };
-    let parameters = parse_parameters(&after_opening[..closing], line, record_types)?;
+    let parameters = parse_parameters(&after_opening[..closing], line, record_types, false)?;
     let after_parameters = after_opening[closing + 1..].trim();
     let Some(result_text) = after_parameters.strip_prefix("-> ") else {
         return Err(CompilerError::new(
@@ -3197,7 +3862,7 @@ fn parse_foreign_weave_header(
             "AE-FFI-001: foreign weave parameter list is missing its closing bracket",
         ));
     };
-    let parameters = parse_parameters(&after_opening[..closing], line, record_types)?;
+    let parameters = parse_parameters(&after_opening[..closing], line, record_types, false)?;
     let after_parameters = after_opening[closing + 1..].trim();
     // -> Type from "lib" symbol "sym"
     let Some(after_arrow) = after_parameters.strip_prefix("-> ") else {
@@ -3383,21 +4048,23 @@ fn validate_host_abi_types(
 fn parse_weave_header(
     line: SourceLine<'_>,
     record_types: &BTreeMap<String, u16>,
-) -> Result<(String, Vec<Parameter>, ValueType, Effect), CompilerError> {
+) -> Result<(String, Vec<Parameter>, ValueType, Effect, bool), CompilerError> {
     let Some(without_colon) = line.content.strip_suffix(':') else {
         return Err(CompilerError::new(
             line.span(1),
             "weave declarations must end with a colon",
         ));
     };
-    let rest = if let Some(rest) = without_colon.strip_prefix("export weave ") {
-        rest
+    let (rest, task) = if let Some(rest) = without_colon.strip_prefix("task weave ") {
+        (rest, true)
+    } else if let Some(rest) = without_colon.strip_prefix("export weave ") {
+        (rest, false)
     } else if let Some(rest) = without_colon.strip_prefix("weave ") {
-        rest
+        (rest, false)
     } else {
         return Err(CompilerError::new(
             line.span(1),
-            "expected weave or export weave declaration",
+            "expected weave, task weave, or export weave declaration",
         ));
     };
     let Some(opening) = rest.find('[') else {
@@ -3415,7 +4082,7 @@ fn parse_weave_header(
             "weave parameter list is missing its closing bracket",
         ));
     };
-    let parameters = parse_parameters(&after_opening[..closing], line, record_types)?;
+    let parameters = parse_parameters(&after_opening[..closing], line, record_types, task)?;
     let after_parameters = after_opening[closing + 1..].trim();
     let Some(result_text) = after_parameters.strip_prefix("-> ") else {
         return Err(CompilerError::new(
@@ -3434,13 +4101,14 @@ fn parse_weave_header(
         (result_text, Effect::Total)
     };
     let result = parse_value_type(result_text, line.span(line.content.len()), record_types)?;
-    Ok((name.to_owned(), parameters, result, effect))
+    Ok((name.to_owned(), parameters, result, effect, task))
 }
 
 fn parse_parameters(
     source: &str,
     line: SourceLine<'_>,
     record_types: &BTreeMap<String, u16>,
+    task: bool,
 ) -> Result<Vec<Parameter>, CompilerError> {
     if source.trim().is_empty() {
         return Ok(Vec::new());
@@ -3470,6 +4138,15 @@ fn parse_parameters(
         };
         validate_name(name, line.span(1), "parameter name", false)?;
         let value_type = parse_value_type(type_text, line.span(1), record_types)?;
+        if task
+            && (mode != ParameterMode::Own
+                || !matches!(value_type, ValueType::Whole | ValueType::Truth))
+        {
+            return Err(CompilerError::new(
+                line.span(1),
+                "AE-TASK-004: task weave parameters must be owned Whole or Truth copy values",
+            ));
+        }
         if mode == ParameterMode::Borrow && !is_unique_value(value_type) {
             return Err(CompilerError::new(
                 line.span(1),
@@ -3960,6 +4637,9 @@ fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerErro
             span,
         });
     }
+    if line.content == "checkpoint" {
+        return Ok(Statement::Checkpoint { span });
+    }
     if let Some(expression) = line.content.strip_prefix("yield ") {
         return Ok(Statement::Yield {
             value: parse_expression(expression, span)?,
@@ -3993,7 +4673,7 @@ fn parse_plain_statement(line: SourceLine<'_>) -> Result<Statement, CompilerErro
     }
     Err(CompilerError::new(
         span,
-        "unknown Aether statement; use comptime bind, bind, revise, speak, release, yield, raise, forward, choose, while, together, or handle",
+        "unknown Aether statement; use comptime bind, bind, revise, speak, release, checkpoint, yield, raise, forward, choose, while, together, or handle",
     ))
 }
 
@@ -4766,6 +5446,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
                     result: host.result,
                     effect: Effect::Total,
                     is_host: true,
+                    is_task: false,
                 },
             )
             .is_some()
@@ -4788,6 +5469,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
                     result: weave.result,
                     effect: weave.effect,
                     is_host: false,
+                    is_task: weave.task,
                 },
             )
             .is_some()
@@ -4818,6 +5500,12 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         ));
     }
 
+    for weave in &program.weaves {
+        if weave.task {
+            validate_task_weave_declaration(weave)?;
+        }
+    }
+
     // M19b: spawn callees must not use M2/M6 resource forms (Policy A).
     let resource_using_weaves: BTreeSet<String> = program
         .weaves
@@ -4826,7 +5514,7 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
         .map(|weave| weave.name.clone())
         .collect();
 
-    for weave in &program.weaves {
+    for (weave_index, weave) in program.weaves.iter().enumerate() {
         validate_value_type(weave.result, &program.records, weave.span)?;
         validate_resource_signature(weave)?;
         validate_effect_signature(weave)?;
@@ -4878,9 +5566,376 @@ fn validate_program(program: &Program) -> Result<SemanticResourcePlan, CompilerE
             &mut resource_plan,
             &mut comptime_env,
             &resource_using_weaves,
+            &program.weaves[..weave_index],
         )?;
     }
+    if program.weaves.iter().any(|weave| weave.task) {
+        validate_m19e_nursery_contracts(program, &signatures)?;
+        apply_m19e_frame_capacity(program, &mut resource_plan)?;
+    }
     Ok(resource_plan)
+}
+
+/// Enforce the deliberately small self-contained task subset before ordinary
+/// source validation resolves its local types and ownership states. The second
+/// pass remains necessary because it proves each concrete local operation.
+fn validate_task_weave_declaration(weave: &Weave) -> Result<(), CompilerError> {
+    if weave.name == "main" || weave.effect != Effect::Total || weave.result != ValueType::Whole {
+        return Err(CompilerError::new(
+            weave.span,
+            "AE-TASK-004: task weave must be a non-main total guest weave returning Whole",
+        ));
+    }
+    for parameter in &weave.parameters {
+        if parameter.mode != ParameterMode::Own
+            || !matches!(parameter.value_type, ValueType::Whole | ValueType::Truth)
+        {
+            return Err(CompilerError::new(
+                parameter.span,
+                "AE-TASK-004: task weave parameters must be owned Whole or Truth copy values",
+            ));
+        }
+    }
+
+    fn reject_task_expression(expression: &Expression) -> Result<(), CompilerError> {
+        if matches!(expression.kind, ExpressionKind::Call { .. }) {
+            return Err(CompilerError::new(
+                expression.span,
+                "AE-TASK-004: task weave cannot use call, host, or foreign invocation",
+            ));
+        }
+        Ok(())
+    }
+
+    fn walk(statements: &[Statement], checkpoint_count: &mut usize) -> Result<(), CompilerError> {
+        for statement in statements {
+            match statement {
+                Statement::Bind {
+                    comptime,
+                    value,
+                    span,
+                    ..
+                } => {
+                    if *comptime {
+                        return Err(CompilerError::new(
+                            *span,
+                            "AE-TASK-004: task weave cannot contain comptime bind",
+                        ));
+                    }
+                    reject_task_expression(value)?;
+                }
+                Statement::Revise { value, .. } | Statement::Yield { value, .. } => {
+                    reject_task_expression(value)?
+                }
+                Statement::Checkpoint { .. } => {
+                    *checkpoint_count = checkpoint_count.saturating_add(1);
+                }
+                Statement::Speak { span, .. } => {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-TASK-004: task weave cannot speak or perform ambient output",
+                    ));
+                }
+                Statement::Raise { span, .. }
+                | Statement::Forward { span, .. }
+                | Statement::Handle { span, .. } => {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-TASK-004: task weave cannot raise, forward, or handle effects",
+                    ));
+                }
+                Statement::Together { span, .. } => {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-TASK-004: task weave cannot open a nested together nursery",
+                    ));
+                }
+                Statement::Release { .. } => {}
+                Statement::Choose {
+                    condition,
+                    when_bright,
+                    when_dim,
+                    ..
+                } => {
+                    reject_task_expression(condition)?;
+                    walk(when_bright, checkpoint_count)?;
+                    walk(when_dim, checkpoint_count)?;
+                }
+                Statement::While {
+                    condition,
+                    body,
+                    span,
+                    ..
+                } => {
+                    reject_task_expression(condition)?;
+                    if !matches!(body.first(), Some(Statement::Checkpoint { .. })) {
+                        return Err(CompilerError::new(
+                            *span,
+                            "AE-TASK-004: every task while body must begin with a direct checkpoint",
+                        ));
+                    }
+                    walk(body, checkpoint_count)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    let mut checkpoints = 0_usize;
+    walk(&weave.body, &mut checkpoints)?;
+    if checkpoints == 0 {
+        return Err(CompilerError::new(
+            weave.span,
+            "AE-TASK-004: task weave requires at least one checkpoint",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_m19e_nursery_contracts(
+    program: &Program,
+    signatures: &BTreeMap<String, FunctionSignature>,
+) -> Result<(), CompilerError> {
+    for weave in &program.weaves {
+        if !weave.task && weave.name != "main" && weave_uses_resource(weave) {
+            return Err(CompilerError::new(
+                weave.span,
+                "AE-RESOURCE-004: a program using task weave permits direct arena/resource ownership only in main or a task weave",
+            ));
+        }
+    }
+
+    fn companion_is_eligible(weave: &Weave) -> bool {
+        if weave.task
+            || weave.result != ValueType::Whole
+            || weave.parameters.iter().any(|parameter| {
+                parameter.mode != ParameterMode::Own
+                    || !matches!(parameter.value_type, ValueType::Whole | ValueType::Truth)
+            })
+            || weave_uses_resource(weave)
+        {
+            return false;
+        }
+        fn copy_atom(atom: &Atom) -> bool {
+            matches!(
+                atom.kind,
+                AtomKind::Whole(_) | AtomKind::Truth(_) | AtomKind::Name(_)
+            )
+        }
+        fn copy_expression(expression: &Expression) -> bool {
+            match &expression.kind {
+                ExpressionKind::Atom(atom) => copy_atom(atom),
+                ExpressionKind::Unary {
+                    operation,
+                    argument,
+                } => matches!(operation, UnaryOperation::Not) && copy_atom(argument),
+                ExpressionKind::Binary { left, right, .. } => copy_atom(left) && copy_atom(right),
+                _ => false,
+            }
+        }
+        fn block(statements: &[Statement]) -> bool {
+            statements.iter().all(|statement| match statement {
+                Statement::Bind {
+                    comptime, value, ..
+                } => !*comptime && copy_expression(value),
+                Statement::Revise { value, .. } | Statement::Yield { value, .. } => {
+                    copy_expression(value)
+                }
+                Statement::Raise { code, .. } => copy_atom(code),
+                Statement::Choose {
+                    condition,
+                    when_bright,
+                    when_dim,
+                    ..
+                } => copy_expression(condition) && block(when_bright) && block(when_dim),
+                Statement::While {
+                    condition, body, ..
+                } => copy_expression(condition) && block(body),
+                Statement::Speak { .. }
+                | Statement::Release { .. }
+                | Statement::Checkpoint { .. }
+                | Statement::Forward { .. }
+                | Statement::Handle { .. }
+                | Statement::Together { .. } => false,
+            })
+        }
+        block(&weave.body)
+    }
+
+    fn visit(
+        parent: &Weave,
+        statements: &[Statement],
+        program: &Program,
+        signatures: &BTreeMap<String, FunctionSignature>,
+    ) -> Result<(), CompilerError> {
+        for statement in statements {
+            match statement {
+                Statement::Together { spawns, span } => {
+                    let checkpointed = spawns.iter().any(|spawn| {
+                        signatures
+                            .get(&spawn.weave)
+                            .is_some_and(|signature| signature.is_task)
+                    });
+                    if checkpointed {
+                        for spawn in spawns {
+                            let Some(signature) = signatures.get(&spawn.weave) else {
+                                return Err(CompilerError::new(
+                                    spawn.span,
+                                    format!("AE-TASK-005: spawn target {} is unknown", spawn.weave),
+                                ));
+                            };
+                            if signature.is_task {
+                                continue;
+                            }
+                            let Some(companion) = program
+                                .weaves
+                                .iter()
+                                .find(|candidate| candidate.name == spawn.weave)
+                            else {
+                                return Err(CompilerError::new(
+                                    spawn.span,
+                                    format!(
+                                        "AE-TASK-005: checkpointed nursery target {} must be a guest task or companion weave",
+                                        spawn.weave
+                                    ),
+                                ));
+                            };
+                            if !companion_is_eligible(companion) {
+                                return Err(CompilerError::new(
+                                    spawn.span,
+                                    format!(
+                                        "AE-TASK-005: checkpointed nursery companion {} must be resource-free, self-contained, and Copy-only",
+                                        spawn.weave
+                                    ),
+                                ));
+                            }
+                        }
+                        if parent.task {
+                            return Err(CompilerError::new(
+                                *span,
+                                "AE-TASK-004: task weave cannot open a checkpointed nursery",
+                            ));
+                        }
+                    }
+                }
+                Statement::Choose {
+                    when_bright,
+                    when_dim,
+                    ..
+                } => {
+                    visit(parent, when_bright, program, signatures)?;
+                    visit(parent, when_dim, program, signatures)?;
+                }
+                Statement::While { body, .. } => visit(parent, body, program, signatures)?,
+                Statement::Bind { .. }
+                | Statement::Revise { .. }
+                | Statement::Speak { .. }
+                | Statement::Release { .. }
+                | Statement::Checkpoint { .. }
+                | Statement::Yield { .. }
+                | Statement::Raise { .. }
+                | Statement::Forward { .. }
+                | Statement::Handle { .. } => {}
+            }
+        }
+        Ok(())
+    }
+
+    for weave in &program.weaves {
+        visit(weave, &weave.body, program, signatures)?;
+    }
+    Ok(())
+}
+
+fn apply_m19e_frame_capacity(
+    program: &Program,
+    resource_plan: &mut SemanticResourcePlan,
+) -> Result<(), CompilerError> {
+    fn visit(
+        statements: &[Statement],
+        program: &Program,
+        resource_plan: &SemanticResourcePlan,
+        maximum: &mut u32,
+    ) -> Result<(), CompilerError> {
+        for statement in statements {
+            match statement {
+                Statement::Together { spawns, span } => {
+                    let mut has_task = false;
+                    let mut total = 0_u32;
+                    for spawn in spawns {
+                        let task = program
+                            .weaves
+                            .iter()
+                            .find(|weave| weave.name == spawn.weave)
+                            .is_some_and(|weave| weave.task);
+                        if task {
+                            has_task = true;
+                            total = total
+                                .checked_add(resource_plan.direct_arena_capacity(&spawn.weave))
+                                .ok_or_else(|| {
+                                    CompilerError::new(
+                                        *span,
+                                        "AE-RESOURCE-004: checkpointed nursery frame capacity overflowed the M2 bound",
+                                    )
+                                })?;
+                        }
+                    }
+                    if has_task {
+                        *maximum = (*maximum).max(total);
+                    }
+                }
+                Statement::Choose {
+                    when_bright,
+                    when_dim,
+                    ..
+                } => {
+                    visit(when_bright, program, resource_plan, maximum)?;
+                    visit(when_dim, program, resource_plan, maximum)?;
+                }
+                Statement::While { body, .. } => visit(body, program, resource_plan, maximum)?,
+                Statement::Bind { .. }
+                | Statement::Revise { .. }
+                | Statement::Speak { .. }
+                | Statement::Release { .. }
+                | Statement::Checkpoint { .. }
+                | Statement::Yield { .. }
+                | Statement::Raise { .. }
+                | Statement::Forward { .. }
+                | Statement::Handle { .. } => {}
+            }
+        }
+        Ok(())
+    }
+
+    let main_capacity = resource_plan.direct_arena_capacity("main");
+    let mut nursery_capacity = 0_u32;
+    for weave in &program.weaves {
+        visit(&weave.body, program, resource_plan, &mut nursery_capacity)?;
+    }
+    let capacity = main_capacity.checked_add(nursery_capacity).ok_or_else(|| {
+        CompilerError::new(
+            Span::synthetic(),
+            "AE-RESOURCE-004: M19e frame capacity overflowed the M2 bound",
+        )
+    })?;
+    if capacity > MAX_ARENA_BYTES {
+        return Err(CompilerError::new(
+            Span::synthetic(),
+            format!(
+                "AE-RESOURCE-004: M19e frame capacity exceeds the M2 safety limit of {MAX_ARENA_BYTES}"
+            ),
+        ));
+    }
+    if capacity == 0 {
+        resource_plan.arena = None;
+    } else {
+        resource_plan.arena = Some(SemanticArena {
+            name: "m19e_frame_plan".to_owned(),
+            capacity,
+            span: Span::synthetic(),
+        });
+    }
+    Ok(())
 }
 
 fn validate_comptime_budget(program: &Program) -> Result<(), CompilerError> {
@@ -4896,6 +5951,7 @@ fn validate_comptime_budget(program: &Program) -> Result<(), CompilerError> {
                 } => count(when_bright) + count(when_dim),
                 Statement::While { body, .. } => count(body),
                 Statement::Together { .. }
+                | Statement::Checkpoint { .. }
                 | Statement::Revise { .. }
                 | Statement::Speak { .. }
                 | Statement::Release { .. }
@@ -4950,77 +6006,304 @@ fn comptime_operand_whole(atom: &Atom, env: &BTreeMap<String, i64>) -> Result<i6
     }
 }
 
-/// M5/M15: one binary Whole arithmetic op over literals and/or prior comptime names.
+/// M5/M15 arithmetic plus the M23 `call` form. Every accepted directive still
+/// folds to one `COMPTIME_WHOLE` immediate; M23 adds no runtime call edge.
 fn evaluate_comptime_whole(
     expression: &Expression,
     env: &BTreeMap<String, i64>,
+    prior_weaves: &[Weave],
 ) -> Result<i64, CompilerError> {
-    let ExpressionKind::Binary {
-        operation,
-        left,
-        right,
-    } = &expression.kind
-    else {
-        return Err(CompilerError::new(
+    match &expression.kind {
+        ExpressionKind::Binary {
+            operation,
+            left,
+            right,
+        } => evaluate_comptime_arithmetic(
+            *operation,
+            comptime_operand_whole(left, env)?,
+            comptime_operand_whole(right, env)?,
             expression.span,
-            "AE-COMPTIME-001: comptime bind requires exactly one Whole sum, difference, product, quotient, or remainder expression",
-        ));
-    };
-    let left = comptime_operand_whole(left, env)?;
-    let right = comptime_operand_whole(right, env)?;
+        ),
+        ExpressionKind::Call { weave, arguments } => {
+            evaluate_comptime_pure_call(expression.span, weave, arguments, env, prior_weaves)
+        }
+        _ => Err(CompilerError::new(
+            expression.span,
+            "AE-COMPTIME-001: comptime bind requires exactly one Whole sum, difference, product, quotient, remainder, or eligible pure call expression",
+        )),
+    }
+}
+
+/// Checked Whole arithmetic shared by the direct M5/M15 evaluator and the
+/// restricted M23 callee interpreter. Keeping one implementation prevents
+/// arithmetic drift between a literal directive and the same operation inside
+/// a pure comptime helper.
+fn evaluate_comptime_arithmetic(
+    operation: BinaryOperation,
+    left: i64,
+    right: i64,
+    span: Span,
+) -> Result<i64, CompilerError> {
     match operation {
         BinaryOperation::Sum => left.checked_add(right).ok_or_else(|| {
-            CompilerError::new(
-                expression.span,
-                "AE-COMPTIME-002: comptime sum overflowed Whole",
-            )
+            CompilerError::new(span, "AE-COMPTIME-002: comptime sum overflowed Whole")
         }),
         BinaryOperation::Difference => left.checked_sub(right).ok_or_else(|| {
             CompilerError::new(
-                expression.span,
+                span,
                 "AE-COMPTIME-002: comptime difference overflowed Whole",
             )
         }),
         BinaryOperation::Product => left.checked_mul(right).ok_or_else(|| {
-            CompilerError::new(
-                expression.span,
-                "AE-COMPTIME-002: comptime product overflowed Whole",
-            )
+            CompilerError::new(span, "AE-COMPTIME-002: comptime product overflowed Whole")
         }),
         BinaryOperation::Quotient => {
             if right == 0 {
                 return Err(CompilerError::new(
-                    expression.span,
+                    span,
                     "AE-COMPTIME-002: comptime quotient cannot divide by zero",
                 ));
             }
             left.checked_div(right).ok_or_else(|| {
-                CompilerError::new(
-                    expression.span,
-                    "AE-COMPTIME-002: comptime quotient overflowed Whole",
-                )
+                CompilerError::new(span, "AE-COMPTIME-002: comptime quotient overflowed Whole")
             })
         }
         BinaryOperation::Remainder => {
             if right == 0 {
                 return Err(CompilerError::new(
-                    expression.span,
+                    span,
                     "AE-COMPTIME-002: comptime remainder cannot divide by zero",
                 ));
             }
             left.checked_rem(right).ok_or_else(|| {
-                CompilerError::new(
-                    expression.span,
-                    "AE-COMPTIME-002: comptime remainder overflowed Whole",
-                )
+                CompilerError::new(span, "AE-COMPTIME-002: comptime remainder overflowed Whole")
             })
         }
         _ => Err(CompilerError::new(
-            expression.span,
+            span,
             format!(
-                "AE-COMPTIME-001: comptime bind does not admit {} in the bounded M15 evaluator",
+                "AE-COMPTIME-001: comptime bind does not admit {} in the bounded comptime evaluator",
                 operation.word()
             ),
+        )),
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ComptimeLocal {
+    value: i64,
+    mutable: bool,
+}
+
+/// M23 resolver: lookup is intentionally limited to earlier guest weaves. A
+/// host/foreign target, a forward target, and an unknown target all fail before
+/// an evaluator can observe any runtime authority.
+fn evaluate_comptime_pure_call(
+    span: Span,
+    weave_name: &str,
+    arguments: &[Atom],
+    caller_env: &BTreeMap<String, i64>,
+    prior_weaves: &[Weave],
+) -> Result<i64, CompilerError> {
+    let callee = prior_weaves
+        .iter()
+        .find(|candidate| candidate.name == weave_name)
+        .ok_or_else(|| {
+            CompilerError::new(
+                span,
+                format!(
+                    "AE-COMPTIME-001: comptime call {weave_name} must target a prior total guest weave"
+                ),
+            )
+        })?;
+
+    if callee.task || callee.effect != Effect::Total || callee.result != ValueType::Whole {
+        return Err(CompilerError::new(
+            span,
+            format!(
+                "AE-COMPTIME-001: comptime call {weave_name} requires a total guest weave returning Whole"
+            ),
+        ));
+    }
+    if callee.parameters.iter().any(|parameter| {
+        parameter.mode != ParameterMode::Own || parameter.value_type != ValueType::Whole
+    }) {
+        return Err(CompilerError::new(
+            span,
+            format!(
+                "AE-COMPTIME-001: comptime call {weave_name} requires owned Whole parameters only"
+            ),
+        ));
+    }
+    if arguments.len() != callee.parameters.len() {
+        return Err(CompilerError::new(
+            span,
+            format!(
+                "AE-COMPTIME-001: comptime call {weave_name} expects {} Whole arguments, received {}",
+                callee.parameters.len(),
+                arguments.len()
+            ),
+        ));
+    }
+
+    let mut locals = BTreeMap::new();
+    for (parameter, argument) in callee.parameters.iter().zip(arguments) {
+        locals.insert(
+            parameter.name.clone(),
+            ComptimeLocal {
+                value: comptime_operand_whole(argument, caller_env)?,
+                mutable: false,
+            },
+        );
+    }
+    evaluate_comptime_pure_weave(callee, locals)
+}
+
+/// Interpret only the M23 callee subset. This deliberately does not reuse the
+/// VM: the evaluator has no bytecode, host, arena, resource, effect, nursery,
+/// control-flow, or nested-call capability to invoke.
+fn evaluate_comptime_pure_weave(
+    weave: &Weave,
+    mut locals: BTreeMap<String, ComptimeLocal>,
+) -> Result<i64, CompilerError> {
+    let mut result = None;
+
+    for (index, statement) in weave.body.iter().enumerate() {
+        match statement {
+            Statement::Bind {
+                name,
+                mutable,
+                comptime,
+                value,
+                span,
+            } => {
+                if *comptime {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-COMPTIME-001: an M23 comptime-pure callee cannot contain comptime bind",
+                    ));
+                }
+                if locals.contains_key(name) {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!(
+                            "AE-COMPTIME-001: comptime-pure callee {} rebinds local {name}",
+                            weave.name
+                        ),
+                    ));
+                }
+                let value = evaluate_comptime_callee_expression(value, &locals)?;
+                locals.insert(
+                    name.clone(),
+                    ComptimeLocal {
+                        value,
+                        mutable: *mutable,
+                    },
+                );
+            }
+            Statement::Revise { name, value, span } => {
+                let evaluated = evaluate_comptime_callee_expression(value, &locals)?;
+                let Some(local) = locals.get_mut(name) else {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!(
+                            "AE-COMPTIME-001: comptime-pure callee {} revises unknown local {name}",
+                            weave.name
+                        ),
+                    ));
+                };
+                if !local.mutable {
+                    return Err(CompilerError::new(
+                        *span,
+                        format!(
+                            "AE-COMPTIME-001: comptime-pure callee {} revises immutable local {name}",
+                            weave.name
+                        ),
+                    ));
+                }
+                local.value = evaluated;
+            }
+            Statement::Yield { value, span } => {
+                if index + 1 != weave.body.len() {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-COMPTIME-001: an M23 comptime-pure callee must end with its Whole yield",
+                    ));
+                }
+                result = Some(evaluate_comptime_callee_expression(value, &locals)?);
+            }
+            _ => {
+                return Err(CompilerError::new(
+                    statement.span(),
+                    format!(
+                        "AE-COMPTIME-001: comptime-pure callee {} permits only Whole bind, revise, and terminal yield statements",
+                        weave.name
+                    ),
+                ));
+            }
+        }
+    }
+
+    result.ok_or_else(|| {
+        CompilerError::new(
+            weave.span,
+            format!(
+                "AE-COMPTIME-001: comptime-pure callee {} requires a terminal Whole yield",
+                weave.name
+            ),
+        )
+    })
+}
+
+fn evaluate_comptime_callee_expression(
+    expression: &Expression,
+    locals: &BTreeMap<String, ComptimeLocal>,
+) -> Result<i64, CompilerError> {
+    match &expression.kind {
+        ExpressionKind::Atom(atom) => comptime_callee_operand_whole(atom, locals),
+        ExpressionKind::Binary {
+            operation,
+            left,
+            right,
+        } => evaluate_comptime_arithmetic(
+            *operation,
+            comptime_callee_operand_whole(left, locals)?,
+            comptime_callee_operand_whole(right, locals)?,
+            expression.span,
+        ),
+        ExpressionKind::Call { .. } => Err(CompilerError::new(
+            expression.span,
+            "AE-COMPTIME-001: an M23 comptime-pure callee cannot contain a nested call",
+        )),
+        _ => Err(CompilerError::new(
+            expression.span,
+            "AE-COMPTIME-001: an M23 comptime-pure callee expression must be a Whole atom or one Whole arithmetic operation",
+        )),
+    }
+}
+
+fn comptime_callee_operand_whole(
+    atom: &Atom,
+    locals: &BTreeMap<String, ComptimeLocal>,
+) -> Result<i64, CompilerError> {
+    match &atom.kind {
+        AtomKind::Whole(value) => Ok(*value),
+        AtomKind::Name(name) => locals.get(name).map(|local| local.value).ok_or_else(|| {
+            CompilerError::new(
+                atom.span,
+                format!(
+                    "AE-COMPTIME-001: comptime-pure callee reads unknown Whole local {name}"
+                ),
+            )
+        }),
+        AtomKind::Text(_)
+        | AtomKind::Bytes(_)
+        | AtomKind::Truth(_)
+        | AtomKind::Borrow(_)
+        | AtomKind::Move(_)
+        | AtomKind::Access(_) => Err(CompilerError::new(
+            atom.span,
+            "AE-COMPTIME-001: an M23 comptime-pure callee accepts only Whole literals or local names",
         )),
     }
 }
@@ -5202,7 +6485,12 @@ fn validate_resource_plan(program: &Program) -> Result<SemanticResourcePlan, Com
         }
     }
     let mut plan = SemanticResourcePlan::empty();
+    for (weave_name, arena) in &arenas {
+        plan.arenas_by_weave
+            .insert(weave_name.clone(), arena.clone());
+    }
     if let Some((_, first)) = arenas.first() {
+        let task_program = program.weaves.iter().any(|weave| weave.task);
         let mut total = 0_u32;
         for (_, arena) in &arenas {
             total = total.checked_add(arena.capacity).ok_or_else(|| {
@@ -5213,7 +6501,7 @@ fn validate_resource_plan(program: &Program) -> Result<SemanticResourcePlan, Com
                     ),
                 )
             })?;
-            if total > MAX_ARENA_BYTES {
+            if !task_program && total > MAX_ARENA_BYTES {
                 return Err(CompilerError::new(
                     arena.span,
                     format!(
@@ -5222,11 +6510,17 @@ fn validate_resource_plan(program: &Program) -> Result<SemanticResourcePlan, Com
                 ));
             }
         }
-        plan.arena = Some(SemanticArena {
-            name: first.name.clone(),
-            capacity: total,
-            span: first.span,
-        });
+        // v12 computes an exact concurrent frame plan after full task/nursery
+        // validation.  Do not reject an unreachable aggregate of independent
+        // task lanes here; the later plan enforces the actual 1,000,000-byte
+        // concurrent bound.  v4-v11 retain their historical aggregate plan.
+        if !task_program {
+            plan.arena = Some(SemanticArena {
+                name: first.name.clone(),
+                capacity: total,
+                span: first.span,
+            });
+        }
     }
     if resource_operations && arenas.is_empty() {
         return Err(CompilerError::new(
@@ -5265,7 +6559,10 @@ fn collect_resource_declarations(
             | Statement::Yield { value, .. } => {
                 *resource_operations |= expression_uses_resource(value);
             }
-            Statement::Raise { .. } | Statement::Forward { .. } | Statement::Release { .. } => {}
+            Statement::Raise { .. }
+            | Statement::Forward { .. }
+            | Statement::Release { .. }
+            | Statement::Checkpoint { .. } => {}
             Statement::Handle { .. } | Statement::Together { .. } => {}
             Statement::Choose {
                 condition,
@@ -5307,9 +6604,10 @@ fn weave_uses_resource(weave: &Weave) -> bool {
             | Statement::Revise { value, .. }
             | Statement::Speak { value, .. }
             | Statement::Yield { value, .. } => expression_uses_resource(value),
-            Statement::Raise { .. } | Statement::Forward { .. } | Statement::Release { .. } => {
-                false
-            }
+            Statement::Raise { .. }
+            | Statement::Forward { .. }
+            | Statement::Release { .. }
+            | Statement::Checkpoint { .. } => false,
             Statement::Handle { .. } | Statement::Together { .. } => false,
             Statement::Choose {
                 condition,
@@ -5361,6 +6659,7 @@ fn validate_block(
     resource_plan: &mut SemanticResourcePlan,
     comptime_env: &mut BTreeMap<String, i64>,
     resource_using_weaves: &BTreeSet<String>,
+    prior_weaves: &[Weave],
 ) -> Result<(), CompilerError> {
     for (index, statement) in statements.iter().enumerate() {
         match statement {
@@ -5388,7 +6687,7 @@ fn validate_block(
                             "AE-COMPTIME-001: comptime bind must be immutable",
                         ));
                     }
-                    let folded = evaluate_comptime_whole(value, comptime_env)?;
+                    let folded = evaluate_comptime_whole(value, comptime_env, prior_weaves)?;
                     comptime_env.insert(name.clone(), folded);
                 }
                 if scope.contains_key(name) {
@@ -5518,11 +6817,32 @@ fn validate_block(
                 }
                 scope.get_mut(name).expect("release target").moved = true;
             }
-            Statement::Yield { value, span } => {
-                if !root || index + 1 != statements.len() {
+            Statement::Checkpoint { span } => {
+                if !weave.task {
                     return Err(CompilerError::new(
                         *span,
-                        "yield is allowed only as the final statement of a weave root",
+                        "AE-TASK-004: checkpoint is valid only in a task weave",
+                    ));
+                }
+                if scope
+                    .values()
+                    .any(|binding| !binding.moved && binding.value_type == ValueType::AccessArena)
+                {
+                    return Err(CompilerError::new(
+                        *span,
+                        "AE-TASK-004: checkpoint cannot cross a live exclusive access loan",
+                    ));
+                }
+            }
+            Statement::Yield { value, span } => {
+                if (!root && !weave.task) || index + 1 != statements.len() {
+                    return Err(CompilerError::new(
+                        *span,
+                        if weave.task {
+                            "AE-TASK-004: task yield must be the final statement of its current outcome branch"
+                        } else {
+                            "yield is allowed only as the final statement of a weave root"
+                        },
                     ));
                 }
                 let value_type = expression_type(value, scope, signatures, records, shapes)?;
@@ -5630,10 +6950,14 @@ fn validate_block(
                 ..
             } => {
                 if matches!(condition.kind, ExpressionKind::Resource(_)) {
-                    if !root || index + 1 != statements.len() {
+                    if index + 1 != statements.len() || (!root && !weave.task) {
                         return Err(CompilerError::new(
                             condition.span,
-                            "a resource outcome choose must be the final statement of a weave root",
+                            if weave.task {
+                                "AE-TASK-004: a task resource outcome choose must be the final statement of its current outcome branch"
+                            } else {
+                                "a resource outcome choose must be the final statement of a weave root"
+                            },
                         ));
                     }
                     let context = ResourceValidationContext {
@@ -5642,14 +6966,28 @@ fn validate_block(
                         shapes,
                         weave,
                     };
-                    validate_resource_choose(
-                        condition,
-                        when_bright,
-                        when_dim,
-                        scope,
-                        &context,
-                        resource_plan,
-                    )?;
+                    if weave.task {
+                        validate_task_resource_choose(
+                            condition,
+                            when_bright,
+                            when_dim,
+                            scope,
+                            &context,
+                            resource_plan,
+                            comptime_env,
+                            resource_using_weaves,
+                            prior_weaves,
+                        )?;
+                    } else {
+                        validate_resource_choose(
+                            condition,
+                            when_bright,
+                            when_dim,
+                            scope,
+                            &context,
+                            resource_plan,
+                        )?;
+                    }
                     continue;
                 }
                 let condition_type =
@@ -5673,6 +7011,7 @@ fn validate_block(
                     resource_plan,
                     comptime_env,
                     resource_using_weaves,
+                    prior_weaves,
                 )?;
                 let mut dim_scope = original.clone();
                 if !when_dim.is_empty() {
@@ -5687,6 +7026,7 @@ fn validate_block(
                         resource_plan,
                         comptime_env,
                         resource_using_weaves,
+                        prior_weaves,
                     )?;
                 }
                 merge_scope(scope, &bright_scope, &dim_scope, statement.span())?;
@@ -5715,6 +7055,7 @@ fn validate_block(
                     resource_plan,
                     comptime_env,
                     resource_using_weaves,
+                    prior_weaves,
                 )?;
                 merge_scope(scope, &before_loop, &body_scope, statement.span())?;
             }
@@ -6013,6 +7354,14 @@ fn validate_effect_call(
             format!("weave {called} has not been declared"),
         ));
     };
+    if signature.is_task {
+        return Err(CompilerError::new(
+            span,
+            format!(
+                "AE-TASK-005: task weave {called} may be invoked only by spawn call inside a checkpointed nursery"
+            ),
+        ));
+    }
     if signature.effect != Effect::ErrorWhole {
         return Err(CompilerError::new(
             span,
@@ -6116,6 +7465,111 @@ fn validate_resource_choose(
     )?;
     validate_resource_terminal_block(when_bright, &mut bright_scope, context, resource_plan)?;
     validate_resource_terminal_block(when_dim, &mut dim_scope, context, resource_plan)
+}
+
+/// M19e keeps the ordinary M2 terminal-outcome rule for v4-v11, but a task
+/// may suspend after a successful resource transition before reaching its own
+/// terminal yield.  The task-only form remains closed: no nested bindings are
+/// introduced, each branch is proven terminal, and every resource transition
+/// still receives the same ownership-state calculation as the historic path.
+#[allow(clippy::too_many_arguments)]
+fn validate_task_resource_choose(
+    condition: &Expression,
+    when_bright: &[Statement],
+    when_dim: &[Statement],
+    scope: &BindingScope,
+    context: &ResourceValidationContext<'_>,
+    resource_plan: &mut SemanticResourcePlan,
+    comptime_env: &mut BTreeMap<String, i64>,
+    resource_using_weaves: &BTreeSet<String>,
+    prior_weaves: &[Weave],
+) -> Result<(), CompilerError> {
+    if !context.weave.task {
+        return Err(CompilerError::new(
+            condition.span,
+            "internal compiler attempted task resource validation for a non-task weave",
+        ));
+    }
+    if when_dim.is_empty() {
+        return Err(CompilerError::new(
+            condition.span,
+            "resource outcomes require an explicit otherwise branch for the dim outcome",
+        ));
+    }
+    let ExpressionKind::Resource(operation) = &condition.kind else {
+        return Err(CompilerError::new(
+            condition.span,
+            "internal compiler expected a task resource outcome condition",
+        ));
+    };
+    let (mut bright_scope, mut dim_scope) = resource_outcome_scopes(
+        operation,
+        scope,
+        condition.span,
+        resource_plan,
+        context.shapes,
+    )?;
+    validate_block(
+        when_bright,
+        &mut bright_scope,
+        context.signatures,
+        context.records,
+        context.shapes,
+        context.weave,
+        false,
+        resource_plan,
+        comptime_env,
+        resource_using_weaves,
+        prior_weaves,
+    )?;
+    validate_block(
+        when_dim,
+        &mut dim_scope,
+        context.signatures,
+        context.records,
+        context.shapes,
+        context.weave,
+        false,
+        resource_plan,
+        comptime_env,
+        resource_using_weaves,
+        prior_weaves,
+    )?;
+    if !task_outcome_block_terminates(when_bright) || !task_outcome_block_terminates(when_dim) {
+        return Err(CompilerError::new(
+            condition.span,
+            "AE-TASK-004: each task resource outcome branch must end in yield or a terminal choose",
+        ));
+    }
+    Ok(())
+}
+
+fn task_outcome_block_terminates(statements: &[Statement]) -> bool {
+    let Some(last) = statements.last() else {
+        return false;
+    };
+    match last {
+        Statement::Yield { .. } => true,
+        Statement::Choose {
+            when_bright,
+            when_dim,
+            ..
+        } => {
+            !when_dim.is_empty()
+                && task_outcome_block_terminates(when_bright)
+                && task_outcome_block_terminates(when_dim)
+        }
+        Statement::Bind { .. }
+        | Statement::Revise { .. }
+        | Statement::Speak { .. }
+        | Statement::Release { .. }
+        | Statement::Checkpoint { .. }
+        | Statement::While { .. }
+        | Statement::Together { .. }
+        | Statement::Raise { .. }
+        | Statement::Forward { .. }
+        | Statement::Handle { .. } => false,
+    }
 }
 
 fn validate_resource_terminal_block(
@@ -7150,6 +8604,14 @@ fn expression_type(
                     format!("weave {weave} has not been declared"),
                 ));
             };
+            if signature.is_task {
+                return Err(CompilerError::new(
+                    expression.span,
+                    format!(
+                        "AE-TASK-005: task weave {weave} may be invoked only by spawn call inside a checkpointed nursery"
+                    ),
+                ));
+            }
             if signature.effect != Effect::Total {
                 return Err(CompilerError::new(
                     expression.span,
@@ -7580,6 +9042,11 @@ fn emit_bytecode_with_resource_plan(
     program: &Program,
     resource_plan: &SemanticResourcePlan,
 ) -> Result<Vec<u8>, CompilerError> {
+    let artifact_version = if program.weaves.iter().any(|weave| weave.task) {
+        ARTIFACT_VERSION_V12
+    } else {
+        ARTIFACT_VERSION_V11
+    };
     // Function table: host weaves first (declaration order), then guest weaves.
     let mut weave_indices = BTreeMap::new();
     let mut weave_results = BTreeMap::new();
@@ -7609,12 +9076,13 @@ fn emit_bytecode_with_resource_plan(
     }
 
     let mut compiled = Vec::new();
-    for weave in &program.weaves {
+    for (weave_index, weave) in program.weaves.iter().enumerate() {
         let layout = slot_layout(weave, &weave_results, &program.records, &program.shapes)?;
         let mut code = Vec::new();
         let mut comptime_env = BTreeMap::new();
         emit_block(
             &weave.body,
+            weave.task,
             &layout,
             &weave_indices,
             &host_flags,
@@ -7622,6 +9090,7 @@ fn emit_bytecode_with_resource_plan(
             &program.shapes,
             resource_plan,
             &mut comptime_env,
+            &program.weaves[..weave_index],
             &mut code,
         )?;
         let mut locals = vec![
@@ -7641,7 +9110,7 @@ fn emit_bytecode_with_resource_plan(
     }
 
     let mut bytecode = Vec::from(&ARTIFACT_MAGIC[..]);
-    bytecode.push(ARTIFACT_VERSION_V11);
+    bytecode.push(artifact_version);
     write_u32(&mut bytecode, resource_plan.arena_capacity());
     write_u16(
         &mut bytecode,
@@ -7740,6 +9209,10 @@ fn emit_bytecode_with_resource_plan(
         write_value_type(&mut bytecode, host.result);
         bytecode.push(Effect::Total.to_byte());
         bytecode.push(FUNCTION_KIND_HOST);
+        if artifact_version == ARTIFACT_VERSION_V12 {
+            bytecode.push(0);
+            write_u32(&mut bytecode, 0);
+        }
         write_u16(
             &mut bytecode,
             u16::try_from(locals.len()).map_err(|_| {
@@ -7769,6 +9242,19 @@ fn emit_bytecode_with_resource_plan(
         write_value_type(&mut bytecode, weave.result);
         bytecode.push(weave.effect.to_byte());
         bytecode.push(FUNCTION_KIND_GUEST);
+        if artifact_version == ARTIFACT_VERSION_V12 {
+            bytecode.push(if weave.task {
+                FUNCTION_FLAG_TASK_FRAME
+            } else {
+                0
+            });
+            let frame_capacity = if weave.task || weave.name == "main" {
+                resource_plan.direct_arena_capacity(&weave.name)
+            } else {
+                0
+            };
+            write_u32(&mut bytecode, frame_capacity);
+        }
         write_u16(
             &mut bytecode,
             u16::try_from(locals.len()).map_err(|_| {
@@ -7997,6 +9483,7 @@ fn static_atom_type(
 #[allow(clippy::too_many_arguments)]
 fn emit_block(
     statements: &[Statement],
+    task: bool,
     layout: &BTreeMap<String, SlotInfo>,
     weave_indices: &BTreeMap<String, usize>,
     host_flags: &BTreeMap<String, bool>,
@@ -8004,6 +9491,7 @@ fn emit_block(
     shapes: &[ShapeDeclaration],
     resource_plan: &SemanticResourcePlan,
     comptime_env: &mut BTreeMap<String, i64>,
+    prior_weaves: &[Weave],
     code: &mut Vec<u8>,
 ) -> Result<(), CompilerError> {
     for statement in statements {
@@ -8015,7 +9503,7 @@ fn emit_block(
                 ..
             } => {
                 if *comptime {
-                    let folded = evaluate_comptime_whole(value, comptime_env)?;
+                    let folded = evaluate_comptime_whole(value, comptime_env, prior_weaves)?;
                     comptime_env.insert(name.clone(), folded);
                     code.push(OP_COMPTIME_WHOLE);
                     write_i64(code, folded);
@@ -8106,6 +9594,7 @@ fn emit_block(
                 code.push(OP_RELEASE);
                 write_u16(code, slot.index);
             }
+            Statement::Checkpoint { .. } => code.push(OP_TASK_CHECKPOINT),
             Statement::Raise { code: value, .. } => {
                 emit_atom(value, layout, code)?;
                 code.push(OP_RAISE);
@@ -8213,6 +9702,7 @@ fn emit_block(
                     let dim_target = reserve_u32(code);
                     emit_block(
                         when_bright,
+                        task,
                         layout,
                         weave_indices,
                         host_flags,
@@ -8220,12 +9710,14 @@ fn emit_block(
                         shapes,
                         resource_plan,
                         comptime_env,
+                        prior_weaves,
                         code,
                     )?;
                     let dim_branch = code.len();
                     patch_u32(code, dim_target, dim_branch)?;
                     emit_block(
                         when_dim,
+                        task,
                         layout,
                         weave_indices,
                         host_flags,
@@ -8233,6 +9725,7 @@ fn emit_block(
                         shapes,
                         resource_plan,
                         comptime_env,
+                        prior_weaves,
                         code,
                     )?;
                     continue;
@@ -8251,6 +9744,7 @@ fn emit_block(
                 let dim_target = reserve_u32(code);
                 emit_block(
                     when_bright,
+                    task,
                     layout,
                     weave_indices,
                     host_flags,
@@ -8258,6 +9752,7 @@ fn emit_block(
                     shapes,
                     resource_plan,
                     comptime_env,
+                    prior_weaves,
                     code,
                 )?;
                 if when_dim.is_empty() {
@@ -8270,6 +9765,7 @@ fn emit_block(
                     patch_u32(code, dim_target, dim_branch)?;
                     emit_block(
                         when_dim,
+                        task,
                         layout,
                         weave_indices,
                         host_flags,
@@ -8277,6 +9773,7 @@ fn emit_block(
                         shapes,
                         resource_plan,
                         comptime_env,
+                        prior_weaves,
                         code,
                     )?;
                     let continuation = code.len();
@@ -8287,6 +9784,13 @@ fn emit_block(
                 condition, body, ..
             } => {
                 let loop_start = code.len();
+                if task {
+                    // The back edge of every v12 task loop targets a verified
+                    // checkpoint.  The source still requires the loop body to
+                    // begin with its own direct checkpoint, so each iteration
+                    // has an explicit safe point before the condition and body.
+                    code.push(OP_TASK_CHECKPOINT);
+                }
                 emit_expression(
                     condition,
                     layout,
@@ -8301,6 +9805,7 @@ fn emit_block(
                 let loop_end = reserve_u32(code);
                 emit_block(
                     body,
+                    task,
                     layout,
                     weave_indices,
                     host_flags,
@@ -8308,6 +9813,7 @@ fn emit_block(
                     shapes,
                     resource_plan,
                     comptime_env,
+                    prior_weaves,
                     code,
                 )?;
                 code.push(OP_JUMP);
@@ -8742,6 +10248,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
             | ARTIFACT_VERSION_V11
+            | ARTIFACT_VERSION_V12
     ) {
         return Err(BytecodeError::new(
             ARTIFACT_MAGIC.len(),
@@ -8757,12 +10264,13 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
             | ARTIFACT_VERSION_V11
+            | ARTIFACT_VERSION_V12
     ) {
         let capacity = read_u32(bytecode, &mut position)?;
         if capacity > MAX_ARENA_BYTES {
             return Err(BytecodeError::new(
                 position,
-                "AETH v6 through v11 arena capacity exceeds the M2 safety limit",
+                "AETH v6 through v12 arena capacity exceeds the M2 safety limit",
             ));
         }
         capacity
@@ -8779,6 +10287,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
             | ARTIFACT_VERSION_V11
+            | ARTIFACT_VERSION_V12
     ) {
         let record_count = usize::from(read_u16(bytecode, &mut position)?);
         if (version == ARTIFACT_VERSION_V5 && record_count == 0) || record_count > MAX_RECORDS {
@@ -8842,7 +10351,7 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     let mut shapes = Vec::new();
     if matches!(
         version,
-        ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11
+        ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11 | ARTIFACT_VERSION_V12
     ) {
         let shape_count = usize::from(read_u16(bytecode, &mut position)?);
         if shape_count > MAX_SHAPES {
@@ -8937,12 +10446,13 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
                 | ARTIFACT_VERSION_V9
                 | ARTIFACT_VERSION_V10
                 | ARTIFACT_VERSION_V11
+                | ARTIFACT_VERSION_V12
         ) {
             Effect::from_byte(read_byte(bytecode, &mut position)?, position)?
         } else {
             Effect::Total
         };
-        let kind = if version == ARTIFACT_VERSION_V11 {
+        let kind = if matches!(version, ARTIFACT_VERSION_V11 | ARTIFACT_VERSION_V12) {
             let kind = read_byte(bytecode, &mut position)?;
             if kind != FUNCTION_KIND_GUEST && kind != FUNCTION_KIND_HOST {
                 return Err(BytecodeError::new(
@@ -8953,6 +10463,25 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             kind
         } else {
             FUNCTION_KIND_GUEST
+        };
+        let (flags, frame_arena_capacity) = if version == ARTIFACT_VERSION_V12 {
+            let flags = read_byte(bytecode, &mut position)?;
+            if flags & !FUNCTION_FLAG_TASK_FRAME != 0 {
+                return Err(BytecodeError::new(
+                    position,
+                    "AETH v12 function flags contain an unknown bit",
+                ));
+            }
+            let frame_arena_capacity = read_u32(bytecode, &mut position)?;
+            if frame_arena_capacity > MAX_ARENA_BYTES {
+                return Err(BytecodeError::new(
+                    position,
+                    "AETH v12 frame arena capacity exceeds the M2 safety limit",
+                ));
+            }
+            (flags, frame_arena_capacity)
+        } else {
+            (0, 0)
         };
         let local_count = usize::from(read_u16(bytecode, &mut position)?);
         if local_count > MAX_LOCALS {
@@ -9037,6 +10566,8 @@ fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
             result,
             effect,
             kind,
+            flags,
+            frame_arena_capacity,
             locals,
             code: code.to_vec(),
         });
@@ -9065,10 +10596,16 @@ fn verify_function(
     version: u8,
 ) -> Result<(), BytecodeError> {
     if function.is_host() {
-        if version != ARTIFACT_VERSION_V11 {
+        if !matches!(version, ARTIFACT_VERSION_V11 | ARTIFACT_VERSION_V12) {
             return Err(BytecodeError::new(
                 0,
-                "host weaves are valid only in AETH v11 artifacts",
+                "host weaves are valid only in AETH v11 or v12 artifacts",
+            ));
+        }
+        if function.flags != 0 || function.frame_arena_capacity != 0 {
+            return Err(BytecodeError::new(
+                0,
+                "AETH v12 host weaves require zero task flags and zero frame arena capacity",
             ));
         }
         if !function.code.is_empty() {
@@ -9108,6 +10645,66 @@ fn verify_function(
             }
         }
     }
+    if function.is_task() {
+        if version != ARTIFACT_VERSION_V12 {
+            return Err(BytecodeError::new(
+                0,
+                "task-frame function metadata is valid only in AETH v12",
+            ));
+        }
+        let mut checkpoint_seen = false;
+        for instruction in &decoded {
+            match instruction.instruction {
+                Instruction::TaskCheckpoint => checkpoint_seen = true,
+                Instruction::Speak
+                | Instruction::Raise
+                | Instruction::ForwardCall { .. }
+                | Instruction::HandleCall { .. }
+                | Instruction::Call { .. }
+                | Instruction::HostCall { .. }
+                | Instruction::NurseryBegin { .. }
+                | Instruction::NurserySpawn { .. }
+                | Instruction::NurseryEnd
+                | Instruction::ComptimeWhole(_) => {
+                    return Err(BytecodeError::new(
+                        instruction.offset,
+                        "AETH v12 task frame contains an instruction outside the self-contained task subset",
+                    ));
+                }
+                Instruction::Jump(target) if target < instruction.offset => {
+                    let Some(target_index) = instruction_indices.get(&target) else {
+                        return Err(BytecodeError::new(
+                            instruction.offset,
+                            "task backward jump target is invalid",
+                        ));
+                    };
+                    if !matches!(
+                        &decoded[*target_index].instruction,
+                        Instruction::TaskCheckpoint
+                    ) {
+                        return Err(BytecodeError::new(
+                            instruction.offset,
+                            "AETH v12 task backward jumps must target TASK_CHECKPOINT",
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !checkpoint_seen {
+            return Err(BytecodeError::new(
+                0,
+                "AETH v12 task frame requires at least one TASK_CHECKPOINT",
+            ));
+        }
+    } else if version != ARTIFACT_VERSION_V12
+        && (function.flags != 0 || function.frame_arena_capacity != 0)
+    {
+        return Err(BytecodeError::new(
+            0,
+            "pre-v12 function metadata cannot carry task flags or frame capacity",
+        ));
+    }
 
     let mut states = BTreeMap::new();
     let initial = VerificationState {
@@ -9127,6 +10724,7 @@ fn verify_function(
     let mut effect_exited = false;
     let context = VerificationContext {
         function_index,
+        version,
         function,
         functions,
         records,
@@ -9179,6 +10777,7 @@ fn verify_instruction(
     effect_exited: &mut bool,
 ) -> Result<Vec<(usize, VerificationState)>, BytecodeError> {
     let function_index = context.function_index;
+    let version = context.version;
     let function = context.function;
     let functions = context.functions;
     let records = context.records;
@@ -9737,6 +11336,12 @@ fn verify_instruction(
                     "forward call references an unknown weave",
                 ));
             };
+            if called_function.is_task() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH v12 task frames may be invoked only by NURSERY_SPAWN",
+                ));
+            }
             verify_effect_call_signature(function, called_function, *arguments, offset, "forward")?;
             pop_verifier_effect_arguments(&mut state.stack, called_function, offset, "forward")?;
             require_verifier_effect_boundary(function, &state, offset)?;
@@ -9763,6 +11368,12 @@ fn verify_instruction(
                     "handle call references an unknown weave",
                 ));
             };
+            if called_function.is_task() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH v12 task frames may be invoked only by NURSERY_SPAWN",
+                ));
+            }
             verify_effect_call_signature(function, called_function, *arguments, offset, "handle")?;
             if function.result != ValueType::Whole || called_function.result != ValueType::Whole {
                 return Err(BytecodeError::new(
@@ -9819,6 +11430,12 @@ fn verify_instruction(
                 return Err(BytecodeError::new(
                     offset,
                     "ordinary AETH CALL cannot invoke a host weave; use HOST_CALL",
+                ));
+            }
+            if called_function.is_task() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH v12 task frames may be invoked only by NURSERY_SPAWN",
                 ));
             }
             if called_function.effect != Effect::Total {
@@ -9937,6 +11554,7 @@ fn verify_instruction(
             state.nursery = Some(NurseryVerification {
                 expected: *count,
                 seen: 0,
+                targets: Vec::new(),
             });
             continue_with(state)
         }
@@ -10023,6 +11641,7 @@ fn verify_instruction(
             }
             if let Some(nursery) = state.nursery.as_mut() {
                 nursery.seen = nursery.seen.saturating_add(1);
+                nursery.targets.push(*called);
             }
             continue_with(state)
         }
@@ -10047,6 +11666,37 @@ fn verify_instruction(
             }
             // Cancel may re-raise at runtime; the success path continues after END.
             let _ = effect_exited;
+            continue_with(state)
+        }
+        Instruction::TaskCheckpoint => {
+            if version != ARTIFACT_VERSION_V12 || !function.is_task() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH TASK_CHECKPOINT requires an AETH v12 task-frame function",
+                ));
+            }
+            if !state.stack.is_empty() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH TASK_CHECKPOINT requires an empty operand stack",
+                ));
+            }
+            if state.nursery.is_some() {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH TASK_CHECKPOINT cannot occur with an open nursery",
+                ));
+            }
+            if function.locals.iter().enumerate().any(|(index, local)| {
+                state.initialized[index]
+                    && !state.moved[index]
+                    && local.value_type == ValueType::AccessArena
+            }) {
+                return Err(BytecodeError::new(
+                    offset,
+                    "AETH TASK_CHECKPOINT cannot cross a live exclusive Arena access loan",
+                ));
+            }
             continue_with(state)
         }
         Instruction::JumpIfDim(target) => {
@@ -10263,40 +11913,69 @@ fn execute_function(
             "runtime cannot execute a host weave as guest bytecode",
         ));
     }
-    if function.parameters.len() != arguments.len() {
-        return Err(BytecodeError::new(
-            0,
-            "runtime call argument count is invalid",
-        ));
-    }
-    let mut locals = vec![None; function.locals.len()];
-    for (index, argument) in arguments.into_iter().enumerate() {
-        let (expected, mode) = function.parameters[index];
-        let argument = if mode == ParameterMode::Access {
-            if !matches!(argument, RuntimeValue::AccessArena) {
+    let (mut locals, mut stack, mut position) =
+        if let Some(frame) = runtime_state.resumed_task.take() {
+            if !function.is_task() || frame.function_index != function_index {
                 return Err(BytecodeError::new(
                     0,
-                    "runtime access parameter did not receive an exclusive Arena access loan",
+                    "runtime task resume does not match its verified task function",
                 ));
             }
-            RuntimeValue::Arena
+            if !arguments.is_empty() {
+                return Err(BytecodeError::new(
+                    0,
+                    "runtime task resume cannot receive a second argument list",
+                ));
+            }
+            if runtime_state.active_task_lane.is_some() {
+                return Err(BytecodeError::new(
+                    0,
+                    "runtime task resume found another active private arena lane",
+                ));
+            }
+            runtime_state.active_task_lane = Some(frame.lane);
+            (frame.locals, frame.stack, frame.position)
         } else {
-            argument
+            if function.is_task() && runtime_state.active_task_lane.is_none() {
+                return Err(BytecodeError::new(
+                    0,
+                    "AETH v12 task frames may run only inside the checkpointed nursery scheduler",
+                ));
+            }
+            if function.parameters.len() != arguments.len() {
+                return Err(BytecodeError::new(
+                    0,
+                    "runtime call argument count is invalid",
+                ));
+            }
+            let mut locals = vec![None; function.locals.len()];
+            for (index, argument) in arguments.into_iter().enumerate() {
+                let (expected, mode) = function.parameters[index];
+                let argument = if mode == ParameterMode::Access {
+                    if !matches!(argument, RuntimeValue::AccessArena) {
+                        return Err(BytecodeError::new(
+                        0,
+                        "runtime access parameter did not receive an exclusive Arena access loan",
+                    ));
+                    }
+                    RuntimeValue::Arena
+                } else {
+                    argument
+                };
+                if argument.value_type() != expected {
+                    return Err(BytecodeError::new(
+                        0,
+                        "runtime call argument type is invalid",
+                    ));
+                }
+                locals[index] = Some(argument);
+            }
+            (locals, Vec::new(), 0)
         };
-        if argument.value_type() != expected {
-            return Err(BytecodeError::new(
-                0,
-                "runtime call argument type is invalid",
-            ));
-        }
-        locals[index] = Some(argument);
-    }
-    let mut stack = Vec::new();
-    let mut position = 0;
     while position < function.code.len() {
         let decoded = decode_instruction(&function.code, &mut position, artifact.version)?;
         match decoded.instruction {
-            Instruction::PushText(value) => stack.push(RuntimeValue::Text(value)),
+            Instruction::PushText(value) => stack.push(RuntimeValue::Text(RuntimeText::new(value))),
             Instruction::PushBytes(value) => stack.push(RuntimeValue::Bytes(value)),
             Instruction::PushWhole(value) | Instruction::ComptimeWhole(value) => {
                 stack.push(RuntimeValue::Whole(value));
@@ -10652,8 +12331,8 @@ fn execute_function(
             }
             Instruction::Speak => match pop_runtime(&mut stack, decoded.offset, "speak")? {
                 RuntimeValue::Text(value) => {
-                    ensure_text_limit(stdout.len(), value.len(), decoded.offset)?;
-                    stdout.push_str(&value);
+                    ensure_text_limit(stdout.len(), value.byte_len(), decoded.offset)?;
+                    stdout.push_str(value.as_str());
                 }
                 _ => {
                     return Err(BytecodeError::new(
@@ -10670,6 +12349,24 @@ fn execute_function(
                         decoded.offset,
                         "yield left values on the runtime stack",
                     ));
+                }
+                if function.is_task() {
+                    let lane = runtime_state.active_task_lane.take().ok_or_else(|| {
+                        BytecodeError::new(
+                            decoded.offset,
+                            "AETH v12 task yield has no active private arena lane",
+                        )
+                    })?;
+                    return Ok(RuntimeExit::TaskReturn {
+                        value,
+                        frame: TaskFrame {
+                            function_index,
+                            locals,
+                            stack,
+                            position,
+                            lane,
+                        },
+                    });
                 }
                 return Ok(RuntimeExit::Return(value));
             }
@@ -10743,8 +12440,8 @@ fn execute_function(
             Instruction::Join => {
                 let right = pop_text(&mut stack, decoded.offset, "join")?;
                 let left = pop_text(&mut stack, decoded.offset, "join")?;
-                ensure_text_limit(left.len(), right.len(), decoded.offset)?;
-                stack.push(RuntimeValue::Text(left + &right));
+                ensure_text_limit(left.byte_len(), right.byte_len(), decoded.offset)?;
+                stack.push(RuntimeValue::Text(left.join(&right)));
             }
             Instruction::Fuse => {
                 let right = pop_bytes(&mut stack, decoded.offset, "fuse")?;
@@ -10766,7 +12463,7 @@ fn execute_function(
             Instruction::Measure => {
                 let text = pop_text(&mut stack, decoded.offset, "measure")?;
                 stack.push(RuntimeValue::Whole(
-                    i64::try_from(text.chars().count()).map_err(|_| {
+                    i64::try_from(text.scalar_len()).map_err(|_| {
                         BytecodeError::new(decoded.offset, "text length is outside Whole range")
                     })?,
                 ));
@@ -10782,7 +12479,7 @@ fn execute_function(
                 let text = pop_text(&mut stack, decoded.offset, "glyph")?;
                 let value = usize::try_from(index)
                     .ok()
-                    .and_then(|index| text.chars().nth(index))
+                    .and_then(|index| text.scalar_at(index))
                     .map_or(-1_i64, |character| i64::from(u32::from(character)));
                 stack.push(RuntimeValue::Whole(value));
             }
@@ -10790,7 +12487,7 @@ fn execute_function(
                 let end = pop_whole(&mut stack, decoded.offset, "cut")?;
                 let start = pop_whole(&mut stack, decoded.offset, "cut")?;
                 let text = pop_text(&mut stack, decoded.offset, "cut")?;
-                let length = i64::try_from(text.chars().count()).map_err(|_| {
+                let length = i64::try_from(text.scalar_len()).map_err(|_| {
                     BytecodeError::new(decoded.offset, "text length is outside Whole range")
                 })?;
                 let start = start.clamp(0, length);
@@ -10799,12 +12496,10 @@ fn execute_function(
                     .map_err(|_| BytecodeError::new(decoded.offset, "cut start is invalid"))?;
                 let end = usize::try_from(end)
                     .map_err(|_| BytecodeError::new(decoded.offset, "cut end is invalid"))?;
-                let start = scalar_byte_offset(&text, start);
-                let end = scalar_byte_offset(&text, end);
                 let slice = text
-                    .get(start..end)
+                    .slice_scalars(start, end)
                     .ok_or_else(|| BytecodeError::new(decoded.offset, "cut range is invalid"))?;
-                stack.push(RuntimeValue::Text(slice.to_owned()));
+                stack.push(RuntimeValue::Text(slice));
             }
             Instruction::Octet => {
                 let index = pop_whole(&mut stack, decoded.offset, "octet")?;
@@ -10834,22 +12529,18 @@ fn execute_function(
                 let start = pop_whole(&mut stack, decoded.offset, "seek")?;
                 let needle = pop_text(&mut stack, decoded.offset, "seek")?;
                 let text = pop_text(&mut stack, decoded.offset, "seek")?;
-                let length = i64::try_from(text.chars().count()).map_err(|_| {
+                let length = i64::try_from(text.scalar_len()).map_err(|_| {
                     BytecodeError::new(decoded.offset, "text length is outside Whole range")
                 })?;
                 let start = start.clamp(0, length);
                 let start = usize::try_from(start)
                     .map_err(|_| BytecodeError::new(decoded.offset, "seek start is invalid"))?;
-                let start_byte = scalar_byte_offset(&text, start);
-                let found = text[start_byte..].find(&needle).map_or(-1_i64, |offset| {
-                    i64::try_from(text[..start_byte + offset].chars().count()).unwrap_or(-1)
-                });
-                stack.push(RuntimeValue::Whole(found));
+                stack.push(RuntimeValue::Whole(text.find_from_scalar(&needle, start)));
             }
             Instruction::Encode => {
                 let text = pop_text(&mut stack, decoded.offset, "encode")?;
-                ensure_bytes_limit(0, text.len(), decoded.offset)?;
-                stack.push(RuntimeValue::Bytes(text.into_bytes()));
+                ensure_bytes_limit(0, text.byte_len(), decoded.offset)?;
+                stack.push(RuntimeValue::Bytes(text.into_string().into_bytes()));
             }
             Instruction::Decode => {
                 let bytes = pop_bytes(&mut stack, decoded.offset, "decode")?;
@@ -10857,17 +12548,17 @@ fn execute_function(
                     BytecodeError::new(decoded.offset, "decode received invalid UTF-8")
                 })?;
                 ensure_text_limit(0, text.len(), decoded.offset)?;
-                stack.push(RuntimeValue::Text(text));
+                stack.push(RuntimeValue::Text(RuntimeText::new(text)));
             }
             Instruction::Number => {
                 let text = pop_text(&mut stack, decoded.offset, "number")?;
-                if !is_whole_literal(&text) {
+                if !is_whole_literal(text.as_str()) {
                     return Err(BytecodeError::new(
                         decoded.offset,
                         "number requires one canonical Whole text value",
                     ));
                 }
-                let value = text.parse::<i64>().map_err(|_| {
+                let value = text.as_str().parse::<i64>().map_err(|_| {
                     BytecodeError::new(decoded.offset, "number is outside the Whole range")
                 })?;
                 stack.push(RuntimeValue::Whole(value));
@@ -10945,9 +12636,9 @@ fn execute_function(
                 let text =
                     match value {
                         RuntimeValue::Text(value) => value,
-                        RuntimeValue::Whole(value) => value.to_string(),
-                        RuntimeValue::Truth(true) => "bright".to_owned(),
-                        RuntimeValue::Truth(false) => "dim".to_owned(),
+                        RuntimeValue::Whole(value) => RuntimeText::new(value.to_string()),
+                        RuntimeValue::Truth(true) => RuntimeText::new("bright".to_owned()),
+                        RuntimeValue::Truth(false) => RuntimeText::new("dim".to_owned()),
                         RuntimeValue::Bytes(_) => return Err(BytecodeError::new(
                             decoded.offset,
                             "render does not accept Bytes or records; project a record field first",
@@ -11046,6 +12737,12 @@ fn execute_function(
                         "runtime forward references an unknown weave",
                     )
                 })?;
+                if called_function.is_task() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime forward cannot invoke a task-frame weave",
+                    ));
+                }
                 if called_function.effect != Effect::ErrorWhole
                     || called_function.result != function.result
                     || called_function.parameters.len() != arguments
@@ -11110,6 +12807,7 @@ fn execute_function(
                 })?;
                 if called_function.effect != Effect::ErrorWhole
                     || called_function.parameters.len() != arguments
+                    || called_function.is_task()
                 {
                     return Err(BytecodeError::new(
                         decoded.offset,
@@ -11137,6 +12835,24 @@ fn execute_function(
                     ));
                 }
                 values.reverse();
+                #[cfg(test)]
+                runtime_state.handle_live_resource_slots.push(
+                    locals
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(slot, value)| {
+                            value.as_ref().and_then(|value| {
+                                matches!(
+                                    value,
+                                    RuntimeValue::Arena
+                                        | RuntimeValue::Buffer { .. }
+                                        | RuntimeValue::Table { .. }
+                                )
+                                .then_some(slot)
+                            })
+                        })
+                        .collect(),
+                );
                 match execute_function(artifact, called, values, stdout, runtime_state, depth + 1)?
                 {
                     RuntimeExit::Return(value) => {
@@ -11188,7 +12904,58 @@ fn execute_function(
                         locals[error_destination] = Some(RuntimeValue::Whole(code));
                         position = error_target;
                     }
+                    RuntimeExit::Checkpoint(_) | RuntimeExit::TaskReturn { .. } => {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime handle cannot invoke a task-frame function",
+                        ));
+                    }
                 }
+                #[cfg(test)]
+                runtime_state.handle_live_resource_slots.push(
+                    locals
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(slot, value)| {
+                            value.as_ref().and_then(|value| {
+                                matches!(
+                                    value,
+                                    RuntimeValue::Arena
+                                        | RuntimeValue::Buffer { .. }
+                                        | RuntimeValue::Table { .. }
+                                )
+                                .then_some(slot)
+                            })
+                        })
+                        .collect(),
+                );
+            }
+            Instruction::TaskCheckpoint => {
+                if artifact.version != ARTIFACT_VERSION_V12 || !function.is_task() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "AETH TASK_CHECKPOINT requires an AETH v12 task-frame function",
+                    ));
+                }
+                if !stack.is_empty() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "AETH TASK_CHECKPOINT requires an empty task operand stack",
+                    ));
+                }
+                let lane = runtime_state.active_task_lane.take().ok_or_else(|| {
+                    BytecodeError::new(
+                        decoded.offset,
+                        "AETH v12 task checkpoint has no active private arena lane",
+                    )
+                })?;
+                return Ok(RuntimeExit::Checkpoint(TaskFrame {
+                    function_index,
+                    locals,
+                    stack,
+                    position,
+                    lane,
+                }));
             }
             Instruction::NurseryBegin { count } => {
                 if count == 0 || usize::from(count) > MAX_NURSERY_SPAWNS {
@@ -11203,6 +12970,22 @@ fn execute_function(
                         "runtime nursery begin left values on the operand stack",
                     ));
                 }
+                if artifact.version == ARTIFACT_VERSION_V12 {
+                    if !runtime_state.v12_nurseries.is_empty()
+                        || !runtime_state.nurseries.is_empty()
+                    {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "AETH v12 cannot open a nested nursery region",
+                        ));
+                    }
+                    runtime_state.v12_nurseries.push(V12NurseryFrame {
+                        expected: count,
+                        seen: 0,
+                        children: Vec::with_capacity(usize::from(count)),
+                    });
+                    continue;
+                }
                 runtime_state.nurseries.push(NurseryFrame {
                     cancelled: false,
                     code: 0,
@@ -11215,6 +12998,66 @@ fn execute_function(
                 arguments,
                 destination,
             } => {
+                if artifact.version == ARTIFACT_VERSION_V12 {
+                    {
+                        let Some(frame) = runtime_state.v12_nurseries.last_mut() else {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime v12 nursery spawn without an open nursery",
+                            ));
+                        };
+                        if frame.seen >= frame.expected {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime v12 nursery spawn exceeds begin count",
+                            ));
+                        }
+                        frame.seen = frame.seen.saturating_add(1);
+                    }
+                    let called_function = artifact.functions.get(called).ok_or_else(|| {
+                        BytecodeError::new(
+                            decoded.offset,
+                            "runtime v12 nursery spawn references an unknown weave",
+                        )
+                    })?;
+                    if called_function.is_host()
+                        || called_function.result != ValueType::Whole
+                        || called_function.parameters.len() != arguments
+                        || called_function.parameters.iter().any(|(value_type, mode)| {
+                            *mode != ParameterMode::Own
+                                || !matches!(value_type, ValueType::Whole | ValueType::Truth)
+                        })
+                    {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime v12 nursery child must use the Copy-only Whole/Truth ABI",
+                        ));
+                    }
+                    let mut values = Vec::with_capacity(arguments);
+                    for (value_type, _) in called_function.parameters.iter().rev() {
+                        let value = pop_runtime(&mut stack, decoded.offset, "v12 nursery spawn")?;
+                        require_runtime_type(
+                            &value,
+                            *value_type,
+                            decoded.offset,
+                            "v12 nursery spawn",
+                        )?;
+                        values.push(value);
+                    }
+                    values.reverse();
+                    let Some(frame) = runtime_state.v12_nurseries.last_mut() else {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime v12 nursery frame was lost during spawn",
+                        ));
+                    };
+                    frame.children.push(V12NurseryChild {
+                        function: called,
+                        arguments: values,
+                        destination,
+                    });
+                    continue;
+                }
                 let Some(frame) = runtime_state.nurseries.last_mut() else {
                     return Err(BytecodeError::new(
                         decoded.offset,
@@ -11236,6 +13079,7 @@ fn execute_function(
                 })?;
                 if called_function.result != ValueType::Whole
                     || called_function.parameters.len() != arguments
+                    || called_function.is_task()
                 {
                     return Err(BytecodeError::new(
                         decoded.offset,
@@ -11317,9 +13161,56 @@ fn execute_function(
                         frame.cancelled = true;
                         frame.code = code;
                     }
+                    RuntimeExit::Checkpoint(_) | RuntimeExit::TaskReturn { .. } => {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "legacy nursery execution cannot invoke a task-frame function",
+                        ));
+                    }
                 }
             }
             Instruction::NurseryEnd => {
+                if artifact.version == ARTIFACT_VERSION_V12 {
+                    if !stack.is_empty() {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime v12 nursery end left values on the operand stack",
+                        ));
+                    }
+                    let Some(frame) = runtime_state.v12_nurseries.pop() else {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime v12 nursery end without an open nursery",
+                        ));
+                    };
+                    if frame.seen != frame.expected {
+                        return Err(BytecodeError::new(
+                            decoded.offset,
+                            "runtime v12 nursery end spawn count is incomplete",
+                        ));
+                    }
+                    if let Some(code) = run_v12_nursery(
+                        V12NurseryExecutionContext {
+                            artifact,
+                            parent: function,
+                            parent_locals: &mut locals,
+                            stdout,
+                            runtime_state,
+                            depth,
+                            offset: decoded.offset,
+                        },
+                        frame.children,
+                    )? {
+                        if function.effect != Effect::ErrorWhole {
+                            return Err(BytecodeError::new(
+                                decoded.offset,
+                                "runtime v12 nursery raised in a total weave",
+                            ));
+                        }
+                        return Ok(RuntimeExit::ErrorWhole(code));
+                    }
+                    continue;
+                }
                 let Some(frame) = runtime_state.nurseries.pop() else {
                     return Err(BytecodeError::new(
                         decoded.offset,
@@ -11359,6 +13250,12 @@ fn execute_function(
                     return Err(BytecodeError::new(
                         decoded.offset,
                         "runtime ordinary call cannot invoke a host weave",
+                    ));
+                }
+                if called_function.is_task() {
+                    return Err(BytecodeError::new(
+                        decoded.offset,
+                        "runtime ordinary call cannot invoke a task-frame weave",
                     ));
                 }
                 if called_function.effect != Effect::Total {
@@ -11479,6 +13376,399 @@ fn execute_function(
     ))
 }
 
+fn commit_v12_nursery_result(
+    parent: &ArtifactFunction,
+    locals: &mut [Option<RuntimeValue>],
+    destination: usize,
+    value: RuntimeValue,
+    offset: usize,
+) -> Result<(), BytecodeError> {
+    let local = parent
+        .locals
+        .get(destination)
+        .ok_or_else(|| BytecodeError::new(offset, "runtime v12 nursery destination is invalid"))?;
+    if !local.mutable || local.value_type != ValueType::Whole {
+        return Err(BytecodeError::new(
+            offset,
+            "runtime v12 nursery destination must be a mutable Whole root binding",
+        ));
+    }
+    require_runtime_type(&value, ValueType::Whole, offset, "v12 nursery result")?;
+    let slot = locals.get_mut(destination).ok_or_else(|| {
+        BytecodeError::new(
+            offset,
+            "runtime v12 nursery destination is outside the parent frame",
+        )
+    })?;
+    if slot.is_none() {
+        return Err(BytecodeError::new(
+            offset,
+            "runtime v12 nursery destination is not live",
+        ));
+    }
+    *slot = Some(value);
+    Ok(())
+}
+
+/// End a completed or cancelled task frame without running guest code.  Local
+/// slots are cleared in reverse declaration order before the private lane is
+/// revoked and zeroed, matching the v12 destruction contract.
+fn destroy_task_frame(
+    mut frame: TaskFrame,
+    runtime_state: &mut RuntimeState,
+    offset: usize,
+) -> Result<(), BytecodeError> {
+    if !frame.stack.is_empty() {
+        return Err(BytecodeError::new(
+            offset,
+            "AETH v12 task destruction found a non-empty transient operand stack",
+        ));
+    }
+    for (slot, local) in frame.locals.iter_mut().enumerate().rev() {
+        // The slot is exposed only by the test-only destruction trace. Consume
+        // it in release builds as well, preserving the same teardown loop.
+        let _ = slot;
+        if local.take().is_some() {
+            #[cfg(test)]
+            runtime_state.task_destroyed_local_slots.push(slot);
+        }
+    }
+    runtime_state.zero_arena_range(frame.lane.start, frame.lane.capacity, offset)
+}
+
+fn cancel_v12_scheduler_children(
+    children: &mut [V12SchedulerChild],
+    runtime_state: &mut RuntimeState,
+    offset: usize,
+) -> Result<(), BytecodeError> {
+    for (index, child) in children.iter_mut().enumerate() {
+        // The index is test-visible through the cfg(test) lifecycle trace.
+        // Keep it consumed in release builds as well so the production crate
+        // remains warning-free without changing cancellation behavior.
+        let _ = index;
+        let state = std::mem::replace(&mut child.state, V12SchedulerState::Cancelled);
+        match state {
+            V12SchedulerState::Parked(frame) => {
+                #[cfg(test)]
+                runtime_state
+                    .task_frame_trace
+                    .push(TaskFrameTraceEvent::Cancelled(index));
+                destroy_task_frame(frame, runtime_state, offset)?;
+            }
+            V12SchedulerState::Completed | V12SchedulerState::Failed => {
+                child.state = state;
+            }
+            V12SchedulerState::Pending(_)
+            | V12SchedulerState::Cancelled
+            | V12SchedulerState::Running => {
+                // Pending arguments are Copy-only and drop here. `Running` is
+                // reachable only while unwinding an invalid-runtime halt; it has
+                // no concurrent guest execution in this single-thread VM.
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Execute one fully captured AETH v12 nursery.  Task children run only until
+/// their next checkpoint or yield; ordinary companions run to a terminal
+/// result.  The source-order loop is deterministic and has no host scheduling
+/// or parallel execution surface.
+fn run_v12_nursery(
+    context: V12NurseryExecutionContext<'_>,
+    children: Vec<V12NurseryChild>,
+) -> Result<Option<i64>, BytecodeError> {
+    let V12NurseryExecutionContext {
+        artifact,
+        parent,
+        parent_locals,
+        stdout,
+        runtime_state,
+        depth,
+        offset,
+    } = context;
+    let mut task_capacity = 0_usize;
+    for child in &children {
+        let function = artifact.functions.get(child.function).ok_or_else(|| {
+            BytecodeError::new(
+                offset,
+                "runtime v12 nursery child references an unknown weave",
+            )
+        })?;
+        if function.is_task() {
+            task_capacity = task_capacity
+                .checked_add(usize::try_from(function.frame_arena_capacity).map_err(|_| {
+                    BytecodeError::new(offset, "task frame capacity is outside platform limits")
+                })?)
+                .ok_or_else(|| BytecodeError::new(offset, "task nursery lane sum overflowed"))?;
+        }
+    }
+
+    // Admission is all-or-nothing and happens before the first task can run.
+    let slab = if task_capacity == 0 {
+        None
+    } else {
+        Some((
+            runtime_state.reserve_task_slab(task_capacity, offset)?,
+            task_capacity,
+        ))
+    };
+    let mut next_lane = slab.map_or(0, |(start, _)| start);
+    let mut scheduled = Vec::with_capacity(children.len());
+    for child in children {
+        let function = artifact.functions.get(child.function).ok_or_else(|| {
+            BytecodeError::new(
+                offset,
+                "runtime v12 nursery child references an unknown weave",
+            )
+        })?;
+        let lane = if function.is_task() {
+            let capacity = usize::try_from(function.frame_arena_capacity).map_err(|_| {
+                BytecodeError::new(offset, "task frame capacity is outside platform limits")
+            })?;
+            let start = next_lane;
+            next_lane = next_lane
+                .checked_add(capacity)
+                .ok_or_else(|| BytecodeError::new(offset, "task nursery lane offset overflowed"))?;
+            Some(TaskArenaLane {
+                start,
+                capacity,
+                used: 0,
+            })
+        } else {
+            None
+        };
+        scheduled.push(V12SchedulerChild {
+            function: child.function,
+            destination: child.destination,
+            lane,
+            state: V12SchedulerState::Pending(child.arguments),
+        });
+    }
+
+    let scheduler_result = (|| -> Result<Option<i64>, BytecodeError> {
+        let mut failure = None;
+        while failure.is_none()
+            && scheduled.iter().any(|child| {
+                matches!(
+                    child.state,
+                    V12SchedulerState::Pending(_) | V12SchedulerState::Parked(_)
+                )
+            })
+        {
+            for (index, child) in scheduled.iter_mut().enumerate() {
+                if failure.is_some() {
+                    break;
+                }
+                // The source-order index is exposed only by test traces. Keep
+                // the production dispatch loop warning-free without changing
+                // the deterministic schedule.
+                let _ = index;
+                let state = std::mem::replace(&mut child.state, V12SchedulerState::Running);
+                let (function_index, destination, lane) =
+                    (child.function, child.destination, child.lane);
+                let called = artifact.functions.get(function_index).ok_or_else(|| {
+                    BytecodeError::new(
+                        offset,
+                        "runtime v12 nursery child references an unknown weave",
+                    )
+                })?;
+                match state {
+                    V12SchedulerState::Pending(arguments) => {
+                        if called.is_task() {
+                            let lane = lane.ok_or_else(|| {
+                                BytecodeError::new(
+                                    offset,
+                                    "runtime v12 task child has no assigned private arena lane",
+                                )
+                            })?;
+                            if runtime_state.active_task_lane.is_some()
+                                || runtime_state.resumed_task.is_some()
+                            {
+                                return Err(BytecodeError::new(
+                                    offset,
+                                    "runtime v12 scheduler found an overlapping active task frame",
+                                ));
+                            }
+                            runtime_state.active_task_lane = Some(lane);
+                            #[cfg(test)]
+                            runtime_state
+                                .task_frame_trace
+                                .push(TaskFrameTraceEvent::Started(index));
+                            match execute_function(
+                                artifact,
+                                function_index,
+                                arguments,
+                                stdout,
+                                runtime_state,
+                                depth + 1,
+                            )? {
+                                RuntimeExit::Checkpoint(frame) => {
+                                    #[cfg(test)]
+                                    runtime_state
+                                        .task_frame_trace
+                                        .push(TaskFrameTraceEvent::Parked(index));
+                                    child.state = V12SchedulerState::Parked(frame);
+                                }
+                                RuntimeExit::TaskReturn { value, frame } => {
+                                    commit_v12_nursery_result(
+                                        parent,
+                                        parent_locals,
+                                        destination,
+                                        value,
+                                        offset,
+                                    )?;
+                                    destroy_task_frame(frame, runtime_state, offset)?;
+                                    #[cfg(test)]
+                                    runtime_state
+                                        .task_frame_trace
+                                        .push(TaskFrameTraceEvent::Completed(index));
+                                    child.state = V12SchedulerState::Completed;
+                                }
+                                RuntimeExit::Return(_) | RuntimeExit::ErrorWhole(_) => {
+                                    return Err(BytecodeError::new(
+                                        offset,
+                                        "runtime v12 task child returned through an invalid exit path",
+                                    ));
+                                }
+                            }
+                        } else {
+                            match execute_function(
+                                artifact,
+                                function_index,
+                                arguments,
+                                stdout,
+                                runtime_state,
+                                depth + 1,
+                            )? {
+                                RuntimeExit::Return(value) => {
+                                    commit_v12_nursery_result(
+                                        parent,
+                                        parent_locals,
+                                        destination,
+                                        value,
+                                        offset,
+                                    )?;
+                                    child.state = V12SchedulerState::Completed;
+                                }
+                                RuntimeExit::ErrorWhole(code) => {
+                                    child.state = V12SchedulerState::Failed;
+                                    failure = Some(code);
+                                }
+                                RuntimeExit::Checkpoint(_) | RuntimeExit::TaskReturn { .. } => {
+                                    return Err(BytecodeError::new(
+                                        offset,
+                                        "runtime v12 companion returned through a task-frame exit path",
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    V12SchedulerState::Parked(frame) => {
+                        if !called.is_task() {
+                            return Err(BytecodeError::new(
+                                offset,
+                                "runtime v12 scheduler parked a non-task companion",
+                            ));
+                        }
+                        if runtime_state.active_task_lane.is_some()
+                            || runtime_state.resumed_task.is_some()
+                        {
+                            return Err(BytecodeError::new(
+                                offset,
+                                "runtime v12 scheduler found an overlapping resumed task frame",
+                            ));
+                        }
+                        runtime_state.resumed_task = Some(frame);
+                        match execute_function(
+                            artifact,
+                            function_index,
+                            Vec::new(),
+                            stdout,
+                            runtime_state,
+                            depth + 1,
+                        )? {
+                            RuntimeExit::Checkpoint(frame) => {
+                                #[cfg(test)]
+                                runtime_state
+                                    .task_frame_trace
+                                    .push(TaskFrameTraceEvent::Parked(index));
+                                child.state = V12SchedulerState::Parked(frame);
+                            }
+                            RuntimeExit::TaskReturn { value, frame } => {
+                                commit_v12_nursery_result(
+                                    parent,
+                                    parent_locals,
+                                    destination,
+                                    value,
+                                    offset,
+                                )?;
+                                destroy_task_frame(frame, runtime_state, offset)?;
+                                #[cfg(test)]
+                                runtime_state
+                                    .task_frame_trace
+                                    .push(TaskFrameTraceEvent::Completed(index));
+                                child.state = V12SchedulerState::Completed;
+                            }
+                            RuntimeExit::Return(_) | RuntimeExit::ErrorWhole(_) => {
+                                return Err(BytecodeError::new(
+                                    offset,
+                                    "runtime resumed task returned through an invalid exit path",
+                                ));
+                            }
+                        }
+                    }
+                    V12SchedulerState::Completed
+                    | V12SchedulerState::Failed
+                    | V12SchedulerState::Cancelled => {
+                        child.state = state;
+                    }
+                    V12SchedulerState::Running => {
+                        return Err(BytecodeError::new(
+                            offset,
+                            "runtime v12 scheduler found a stale running child state",
+                        ));
+                    }
+                }
+            }
+        }
+        if failure.is_some() {
+            cancel_v12_scheduler_children(&mut scheduled, runtime_state, offset)?;
+        }
+        Ok(failure)
+    })();
+
+    // No task frame may survive the nursery boundary, even if malformed input
+    // caused an internal runtime halt.  This keeps all private bytes inside the
+    // slab and ensures future calls cannot inherit a stale execution context.
+    let cleanup_result = cancel_v12_scheduler_children(&mut scheduled, runtime_state, offset);
+    runtime_state.resumed_task = None;
+    runtime_state.active_task_lane = None;
+    let slab_result = if let Some((start, capacity)) = slab {
+        let expected_end = start
+            .checked_add(capacity)
+            .ok_or_else(|| BytecodeError::new(offset, "task nursery slab range overflowed"))?;
+        let invariant = if runtime_state.arena.used == expected_end {
+            Ok(())
+        } else {
+            Err(BytecodeError::new(
+                offset,
+                "runtime v12 task nursery lost LIFO ownership of its private slab",
+            ))
+        };
+        let zero = runtime_state.zero_arena_range(start, capacity, offset);
+        runtime_state.arena.used = start;
+        invariant.and(zero)
+    } else {
+        Ok(())
+    };
+
+    let scheduler_outcome = scheduler_result?;
+    cleanup_result?;
+    slab_result?;
+    Ok(scheduler_outcome)
+}
+
 fn decode_code(code: &[u8], version: u8) -> Result<Vec<DecodedInstruction>, BytecodeError> {
     let mut position = 0;
     let mut instructions = Vec::new();
@@ -11566,10 +13856,11 @@ fn decode_instruction(
                     | ARTIFACT_VERSION_V9
                     | ARTIFACT_VERSION_V10
                     | ARTIFACT_VERSION_V11
+                    | ARTIFACT_VERSION_V12
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record construction is valid only in AETH v5 through v11 artifacts",
+                    "record construction is valid only in AETH v5 through v12 artifacts",
                 ));
             }
             Instruction::MakeRecord(read_u16(code, position)?)
@@ -11584,10 +13875,11 @@ fn decode_instruction(
                     | ARTIFACT_VERSION_V9
                     | ARTIFACT_VERSION_V10
                     | ARTIFACT_VERSION_V11
+                    | ARTIFACT_VERSION_V12
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record field projection is valid only in AETH v5 through v11 artifacts",
+                    "record field projection is valid only in AETH v5 through v12 artifacts",
                 ));
             }
             Instruction::Field {
@@ -11686,6 +13978,15 @@ fn decode_instruction(
             require_v10_instruction(version, offset, "nursery end")?;
             Instruction::NurseryEnd
         }
+        OP_TASK_CHECKPOINT => {
+            if version != ARTIFACT_VERSION_V12 {
+                return Err(BytecodeError::new(
+                    offset,
+                    "task checkpoint is valid only in AETH v12 artifacts",
+                ));
+            }
+            Instruction::TaskCheckpoint
+        }
         OP_RAISE => {
             require_v7_instruction(version, offset, "raise")?;
             Instruction::Raise
@@ -11743,12 +14044,13 @@ fn require_v6_instruction(version: u8, offset: usize, subject: &str) -> Result<(
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
             | ARTIFACT_VERSION_V11
+            | ARTIFACT_VERSION_V12
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v6 through v11 artifacts"),
+            format!("{subject} is valid only in AETH v6 through v12 artifacts"),
         ))
     }
 }
@@ -11761,12 +14063,13 @@ fn require_v7_instruction(version: u8, offset: usize, subject: &str) -> Result<(
             | ARTIFACT_VERSION_V9
             | ARTIFACT_VERSION_V10
             | ARTIFACT_VERSION_V11
+            | ARTIFACT_VERSION_V12
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v7 through v11 artifacts"),
+            format!("{subject} is valid only in AETH v7 through v12 artifacts"),
         ))
     }
 }
@@ -11774,13 +14077,17 @@ fn require_v7_instruction(version: u8, offset: usize, subject: &str) -> Result<(
 fn require_v8_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
     if matches!(
         version,
-        ARTIFACT_VERSION_V8 | ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11
+        ARTIFACT_VERSION_V8
+            | ARTIFACT_VERSION_V9
+            | ARTIFACT_VERSION_V10
+            | ARTIFACT_VERSION_V11
+            | ARTIFACT_VERSION_V12
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v8 through v11 artifacts"),
+            format!("{subject} is valid only in AETH v8 through v12 artifacts"),
         ))
     }
 }
@@ -11788,35 +14095,38 @@ fn require_v8_instruction(version: u8, offset: usize, subject: &str) -> Result<(
 fn require_v9_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
     if matches!(
         version,
-        ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11
+        ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11 | ARTIFACT_VERSION_V12
     ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v9 through v11 artifacts"),
+            format!("{subject} is valid only in AETH v9 through v12 artifacts"),
         ))
     }
 }
 
 fn require_v10_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if matches!(version, ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11) {
+    if matches!(
+        version,
+        ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11 | ARTIFACT_VERSION_V12
+    ) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v10 or v11 artifacts"),
+            format!("{subject} is valid only in AETH v10 through v12 artifacts"),
         ))
     }
 }
 
 fn require_v11_instruction(version: u8, offset: usize, subject: &str) -> Result<(), BytecodeError> {
-    if version == ARTIFACT_VERSION_V11 {
+    if matches!(version, ARTIFACT_VERSION_V11 | ARTIFACT_VERSION_V12) {
         Ok(())
     } else {
         Err(BytecodeError::new(
             offset,
-            format!("{subject} is valid only in AETH v11 artifacts"),
+            format!("{subject} is valid only in AETH v11 or v12 artifacts"),
         ))
     }
 }
@@ -12111,7 +14421,7 @@ fn pop_text(
     stack: &mut Vec<RuntimeValue>,
     offset: usize,
     operation: &str,
-) -> Result<String, BytecodeError> {
+) -> Result<RuntimeText, BytecodeError> {
     match pop_runtime(stack, offset, operation)? {
         RuntimeValue::Text(value) => Ok(value),
         value => Err(BytecodeError::new(
@@ -12238,7 +14548,7 @@ fn runtime_allocate_buffer(
             ))
         }
     };
-    let Some(end) = runtime_state.arena.used.checked_add(required) else {
+    let Some(allocation_start) = runtime_state.reserve_arena_bytes(required) else {
         return Ok((
             RuntimeValue::Buffer {
                 element,
@@ -12250,24 +14560,9 @@ fn runtime_allocate_buffer(
             false,
         ));
     };
-    if end > runtime_state.arena.bytes.len() {
-        return Ok((
-            RuntimeValue::Buffer {
-                element,
-                allocated: false,
-                offset: 0,
-                len: 0,
-                capacity: 0,
-            },
-            false,
-        ));
-    }
-    let offset = runtime_state
-        .arena
-        .used
+    let offset = allocation_start
         .checked_add(BUFFER_METADATA_BYTES)
         .ok_or_else(|| BytecodeError::new(offset, "buffer data offset overflowed"))?;
-    runtime_state.arena.used = end;
     Ok((
         RuntimeValue::Buffer {
             element,
@@ -12485,7 +14780,7 @@ fn runtime_allocate_table(
             ))
         }
     };
-    let Some(end) = runtime_state.arena.used.checked_add(required) else {
+    let Some(allocation_start) = runtime_state.reserve_arena_bytes(required) else {
         return Ok((
             RuntimeValue::Table {
                 shape,
@@ -12498,25 +14793,9 @@ fn runtime_allocate_table(
             false,
         ));
     };
-    if end > runtime_state.arena.bytes.len() {
-        return Ok((
-            RuntimeValue::Table {
-                shape,
-                layout,
-                field_count,
-                allocated: false,
-                offset: 0,
-                capacity: 0,
-            },
-            false,
-        ));
-    }
-    let data_offset = runtime_state
-        .arena
-        .used
+    let data_offset = allocation_start
         .checked_add(TABLE_METADATA_BYTES)
         .ok_or_else(|| BytecodeError::new(offset, "table data offset overflowed"))?;
-    runtime_state.arena.used = end;
     Ok((
         RuntimeValue::Table {
             shape,
@@ -12719,7 +14998,7 @@ fn runtime_table_load(
 
 fn runtime_values_equal(left: &RuntimeValue, right: &RuntimeValue) -> bool {
     match (left, right) {
-        (RuntimeValue::Text(left), RuntimeValue::Text(right)) => left == right,
+        (RuntimeValue::Text(left), RuntimeValue::Text(right)) => left.as_str() == right.as_str(),
         (RuntimeValue::Whole(left), RuntimeValue::Whole(right)) => left == right,
         (RuntimeValue::Truth(left), RuntimeValue::Truth(right)) => left == right,
         (RuntimeValue::Bytes(left), RuntimeValue::Bytes(right)) => left == right,
@@ -12813,7 +15092,7 @@ fn ensure_record_size(fields: &[RuntimeValue], offset: usize) -> Result<(), Byte
 
 fn runtime_value_size(value: &RuntimeValue, offset: usize) -> Result<usize, BytecodeError> {
     match value {
-        RuntimeValue::Text(value) => Ok(value.len()),
+        RuntimeValue::Text(value) => Ok(value.byte_len()),
         RuntimeValue::Whole(_) => Ok(std::mem::size_of::<i64>()),
         RuntimeValue::Truth(_) => Ok(1),
         RuntimeValue::Bytes(value) => Ok(value.len()),
@@ -12909,10 +15188,11 @@ fn read_value_type(
                     | ARTIFACT_VERSION_V9
                     | ARTIFACT_VERSION_V10
                     | ARTIFACT_VERSION_V11
+                    | ARTIFACT_VERSION_V12
             ) {
                 return Err(BytecodeError::new(
                     offset,
-                    "record types are valid only in AETH v5 through v11 artifacts",
+                    "record types are valid only in AETH v5 through v12 artifacts",
                 ));
             }
             let record_id = read_u16(bytes, position)?;
@@ -12932,6 +15212,7 @@ fn read_value_type(
                 | ARTIFACT_VERSION_V9
                 | ARTIFACT_VERSION_V10
                 | ARTIFACT_VERSION_V11
+                | ARTIFACT_VERSION_V12
         ) =>
         {
             Ok(ValueType::Arena)
@@ -12944,6 +15225,7 @@ fn read_value_type(
                 | ARTIFACT_VERSION_V9
                 | ARTIFACT_VERSION_V10
                 | ARTIFACT_VERSION_V11
+                | ARTIFACT_VERSION_V12
         ) =>
         {
             Ok(ValueType::BufferWhole)
@@ -12956,6 +15238,7 @@ fn read_value_type(
                 | ARTIFACT_VERSION_V9
                 | ARTIFACT_VERSION_V10
                 | ARTIFACT_VERSION_V11
+                | ARTIFACT_VERSION_V12
         ) =>
         {
             Ok(ValueType::BufferTruth)
@@ -12966,7 +15249,10 @@ fn read_value_type(
         )),
         10 if matches!(
             version,
-            ARTIFACT_VERSION_V9 | ARTIFACT_VERSION_V10 | ARTIFACT_VERSION_V11
+            ARTIFACT_VERSION_V9
+                | ARTIFACT_VERSION_V10
+                | ARTIFACT_VERSION_V11
+                | ARTIFACT_VERSION_V12
         ) =>
         {
             let shape_id = read_u16(bytes, position)?;
@@ -13087,12 +15373,6 @@ fn read_raw_bytes(
     };
     *position = end;
     Ok(slice.to_vec())
-}
-
-fn scalar_byte_offset(text: &str, scalar_index: usize) -> usize {
-    text.char_indices()
-        .nth(scalar_index)
-        .map_or(text.len(), |(offset, _)| offset)
 }
 
 fn checked_bytes_index(
@@ -13224,6 +15504,9 @@ fn write_block(statements: &[Statement], indentation: usize, output: &mut String
                 output.push_str("release ");
                 output.push_str(name);
                 output.push('\n');
+            }
+            Statement::Checkpoint { .. } => {
+                output.push_str("checkpoint\n");
             }
             Statement::Yield { value, .. } => {
                 output.push_str("yield ");
@@ -13568,6 +15851,7 @@ fn write_ast_block(statements: &[Statement], output: &mut String) {
                 output.push_str(name);
                 output.push(')');
             }
+            Statement::Checkpoint { .. } => output.push_str("Checkpoint"),
             Statement::Yield { value, .. } => {
                 output.push_str("Yield(");
                 write_ast_expression(value, output);
@@ -13887,6 +16171,7 @@ fn statement_token_count(statements: &[Statement]) -> usize {
             | Statement::Speak { .. }
             | Statement::Release { .. }
             | Statement::Yield { .. } => 2,
+            Statement::Checkpoint { .. } => 1,
             Statement::Raise { .. } | Statement::Forward { .. } => 2,
             Statement::Handle { .. } => 4,
             Statement::Choose {
@@ -14120,6 +16405,66 @@ mod tests {
 
     const HELLO: &str = "world genesis\n\nweave main [] -> Whole:\n  bind greeting <- \"Hello from Aether\\n\"\n  speak borrow greeting\n  yield 0\n";
 
+    /// Locate v12 descriptor metadata for a deliberately primitive-only test
+    /// fixture. Keeping this tiny decoder in the test module lets hostile
+    /// artifact tests mutate one invariant at a time without exposing parser
+    /// offsets through the product API.
+    fn v12_primitive_function_offsets(bytecode: &[u8], expected_name: &str) -> (usize, usize) {
+        assert_eq!(&bytecode[..5], b"AETH\x0c");
+        let mut position = 9;
+        let records = u16::from_le_bytes([bytecode[position], bytecode[position + 1]]);
+        assert_eq!(records, 0, "fixture must remain record-free");
+        position += 2;
+        let shapes = u16::from_le_bytes([bytecode[position], bytecode[position + 1]]);
+        assert_eq!(shapes, 0, "fixture must remain shape-free");
+        position += 2;
+        let function_count = usize::from(u16::from_le_bytes([
+            bytecode[position],
+            bytecode[position + 1],
+        ]));
+        position += 2;
+        for _ in 0..function_count {
+            let name_length = usize::from(bytecode[position]);
+            position += 1;
+            let name = std::str::from_utf8(&bytecode[position..position + name_length])
+                .expect("test fixture function names must be ASCII");
+            position += name_length;
+            let parameter_count = usize::from(bytecode[position]);
+            position += 1;
+            // Every parameter in this fixture is one primitive value-type byte
+            // plus one parameter-mode byte.
+            position += parameter_count * 2;
+            // Primitive result, effect, and guest/host kind.
+            position += 3;
+            let flags_offset = position;
+            position += 1;
+            // Frame arena capacity.
+            position += 4;
+            let local_count = usize::from(u16::from_le_bytes([
+                bytecode[position],
+                bytecode[position + 1],
+            ]));
+            position += 2;
+            // Every local in this fixture is one primitive value-type byte plus
+            // one mutability byte.
+            position += local_count * 2;
+            let code_length = usize::try_from(u32::from_le_bytes([
+                bytecode[position],
+                bytecode[position + 1],
+                bytecode[position + 2],
+                bytecode[position + 3],
+            ]))
+            .expect("test fixture code length must fit usize");
+            position += 4;
+            let code_offset = position;
+            position += code_length;
+            if name == expected_name {
+                return (flags_offset, code_offset);
+            }
+        }
+        panic!("test fixture has no function named {expected_name}");
+    }
+
     #[test]
     fn compiles_runs_and_formats_legacy_source_in_current_aeth_v9() {
         let output = compile_to_bytecode(HELLO).expect("Aether source should compile");
@@ -14183,11 +16528,11 @@ mod tests {
 
     #[test]
     fn runs_unicode_text_primitives_on_scalar_boundaries() {
-        let source = "world unicode\n\nweave main [] -> Whole:\n  bind source <- \"Aé🙂Z\"\n  bind section <- cut borrow source 1 3\n  bind count <- measure borrow source\n  bind code <- glyph borrow source 2\n  bind mutable result <- -1\n  choose same count 4:\n    revise result <- code\n  speak borrow section\n  yield result\n";
+        let source = "world unicode\n\nweave main [] -> Whole:\n  bind source <- \"Aé🙂Z\"\n  bind section <- cut borrow source 1 3\n  bind count <- measure borrow source\n  bind code <- glyph borrow source 2\n  bind found <- seek borrow source \"🙂\" 1\n  bind mutable result <- -1\n  choose same count 4:\n    revise result <- sum code found\n  speak borrow section\n  yield result\n";
         let output = compile_to_bytecode(source).expect("Unicode source should compile");
         let run = run_bytecode(&output.bytecode).expect("Unicode artifact should run");
         assert_eq!(run.stdout, "é🙂");
-        assert_eq!(run.exit_code, 128_578);
+        assert_eq!(run.exit_code, 128_580);
 
         let mut malformed = output.bytecode;
         let text_byte = malformed
@@ -14198,6 +16543,47 @@ mod tests {
         let error = verify_bytecode(&malformed)
             .expect_err("invalid UTF-8 artifacts must fail verification");
         assert!(error.message.contains("valid UTF-8"));
+    }
+
+    #[test]
+    fn runtime_text_preserves_ascii_fast_and_unicode_scalar_offsets() {
+        let ascii = RuntimeText::new("aether".to_owned());
+        assert!(
+            ascii.ascii,
+            "ASCII text must retain the cached fast-path fact"
+        );
+        assert_eq!(ascii.scalar_len(), 6);
+        assert_eq!(ascii.scalar_at(2), Some('t'));
+        assert_eq!(
+            ascii.find_from_scalar(&RuntimeText::new("th".to_owned()), 1),
+            2
+        );
+        assert_eq!(
+            ascii
+                .slice_scalars(1, 4)
+                .expect("ASCII scalar range should be valid")
+                .as_str(),
+            "eth"
+        );
+
+        let unicode = RuntimeText::new("Aé🙂Z".to_owned());
+        assert!(
+            !unicode.ascii,
+            "Unicode text must retain scalar traversal semantics"
+        );
+        assert_eq!(unicode.scalar_len(), 4);
+        assert_eq!(unicode.scalar_at(2), Some('🙂'));
+        assert_eq!(
+            unicode.find_from_scalar(&RuntimeText::new("Z".to_owned()), 1),
+            3
+        );
+        assert_eq!(
+            unicode
+                .slice_scalars(1, 3)
+                .expect("Unicode scalar range should be valid")
+                .as_str(),
+            "é🙂"
+        );
     }
 
     #[test]
@@ -14774,6 +17160,128 @@ mod tests {
     }
 
     #[test]
+    fn compiles_verifies_runs_and_seed_matches_m23_pure_comptime_calls() {
+        let source = include_str!("../../../examples/comptime-calls.ae");
+        let bootstrap = compile_to_bytecode(source).expect("M23 source should bootstrap compile");
+        assert_eq!(
+            format_program(&bootstrap.program),
+            source.replace("\r\n", "\n")
+        );
+        assert!(
+            bootstrap.bytecode.contains(&OP_COMPTIME_WHOLE),
+            "M23 calls must still lower to COMPTIME_WHOLE"
+        );
+        verify_bytecode(&bootstrap.bytecode).expect("M23 bootstrap artifact should verify");
+        assert_eq!(
+            run_bytecode(&bootstrap.bytecode)
+                .expect("M23 bootstrap artifact should run")
+                .exit_code,
+            512,
+            "cell=64, wide=128, total=512"
+        );
+
+        let seeded = compile_with_seed(source).expect("M23 source should seed compile");
+        assert_eq!(
+            seeded.bytecode, bootstrap.bytecode,
+            "M23 bootstrap materialization plus seed emission must be byte-identical"
+        );
+        assert_eq!(
+            run_bytecode(&seeded.bytecode)
+                .expect("M23 seed artifact should run")
+                .exit_code,
+            512
+        );
+    }
+
+    #[test]
+    fn rejects_m23_ineligible_calls_without_expanding_comptime_authority() {
+        let cases = [
+            (
+                "host target",
+                "world invalid\n\nhost weave host_inc [value: Whole] -> Whole\n\nweave main [] -> Whole:\n  comptime bind result <- call host_inc 1\n  yield result\n",
+                "AE-COMPTIME-001",
+                "prior total guest weave",
+            ),
+            (
+                "foreign target",
+                "world invalid\n\nforeign weave foreign_sum [left: Whole, right: Whole] -> Whole from \"pilot\" symbol \"aether_foreign_sum\"\n\nweave main [] -> Whole:\n  comptime bind result <- call foreign_sum 1 2\n  yield result\n",
+                "AE-COMPTIME-001",
+                "prior total guest weave",
+            ),
+            (
+                "erroring target",
+                "world invalid\n\nweave boom [value: Whole] -> Whole raises Whole:\n  raise value\n\nweave main [] -> Whole:\n  comptime bind result <- call boom 1\n  yield result\n",
+                "AE-COMPTIME-001",
+                "total guest weave returning Whole",
+            ),
+            (
+                "nested call in callee",
+                "world invalid\n\nweave leaf [value: Whole] -> Whole:\n  yield sum value 1\n\nweave bad [value: Whole] -> Whole:\n  yield call leaf value\n\nweave main [] -> Whole:\n  comptime bind result <- call bad 1\n  yield result\n",
+                "AE-COMPTIME-001",
+                "nested call",
+            ),
+            (
+                "choose in callee",
+                "world invalid\n\nweave branch [value: Whole] -> Whole:\n  bind mutable result <- 0\n  choose bright:\n    revise result <- value\n  otherwise:\n    revise result <- 0\n  yield result\n\nweave main [] -> Whole:\n  comptime bind result <- call branch 1\n  yield result\n",
+                "AE-COMPTIME-001",
+                "permits only Whole bind, revise, and terminal yield",
+            ),
+            (
+                "while in callee",
+                "world invalid\n\nweave loop [value: Whole] -> Whole:\n  bind mutable result <- value\n  while dim:\n    revise result <- 0\n  yield result\n\nweave main [] -> Whole:\n  comptime bind result <- call loop 1\n  yield result\n",
+                "AE-COMPTIME-001",
+                "permits only Whole bind, revise, and terminal yield",
+            ),
+            (
+                "runtime argument",
+                "world invalid\n\nweave double [value: Whole] -> Whole:\n  yield product value 2\n\nweave main [] -> Whole:\n  bind runtime_value <- 21\n  comptime bind result <- call double runtime_value\n  yield result\n",
+                "AE-COMPTIME-001",
+                "not a prior root-level comptime Whole binding",
+            ),
+            (
+                "forward target",
+                "world invalid\n\nweave main [] -> Whole:\n  comptime bind result <- call double 21\n  yield result\n\nweave double [value: Whole] -> Whole:\n  yield product value 2\n",
+                "AE-COMPTIME-001",
+                "prior total guest weave",
+            ),
+            (
+                "non Whole parameter",
+                "world invalid\n\nweave text_value [value: Text] -> Whole:\n  yield 1\n\nweave main [] -> Whole:\n  comptime bind result <- call text_value 1\n  yield result\n",
+                "AE-COMPTIME-001",
+                "owned Whole parameters only",
+            ),
+            (
+                "non Whole result",
+                "world invalid\n\nweave truth_value [value: Whole] -> Truth:\n  yield bright\n\nweave main [] -> Whole:\n  comptime bind result <- call truth_value 1\n  yield result\n",
+                "AE-COMPTIME-001",
+                "total guest weave returning Whole",
+            ),
+            (
+                "argument count",
+                "world invalid\n\nweave area [width: Whole, height: Whole] -> Whole:\n  yield product width height\n\nweave main [] -> Whole:\n  comptime bind result <- call area 2\n  yield result\n",
+                "AE-COMPTIME-001",
+                "expects 2 Whole arguments, received 1",
+            ),
+            (
+                "overflow in callee",
+                "world invalid\n\nweave increment [value: Whole] -> Whole:\n  yield sum value 1\n\nweave main [] -> Whole:\n  comptime bind result <- call increment 9223372036854775807\n  yield result\n",
+                "AE-COMPTIME-002",
+                "comptime sum overflowed Whole",
+            ),
+        ];
+
+        for (name, source, expected_code, expected_message) in cases {
+            let error = compile_source(source)
+                .expect_err("M23 ineligible call must fail during source validation");
+            assert_eq!(error.diagnostic().code, expected_code, "case: {name}");
+            assert!(
+                error.message.contains(expected_message),
+                "case {name} must explain the M23 boundary: {error}"
+            );
+        }
+    }
+
+    #[test]
     fn rejects_m15_forward_ref_and_runtime_comptime_operands() {
         let forward = "world invalid\n\nweave main [] -> Whole:\n  comptime bind a <- sum b 1\n  comptime bind b <- sum 1 1\n  yield a\n";
         let error = compile_source(forward).expect_err("forward comptime name must fail");
@@ -14878,7 +17386,7 @@ mod tests {
         let source = include_str!("../../../examples/release-raise.ae");
         let output = compile_to_bytecode(source).expect("M19a release-raise should compile");
         assert!(
-            output.bytecode.iter().any(|byte| *byte == OP_RELEASE),
+            output.bytecode.contains(&OP_RELEASE),
             "release must emit OP_RELEASE"
         );
         verify_bytecode(&output.bytecode).expect("verify");
@@ -15157,6 +17665,702 @@ mod tests {
     }
 
     #[test]
+    fn m19e_active_task_frame_cancels_at_a_private_resource_checkpoint() {
+        let source = include_str!("../../../examples/active-cancel.ae");
+        let output = compile_to_bytecode(source).expect("M19e active-cancel source should compile");
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V12);
+        assert!(
+            output.bytecode.contains(&OP_TASK_CHECKPOINT),
+            "the task fixture must emit an explicit suspension opcode"
+        );
+        assert_eq!(
+            u32::from_le_bytes(
+                output.bytecode[5..9]
+                    .try_into()
+                    .expect("AETH capacity header")
+            ),
+            64,
+            "one private staged-task lane is the exact concurrent arena requirement"
+        );
+        assert!(canonical_ast(&output.program).contains("Weave(staged->Whole#Total#Task)"));
+        assert_eq!(
+            format_program(&output.program),
+            source.replace("\r\n", "\n")
+        );
+        verify_bytecode(&output.bytecode).expect("M19e artifact must verify before execution");
+        let seeded = compile_with_seed(source)
+            .expect("M19e active cancellation must compile through the checked-in seed");
+        assert_eq!(
+            seeded.bytecode, output.bytecode,
+            "seed and bootstrap must agree on active-frame cancellation artifacts"
+        );
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("M19e active cancellation must run deterministically")
+                .exit_code,
+            9,
+            "the later companion failure must propagate after cancellation"
+        );
+
+        let artifact = parse_artifact(&output.bytecode).expect("verified fixture must parse");
+        let main_index = artifact
+            .functions
+            .iter()
+            .position(|function| function.name == "main")
+            .expect("fixture must retain main");
+        let mut stdout = String::new();
+        let mut runtime_state =
+            RuntimeState::with_hosts(artifact.arena_capacity, HostServices::pure_fixture())
+                .expect("verified header capacity must admit the runtime arena");
+        let exit = execute_function(
+            &artifact,
+            main_index,
+            Vec::new(),
+            &mut stdout,
+            &mut runtime_state,
+            0,
+        )
+        .expect("active frame fixture must execute under the internal scheduler");
+        assert!(matches!(exit, RuntimeExit::Return(RuntimeValue::Whole(9))));
+        assert_eq!(
+            runtime_state.task_frame_trace,
+            vec![
+                TaskFrameTraceEvent::Started(0),
+                TaskFrameTraceEvent::Parked(0),
+                TaskFrameTraceEvent::Cancelled(0),
+            ],
+            "the task must start, park at its checkpoint, then be cancelled rather than resumed"
+        );
+        assert_eq!(
+            runtime_state.task_destroyed_local_slots,
+            vec![4, 3, 2],
+            "cancellation must clear the live Buffer, Arena, and record-owned Text/Bytes in reverse slot order; moved inputs are not destroyed twice"
+        );
+        assert_eq!(
+            runtime_state.arena.used, 0,
+            "cancelled slab ownership must be reclaimed"
+        );
+        assert!(
+            runtime_state.arena.bytes.iter().all(|byte| *byte == 0),
+            "cancelled task-lane bytes must be scrubbed before the nursery returns"
+        );
+    }
+
+    #[test]
+    fn m19e_scheduler_retains_completed_results_and_only_cancels_live_or_pending_children() {
+        let source = "world scheduler_results\n\ntask weave fast [] -> Whole:\n  bind mutable result <- 7\n  choose dim:\n    checkpoint\n    revise result <- 0\n  otherwise:\n    revise result <- 7\n  yield result\n\ntask weave parked [] -> Whole:\n  checkpoint\n  yield 8\n\nweave fail [] -> Whole raises Whole:\n  raise 9\n\nweave run [] -> Whole raises Whole:\n  bind mutable completed <- 0\n  bind mutable cancelled <- 0\n  bind mutable pending <- 0\n  together:\n    spawn call fast into completed\n    spawn call parked into cancelled\n    spawn call fail into pending\n  yield completed\n\nweave main [] -> Whole:\n  bind mutable value <- 0\n  bind mutable fault <- 0\n  handle call run into value otherwise error into fault\n";
+        let output = compile_to_bytecode(source)
+            .expect("completed/cancelled scheduler fixture should compile");
+        verify_bytecode(&output.bytecode).expect("scheduler fixture must verify before execution");
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("scheduler fixture should re-raise deterministically")
+                .exit_code,
+            9
+        );
+
+        let artifact = parse_artifact(&output.bytecode).expect("fixture artifact must parse");
+        let function_index = |name: &str| {
+            artifact
+                .functions
+                .iter()
+                .position(|function| function.name == name)
+                .unwrap_or_else(|| panic!("fixture must retain {name}"))
+        };
+        let run_index = function_index("run");
+        let mut parent_locals =
+            vec![Some(RuntimeValue::Whole(0)); artifact.functions[run_index].locals.len()];
+        assert_eq!(
+            parent_locals.len(),
+            3,
+            "fixture keeps three nursery destinations"
+        );
+        let children = vec![
+            V12NurseryChild {
+                function: function_index("fast"),
+                arguments: Vec::new(),
+                destination: 0,
+            },
+            V12NurseryChild {
+                function: function_index("parked"),
+                arguments: Vec::new(),
+                destination: 1,
+            },
+            V12NurseryChild {
+                function: function_index("fail"),
+                arguments: Vec::new(),
+                destination: 2,
+            },
+        ];
+        let mut stdout = String::new();
+        let mut runtime_state =
+            RuntimeState::with_hosts(artifact.arena_capacity, HostServices::pure_fixture())
+                .expect("verified fixture capacity must admit its runtime state");
+        let outcome = run_v12_nursery(
+            V12NurseryExecutionContext {
+                artifact: &artifact,
+                parent: &artifact.functions[run_index],
+                parent_locals: &mut parent_locals,
+                stdout: &mut stdout,
+                runtime_state: &mut runtime_state,
+                depth: 0,
+                offset: 0,
+            },
+            children,
+        )
+        .expect("scheduler must quiesce after the first companion failure");
+        assert_eq!(outcome, Some(9));
+        for (slot, expected) in [(0_usize, 7_i64), (1, 0), (2, 0)] {
+            assert!(
+                matches!(parent_locals[slot].as_ref(), Some(RuntimeValue::Whole(value)) if *value == expected),
+                "destination slot {slot} must retain only its documented outcome"
+            );
+        }
+        assert_eq!(
+            runtime_state.task_frame_trace,
+            vec![
+                TaskFrameTraceEvent::Started(0),
+                TaskFrameTraceEvent::Completed(0),
+                TaskFrameTraceEvent::Started(1),
+                TaskFrameTraceEvent::Parked(1),
+                TaskFrameTraceEvent::Cancelled(1),
+            ],
+            "a completed task commits before failure, while its parked sibling is cancelled and the failing destination remains unchanged"
+        );
+    }
+
+    #[test]
+    fn m19e_task_loop_resumes_only_at_verifier_checkpoint_boundaries() {
+        let source = "world task_loop\n\ntask weave count [limit: Whole] -> Whole:\n  bind mutable current <- 0\n  while less current limit:\n    checkpoint\n    revise current <- sum current 1\n  checkpoint\n  yield current\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call count 3 into result\n  yield result\n";
+        let output = compile_to_bytecode(source).expect("checkpointed task loop should compile");
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V12);
+        verify_bytecode(&output.bytecode).expect("task loop back edge must target checkpoint");
+        let seeded = compile_with_seed(source)
+            .expect("checkpointed task loop must compile through the checked-in seed");
+        assert_eq!(
+            seeded.bytecode, output.bytecode,
+            "seed and bootstrap must preserve task loop checkpoint placement"
+        );
+        assert_eq!(
+            run_bytecode(&output.bytecode)
+                .expect("task loop should resume and complete")
+                .exit_code,
+            3
+        );
+    }
+
+    #[test]
+    fn m19e_frame_plan_adds_main_capacity_to_the_largest_task_nursery() {
+        let source = include_str!("../../../examples/task-frame-capacity.ae");
+        let bootstrap = compile_to_bytecode(source)
+            .expect("multi-task capacity fixture should bootstrap compile");
+        assert_eq!(bootstrap.bytecode[4], ARTIFACT_VERSION_V12);
+        assert_eq!(
+            u32::from_le_bytes(
+                bootstrap.bytecode[5..9]
+                    .try_into()
+                    .expect("AETH v12 capacity header"),
+            ),
+            96,
+            "main's 16-byte arena plus the 32+48-byte concurrent task lanes"
+        );
+        verify_bytecode(&bootstrap.bytecode).expect("exact frame plan must verify");
+        assert_eq!(
+            run_bytecode(&bootstrap.bytecode)
+                .expect("task frame capacity fixture should run")
+                .exit_code,
+            3
+        );
+
+        let artifact = parse_artifact(&bootstrap.bytecode).expect("capacity fixture must parse");
+        let main_index = artifact
+            .functions
+            .iter()
+            .position(|function| function.name == "main")
+            .expect("capacity fixture must retain main");
+        let mut stdout = String::new();
+        let mut runtime_state =
+            RuntimeState::with_hosts(artifact.arena_capacity, HostServices::pure_fixture())
+                .expect("verified frame plan must admit the runtime arena");
+        let exit = execute_function(
+            &artifact,
+            main_index,
+            Vec::new(),
+            &mut stdout,
+            &mut runtime_state,
+            0,
+        )
+        .expect("capacity fixture must complete through the round-robin scheduler");
+        assert!(matches!(exit, RuntimeExit::Return(RuntimeValue::Whole(3))));
+        assert_eq!(
+            runtime_state.task_frame_trace,
+            vec![
+                TaskFrameTraceEvent::Started(0),
+                TaskFrameTraceEvent::Parked(0),
+                TaskFrameTraceEvent::Started(1),
+                TaskFrameTraceEvent::Parked(1),
+                TaskFrameTraceEvent::Completed(0),
+                TaskFrameTraceEvent::Completed(1),
+            ],
+            "two parked tasks must resume and complete in source-order round-robin order"
+        );
+
+        let mut no_admission_state = RuntimeState::with_hosts(79, HostServices::pure_fixture())
+            .expect("the deliberately undersized diagnostic arena should initialize");
+        let error = match execute_function(
+            &artifact,
+            main_index,
+            Vec::new(),
+            &mut String::new(),
+            &mut no_admission_state,
+            0,
+        ) {
+            Ok(_) => panic!("all task lanes must be admitted before any child starts"),
+            Err(error) => error,
+        };
+        assert!(error.message.contains("admission exceeded"));
+        assert!(
+            no_admission_state.task_frame_trace.is_empty(),
+            "a failed slab admission must leave every task pending"
+        );
+        assert_eq!(no_admission_state.arena.used, 0);
+
+        let seeded = compile_with_seed(source)
+            .expect("M19e frame plan must use the checked-in seed compiler");
+        assert_eq!(
+            seeded.bytecode, bootstrap.bytecode,
+            "seed and bootstrap must agree on the exact concurrent frame plan"
+        );
+    }
+
+    #[test]
+    fn m19e_preserves_main_owners_across_handled_failure_and_never_double_releases_a_task_owner() {
+        let parent_owner_source = "world parent_owner\n\ntask weave parked [] -> Whole:\n  checkpoint\n  yield 1\n\nweave fail [] -> Whole raises Whole:\n  raise 9\n\nweave run [] -> Whole raises Whole:\n  bind mutable value <- 0\n  bind mutable failed <- 0\n  together:\n    spawn call parked into value\n    spawn call fail into failed\n  yield value\n\nweave main [] -> Whole:\n  bind memory <- arena 16\n  bind mutable values <- buffer Whole\n  bind mutable value <- 0\n  bind mutable fault <- 0\n  handle call run into value otherwise error into fault\n";
+        let parent_owner = compile_to_bytecode(parent_owner_source)
+            .expect("main-owned arena fixture should compile");
+        assert_eq!(parent_owner.bytecode[4], ARTIFACT_VERSION_V12);
+        assert_eq!(
+            u32::from_le_bytes(
+                parent_owner.bytecode[5..9]
+                    .try_into()
+                    .expect("v12 capacity")
+            ),
+            16,
+            "the main-owned arena remains outside the zero-capacity parked task lane"
+        );
+        assert_eq!(
+            compile_with_seed(parent_owner_source)
+                .expect("main-owned arena fixture must seed-compile")
+                .bytecode,
+            parent_owner.bytecode
+        );
+        assert_eq!(
+            run_bytecode(&parent_owner.bytecode)
+                .expect("handled nursery failure must keep main resources live")
+                .exit_code,
+            9
+        );
+        let artifact =
+            parse_artifact(&parent_owner.bytecode).expect("parent-owner fixture must parse");
+        let main_index = artifact
+            .functions
+            .iter()
+            .position(|function| function.name == "main")
+            .expect("parent-owner fixture must retain main");
+        let mut runtime_state =
+            RuntimeState::with_hosts(artifact.arena_capacity, HostServices::pure_fixture())
+                .expect("parent-owner fixture capacity must admit its runtime state");
+        let exit = execute_function(
+            &artifact,
+            main_index,
+            Vec::new(),
+            &mut String::new(),
+            &mut runtime_state,
+            0,
+        )
+        .expect("main-owned resources may cross the terminal M16 handle boundary");
+        assert!(matches!(exit, RuntimeExit::Return(RuntimeValue::Whole(9))));
+        assert_eq!(
+            runtime_state.handle_live_resource_slots,
+            vec![vec![0, 1], vec![0, 1]],
+            "the parent Arena and Buffer must remain live both before and after its child nursery cancels"
+        );
+
+        let released_task_source = "world released_task\n\ntask weave released [] -> Whole:\n  bind memory <- arena 16\n  release memory\n  checkpoint\n  yield 1\n\nweave fail [] -> Whole raises Whole:\n  raise 9\n\nweave run [] -> Whole raises Whole:\n  bind mutable value <- 0\n  bind mutable failed <- 0\n  together:\n    spawn call released into value\n    spawn call fail into failed\n  yield value\n\nweave main [] -> Whole:\n  bind mutable value <- 0\n  bind mutable fault <- 0\n  handle call run into value otherwise error into fault\n";
+        let released_task = compile_to_bytecode(released_task_source)
+            .expect("released task fixture should compile");
+        assert_eq!(
+            compile_with_seed(released_task_source)
+                .expect("released task fixture must seed-compile")
+                .bytecode,
+            released_task.bytecode
+        );
+        let artifact =
+            parse_artifact(&released_task.bytecode).expect("released fixture must parse");
+        let main_index = artifact
+            .functions
+            .iter()
+            .position(|function| function.name == "main")
+            .expect("released fixture must retain main");
+        let mut runtime_state =
+            RuntimeState::with_hosts(artifact.arena_capacity, HostServices::pure_fixture())
+                .expect("released fixture capacity must admit its runtime state");
+        let exit = execute_function(
+            &artifact,
+            main_index,
+            Vec::new(),
+            &mut String::new(),
+            &mut runtime_state,
+            0,
+        )
+        .expect("released task failure must be handled by main");
+        assert!(matches!(exit, RuntimeExit::Return(RuntimeValue::Whole(9))));
+        assert_eq!(
+            runtime_state.task_frame_trace,
+            vec![
+                TaskFrameTraceEvent::Started(0),
+                TaskFrameTraceEvent::Parked(0),
+                TaskFrameTraceEvent::Cancelled(0),
+            ]
+        );
+        assert!(
+            runtime_state.task_destroyed_local_slots.is_empty(),
+            "a released Arena is already absent from the parked frame and cannot be destroyed twice"
+        );
+        assert_eq!(runtime_state.arena.used, 0);
+        assert!(runtime_state.arena.bytes.iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
+    fn m19e_rejects_task_forms_outside_the_closed_cancellation_subset() {
+        let checkpoint_outside =
+            "world invalid\n\nweave main [] -> Whole:\n  checkpoint\n  yield 0\n";
+        let error =
+            compile_source(checkpoint_outside).expect_err("checkpoint outside task must fail");
+        assert_eq!(error.diagnostic().code, "AE-TASK-004");
+
+        let no_checkpoint = "world invalid\n\ntask weave worker [] -> Whole:\n  yield 0\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(no_checkpoint).expect_err("task must declare a checkpoint");
+        assert_eq!(error.diagnostic().code, "AE-TASK-004");
+
+        let ordinary_call = "world invalid\n\ntask weave worker [] -> Whole:\n  checkpoint\n  yield 1\n\nweave main [] -> Whole:\n  yield call worker\n";
+        let error = compile_source(ordinary_call).expect_err("task ordinary call must fail");
+        assert_eq!(error.diagnostic().code, "AE-TASK-005");
+
+        let bad_loop = "world invalid\n\ntask weave worker [] -> Whole:\n  bind mutable value <- 0\n  while less value 1:\n    revise value <- sum value 1\n  checkpoint\n  yield value\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(bad_loop).expect_err("task loop must lead with checkpoint");
+        assert_eq!(error.diagnostic().code, "AE-TASK-004");
+
+        for (name, source, expected_code) in [
+            (
+                "erroring task",
+                "world invalid\n\ntask weave worker [] -> Whole raises Whole:\n  checkpoint\n  raise 1\n\nweave main [] -> Whole:\n  yield 0\n",
+                "AE-TASK-004",
+            ),
+            (
+                "task main",
+                "world invalid\n\ntask weave main [] -> Whole:\n  checkpoint\n  yield 0\n",
+                "AE-TASK-004",
+            ),
+            (
+                "non-Whole task",
+                "world invalid\n\ntask weave worker [] -> Text:\n  checkpoint\n  yield \"no\"\n\nweave main [] -> Whole:\n  yield 0\n",
+                "AE-TASK-004",
+            ),
+            (
+                "borrowed task parameter",
+                "world invalid\n\ntask weave worker [borrow value: Whole] -> Whole:\n  checkpoint\n  yield value\n\nweave main [] -> Whole:\n  yield 0\n",
+                "AE-TASK-004",
+            ),
+            (
+                "task ambient output",
+                "world invalid\n\ntask weave worker [] -> Whole:\n  checkpoint\n  speak \"no\"\n  yield 0\n\nweave main [] -> Whole:\n  yield 0\n",
+                "AE-TASK-004",
+            ),
+        ] {
+            let error = match compile_source(source) {
+                Ok(_) => panic!("{name} must be rejected"),
+                Err(error) => error,
+            };
+            assert_eq!(
+                error.diagnostic().code,
+                expected_code,
+                "{name} diagnostic: {}",
+                error.message
+            );
+        }
+
+        let noisy_companion = "world invalid\n\ntask weave worker [] -> Whole:\n  checkpoint\n  yield 1\n\nweave noisy [] -> Whole:\n  speak \"no\"\n  yield 2\n\nweave main [] -> Whole:\n  bind mutable first <- 0\n  bind mutable second <- 0\n  together:\n    spawn call worker into first\n    spawn call noisy into second\n  yield first\n";
+        let error = compile_source(noisy_companion)
+            .expect_err("a checkpointed nursery companion cannot use stdout");
+        assert_eq!(error.diagnostic().code, "AE-TASK-005");
+
+        let total_parent_failure = "world invalid\n\ntask weave worker [] -> Whole:\n  checkpoint\n  yield 1\n\nweave boom [] -> Whole raises Whole:\n  raise 9\n\nweave main [] -> Whole:\n  bind mutable worker <- 0\n  bind mutable failed <- 0\n  together:\n    spawn call worker into worker\n    spawn call boom into failed\n  yield worker\n";
+        let error = compile_source(total_parent_failure)
+            .expect_err("a total checkpointed nursery parent cannot spawn an erroring companion");
+        assert_eq!(error.diagnostic().code, "AE-TASK-002");
+
+        let non_main_resource_owner = "world invalid\n\ntask weave worker [] -> Whole:\n  checkpoint\n  yield 1\n\nweave helper [] -> Whole:\n  bind memory <- arena 8\n  yield 0\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(non_main_resource_owner)
+            .expect_err("task programs forbid direct resource ownership in a non-main companion");
+        assert_eq!(
+            error.diagnostic().code,
+            "AE-RESOURCE-004",
+            "non-main task-program resource diagnostic: {}",
+            error.message
+        );
+
+        let cancellation_api = "world invalid\n\ntask weave worker [] -> Whole:\n  checkpoint\n  cancel worker\n  yield 0\n\nweave main [] -> Whole:\n  yield 0\n";
+        let error = compile_source(cancellation_api)
+            .expect_err("M19e deliberately exposes no task handle or cancellation API");
+        assert_eq!(error.diagnostic().code, "AE-TASK-001");
+    }
+
+    #[test]
+    fn verifier_rejects_m19e_descriptor_and_task_call_escapes() {
+        let source = "world hostile_task\n\ntask weave worker [] -> Whole:\n  checkpoint\n  yield 1\n\nweave helper [] -> Whole:\n  yield 2\n\nweave main [] -> Whole:\n  bind mutable slot <- 0\n  together:\n    spawn call worker into slot\n  bind result <- call helper\n  yield result\n";
+        let output = compile_to_bytecode(source).expect("closed task fixture should compile");
+        assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V12);
+        let (worker_flags, _) = v12_primitive_function_offsets(&output.bytecode, "worker");
+
+        let mut unknown_flag = output.bytecode.clone();
+        unknown_flag[worker_flags] = 0x80;
+        let error = verify_bytecode(&unknown_flag)
+            .expect_err("unknown v12 function-flag bits must fail closed");
+        assert!(error.message.contains("unknown bit"));
+
+        let mut non_task_checkpoint = output.bytecode.clone();
+        non_task_checkpoint[worker_flags] = 0;
+        let error = verify_bytecode(&non_task_checkpoint)
+            .expect_err("TASK_CHECKPOINT outside a task frame must fail verification");
+        assert!(error.message.contains("TASK_CHECKPOINT requires"));
+
+        let artifact = parse_artifact(&output.bytecode).expect("fixture must parse");
+        let worker_index = artifact
+            .functions
+            .iter()
+            .position(|function| function.name == "worker")
+            .expect("fixture must retain worker");
+        let main_index = artifact
+            .functions
+            .iter()
+            .position(|function| function.name == "main")
+            .expect("fixture must retain main");
+        let (_, main_code_offset) = v12_primitive_function_offsets(&output.bytecode, "main");
+        let call = decode_code(&artifact.functions[main_index].code, ARTIFACT_VERSION_V12)
+            .expect("fixture main code must decode")
+            .into_iter()
+            .find(|instruction| matches!(instruction.instruction, Instruction::Call { .. }))
+            .expect("fixture main must contain the ordinary helper call");
+        let mut ordinary_task_call = output.bytecode;
+        let raw_call_offset = main_code_offset + call.offset;
+        assert_eq!(ordinary_task_call[raw_call_offset], OP_CALL);
+        ordinary_task_call[raw_call_offset + 1..raw_call_offset + 3]
+            .copy_from_slice(&(worker_index as u16).to_le_bytes());
+        let error = verify_bytecode(&ordinary_task_call)
+            .expect_err("raw ordinary CALL to a task frame must fail verification");
+        assert!(error
+            .message
+            .contains("may be invoked only by NURSERY_SPAWN"));
+
+        let mut bad_capacity =
+            compile_to_bytecode(include_str!("../../../examples/active-cancel.ae"))
+                .expect("active cancellation fixture should compile")
+                .bytecode;
+        bad_capacity[5..9].copy_from_slice(&0_u32.to_le_bytes());
+        let error = verify_bytecode(&bad_capacity)
+            .expect_err("v12 header capacity must match its concurrent frame plan");
+        assert!(error.message.contains("header arena capacity"));
+    }
+
+    #[test]
+    fn verifier_rejects_m19e_checkpointed_nursery_hostile_forms_before_execution() {
+        let mut legacy_checkpoint =
+            compile_to_bytecode("world legacy_checkpoint\n\nweave main [] -> Whole:\n  yield 0\n")
+                .expect("legacy fixture should compile")
+                .bytecode;
+        assert_eq!(legacy_checkpoint[4], ARTIFACT_VERSION_V11);
+        let last = legacy_checkpoint
+            .last_mut()
+            .expect("legacy fixture must contain its terminal yield opcode");
+        assert_eq!(*last, OP_YIELD);
+        *last = OP_TASK_CHECKPOINT;
+        let error = verify_bytecode(&legacy_checkpoint)
+            .expect_err("v11 must reject a v12-only checkpoint opcode");
+        assert!(error.message.contains("only in AETH v12"));
+
+        let source = "world hostile_v12\n\ntask weave worker [] -> Whole:\n  checkpoint\n  checkpoint\n  yield 1\n\nweave fail [] -> Whole raises Whole:\n  raise 9\n\nweave forwarder [] -> Whole raises Whole:\n  forward call fail\n\nweave wrapper [] -> Whole:\n  bind mutable value <- 0\n  bind mutable fault <- 0\n  handle call fail into value otherwise error into fault\n\nweave main [] -> Whole:\n  bind mutable slot <- 0\n  together:\n    spawn call worker into slot\n  yield slot\n";
+        let baseline = compile_to_bytecode(source)
+            .expect("primitive hostile fixture should compile")
+            .bytecode;
+        verify_bytecode(&baseline).expect("baseline hostile fixture must verify");
+        let artifact = parse_artifact(&baseline).expect("baseline artifact must parse");
+        let index_of = |name: &str| {
+            artifact
+                .functions
+                .iter()
+                .position(|function| function.name == name)
+                .unwrap_or_else(|| panic!("baseline fixture must retain {name}"))
+        };
+        let worker_index = index_of("worker");
+        let (worker_flags, worker_code_offset) =
+            v12_primitive_function_offsets(&baseline, "worker");
+        let worker_checkpoint_offset =
+            decode_code(&artifact.functions[worker_index].code, ARTIFACT_VERSION_V12)
+                .expect("worker code must decode")
+                .into_iter()
+                .find(|instruction| matches!(instruction.instruction, Instruction::TaskCheckpoint))
+                .expect("worker fixture must contain a task checkpoint")
+                .offset;
+        let raw_worker_checkpoint = worker_code_offset + worker_checkpoint_offset;
+        assert_eq!(baseline[raw_worker_checkpoint], OP_TASK_CHECKPOINT);
+
+        let mut erroring_task = baseline.clone();
+        erroring_task[worker_flags - 2] = Effect::ErrorWhole.to_byte();
+        let error = verify_bytecode(&erroring_task)
+            .expect_err("an erroring descriptor cannot claim a task frame");
+        assert!(error
+            .message
+            .contains("task frame must be a non-main total Whole"));
+
+        let mut oversized_frame = baseline.clone();
+        oversized_frame[worker_flags + 1..worker_flags + 5]
+            .copy_from_slice(&(MAX_ARENA_BYTES + 1).to_le_bytes());
+        let error = verify_bytecode(&oversized_frame)
+            .expect_err("a frame capacity above the M2 limit must fail before execution");
+        assert!(error.message.contains("frame arena capacity"));
+
+        let mut non_empty_checkpoint = baseline.clone();
+        let old_code_length = u32::from_le_bytes(
+            non_empty_checkpoint[worker_code_offset - 4..worker_code_offset]
+                .try_into()
+                .expect("worker code length must be encoded"),
+        );
+        non_empty_checkpoint.splice(
+            raw_worker_checkpoint..raw_worker_checkpoint,
+            [OP_PUSH_WHOLE, 0, 0, 0, 0, 0, 0, 0, 0],
+        );
+        non_empty_checkpoint[worker_code_offset - 4..worker_code_offset]
+            .copy_from_slice(&(old_code_length + 9).to_le_bytes());
+        let error = verify_bytecode(&non_empty_checkpoint)
+            .expect_err("a checkpoint with a transient operand must fail before execution");
+        assert!(error.message.contains("empty operand stack"));
+
+        let mut forbidden_task_opcode = baseline.clone();
+        forbidden_task_opcode[raw_worker_checkpoint] = OP_SPEAK;
+        let error = verify_bytecode(&forbidden_task_opcode)
+            .expect_err("a task frame cannot smuggle stdout work into a cancellation region");
+        assert!(error
+            .message
+            .contains("outside the self-contained task subset"));
+
+        let wrapper_index = index_of("wrapper");
+        let (_, wrapper_code_offset) = v12_primitive_function_offsets(&baseline, "wrapper");
+        let wrapper_handle_offset = decode_code(
+            &artifact.functions[wrapper_index].code,
+            ARTIFACT_VERSION_V12,
+        )
+        .expect("wrapper code must decode")
+        .into_iter()
+        .find(|instruction| matches!(instruction.instruction, Instruction::HandleCall { .. }))
+        .expect("wrapper fixture must contain a handle call")
+        .offset;
+        let mut task_handle = baseline.clone();
+        let raw_wrapper_handle = wrapper_code_offset + wrapper_handle_offset;
+        assert_eq!(task_handle[raw_wrapper_handle], OP_HANDLE_CALL);
+        task_handle[raw_wrapper_handle + 1..raw_wrapper_handle + 3]
+            .copy_from_slice(&(worker_index as u16).to_le_bytes());
+        let error =
+            verify_bytecode(&task_handle).expect_err("HANDLE_CALL cannot target a task frame");
+        assert!(error
+            .message
+            .contains("may be invoked only by NURSERY_SPAWN"));
+
+        let forwarder_index = index_of("forwarder");
+        let (_, forwarder_code_offset) = v12_primitive_function_offsets(&baseline, "forwarder");
+        let forward_offset = decode_code(
+            &artifact.functions[forwarder_index].code,
+            ARTIFACT_VERSION_V12,
+        )
+        .expect("forwarder code must decode")
+        .into_iter()
+        .find(|instruction| matches!(instruction.instruction, Instruction::ForwardCall { .. }))
+        .expect("forwarder fixture must contain a forward call")
+        .offset;
+        let mut task_forward = baseline.clone();
+        let raw_forward = forwarder_code_offset + forward_offset;
+        assert_eq!(task_forward[raw_forward], OP_FORWARD_CALL);
+        task_forward[raw_forward + 1..raw_forward + 3]
+            .copy_from_slice(&(worker_index as u16).to_le_bytes());
+        let error =
+            verify_bytecode(&task_forward).expect_err("FORWARD_CALL cannot target a task frame");
+        assert!(error
+            .message
+            .contains("may be invoked only by NURSERY_SPAWN"));
+
+        let main_index = index_of("main");
+        let (_, main_code_offset) = v12_primitive_function_offsets(&baseline, "main");
+        let spawn_offset = decode_code(&artifact.functions[main_index].code, ARTIFACT_VERSION_V12)
+            .expect("main code must decode")
+            .into_iter()
+            .find(|instruction| matches!(instruction.instruction, Instruction::NurserySpawn { .. }))
+            .expect("main fixture must contain a nursery spawn")
+            .offset;
+        let mut invalid_destination = baseline.clone();
+        let raw_spawn = main_code_offset + spawn_offset;
+        assert_eq!(invalid_destination[raw_spawn], OP_NURSERY_SPAWN);
+        invalid_destination[raw_spawn + 4..raw_spawn + 6].copy_from_slice(&u16::MAX.to_le_bytes());
+        let error = verify_bytecode(&invalid_destination)
+            .expect_err("a malformed v12 nursery destination must fail before scheduling");
+        assert!(error
+            .message
+            .contains("local slot is outside the local table"));
+
+        let loop_artifact = compile_to_bytecode(include_str!("../../../examples/task-loop.ae"))
+            .expect("task loop fixture should compile")
+            .bytecode;
+        let loop_parsed = parse_artifact(&loop_artifact).expect("task loop artifact must parse");
+        let loop_index = loop_parsed
+            .functions
+            .iter()
+            .position(|function| function.name == "count")
+            .expect("task loop fixture must retain count");
+        let (_, loop_code_offset) = v12_primitive_function_offsets(&loop_artifact, "count");
+        let loop_code = decode_code(
+            &loop_parsed.functions[loop_index].code,
+            ARTIFACT_VERSION_V12,
+        )
+        .expect("task loop code must decode");
+        let back_edge = loop_code
+            .iter()
+            .find_map(|instruction| match instruction.instruction {
+                Instruction::Jump(target) if target < instruction.offset => {
+                    Some((instruction.offset, target))
+                }
+                _ => None,
+            })
+            .expect("task loop fixture must contain a backward jump");
+        let invalid_target = back_edge.1 + 1;
+        assert!(
+            loop_code.iter().any(|instruction| {
+                instruction.offset == invalid_target
+                    && !matches!(instruction.instruction, Instruction::TaskCheckpoint)
+            }),
+            "the hostile target must remain an instruction boundary but not a checkpoint"
+        );
+        let mut invalid_back_edge = loop_artifact;
+        let raw_back_edge = loop_code_offset + back_edge.0;
+        assert_eq!(invalid_back_edge[raw_back_edge], OP_JUMP);
+        invalid_back_edge[raw_back_edge + 1..raw_back_edge + 5]
+            .copy_from_slice(&(invalid_target as u32).to_le_bytes());
+        let error = verify_bytecode(&invalid_back_edge)
+            .expect_err("a task back edge that skips its checkpoint must fail verification");
+        assert!(error
+            .message
+            .contains("backward jumps must target TASK_CHECKPOINT"));
+    }
+
+    #[test]
     fn rejects_illegal_nursery_shapes_and_boundaries() {
         let empty = "world invalid\n\nweave main [] -> Whole:\n  together:\n  yield 0\n";
         let error = compile_source(empty).expect_err("empty together must fail");
@@ -15238,7 +18442,7 @@ mod tests {
         let output = compile_to_bytecode(source).expect("host-pilot should compile");
         assert_eq!(output.bytecode[4], ARTIFACT_VERSION_V11);
         assert!(
-            output.bytecode.iter().any(|byte| *byte == OP_HOST_CALL),
+            output.bytecode.contains(&OP_HOST_CALL),
             "host-pilot artifact must emit HOST_CALL"
         );
         assert!(
@@ -15345,10 +18549,7 @@ weave main [] -> Whole:
             compiled.program.host_weaves[0].foreign.is_some(),
             "foreign metadata on host weave"
         );
-        assert_eq!(
-            format_program(&compiled.program).contains("foreign weave whole_inc_f"),
-            true
-        );
+        assert!(format_program(&compiled.program).contains("foreign weave whole_inc_f"));
 
         let denied = run_bytecode(&compiled.bytecode).expect_err("missing grant-lib fails closed");
         assert!(

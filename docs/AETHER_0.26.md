@@ -1,6 +1,6 @@
 # Aether 0.26 Toolchain Contract (M19b nursery × resource)
 
-**Status:** Historical package 0.26 — language **0.11** surface / AETH **v11** + M19b Policy A; current package is [AETHER_0.27.md](AETHER_0.27.md)  
+**Status:** Historical package 0.26 — language **0.11** surface / AETH **v11** + M19b Policy A; current package is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** ADR-028, M7, M2, M19a  
 
 ## Surface

@@ -11,15 +11,16 @@ use aether_core::{
     apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
     compile_to_bytecode, compile_with_seed, compile_workspace_package, forge_bytecode,
     format_project, format_source, multi_module_authority_note, parse_project_document,
-    parse_workspace_document, run_bytecode, run_bytecode_with_grants,
-    run_project_tests_with_grants, structural_document_json, unit_artifact_file_name,
+    parse_workspace_document, refresh_project_lock, refresh_workspace_lock, run_bytecode,
+    run_bytecode_with_grants, run_project_tests_with_grants, serialize_project_document,
+    serialize_workspace_document, structural_document_json, unit_artifact_file_name,
     verify_bytecode, verify_project, verify_workspace, HostGrantConfig, InvocationValue,
     LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nstructure emits aether.ast/v7 JSON. apply-edit accepts aether.edit/v7 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics / dual-compare proofs)."
+        "Usage:\n  aether check <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nstructure emits aether.ast/v8 JSON. apply-edit accepts aether.edit/v8 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compared to bootstrap).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics / dual-compare proofs)."
     );
 }
 
@@ -410,6 +411,24 @@ fn workspace_build(
     Ok(())
 }
 
+fn workspace_lock(workspace_path: &Path, write: bool) -> Result<(), String> {
+    let json = read_source(workspace_path)?;
+    let document = parse_workspace_document(&json).map_err(|error| error.to_string())?;
+    let root = project_root_for(workspace_path);
+    let refreshed = refresh_workspace_lock(root, &document).map_err(|error| error.to_string())?;
+    let rendered = serialize_workspace_document(&refreshed).map_err(|error| error.to_string())?;
+    if write {
+        write_source(workspace_path, &rendered)?;
+        println!(
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} refreshed workspace lock in {}",
+            workspace_path.display()
+        );
+    } else {
+        print!("{rendered}");
+    }
+    Ok(())
+}
+
 fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), String> {
     let json = read_source(project_path)?;
     let document = parse_project_document(&json).map_err(|error| error.to_string())?;
@@ -444,6 +463,24 @@ fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), 
             "  [{role}] {} sha256={} artifact_bytes={}",
             unit.path, unit.sha256, unit.artifact_bytes
         );
+    }
+    Ok(())
+}
+
+fn project_lock(project_path: &Path, write: bool) -> Result<(), String> {
+    let json = read_source(project_path)?;
+    let document = parse_project_document(&json).map_err(|error| error.to_string())?;
+    let root = project_root_for(project_path);
+    let refreshed = refresh_project_lock(root, &document).map_err(|error| error.to_string())?;
+    let rendered = serialize_project_document(&refreshed).map_err(|error| error.to_string())?;
+    if write {
+        write_source(project_path, &rendered)?;
+        println!(
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} refreshed project lock in {}",
+            project_path.display()
+        );
+    } else {
+        print!("{rendered}");
     }
     Ok(())
 }
@@ -544,6 +581,19 @@ fn next_argument(
     name: &str,
 ) -> Result<OsString, String> {
     arguments.next().ok_or_else(|| format!("missing {name}"))
+}
+
+fn parse_optional_write_flag(
+    arguments: &mut impl Iterator<Item = OsString>,
+    command: &str,
+) -> Result<bool, String> {
+    let Some(flag) = arguments.next() else {
+        return Ok(false);
+    };
+    if flag != "--write" || arguments.next().is_some() {
+        return Err(format!("{command} accepts an optional --write flag only"));
+    }
+    Ok(true)
 }
 
 fn run() -> Result<(), String> {
@@ -704,6 +754,11 @@ fn run() -> Result<(), String> {
                     }
                     project_format(Path::new(&project), write)
                 }
+                "lock" => {
+                    let project = next_argument(&mut arguments, "project file")?;
+                    let write = parse_optional_write_flag(&mut arguments, "project lock")?;
+                    project_lock(Path::new(&project), write)
+                }
                 "build" => {
                     let project = next_argument(&mut arguments, "project file")?;
                     let output_flag = next_argument(&mut arguments, "--output flag")?;
@@ -730,7 +785,9 @@ fn run() -> Result<(), String> {
                         report_junit.as_deref(),
                     )
                 }
-                _ => Err("project accepts verify, format, build, or test subcommands".to_owned()),
+                _ => Err(
+                    "project accepts verify, format, lock, build, or test subcommands".to_owned(),
+                ),
             }
         }
         "workspace" => {
@@ -744,6 +801,11 @@ fn run() -> Result<(), String> {
                         );
                     }
                     workspace_verify(Path::new(&workspace))
+                }
+                "lock" => {
+                    let workspace = next_argument(&mut arguments, "workspace file")?;
+                    let write = parse_optional_write_flag(&mut arguments, "workspace lock")?;
+                    workspace_lock(Path::new(&workspace), write)
                 }
                 "build" => {
                     let workspace = next_argument(&mut arguments, "workspace file")?;
@@ -774,7 +836,7 @@ fn run() -> Result<(), String> {
                         .map_err(|_| "package name must be valid UTF-8".to_owned())?;
                     workspace_build(Path::new(&workspace), &package, Path::new(&output))
                 }
-                _ => Err("workspace accepts verify or build subcommands".to_owned()),
+                _ => Err("workspace accepts verify, lock, or build subcommands".to_owned()),
             }
         }
         "version" => {
@@ -893,8 +955,8 @@ mod tests {
         let output_path = temporary.path.join("output.ae");
         let source = "world cli\n\nweave main [] -> Whole:\n  yield 0\n";
         let edit = r#"{
-  "protocol": "aether.edit/v7",
-  "schema": "aether.ast/v7",
+  "protocol": "aether.edit/v8",
+  "schema": "aether.ast/v8",
   "baseSource": "world cli\n\nweave main [] -> Whole:\n  yield 0\n",
   "operations": [{
     "op": "replace",
@@ -905,6 +967,7 @@ mod tests {
       "parameters": [],
       "result": "Whole",
       "effect": "Total",
+      "task": false,
       "body": [{
         "kind": "Yield",
         "value": {"kind": "Atom", "atom": {"kind": "Whole", "value": 9}}
@@ -980,7 +1043,7 @@ mod tests {
         .expect("fail fixture");
 
         let report = test_runner::run_tests_with_grants(
-            &[temporary.path.clone()],
+            std::slice::from_ref(&temporary.path),
             HostGrantConfig::default(),
         )
         .expect("discover tests");
@@ -1032,6 +1095,90 @@ mod tests {
     }
 
     #[test]
+    fn lock_write_flag_is_closed_and_explicit() {
+        let mut absent = Vec::<OsString>::new().into_iter();
+        assert!(!parse_optional_write_flag(&mut absent, "project lock").expect("no flag"));
+
+        let mut write = vec![OsString::from("--write")].into_iter();
+        assert!(parse_optional_write_flag(&mut write, "project lock").expect("write flag"));
+
+        let mut unexpected = vec![OsString::from("--force")].into_iter();
+        let error = parse_optional_write_flag(&mut unexpected, "project lock")
+            .expect_err("unknown mutation flag is rejected");
+        assert!(error.contains("optional --write flag only"), "{error}");
+
+        let mut trailing = vec![OsString::from("--write"), OsString::from("extra")].into_iter();
+        let error = parse_optional_write_flag(&mut trailing, "workspace lock")
+            .expect_err("trailing argument is rejected");
+        assert!(error.contains("optional --write flag only"), "{error}");
+    }
+
+    #[test]
+    fn lock_commands_only_write_explicitly_and_locked_build_rejects_stale_manifest() {
+        let temporary = TemporaryDirectory::create();
+        let package_dir = temporary.path.join("app");
+        fs::create_dir_all(&package_dir).expect("package dir");
+        fs::write(
+            package_dir.join("main.ae"),
+            "world app_pkg\n\nweave main [] -> Whole:\n  yield 0\n",
+        )
+        .expect("package source");
+        let project_path = package_dir.join("aether.project.json");
+        fs::write(
+            &project_path,
+            r#"{
+  "schema": "aether.project/v1",
+  "name": "app_pkg",
+  "version": "0.1.0",
+  "units": [{ "path": "main.ae", "role": "main" }]
+}"#,
+        )
+        .expect("project manifest");
+        let original_project = fs::read(&project_path).expect("read project before lock");
+
+        project_lock(&project_path, false).expect("project lock preview");
+        assert_eq!(
+            fs::read(&project_path).expect("project remains untouched"),
+            original_project
+        );
+        project_lock(&project_path, true).expect("project lock write");
+        let locked_project = fs::read_to_string(&project_path).expect("locked project");
+        assert!(parse_project_document(&locked_project)
+            .expect("parse locked project")
+            .lock
+            .is_some());
+
+        let workspace_path = temporary.path.join("aether.workspace.json");
+        fs::write(
+            &workspace_path,
+            r#"{
+  "schema": "aether.workspace/v1",
+  "name": "lock_cli_demo",
+  "version": "0.1.0",
+  "packages": [{ "name": "app", "path": "app" }]
+}"#,
+        )
+        .expect("workspace manifest");
+        let original_workspace = fs::read(&workspace_path).expect("read workspace before lock");
+
+        workspace_lock(&workspace_path, false).expect("workspace lock preview");
+        assert_eq!(
+            fs::read(&workspace_path).expect("workspace remains untouched"),
+            original_workspace
+        );
+        workspace_lock(&workspace_path, true).expect("workspace lock write");
+        workspace_verify(&workspace_path).expect("locked workspace verifies");
+
+        let changed_manifest = locked_project.replace('\n', "\r\n");
+        fs::write(&project_path, changed_manifest).expect("stale project manifest");
+        let output = temporary.path.join("app.aeth");
+        let error = workspace_build(&workspace_path, "app", &output)
+            .expect_err("locked build rejects stale project manifest");
+        assert!(error.contains("AE-WORKSPACE-005"), "{error}");
+        assert!(!output.exists(), "locked build must not write an artifact");
+    }
+
+    #[test]
     fn shipped_stdlib_layer1_project_builds_and_runs() {
         let temporary = TemporaryDirectory::create();
         let project =
@@ -1067,9 +1214,11 @@ mod tests {
             "world ok\n\nweave main [] -> Whole:\n  yield 0\n",
         )
         .expect("pass");
-        let report =
-            test_runner::run_tests_with_grants(&[pass_path.clone()], HostGrantConfig::default())
-                .expect("run");
+        let report = test_runner::run_tests_with_grants(
+            std::slice::from_ref(&pass_path),
+            HostGrantConfig::default(),
+        )
+        .expect("run");
         let json_path = temporary.path.join("report.json");
         let junit_path = temporary.path.join("report.xml");
         test_runner::write_structured_reports(&report, Some(&json_path), Some(&junit_path))

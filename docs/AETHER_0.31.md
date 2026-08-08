@@ -1,6 +1,6 @@
 # Aether 0.31 Toolchain Contract (M21 foreign ABI pilot)
 
-**Status:** Historical package 0.31 — language **0.11** / AETH **v11** + M21 foreign pilot; current package is [AETHER_0.32.md](AETHER_0.32.md)  
+**Status:** Historical package 0.31 — language **0.11** / AETH **v11** + M21 foreign pilot; current package is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** ADR-025 human implement authorization, threat model v3 residual acceptance  
 
 ## Surface

@@ -1,14 +1,18 @@
 <#
 .SYNOPSIS
-  Stage a local Aether technical preview package under dist/.
+  Stage the current Aether local technical-preview package under dist/.
 
 .DESCRIPTION
-  Builds release CLI (unless -SkipBuild), copies binary, seed, schemas,
-  examples, notes, verify script, and writes SHA-256SUMS.
-  REL-PACKAGE-001 / REL-DETERM-001.
+  Builds the release CLI unless -SkipBuild is supplied, then creates an exact,
+  version-derived package containing the executable contract, current release
+  documents, checked-in seed, schemas, examples, stdlib, and consumer verifier.
+  SHA-256SUMS covers every staged file except itself.
 
 .PARAMETER SkipBuild
-  Reuse existing target/release/aether.exe
+  Reuse an existing target/release/aether.exe after validating it exists.
+
+.NOTES
+  Rule IDs: REL-PACKAGE-001, REL-DETERM-001, OPS-DEL-001, SEC-INPUT-001.
 #>
 [CmdletBinding()]
 param(
@@ -18,17 +22,94 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+function Fail([string]$Message) {
+    Write-Host "FAIL: $Message" -ForegroundColor Red
+    exit 1
+}
+
+function Get-CliPackageVersion([string]$RepoRoot) {
+    $manifestPath = Join-Path $RepoRoot "apps\xlang-cli\Cargo.toml"
+    if (-not (Test-Path -LiteralPath $manifestPath)) {
+        Fail "missing CLI manifest: $manifestPath"
+    }
+
+    $manifest = Get-Content -Raw -LiteralPath $manifestPath
+    $match = [regex]::Match($manifest, '(?m)^\s*version\s*=\s*"(?<version>[0-9A-Za-z.+-]+)"\s*$')
+    if (-not $match.Success) {
+        Fail "could not read an explicit package version from $manifestPath"
+    }
+
+    $version = $match.Groups["version"].Value
+    if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') {
+        Fail "CLI package version is not a safe SemVer package segment: $version"
+    }
+
+    return $version
+}
+
+function Assert-ChildPath([string]$Parent, [string]$Candidate, [string]$Label) {
+    $parentFull = [System.IO.Path]::GetFullPath($Parent)
+    $candidateFull = [System.IO.Path]::GetFullPath($Candidate)
+    $separator = [System.IO.Path]::DirectorySeparatorChar
+    $prefix = if ($parentFull.EndsWith([string]$separator)) { $parentFull } else { "$parentFull$separator" }
+
+    if (-not $candidateFull.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        Fail "$Label escapes its required parent: $candidateFull"
+    }
+
+    return $candidateFull
+}
+
+function Assert-RelativePath([string]$Path, [string]$Label) {
+    if ([System.IO.Path]::IsPathRooted($Path) -or
+        $Path -match '(^|[\\/])\.\.?(?:[\\/]|$)') {
+        Fail "$Label must be a confined relative path: $Path"
+    }
+}
+
+function Write-Utf8NoBom([string]$Path, [string]$Contents) {
+    $encoding = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($Path, $Contents, $encoding)
+}
+
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RepoRoot
 
-$Version = "0.18.0"
-$PkgName = "aether-$Version-tp"
+$Version = Get-CliPackageVersion $RepoRoot
+$PackageName = "aether-$Version-tp"
 $DistRoot = Join-Path $RepoRoot "dist"
-$Pkg = Join-Path $DistRoot $PkgName
+New-Item -ItemType Directory -Force -Path $DistRoot | Out-Null
+$DistRoot = (Resolve-Path -LiteralPath $DistRoot).Path
+$PackageRoot = Assert-ChildPath $DistRoot (Join-Path $DistRoot $PackageName) "technical-preview package root"
 
-function Fail([string]$m) {
-    Write-Host "FAIL: $m" -ForegroundColor Red
-    exit 1
+function Copy-FileToPackage([string]$SourceRelativePath, [string]$DestinationRelativePath = $SourceRelativePath) {
+    Assert-RelativePath $SourceRelativePath "source path"
+    Assert-RelativePath $DestinationRelativePath "package destination"
+
+    $source = Join-Path $RepoRoot $SourceRelativePath
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        Fail "required release file is missing: $SourceRelativePath"
+    }
+
+    $destination = Assert-ChildPath $PackageRoot (Join-Path $PackageRoot $DestinationRelativePath) "package destination"
+    $destinationParent = Split-Path -Parent $destination
+    New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
+    Copy-Item -LiteralPath $source -Destination $destination -Force
+}
+
+function Copy-DirectoryToPackage([string]$SourceRelativePath) {
+    Assert-RelativePath $SourceRelativePath "source directory"
+
+    $source = Join-Path $RepoRoot $SourceRelativePath
+    if (-not (Test-Path -LiteralPath $source -PathType Container)) {
+        Fail "required release directory is missing: $SourceRelativePath"
+    }
+
+    $destination = Assert-ChildPath $PackageRoot (Join-Path $PackageRoot $SourceRelativePath) "package directory"
+    New-Item -ItemType Directory -Force -Path $destination | Out-Null
+    foreach ($entry in @(Get-ChildItem -LiteralPath $source -Force)) {
+        Copy-Item -LiteralPath $entry.FullName -Destination $destination -Recurse -Force
+    }
 }
 
 if (-not $SkipBuild) {
@@ -37,62 +118,69 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { Fail "release build failed" }
 }
 
-$exeSrc = Join-Path $RepoRoot "target\release\aether.exe"
-if (-not (Test-Path -LiteralPath $exeSrc)) {
-    Fail "missing $exeSrc — run without -SkipBuild or build first"
+$ExecutableSource = Join-Path $RepoRoot "target\release\aether.exe"
+if (-not (Test-Path -LiteralPath $ExecutableSource -PathType Leaf)) {
+    Fail "missing $ExecutableSource — run without -SkipBuild or build first"
 }
 
-if (Test-Path -LiteralPath $Pkg) {
-    Remove-Item -LiteralPath $Pkg -Recurse -Force
+if (Test-Path -LiteralPath $PackageRoot) {
+    Write-Host "=== replacing $PackageRoot ===" -ForegroundColor Cyan
+    Remove-Item -LiteralPath $PackageRoot -Recurse -Force
 }
-New-Item -ItemType Directory -Force -Path $Pkg | Out-Null
+New-Item -ItemType Directory -Force -Path $PackageRoot | Out-Null
 
-Write-Host "=== staging $Pkg ===" -ForegroundColor Cyan
-Copy-Item -LiteralPath $exeSrc -Destination (Join-Path $Pkg "aether.exe")
+Write-Host "=== staging $PackageRoot ===" -ForegroundColor Cyan
+Copy-Item -LiteralPath $ExecutableSource -Destination (Join-Path $PackageRoot "aether.exe") -Force
 
-New-Item -ItemType Directory -Force -Path (Join-Path $Pkg "seed") | Out-Null
-Copy-Item -LiteralPath (Join-Path $RepoRoot "seed\aether_seed.aeth") `
-    -Destination (Join-Path $Pkg "seed\aether_seed.aeth")
+# The package root README is purpose-built for a portable local preview. The
+# repository README contains checkout-specific engineering directions instead.
+Copy-FileToPackage "RELEASE-README-0.36-TECHNICAL-PREVIEW.md" "README.md"
+Copy-FileToPackage "MANIFEST.md"
+Copy-DirectoryToPackage "docs"
+Copy-DirectoryToPackage "seed"
+Copy-DirectoryToPackage "schemas"
+Copy-DirectoryToPackage "examples"
+Copy-DirectoryToPackage "stdlib"
+Copy-FileToPackage "tools\verify-preview.ps1" "verify-preview.ps1"
 
-New-Item -ItemType Directory -Force -Path (Join-Path $Pkg "schemas") | Out-Null
-Copy-Item -Path (Join-Path $RepoRoot "schemas\*") -Destination (Join-Path $Pkg "schemas") -Recurse
-
-New-Item -ItemType Directory -Force -Path (Join-Path $Pkg "examples") | Out-Null
-Copy-Item -Path (Join-Path $RepoRoot "examples\*") -Destination (Join-Path $Pkg "examples") -Recurse
-
-foreach ($doc in @(
-        "docs\RELEASE_NOTES-TECHNICAL-PREVIEW.md",
-        "docs\CHANGELOG-0.12.md",
-        "docs\THREAT_MODEL-TECHNICAL-PREVIEW.md",
-        "MANIFEST.md"
-    )) {
-    $src = Join-Path $RepoRoot $doc
-    if (-not (Test-Path -LiteralPath $src)) { Fail "missing $doc" }
-    Copy-Item -LiteralPath $src -Destination (Join-Path $Pkg (Split-Path $doc -Leaf))
+$metadata = [ordered]@{
+    schema = "aether.preview/v1"
+    product = "Aether"
+    packageVersion = $Version
+    languageSurface = "0.11"
+    aeth = [ordered]@{
+        withoutTaskFrames = 11
+        taskFrames = 12
+    }
+    authoring = [ordered]@{
+        ast = "aether.ast/v8"
+        edit = "aether.edit/v8"
+        diagnostic = "aether.diagnostic/v8"
+    }
+    channel = "local-folder"
+    license = "UNLICENSED"
 }
+$metadataJson = ($metadata | ConvertTo-Json -Depth 4) -replace "`r`n", "`n"
+Write-Utf8NoBom (Join-Path $PackageRoot "RELEASE-METADATA.json") "$metadataJson`n"
 
-$verifySrc = Join-Path $RepoRoot "tools\verify-preview.ps1"
-if (-not (Test-Path -LiteralPath $verifySrc)) { Fail "missing tools/verify-preview.ps1" }
-Copy-Item -LiteralPath $verifySrc -Destination (Join-Path $Pkg "verify-preview.ps1")
-
-# SHA-256SUMS (paths relative to package root, forward slashes)
 Write-Host "=== SHA-256SUMS ===" -ForegroundColor Cyan
-$sumPath = Join-Path $Pkg "SHA-256SUMS"
-$lines = New-Object System.Collections.Generic.List[string]
-Get-ChildItem -LiteralPath $Pkg -Recurse -File |
+$sumsPath = Join-Path $PackageRoot "SHA-256SUMS"
+$sumLines = New-Object System.Collections.Generic.List[string]
+Get-ChildItem -LiteralPath $PackageRoot -Recurse -File |
     Where-Object { $_.Name -ne "SHA-256SUMS" } |
     Sort-Object FullName |
     ForEach-Object {
-        $rel = $_.FullName.Substring($Pkg.Length).TrimStart("\", "/")
-        $rel = $rel -replace "\\", "/"
+        $relative = $_.FullName.Substring($PackageRoot.Length)
+        $relative = $relative.TrimStart([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+        $relative = $relative.Replace([System.IO.Path]::DirectorySeparatorChar, [char]"/")
         $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
-        $lines.Add("$hash  $rel")
+        $sumLines.Add("$hash  $relative")
     }
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-[System.IO.File]::WriteAllLines($sumPath, $lines, $utf8NoBom)
+[System.IO.File]::WriteAllLines($sumsPath, $sumLines, $utf8NoBom)
 
-Write-Host "Package ready: $Pkg"
-Write-Host "Files:" ($lines.Count)
-Get-Content -LiteralPath $sumPath | Select-Object -First 5
+Write-Host "Package ready: $PackageRoot"
+Write-Host "Files: $($sumLines.Count) plus SHA-256SUMS"
+Get-Content -LiteralPath $sumsPath | Select-Object -First 5
 Write-Host "..."
 exit 0

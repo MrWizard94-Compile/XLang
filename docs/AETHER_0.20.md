@@ -1,6 +1,6 @@
 # Aether 0.20 Toolchain Contract (M15 comptime expansion)
 
-**Status:** Current package contract — language surface remains **0.11** / AETH **v11**; package **0.20** expands M5 comptime  
+**Status:** Historical package contract — language surface remains **0.11** / AETH **v11**; package **0.20** expands M5 comptime; current package contract is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** [AETHER_0.11.md](AETHER_0.11.md) (M5), [ADR-019](ADR-019-m15-comptime-expansion.md)
 
 ## Purpose

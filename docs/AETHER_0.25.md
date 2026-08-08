@@ -1,6 +1,6 @@
 # Aether 0.25 Toolchain Contract (M19a explicit `release`)
 
-**Status:** Historical package 0.25 — language **0.11** / AETH **v11** + `RELEASE` (66); current package is [AETHER_0.26.md](AETHER_0.26.md)  
+**Status:** Historical package 0.25 — language **0.11** / AETH **v11** + `RELEASE` (66); current package is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** ADR-027, M2, M4, M16  
 
 ## Surface

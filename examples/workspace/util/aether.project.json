@@ -5,5 +5,17 @@
   "units": [
     { "path": "main.ae", "role": "main" },
     { "path": "whole.ae", "role": "lib" }
-  ]
+  ],
+  "lock": {
+    "units": [
+      {
+        "path": "main.ae",
+        "sha256": "18346fbc43e24b870911c14a8fce8927703e1da923c3243b4efbbfabc178d5b1"
+      },
+      {
+        "path": "whole.ae",
+        "sha256": "8f13957d74ab7ddef893fa18f1edde3976652d04b9e83a8da4522e8b500eb87e"
+      }
+    ]
+  }
 }

@@ -1,6 +1,6 @@
 # Aether 0.23 Toolchain Contract (M18 offline workspace)
 
-**Status:** Current package contract — language surface remains **0.11** / AETH **v11**; package **0.23** adds multi-package workspaces  
+**Status:** Historical package contract — language surface remains **0.11** / AETH **v11**; package **0.23** adds multi-package workspaces; current package contract is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** M9–M11 project tooling, [ADR-022](ADR-022-m18-offline-workspace.md)
 
 ## Purpose

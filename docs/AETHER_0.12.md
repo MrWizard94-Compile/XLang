@@ -1,7 +1,7 @@
 # Aether 0.12 Toolchain Contract
 
-**Status:** Current product toolchain contract — M9 offline project tooling
-pilot
+**Status:** Historical product toolchain contract — M9 offline project tooling
+pilot; current package contract is [AETHER_0.35.md](AETHER_0.35.md)
 
 **Language surface:** Aether 0.11 (AETH v11) unchanged
 

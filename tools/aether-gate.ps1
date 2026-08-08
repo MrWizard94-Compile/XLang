@@ -3,20 +3,24 @@
   Offline Aether quality gate (CONST-GATE-001).
 
 .DESCRIPTION
-  Runs pack verify (when found), fmt, clippy -D warnings, core/CLI tests,
-  example dual-compare, host-pilot run, and project verify.
+  Runs pack verify (when found), fmt, workspace Clippy with warnings denied,
+  tests, example dual-compare, host-pilot run, and project verification.
   -Mode full also rebuilds seed via bootstrap + forge and checks hash identity.
+  -Mode release adds a release build, a version-derived local package, consumer
+  verification, and a negative package-integrity check.
 
 .PARAMETER Mode
-  quick  — day-to-day (default)
-  full   — release / TP-2 blocking (includes seed forge identity)
+  quick   — day-to-day (default)
+  full    — full source and seed proof (includes seed forge identity)
+  release — full plus local technical-preview packaging and consumer proof
 
 .NOTES
-  Rule IDs: CONST-GATE-001, ENG-WARN-001, TEST-BEHAVIOR-001, GOV-INT-001
+  Rule IDs: CONST-GATE-001, ENG-WARN-001, TEST-BEHAVIOR-001, GOV-INT-001,
+  REL-PACKAGE-001, REL-DETERM-001, SEC-INPUT-001
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet("quick", "full")]
+    [ValidateSet("quick", "full", "release")]
     [string]$Mode = "quick",
 
     [switch]$SkipPack
@@ -60,6 +64,30 @@ function Find-PackVerify {
     return $null
 }
 
+function Get-CliPackageVersion {
+    $manifestPath = Join-Path $RepoRoot "apps\xlang-cli\Cargo.toml"
+    if (-not (Test-Path -LiteralPath $manifestPath)) {
+        Fail "missing CLI manifest: $manifestPath"
+    }
+    $manifest = Get-Content -Raw -LiteralPath $manifestPath
+    $match = [regex]::Match($manifest, '(?m)^\s*version\s*=\s*"(?<version>[0-9A-Za-z.+-]+)"\s*$')
+    if (-not $match.Success) {
+        Fail "could not read the CLI package version from $manifestPath"
+    }
+    return $match.Groups["version"].Value
+}
+
+function Assert-ChildPath([string]$Parent, [string]$Candidate, [string]$Label) {
+    $parentFull = [System.IO.Path]::GetFullPath($Parent)
+    $candidateFull = [System.IO.Path]::GetFullPath($Candidate)
+    $separator = [System.IO.Path]::DirectorySeparatorChar
+    $prefix = if ($parentFull.EndsWith([string]$separator)) { $parentFull } else { "$parentFull$separator" }
+    if (-not $candidateFull.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        Fail "$Label escapes its required parent: $candidateFull"
+    }
+    return $candidateFull
+}
+
 Write-Host "Aether gate mode=$Mode root=$RepoRoot"
 
 # --- Pack integrity ---
@@ -84,8 +112,8 @@ Invoke-Checked "cargo fmt --check" {
 }
 
 # --- Clippy ---
-Invoke-Checked "cargo clippy -D warnings" {
-    cargo clippy -p aether-core -p aether-cli -- -D warnings
+Invoke-Checked "cargo clippy --workspace --all-targets -D warnings" {
+    cargo clippy --workspace --all-targets -- -D warnings
 }
 
 # --- Tests ---
@@ -105,15 +133,14 @@ if ($Mode -eq "quick") {
             cargo test -p aether-core --test $t
         }
     }
-}
-else {
-    Invoke-Checked "cargo test aether-core (includes seed_self_host)" {
-        cargo test -p aether-core
+    Invoke-Checked "cargo test aether-cli" {
+        cargo test -p aether-cli
     }
 }
-
-Invoke-Checked "cargo test aether-cli" {
-    cargo test -p aether-cli
+else {
+    Invoke-Checked "cargo test --workspace (includes seed_self_host)" {
+        cargo test --workspace
+    }
 }
 
 # --- Dual-compare shipped examples (seed ≡ bootstrap) ---
@@ -203,7 +230,7 @@ if (Test-Path -LiteralPath $modFile) {
 }
 
 # --- Full: seed forge identity ---
-if ($Mode -eq "full") {
+if ($Mode -ne "quick") {
     Write-Step "Seed bootstrap + forge hash identity"
     $seedAe = Join-Path $RepoRoot "seed\aether_seed.ae"
     $seedBoot = Join-Path $RepoRoot "target\aether_seed.gate.bootstrap.aeth"
@@ -228,6 +255,59 @@ if ($Mode -eq "full") {
     }
     Write-Host "  seed SHA-256: $hb"
     Write-Host "  bootstrap ≡ forged ≡ checked-in OK"
+}
+
+# --- Release: package and consumer verification ---
+if ($Mode -eq "release") {
+    Write-Step "Release build + local technical-preview package"
+    cargo build --release -p aether-cli
+    if ($LASTEXITCODE -ne 0) { Fail "release CLI build failed" }
+
+    $packageScript = Join-Path $RepoRoot "tools\package-preview.ps1"
+    & pwsh -NoProfile -File $packageScript -SkipBuild
+    if ($LASTEXITCODE -ne 0) { Fail "technical-preview packaging failed" }
+
+    $version = Get-CliPackageVersion
+    $packageRoot = Join-Path $RepoRoot "dist\aether-$version-tp"
+    $previewVerifier = Join-Path $packageRoot "verify-preview.ps1"
+    if (-not (Test-Path -LiteralPath $previewVerifier -PathType Leaf)) {
+        Fail "staged preview verifier is missing: $previewVerifier"
+    }
+
+    Write-Step "Consumer verification of local technical-preview package"
+    & pwsh -NoProfile -File $previewVerifier -PackageRoot $packageRoot
+    if ($LASTEXITCODE -ne 0) { Fail "consumer preview verification failed" }
+
+    Write-Step "Preview verifier rejects an unlisted package file"
+    $tamperParent = Join-Path $RepoRoot "target"
+    New-Item -ItemType Directory -Force -Path $tamperParent | Out-Null
+    $tamperRoot = Assert-ChildPath $tamperParent (Join-Path $tamperParent "gate-preview-unlisted") "preview verifier tamper fixture"
+    if (Test-Path -LiteralPath $tamperRoot) {
+        Remove-Item -LiteralPath $tamperRoot -Recurse -Force
+    }
+
+    $tamperFailure = $null
+    try {
+        Copy-Item -LiteralPath $packageRoot -Destination $tamperRoot -Recurse -Force
+        $unlistedFile = Assert-ChildPath $tamperRoot (Join-Path $tamperRoot "UNLISTED-TAMPER-PROBE.txt") "preview verifier tamper probe"
+        $encoding = New-Object System.Text.UTF8Encoding $false
+        [System.IO.File]::WriteAllText($unlistedFile, "intentional verification probe`n", $encoding)
+
+        & pwsh -NoProfile -File $previewVerifier -PackageRoot $tamperRoot
+        $tamperExit = $LASTEXITCODE
+        if ($tamperExit -eq 0) {
+            $tamperFailure = "preview verifier accepted an unlisted package file"
+        }
+        else {
+            Write-Host "  unlisted package file rejected (exit $tamperExit) OK"
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $tamperRoot) {
+            Remove-Item -LiteralPath $tamperRoot -Recurse -Force
+        }
+    }
+    if ($null -ne $tamperFailure) { Fail $tamperFailure }
 }
 
 Write-Host ""

@@ -1,8 +1,11 @@
 # Aether Language Development Roadmap
 
-**Status:** M0–M18, M19a–d (cooperative Policy B bounded), M20/M20b, M17b–d, M21,
-M22 product; package **0.32**; TP-1/TP-2 delivered; portfolio ADR-014
-**Date:** 2026-08-04
+**Status:** M0–M23 product: M19a–e (M19e bounded active-frame cancellation),
+M20/M20b, M17b–d, M21, M22, and M23 pure comptime calls; RTP-001 runtime
+performance increment; PKG-001 offline workspace locks; package **0.36**
+current. M19e is implemented as the verifier-checked v12 task-frame slice
+(ADR-042); TP-1/TP-2 delivered; portfolio ADR-014
+**Date:** 2026-08-08
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
 constitution gate.
@@ -20,11 +23,14 @@ Human-approved under AGENTS Constitution + SOP:
 | Target | Definition | Delivery |
 | --- | --- | --- |
 | **TP-1** Integrity Complete | Claim/docs sync, formal audit, automated offline gate, clean product tree | Done (audit report) |
-| **TP-2** Technical Preview | TP-1 + threat model + local `dist/` package + SHA-256SUMS + consumer verify | Local folder + checksums only |
+| **TP-2** Technical Preview | TP-1 + threat model + local `dist/` package + SHA-256SUMS + consumer verify | Current 0.36 local-only package; no public release or license grant |
 | **P4.1** Multi-unit offline projects | Extend M9 after TP-2; full SOP design → ADR → matrix before code | Feature track (not 1.0) |
 
-Threat model freeze: [THREAT_MODEL-TECHNICAL-PREVIEW.md](THREAT_MODEL-TECHNICAL-PREVIEW.md).  
-Package helpers: `tools/package-preview.ps1`, `tools/verify-preview.ps1`.
+Current preview threat model: [THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md](THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md).
+
+Historical pure-surface freeze: [THREAT_MODEL-TECHNICAL-PREVIEW.md](THREAT_MODEL-TECHNICAL-PREVIEW.md).
+Package helpers: `tools/package-preview.ps1`, `tools/verify-preview.ps1`, and
+`tools/aether-gate.ps1 -Mode release`.
 
 **Out of scope unless new ADR / law fork:** expanded FFI beyond M21 Whole pilot,
 native/LLVM, network registry, ambient host I/O, mid-frame cancel destroy.
@@ -93,11 +99,14 @@ invalid-source diagnostic parity.
 | M19b | Nursery × resource Policy A | M19a, M7 | Parent may own resources with pure spawn callees; nursery site allows live owners, not access loans. | Matrix green; seed≡bootstrap mix corpus. | **Implemented in package 0.26 (ADR-028)** |
 | M19c | Nursery Policy B cooperative | M19d, M7 | Unstarted cancel clean; total resourceful spawns end owners at return. | Matrix green; no mid-frame cancel claim. | **Bounded product in package 0.32 (ADR-036)** |
 | M19d | Multi-weave / spawn arenas | M19b, M2 | Total weaves declare self-owned arenas; capacity sum; Policy A+ spawn. | Matrix green; seed≡bootstrap spawn-arena. | **Implemented in package 0.32 (ADR-035)** |
+| M19e | Active-frame cancel + destroy | M19a–d, M7 | Versioned `task weave` / `checkpoint`, v12 frames, private lanes, deterministic teardown. | Full matrix: source, v12 verifier/VM, seed, authoring, hostile artifacts, v4–v11 compatibility, and zero-warning gates. | **Implemented in package 0.36 (ADR-042); bounded task-frame scope only** |
 | M20 | Stdlib layer 0 | M11 | Pure Whole helper modules under `stdlib/`. | Project build + tests. | **Implemented in package 0.24 (ADR-024)** |
 | M20b | Stdlib layer 1 | M20 | Expand pure Whole helpers; add Truth + Text modules; multi-import demo. | Project build dual-compare; `aether test`; exit 42 demo. | **Implemented in package 0.27 (ADR-029)** |
 | M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Matrix green; human residual-risk accepted; seed≡bootstrap foreign corpus. | **Pilot implemented in package 0.31 (ADR-025); seed dual-compare proven** |
 | M22 | Cross-package import | M11, M18 | `import unit "…" from package name as alias` + `workspace build --package`. | Matrix green; depends_on jail. | **Implemented in package 0.24 (ADR-026)** |
-| M23 | Pure comptime weave calls (T-CT) | M15 | `comptime bind <- call` pure total Whole helpers; COMPTIME_WHOLE fold. | Matrix green; seed≡bootstrap; no host/effect/resource callees. | **Design + ADR-039 ready; implement next** |
+| M23 | Pure comptime weave calls (T-CT) | M15 | `comptime bind <- call` pure total Whole helpers; COMPTIME_WHOLE fold. | Matrix green; bootstrap materialization + seed emission ≡ bootstrap; no host/effect/resource callees. | **Implemented in package 0.33 (ADR-039)** |
+| RTP-001 | Runtime Text ASCII fast path | Current VM | Private cached ASCII provenance for scalar-equivalent Text operations; no source or AETH change. | Unicode boundary tests, full debug/release suites, and scoped local self-host measurement. | **Implemented in package 0.34 (ADR-040)** |
+| PKG-001 | Offline workspace locks | M9, M18, M22 | Explicit project/workspace lock refresh; complete local package identity pins; locked build preflight. | Matrix green; project-manifest + nested unit lock checks; no-registry boundary preserved. | **Implemented in package 0.35 (ADR-041)** |
 
 ## Milestone detail
 
@@ -259,8 +268,10 @@ Post-M10 growth is governed by [ADR-014](ADR-014-post-m10-track-portfolio.md).
 Mainstream multi-epoch plan:
 [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next:** deeper T-RX Policy B only with cancel-destroy design; further
-stdlib depth; FFI only after human authorize ADR-025 threat residual.
+**Default next:** 0.36 release/stabilization evidence is complete for the local
+preview channel; select one new scoped, ADR-backed design. Further stdlib depth
+remains a separate scoped design; FFI only after its existing human-authorized
+residual boundary.
 
 Native/LLVM and network registries remain blocked without law change.
 
@@ -278,7 +289,7 @@ No milestone advances merely because its happy path works.
 | General error/effect representation and inference boundary beyond `Error[Whole]` | It affects function types, handlers, cancellation, and compile-time rules. The M4 initial abortive representation is decided in ADR-007; generalization remains open. | Post-M4 |
 | Any expansion beyond M5 literal comptime | Calls, control flow, type computation, or source generation would change determinism, denial-of-service resistance, and host authority. | **M15 / T-CT** name chaining designed ([ADR-019](ADR-019-m15-comptime-expansion.md)); further slices still need new ADRs |
 | Generic shape and layout semantics | It affects ABI, correctness, performance claims, and debuggability. | M6 |
-| Task model and cancellation semantics | It affects resource lifetime, scheduler behavior, and failure propagation. | M7 |
+| Task model and cancellation semantics | M7/v11 retains unstarted-only cancellation; M19e implements the bounded active-frame v12 model. Broader task semantics still require a new ADR. | M7 / M19e |
 | Foreign interface scope, including any C-header strategy | It affects ownership, hostile input handling, portability, and host capability boundaries. | M8 / **T-FFI** (after pure host; ADR-014) |
 | Any native/LLVM backend | It conflicts with current AETH-only project law and therefore requires explicit law/ADR change before design work. | Outside this roadmap unless approved (**T-NATIVE**) |
 | Language modules / cross-file weave resolution | Changes seed surface and ownership/diagnostics; cannot be implied by multi-unit project files alone. | **M11 / T-MOD** — designed ([ADR-015](ADR-015-m11-language-modules.md)); implement M11a then M11b |
@@ -316,14 +327,29 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Package **0.32** ships M19d multi-weave arenas + cooperative Policy B bounds, with
-M21 foreign pilot already on the seed path. Institutional progress report and
-DOC-SYNC honesty pass (2026-08-05) refresh NORTH_STAR / maturity baseline pins.
-**Blocked without new ADR / law:** mid-frame cancel destroy, expanded FFI
-signatures, native/LLVM, network registry.
-**Human backlog (2026-08-05):** see [BACKLOG-HUMAN-2026-08-05.md](BACKLOG-HUMAN-2026-08-05.md).  
-1. **T-CT** — ADR-039 pure comptime calls **design complete**; implement on direction.  
-2. Offline package polish.  
-3. Ownership + destroy + mid-frame cancel (full T-RX ADR).  
-4. Law forks F-NATIVE / F-REGISTRY — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) /
+Package **0.36** is the current executable contract: v11 compatibility, M19e
+v12 task frames and explicit checkpoints, RTP-001's internal ASCII Text fast
+path, and PKG-001's optional fully local workspace locks. The M19e vertical
+slice is complete across parser/semantic model, verifier/VM, seed, authoring,
+hostile artifacts, compatibility, and its documented quality gate. Its design
+and implementation records are
+[DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md](DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md),
+[ADR-042](ADR-042-m19e-active-frame-cancel.md),
+[M19E-VALIDATION-MATRIX.md](M19E-VALIDATION-MATRIX.md), and the
+[implementation delivery report](DELIVERY_REPORT-2026-08-08-M19E-T-RX-IMPLEMENTATION.md).
+
+The 0.36 local-preview release/stabilization increment is complete: the release
+gate builds, stages, consumer-verifies, and integrity-probes the package without
+committing or publishing it. The next engineering milestone must be a new
+ADR-backed scope. No subsequent language capability is implicitly approved by
+M19e's completion.
+
+**Still blocked without a new ADR / law:** expanded FFI signatures,
+native/LLVM, network registry, task handles/timeouts/parallelism, and any
+broader resource/effect cancellation surface.
+
+**Human backlog (updated 2026-08-08):**
+1. Further offline package/stdlib polish only through a new scoped design and matrix.
+2. Broader task cancellation, task handles/timeouts/parallelism, or resource/effect cancellation only through a new ADR.
+3. Law forks F-NATIVE / F-REGISTRY — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) /
    [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md) (§3 phrase required).

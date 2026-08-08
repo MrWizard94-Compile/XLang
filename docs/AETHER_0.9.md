@@ -1,7 +1,7 @@
 # Aether 0.9 Language Contract
 
 **Status:** Historical Aether 0.9 specification. Current product contract is
-[AETHER_0.10.md](AETHER_0.10.md).
+[AETHER_0.35.md](AETHER_0.35.md).
 
 **Artifact output:** AETH v9
 

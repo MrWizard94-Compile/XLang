@@ -5,5 +5,23 @@
   "packages": [
     { "name": "util", "path": "util" },
     { "name": "app", "path": "app", "depends_on": ["util"] }
-  ]
+  ],
+  "lock": {
+    "packages": [
+      {
+        "name": "util",
+        "path": "util",
+        "project_name": "util_pkg",
+        "project_version": "0.1.0",
+        "project_sha256": "e2c8f7f15e2978d977dc2a9ee3682c2c1b36bd6ba4542f9f0650e26b7c77f4b5"
+      },
+      {
+        "name": "app",
+        "path": "app",
+        "project_name": "app_pkg",
+        "project_version": "0.1.0",
+        "project_sha256": "a27a8b2dca5dde0fdc10540048561fc9cc7cd94025e3339596bf5eac41710559"
+      }
+    ]
+  }
 }

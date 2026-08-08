@@ -1,6 +1,6 @@
 # Aether 0.29 Toolchain Contract (M17c grants-in-tests)
 
-**Status:** Historical package 0.29 — language **0.11** / AETH **v11** + optional test grants; current package is [AETHER_0.30.md](AETHER_0.30.md)  
+**Status:** Historical package 0.29 — language **0.11** / AETH **v11** + optional test grants; current package is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** ADR-031, M17, M14  
 
 ## Surface

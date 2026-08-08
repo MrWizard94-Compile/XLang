@@ -1,7 +1,8 @@
 # Aether 0.32 Toolchain Contract (M19d multi-weave arenas + Policy B cooperative)
 
-**Status:** Current package — language **0.11** surface forms + M19d multi-weave
-arenas / Policy A+ resourceful total spawn callees; AETH **v11**  
+**Status:** Historical package 0.32 — language **0.11** surface forms + M19d
+multi-weave arenas / Policy A+ resourceful total spawn callees; AETH **v11**;
+current package is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** ADR-035, ADR-036  
 
 ## Surface

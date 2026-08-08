@@ -1,20 +1,21 @@
 # Aether Seed Profile
 
-Status: normative Stage 7/M4–M8 Seed Profile (complete canonical 0.11 source
-surface + product compile path), 2026-08-04.
+Status: normative seed-emission profile for package **0.36.0** (canonical 0.11
+surface plus documented later bounded semantics), 2026-08-08.
 
 This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
-It covers the complete documented canonical Aether 0.11 source surface. Product
-`compile` uses this profile via the seed artifact. Rust bootstrap remains for
-seed rebuild, `check` AST, and dual-compare proofs. A Seed Profile claim is not
+It covers the documented canonical Aether 0.11 source surface and the later
+seed-emitted product cases explicitly listed below. Product `compile` uses this
+profile via the seed artifact. Rust bootstrap remains for seed rebuild, `check`
+AST, M23 materialization, and dual-compare proofs. A Seed Profile claim is not
 a claim of full bootstrap diagnostic parity for invalid input.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,
 root-only bindings, bounded immutable records, closed bounded-resource forms,
-dual-layout tables, bounded terminal effect forms, literal `comptime bind`,
-structured nurseries, and capability-closed `host weave` declarations. The
-profile does not expand that language surface.
+dual-layout tables, bounded terminal effect forms, M5/M15 arithmetic `comptime
+bind`, structured nurseries, and capability-closed `host weave` declarations.
+The profile does not silently expand that language surface.
 
 ## Claim
 
@@ -22,10 +23,10 @@ profile does not expand that language surface.
 
 1. Accepts complete canonical Aether 0.11 source as `Text`.
 2. Parses statements and expressions itself (no host parser callback).
-3. Emits a complete AETH **v11** artifact with a resource-capacity header,
-   optional record table, shape table, function effect and host-kind metadata,
-   table opcodes, nursery opcodes, and `HOST_CALL` through ordinary `Bytes`
-   operations.
+3. Emits a complete AETH **v11** artifact for source without task frames and
+    AETH **v12** for valid M19e task source, with resource-capacity header,
+    optional record table, shape table, function metadata, table/nursery
+    opcodes, and `HOST_CALL` through ordinary `Bytes` operations.
 4. Exposes the forge ABI `weave compile [borrow source: Text] -> Bytes`.
 5. Rebuilds its own source byte-for-byte under `aether forge`.
 6. Compiles every documented canonical statement, shallow expression, literal,
@@ -43,11 +44,11 @@ profile does not expand that language surface.
     terminal `handle call ... into success otherwise error into code`; it emits
     `RAISE` (53), `FORWARD_CALL` (54), and `HANDLE_CALL` (55) byte-for-byte
     like the bootstrap.
-11. Parses root-only immutable `comptime bind` with one `sum`, `difference`,
-    `product`, `quotient`, or `remainder` operation over literal `Whole`
-    operands, evaluates it
-    with checked Aether arithmetic, and emits `COMPTIME_WHOLE` (56)
-    byte-for-byte like the bootstrap.
+11. Parses root-only immutable M5/M15 `comptime bind` with one `sum`,
+    `difference`, `product`, `quotient`, or `remainder` operation over Whole
+    literals or prior same-weave comptime names, evaluates it with checked
+    Aether arithmetic, and emits `COMPTIME_WHOLE` (56) byte-for-byte like the
+    bootstrap.
 12. Parses `shape` declarations and `table Shape layout rows|columns` with
     closed allocate/store/load; emits table opcodes (57–61) byte-for-byte like
     the bootstrap for the documented M6 corpus.
@@ -66,9 +67,32 @@ profile does not expand that language surface.
     `--grant-lib`; the seed does not load libraries.
 16. Accepts multi-weave total `arena N` declarations (M19d) and sums capacities
     into the AETH header, matching bootstrap for `examples/spawn-arena.ae`.
+17. For M23 pure comptime calls, the product path bootstrap-validates and folds
+    the narrow call subset, materializes an equivalent M5 literal directive,
+    and then forges through this seed. The resulting artifact is byte-identical
+    to direct bootstrap output for `examples/comptime-calls.ae`. The checked-in
+     seed does **not** independently interpret raw M23 call source.
+18. Parses `task weave` and `checkpoint`, emits v12 task flags,
+    `frame_arena_capacity`, and `TASK_CHECKPOINT` (67), preserves verifier-safe
+    task loop back edges, and computes the exact main-plus-largest-task-nursery
+    capacity header. The active-cancel, capacity, loop, and forward-task corpus
+    matches bootstrap byte-for-byte.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
+
+Package 0.34's RTP-001 Text cache is VM-internal and deliberately outside this
+profile: it changes neither seed source nor artifact bytes. The full seed
+identity proof remains required after the runtime change.
+
+Package 0.35's PKG-001 project/workspace lock workflow is host-local tooling
+outside the profile. It does not alter Aether source parsing, seed source,
+emitted AETH bytes, forge inputs, or the required seed identity proof.
+
+Package 0.36's M19e task support is inside this profile. The checked-in seed
+artifact remains a v11 compiler program, but it emits v12 when it parses valid
+task source. Its v12 byte identity with the Rust bootstrap is required just as
+for the prior seed surface.
 
 ## Required shape
 
@@ -106,15 +130,16 @@ compiled from source, including `main`.
   `Arena`, access loans, `BufferWhole`, and `BufferTruth` are not result types.
 - Nested blocks may `revise` existing locals but must not introduce bindings.
 - `bind` / `bind mutable` establish runtime locals; `revise` replaces a live
-  local. `comptime bind` establishes one immutable literal-evaluated `Whole`
-  local under the fixed M5 directive budget.
+  local. M5/M15 `comptime bind` establishes one immutable checked `Whole` local
+  under the fixed 1,024-directive budget. M23 calls are materialized before the
+  seed sees them.
 - Hex `bytes "ff…"` literals decode to raw bytes. Text literals decode the five
   defined escapes (`\\`, `\"`, `\n`, `\r`, `\t`) and record **byte** length of
   UTF-8 content after decoding (not scalar count).
-- `arena N` appears only in `main` and becomes the one v6/v7/v8 resource-plan
-  capacity. `buffer Whole` and `buffer Truth` establish unallocated owner
-  placeholders. Resource owner replacement uses only closed outcomes, never
-  `revise`.
+- One total weave may declare `arena N`; M19d sums every declared capacity into
+  the v11 resource-plan header. `buffer Whole` and `buffer Truth` establish
+  unallocated owner placeholders. Resource owner replacement uses only closed
+  outcomes, never `revise`.
 
 ## Statements
 
@@ -124,7 +149,8 @@ Supported forms:
 | --- | --- |
 | `bind name <- expression` | Immutable local |
 | `bind mutable name <- expression` | Mutable local |
-| `comptime bind name <- op whole whole` | Root-only immutable literal `Whole` result; `op` is `sum`, `difference`, `product`, `quotient`, or `remainder` |
+| `comptime bind name <- op left right` | Root-only immutable M5/M15 Whole result; operands are literals or prior comptime names |
+| `comptime bind name <- call weave args...` | M23 product form; bootstrap validates/folds/materializes before seed forge |
 | `revise name <- expression` | Same-type replacement |
 | `speak expression` | Expression must be `Text` |
 | `release name` | Root-only logical destruction of a live unique/resource owner; emits `RELEASE` (66) |
@@ -170,10 +196,12 @@ Supported operations (by seed emitter opcode mapping):
   args... into success otherwise error into code`. The seed emits direct v7
   two-exit metadata and branch targets; M4's source/type/ownership restrictions
   are verified by the product artifact before output is accepted.
-- Comptime: `comptime bind name <- op left right` accepts exactly one literal
-  signed-`Whole` binary operation. It has no names, calls, loops, text, bytes,
-  effects, resources, or source-configurable fuel; at most 1,024 directives
-  occur in one source program.
+- Comptime: the seed directly accepts one M5/M15 signed-`Whole` binary operation
+  over literals or prior same-weave comptime names. M23 pure calls are
+  bootstrap-folded and materialized before seed input. There are no loops,
+  recursion, text/bytes evaluation, effects, resources, host calls, or
+  source-configurable fuel; at most 1,024 directives occur in one source
+  program.
 
 ## Multi-weave emission
 
@@ -187,18 +215,20 @@ at end of source it flushes the previous weave record:
 - local count, then `(type, mutable)` pairs (parameters occupy the leading slots)
 - code length and instruction bytes
 
-The final artifact is `AETH` + version `8` + arena capacity (`u32` little
-endian) + bounded record schema table + function table. Record type descriptors
+The final artifact is `AETH` + version `11` or `12` + arena capacity (`u32`
+little endian) + bounded record schema table + function table. Record type descriptors
 retain tag `5` plus a record identifier; v6+ use Arena/Buffer type tags,
 access parameter mode, and the closed resource instruction payloads; v7 adds
 the effect tag and three explicit effect instructions; v8 adds
 `COMPTIME_WHOLE`; v9 adds shape metadata and table opcodes; v10 adds nursery
-opcodes. This replaces the Stage 3 fixed two-weave (`compile` + synthetic
-`main`) emitter.
+opcodes; v11 adds function host-kind metadata, `HOST_CALL`, and `RELEASE`; v12
+adds task flags, per-function frame capacity, and `TASK_CHECKPOINT`.
+This replaces the Stage 3 fixed two-weave (`compile` + synthetic `main`)
+emitter.
 
 ## Explicit non-goals
 
-Seed parity does not expand Aether 0.10 language rules. In particular, nested
+Seed parity does not silently expand Aether 0.36 language rules. In particular, nested
 expression trees, nested binding introduction, nested record fields, record
 mutation, host record invocation, first-class resource outcomes, Buffer weave
 results, resource-owner `revise`, OS-thread parallelism, automatic layout
@@ -209,7 +239,12 @@ for:
 - Host I/O, networking, or model access
 - Full Aether diagnostic fidelity (invalid Seed Profile input may fail late or
   produce a rejectable artifact; the bootstrap compiler remains the complete
-  diagnostic authority for invalid Aether 0.10 input)
+  diagnostic authority for invalid Aether input)
+- Direct raw-M23 seed evaluation; 0.33 uses the documented bootstrap
+  materialization bridge
+- General async/parallel tasks, task handles, timeout or manual cancellation,
+  nested task nurseries, arbitrary preemption, task external effects, or guest
+  cancellation handlers beyond the M19e closed task/checkpoint subset
 - Future Aether language extensions until they meet the same byte-identity proof
 
 ## Reproducibility procedure
@@ -236,7 +271,8 @@ All three SHA-256 digests must match. The regression tests also forge:
    allocation exhaustion, append full, lookup fallback, Truth elements, and an
    access-bound helper weave.
 7. The M4 error and normal-exit fixtures, including `examples/error-effect.ae`.
-8. The M5 literal comptime fixture, including `examples/comptime.ae`.
+8. The M5 literal and M15 name-chain comptime fixtures, including
+   `examples/comptime.ae` and `examples/comptime-chain.ae`.
 9. The M6 layout fixture, including `examples/layout-table.ae`.
 10. The M7 nursery fixtures, including `examples/nursery-total.ae` and
     `examples/nursery-cancel.ae`.
@@ -244,10 +280,17 @@ All three SHA-256 digests must match. The regression tests also forge:
     `examples/foreign-sum.ae`) dual-compare and fail closed without a library grant.
 12. The M19d spawn-arena fixture (`examples/spawn-arena.ae`) dual-compares with
     header capacity equal to the sum of arena declarations.
+13. The M23 pure-call fixture (`examples/comptime-calls.ae`) bootstrap-folds,
+    seed-emits, dual-compares, and exits 512.
+14. The M19e active-frame fixtures (`examples/active-cancel.ae`,
+    `examples/task-frame-capacity.ae`, and `examples/task-loop.ae`) plus a
+    forward-declared task fixture dual-compare as v12 and run with their
+    documented exits/capacities.
 
 ## Authority
 
-- Full language: [AETHER_0.10.md](AETHER_0.10.md)
+- Current toolchain delta: [AETHER_0.36.md](AETHER_0.36.md)
+- Historical base language: [AETHER_0.11.md](AETHER_0.11.md)
 - Host forge ABI: [FORGE_CONTRACT.md](FORGE_CONTRACT.md)
 - Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Product gate: [../MANIFEST.md](../MANIFEST.md)

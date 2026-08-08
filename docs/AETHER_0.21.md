@@ -1,6 +1,6 @@
 # Aether 0.21 Toolchain Contract (M16 resource ↔ handle)
 
-**Status:** Current package contract — language surface remains **0.11** / AETH **v11**; package **0.21** relaxes M4 mix ban for terminal handle  
+**Status:** Historical package contract — language surface remains **0.11** / AETH **v11**; package **0.21** relaxes M4 mix ban for terminal handle; current package contract is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** [AETHER_0.11.md](AETHER_0.11.md), [ADR-020](ADR-020-m16-resource-effect.md)
 
 ## Purpose

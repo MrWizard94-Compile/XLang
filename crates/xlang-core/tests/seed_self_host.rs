@@ -27,13 +27,35 @@ const FORWARD_CALL_SOURCE: &str = concat!(
     "  yield product v0 2\n",
 );
 
+/// A task may be declared after the nursery that spawns it; both compiler
+/// passes must preserve the declaration's task-frame descriptor and capacity.
+const M19E_FORWARD_TASK_SOURCE: &str = concat!(
+    "world task_forward\n",
+    "weave main [] -> Whole:\n",
+    "  bind mutable result <- 0\n",
+    "  together:\n",
+    "    spawn call later into result\n",
+    "  yield result\n",
+    "\n",
+    "task weave later [] -> Whole:\n",
+    "  bind memory <- arena 32\n",
+    "  checkpoint\n",
+    "  release memory\n",
+    "  yield 4\n",
+);
+
 const M4_ERROR_EFFECT_SOURCE: &str = include_str!("../../../examples/error-effect.ae");
 const M5_COMPTIME_SOURCE: &str = include_str!("../../../examples/comptime.ae");
 const M15_COMPTIME_CHAIN_SOURCE: &str = include_str!("../../../examples/comptime-chain.ae");
+const M23_COMPTIME_CALL_SOURCE: &str = include_str!("../../../examples/comptime-calls.ae");
 const M16_RESOURCE_HANDLE_SOURCE: &str = include_str!("../../../examples/resource-handle.ae");
 const M19A_RELEASE_RAISE_SOURCE: &str = include_str!("../../../examples/release-raise.ae");
 const M19B_NURSERY_RESOURCE_SOURCE: &str = include_str!("../../../examples/nursery-resource.ae");
 const M19D_SPAWN_ARENA_SOURCE: &str = include_str!("../../../examples/spawn-arena.ae");
+const M19E_ACTIVE_CANCEL_SOURCE: &str = include_str!("../../../examples/active-cancel.ae");
+const M19E_TASK_FRAME_CAPACITY_SOURCE: &str =
+    include_str!("../../../examples/task-frame-capacity.ae");
+const M19E_TASK_LOOP_SOURCE: &str = include_str!("../../../examples/task-loop.ae");
 const M6_LAYOUT_SOURCE: &str = include_str!("../../../examples/layout-table.ae");
 const M7_NURSERY_TOTAL_SOURCE: &str = include_str!("../../../examples/nursery-total.ae");
 const M7_NURSERY_CANCEL_SOURCE: &str = include_str!("../../../examples/nursery-cancel.ae");
@@ -82,10 +104,10 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
     );
 
     // Insert a fresh unused local so the variant differs without colliding with
-    // the seed's existing high-numbered slots (v103/v104 already bound).
+    // the seed's existing high-numbered slots (v103 through v123 are bound).
     let variant = SEED_SOURCE.replacen(
         "  bind mutable v65 <- 0\n",
-        "  bind mutable v65 <- 0\n  bind mutable v105 <- 0\n",
+        "  bind mutable v65 <- 0\n  bind mutable v124 <- 0\n",
         1,
     );
     assert_ne!(
@@ -278,6 +300,28 @@ fn seed_profile_compiler_forges_m15_comptime_chain_byte_identically() {
 }
 
 #[test]
+fn seed_hosted_product_path_forges_m23_comptime_calls_byte_identically() {
+    let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
+        .expect("the M23 comptime-call fixture must bootstrap")
+        .bytecode;
+    let seeded = compile_with_seed(M23_COMPTIME_CALL_SOURCE)
+        .expect("the M23 comptime-call fixture must compile through the seed product path")
+        .bytecode;
+    verify_bytecode(&seeded).expect("M23 seed-produced artifact must verify");
+    assert_eq!(
+        seeded, bootstrap,
+        "M23 bootstrap materialization and seed emission must match byte-for-byte"
+    );
+    assert_eq!(
+        run_bytecode(&seeded)
+            .expect("M23 seed-produced artifact must run")
+            .exit_code,
+        512,
+        "M23 comptime helper chain should exit 512"
+    );
+}
+
+#[test]
 fn seed_profile_compiler_forges_m19a_release_raise_byte_identically() {
     let bootstrap = compile_to_bytecode(M19A_RELEASE_RAISE_SOURCE)
         .expect("M19a release-raise must bootstrap")
@@ -290,10 +334,7 @@ fn seed_profile_compiler_forges_m19a_release_raise_byte_identically() {
         seeded, bootstrap,
         "M19a release-raise must match bootstrap byte-for-byte"
     );
-    assert!(
-        seeded.iter().any(|byte| *byte == 66),
-        "seed path must emit OP_RELEASE (66)"
-    );
+    assert!(seeded.contains(&66), "seed path must emit OP_RELEASE (66)");
     assert_eq!(
         run_bytecode(&seeded)
             .expect("M19a seed artifact must run")
@@ -322,6 +363,56 @@ fn seed_profile_compiler_forges_m19b_nursery_resource_byte_identically() {
             .exit_code,
         7
     );
+}
+
+#[test]
+fn seed_profile_compiler_forges_m19e_active_task_frames_byte_identically() {
+    let bootstrap_seed = compile_to_bytecode(SEED_SOURCE)
+        .expect("the checked-in Aether seed source must bootstrap")
+        .bytecode;
+    for (name, source, expected_exit, expected_capacity) in [
+        ("active cancellation", M19E_ACTIVE_CANCEL_SOURCE, 9, 64_u32),
+        (
+            "multi-task frame capacity",
+            M19E_TASK_FRAME_CAPACITY_SOURCE,
+            3,
+            96_u32,
+        ),
+        ("checkpointed task loop", M19E_TASK_LOOP_SOURCE, 3, 0_u32),
+        (
+            "forward-declared task frame",
+            M19E_FORWARD_TASK_SOURCE,
+            4,
+            32_u32,
+        ),
+    ] {
+        let bootstrap = compile_to_bytecode(source)
+            .unwrap_or_else(|error| panic!("M19e {name} must bootstrap: {error}"))
+            .bytecode;
+        let forged = bytes(
+            forge_bytecode(&bootstrap_seed, source)
+                .unwrap_or_else(|error| panic!("M19e {name} must forge through the seed: {error}")),
+        );
+        verify_bytecode(&forged)
+            .unwrap_or_else(|error| panic!("M19e {name} seed artifact must verify: {error}"));
+        assert_eq!(
+            forged, bootstrap,
+            "M19e {name} must match bootstrap byte-for-byte"
+        );
+        assert_eq!(forged[4], 12, "M19e {name} must emit AETH v12");
+        assert_eq!(
+            u32::from_le_bytes(forged[5..9].try_into().expect("AETH v12 capacity header")),
+            expected_capacity,
+            "M19e {name} must encode its exact concurrent frame plan"
+        );
+        assert_eq!(
+            run_bytecode(&forged)
+                .unwrap_or_else(|error| panic!("M19e {name} seed artifact must run: {error}"))
+                .exit_code,
+            expected_exit,
+            "M19e {name} must preserve its documented runtime outcome"
+        );
+    }
 }
 
 #[test]
@@ -415,7 +506,7 @@ fn seed_profile_compiler_forges_bounded_m8_host_pilot_byte_identically() {
         "the M8 host-pilot fixture must match bootstrap byte-for-byte"
     );
     assert!(
-        forged.iter().any(|byte| *byte == 65),
+        forged.contains(&65),
         "seed host-pilot forge must emit HOST_CALL opcode 65"
     );
     assert_eq!(
@@ -445,10 +536,7 @@ fn seed_profile_compiler_forges_m14_host_io_declarations_byte_identically() {
             "M14 {name} seed-hosted compile must match bootstrap byte-for-byte"
         );
         verify_bytecode(&seeded).expect("M14 seed-produced artifact must verify");
-        assert!(
-            seeded.iter().any(|byte| *byte == 65),
-            "M14 {name} must emit HOST_CALL"
-        );
+        assert!(seeded.contains(&65), "M14 {name} must emit HOST_CALL");
         let denied = run_bytecode(&seeded).expect_err("M14 I/O without grants fails closed");
         assert!(
             denied.message.contains("AE-HOST-003"),
@@ -478,7 +566,7 @@ fn seed_profile_compiler_forges_m21_foreign_pilot_byte_identically() {
         );
         verify_bytecode(&seeded).expect("M21 seed-produced artifact must verify");
         assert!(
-            seeded.iter().any(|byte| *byte == 65),
+            seeded.contains(&65),
             "M21 {name} must emit HOST_CALL opcode 65"
         );
         let denied = run_bytecode(&seeded).expect_err("M21 foreign without grant fails closed");
@@ -570,12 +658,20 @@ fn seed_hosted_compile_matches_bootstrap_for_shipped_examples() {
         ),
         ("comptime", M5_COMPTIME_SOURCE, Some(150)),
         ("comptime-chain", M15_COMPTIME_CHAIN_SOURCE, Some(288)),
+        ("comptime-calls", M23_COMPTIME_CALL_SOURCE, Some(512)),
         ("resource-handle", M16_RESOURCE_HANDLE_SOURCE, Some(7)),
         ("layout-table", M6_LAYOUT_SOURCE, Some(10)),
         ("nursery-total", M7_NURSERY_TOTAL_SOURCE, Some(7)),
         ("nursery-cancel", M7_NURSERY_CANCEL_SOURCE, Some(9)),
         ("nursery-resource", M19B_NURSERY_RESOURCE_SOURCE, Some(7)),
         ("spawn-arena", M19D_SPAWN_ARENA_SOURCE, Some(7)),
+        ("active-cancel", M19E_ACTIVE_CANCEL_SOURCE, Some(9)),
+        (
+            "task-frame-capacity",
+            M19E_TASK_FRAME_CAPACITY_SOURCE,
+            Some(3),
+        ),
+        ("task-loop", M19E_TASK_LOOP_SOURCE, Some(3)),
         ("release-raise", M19A_RELEASE_RAISE_SOURCE, Some(9)),
         ("host-pilot", M8_HOST_PILOT_SOURCE, Some(48)),
     ];

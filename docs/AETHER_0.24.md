@@ -1,6 +1,6 @@
 # Aether 0.24 Toolchain Contract (M20 stdlib layer 0 + M22 cross-package import)
 
-**Status:** Current package contract — language **0.11** / AETH **v11**; package **0.24**  
+**Status:** Historical package contract — language **0.11** / AETH **v11**; package **0.24**; current package contract is [AETHER_0.35.md](AETHER_0.35.md)
 **Also documented:** M19/M21 design-only (deeper T-RX; FFI blocked)
 
 ## M20 — Stdlib layer 0

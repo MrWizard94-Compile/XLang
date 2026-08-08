@@ -3,12 +3,12 @@
 ```
 Document: Full Project Progress Report
 Status: Honest institutional record (Level 4 product docs)
-Authority: AGENTS Constitution (pack) + project AGENTS.md
-Date: 2026-08-05
+Authority: AGENTS Constitution + current MANIFEST / claims / ADR set
+Date: 2026-08-08
 Branch: codex/xlang-local-first-studio
-HEAD: c23f6ddfaa4925c33642ea78af54ffb8583dc392
-Package: aether-core / aether-cli 0.32.0
-Language surface: 0.11 keyword forms / AETH v11 (+ toolchain semantics through M19d/M21)
+HEAD base: 0adb49f0a3924bed1e7d32bdf62e89825841875e (M23 design/ADR); M23, RTP-001, and PKG-001 are uncommitted working-tree deliveries
+Package: aether-core / aether-cli 0.36.0 (working tree)
+Language surface: 0.11 keyword forms plus bounded M19e task syntax / AETH v11 and v12
 Related Rule IDs: CONST-GATE-001, CONST-DONE-001, CONST-COMPLETE-001,
   CONST-DEP-001, DOC-SYNC-001, ENG-WARN-001, TEST-BEHAVIOR-001,
   SEC-INPUT-001, REV-PACK-001, REL-PACKAGE-001, SOP-PHASE-001, SOP-GATE-001
@@ -25,19 +25,30 @@ emits verified **AETH** bytecode, and runs that bytecode in the Aether VM. It
 does **not** transpile to Rust, C, JavaScript, LLVM, or any other language
 (CLM-010 / project law).
 
-As of **2026-08-05**, package **0.32.0**:
+As of **2026-08-08**, package **0.36.0**:
 
 1. **Language pilot M0–M8** is product: surface **0.11** forms / AETH **v11**
    with seed-hosted default compile and dual-compare for the documented corpus.  
 2. **Tooling portfolio M9–M18, M20–M22, M17b–d** is product: multi-unit
    projects, modules, structural edits, bounded LSP, grant host I/O, tests,
    workspaces, stdlib layer 1, cross-package import.  
-3. **T-RX depth M19a–d** is product within honest bounds: `release`, nursery×
-   resource Policy A+, multi-weave arenas, **cooperative** Policy B only.  
+3. **T-RX depth M19a–e** is product within honest bounds: `release`, nursery×
+    resource Policy A+, multi-weave arenas, v11 **cooperative** Policy B, and
+    v12 deterministic active-frame cancellation at explicit task checkpoints.
 4. **M21 foreign ABI pilot** is product after human residual-risk acceptance:
    Whole-only `foreign weave`, `--grant-lib`, seed≡bootstrap for foreign corpus.  
-5. **TP-1 integrity** and **TP-2 local technical preview** packaging paths exist
-   under AGENTS Constitution.
+5. **M23 pure comptime calls** are product within their bounded total-guest
+   Whole-only contract; bootstrap materializes accepted calls before seed emission
+   and the result dual-compares to bootstrap.
+6. **RTP-001 runtime Text** caches ASCII provenance privately and restores a
+   practical full debug self-host gate; its measured result is local evidence,
+   not a general VM performance claim.
+7. **PKG-001 offline workspace locks** provide optional local package-identity
+   pins, explicit project/workspace lock refresh, project-manifest confinement,
+   and locked-build integrity preflight; no registry or network authority exists.
+8. **TP-1 integrity** and the **TP-2 local technical preview** are verified
+   under AGENTS Constitution: the version-derived 0.36 package has exact
+   checksums, consumer behavior checks, and an unlisted-file rejection probe.
 
 **This is not a 1.0 general systems language.** It is a high-trust, bounded
 systems pilot with strong verification and capability discipline. Claims below
@@ -45,16 +56,20 @@ are evidence-linked and deliberately non-marketing (CLM-011 prohibited).
 
 ### 1.1 One-page truth table
 
-| Layer | Truth (0.32) |
+| Layer | Truth (0.36) |
 | --- | --- |
 | Seed-hosted compile + verify + run | **Product-usable** |
 | Dual-compare seed≡bootstrap | **Proven** for documented corpus (not full diagnostic parity) |
-| AI structural authoring (ast/edit/diagnostic **v7**) | **Product-usable** (bounded) |
-| Offline project / workspace / test / LSP | **Product-usable** (bounded, offline) |
+| AI structural authoring (ast/edit/diagnostic **v8**) | **Product-usable** (bounded) |
+| Offline project / workspace / test / LSP | **Product-usable** (bounded, offline; locked workspace integrity is opt-in) |
 | Grant host I/O (M14) | **Product-usable** (deny-by-default) |
 | Foreign weave pilot (M21) | **Product-usable** (Whole-only; not sandboxed) |
 | Multi-weave arenas / resourceful total spawn (M19d) | **Product-usable** |
+| Pure comptime helper calls (M23) | **Product-usable, bounded** (no control/recursion/host/effect/resource) |
+| Runtime Text scalar operations (RTP-001) | **Product-usable, scoped performance evidence** (ASCII fast path; Unicode scalar fallback) |
+| Offline workspace package identity (PKG-001) | **Product-usable, bounded** (local name/path/project identity and nested unit locks; no registry) |
 | Cooperative Policy B (M19c) | **Bounded claim only** (no mid-frame cancel) |
+| M19e active-frame cancellation | **Product-usable, bounded** — v12 task/checkpoint frames only; no handles, timeouts, preemption, or external effects |
 | Network registry / ambient I/O / native backend | **Blocked** — F-NATIVE/F-REGISTRY decision packages ready; need human §3 authorize |
 | “Better than all languages” | **Prohibited claim** |
 
@@ -68,7 +83,11 @@ M0–M9 product and M10 **design only**. Since then the project shipped:
 | 0.13–0.18 | M10 multi-unit projects; M11 modules (+ seed dual-compare); M12 fine edits; M13a/b LSP |
 | 0.19–0.24 | M14 grant I/O; M15 comptime chain; M16 resource+handle; M17 test; M18 workspace; M20/M22 stdlib + xpkg |
 | 0.25–0.30 | M19a `release`; M19b Policy A; M20b stdlib L1; M17b–d project test / grants / reports |
-| 0.31–0.32 | M21 foreign pilot (+ seed dual-compare); M19d multi-weave arenas + cooperative Policy B |
+| 0.31–0.33 | M21 foreign pilot (+ seed dual-compare); M19d multi-weave arenas + cooperative Policy B; M23 pure comptime calls |
+| 0.34 | RTP-001 cached ASCII VM Text fast path; no language or AETH surface change |
+| 0.35 | PKG-001 local workspace locks; no language or AETH surface change |
+| 0.36 | M19e bounded active-frame cancellation: task/checkpoint source, AETH v12, seed/authoring parity |
+| 0.35 | PKG-001 optional offline workspace locks; no language, AETH, VM, capability, registry, or network change |
 
 ---
 
@@ -81,7 +100,7 @@ M0–M9 product and M10 **design only**. Since then the project shipped:
 | 1–3 | AGENTS Constitution pack | Universal quality + process law |
 | 2 | Pack `SOP.md` | Research → design → implement → audit → harden → deliver |
 | 1 | Pack Definition of Done | Machine-checkable Done |
-| 4 | Repository `AGENTS.md` | Aether mission, invariants, stack pins |
+| 4 | Current manifest / claims / version contract | Aether mission, invariants, stack pins |
 | 4 | `MANIFEST.md` | Executable product contract |
 | 4 | `docs/CORE_CLAIMS.md` | Claim register (Proven / Direction / Hypothesis / Prohibited) |
 | 4 | ADRs + validation matrices | Per-track decisions and evidence |
@@ -97,7 +116,8 @@ M0–M9 product and M10 **design only**. Since then the project shipped:
    seed diagnostic parity claim.  
 5. **CLI authority boundary** — local files, explicit outputs, no model/network
    as compiler authority.  
-6. **`legacy/` is reference only** — never a production build input.  
+6. **Archived legacy material is not a production build input** — the current
+   checkout intentionally contains no active legacy implementation tree.
 7. **Zero-warning gate** — Clippy `all = "deny"`; `unsafe_code = "deny"` with
    scoped `allow` only for authorized M21 FFI load path.
 
@@ -121,17 +141,17 @@ native/LLVM, and network registry require new ADRs and/or law forks.
 | Product name | Aether |
 | Repository | XLang workspace (`C:\WPAI\Software\XLang` or equivalent) |
 | Branch | `codex/xlang-local-first-studio` |
-| HEAD (this report) | `c23f6dd` — M19d multi-weave arenas + cooperative Policy B (0.32) |
-| Core crate | `aether-core` @ `crates/xlang-core` **0.32.0** |
-| CLI binary | `aether` via `apps/xlang-cli` / package `aether-cli` **0.32.0** |
-| Pilot FFI lib | `aether-ffi-pilot` **0.32.0** (cdylib; not a product dependency of guest code) |
-| Language surface | **0.11** keyword forms (records, arena/buffer, effects, comptime, shapes, nurseries, host/foreign weaves, `release`) |
-| Artifact | AETH **v11** default emit; **v4–v10** verified compatibility inputs |
-| Product compile | Seed-hosted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`) |
-| Bootstrap | `compile --bootstrap`, `check` AST, seed rebuild |
+| Delivery state | M23 + RTP-001 + PKG-001 + M19e package 0.36 working tree; commit intentionally not assumed by this report |
+| Core crate | `aether-core` @ `crates/xlang-core` **0.36.0** |
+| CLI binary | `aether` via `apps/xlang-cli` / package `aether-cli` **0.36.0** |
+| Pilot FFI lib | `aether-ffi-pilot` **0.36.0** (cdylib; not a product dependency of guest code) |
+| Language surface | **0.11** keyword forms plus bounded `task weave` / `checkpoint` (records, arena/buffer, effects, comptime, shapes, nurseries, host/foreign weaves, `release`) |
+| Artifact | AETH **v11** for non-task source; AETH **v12** for valid task source; **v4–v11** verified compatibility inputs |
+| Product compile | Seed-emitted (`compile_with_seed` / embedded `SEED_COMPILER_ARTIFACT`); M23 is bootstrap-materialized before forge |
+| Bootstrap | `compile --bootstrap`, `check` AST, seed rebuild, M23 validation/materialization |
 | Seed sources | `seed/aether_seed.ae` (~2637 lines) + `seed/aether_seed.aeth` (~31 229 bytes) |
 | Rust edition / MSRV | edition 2021, `rust-version = "1.88"` |
-| Authoring protocols | `aether.ast/v7`, `aether.edit/v7`, `aether.diagnostic/v7` |
+| Authoring protocols | `aether.ast/v8`, `aether.edit/v8`, `aether.diagnostic/v8` |
 
 ### 3.1 Runtime / host surface (honest)
 
@@ -174,7 +194,7 @@ Seed claims: [SEED_PROFILE.md](SEED_PROFILE.md).
 
 ---
 
-## 5. Milestone ledger (status at 0.32)
+## 5. Milestone ledger (status at 0.35)
 
 Statuses are **product-honest**: Implemented means matrix + delivery evidence
 exist; Design-only means no product claim.
@@ -208,9 +228,13 @@ exist; Design-only means no product claim.
 | M19b | Nursery×resource Policy A | 0.26 | **Implemented** + seed dual-compare |
 | M19c | Policy B cooperative | 0.32 | **Bounded product** (ADR-036) |
 | M19d | Multi-weave arenas / Policy A+ | 0.32 | **Implemented** + seed dual-compare |
+| M19e | Active-frame cancel + destroy | 0.36 / v12 | **Implemented, bounded** ([ADR-042](ADR-042-m19e-active-frame-cancel.md)); task/checkpoint source, private lanes, deterministic teardown, seed/authoring parity, and hostile-artifact evidence [recorded](DELIVERY_REPORT-2026-08-08-M19E-T-RX-IMPLEMENTATION.md) |
 | M20 / M20b | Stdlib layer 0/1 | 0.24 / 0.27 | **Implemented** |
 | M21 | Foreign ABI pilot | 0.31 | **Implemented** + seed dual-compare |
 | M22 | Cross-package import | 0.24 | **Implemented** |
+| M23 | Pure comptime weave calls | 0.33 | **Implemented** + bootstrap-materialized seed-emission dual-compare |
+| RTP-001 | Runtime Text ASCII fast path | 0.34 | **Implemented**; no language or AETH surface change |
+| PKG-001 | Offline workspace locks | 0.35 | **Implemented**; local package identity pins and locked-build preflight; no registry |
 
 ### 5.1 Package timeline (toolchain)
 
@@ -223,8 +247,11 @@ exist; Design-only means no product claim.
 | **0.25–0.30** | `release`, nursery×resource, stdlib L1, project test/grants/reports |
 | **0.31** | Foreign weave pilot + human residual-risk accept + seed dual-compare |
 | **0.32** | Multi-weave arenas, Policy A+, cooperative Policy B |
+| **0.33** | M23 pure comptime calls; bounded bootstrap materialization before seed emission |
+| **0.34** | RTP-001 private cached-ASCII VM Text fast path; local exact self-host evidence |
+| **0.35** | PKG-001 optional local workspace locks, explicit lock refresh, and locked-build preflight |
 
-Exact contract text: [MANIFEST.md](../MANIFEST.md), [AETHER_0.32.md](AETHER_0.32.md).
+Exact contract text: [MANIFEST.md](../MANIFEST.md), [AETHER_0.35.md](AETHER_0.35.md).
 
 ---
 
@@ -264,7 +291,7 @@ execution.
 - Transpile to C/Rust/JS/LLVM  
 - Ambient guest file/process/network/shell  
 - Network package registry  
-- Mid-frame cancel of started spawns  
+- General mid-frame cancellation beyond the M19e verifier-checked task/checkpoint subset
 - Free-on-raise of live parent owners  
 - Full seed diagnostic parity with bootstrap  
 - Memory-safety claims for foreign libraries  
@@ -280,8 +307,8 @@ execution.
 | Command | Role |
 | --- | --- |
 | `aether check` | Bootstrap AST / diagnostics |
-| `aether structure` | `aether.ast/v7` JSON |
-| `aether apply-edit` | `aether.edit/v7` + seed-before-write |
+| `aether structure` | `aether.ast/v8` JSON |
+| `aether apply-edit` | `aether.edit/v8` + seed-before-write |
 | `aether format` | Canonical source |
 | `aether compile` | Default **seed**; optional `--bootstrap` |
 | `aether forge` | Run compiler artifact on source |
@@ -330,13 +357,16 @@ No host I/O in stdlib; no registry distribution.
 - **Byte identity** seed≡bootstrap for the documented corpus, including:  
   shipped seed-path examples, M2–M8 fixtures, M14 host-io *declarations*,
   M15 chain, M16 resource-handle, M19a release, M19b nursery-resource,
-  M19d spawn-arena, M21 foreign-pilot/sum, multi-module elaboration path.  
+  M19d spawn-arena, M21 foreign-pilot/sum, M23 comptime-calls after bootstrap
+  materialization, and the multi-module elaboration path.
 
 ### 8.2 Not proven / not claimed
 
 - Full diagnostic parity for invalid input (bootstrap remains diagnostic
   authority).  
 - Seed native multi-file parse (modules are host-elaborated then seed-emitted).  
+- Direct raw-M23 seed evaluation (0.33 deliberately uses the documented
+  bootstrap-materialization bridge).
 - Dual-compare for undocumenteds / future syntax without a new matrix.  
 
 Evidence: `crates/xlang-core/tests/seed_self_host.rs`, [SEED_PROFILE.md](SEED_PROFILE.md).
@@ -363,8 +393,8 @@ Full table: [CORE_CLAIMS.md](CORE_CLAIMS.md).
 
 | Status class | Representative claims |
 | --- | --- |
-| **Proven now** | CLM-001–007, 012–018, 020–033 (bounded scopes as stated) |
-| **Accepted direction / process** | CLM-019 portfolio process; broader FFI ownership (CLM-009 direction) |
+| **Proven now** | CLM-001–007, 012–018, 020–033, 036–039 (bounded scopes as stated) |
+| **Accepted direction / process** | CLM-009 broader FFI ownership, CLM-019 portfolio process, and CLM-034/035 law forks |
 | **Research hypothesis** | CLM-008 further layout/generics |
 | **Prohibited** | CLM-010 transpile; CLM-011 “better than all languages” |
 
@@ -376,11 +406,11 @@ Full table: [CORE_CLAIMS.md](CORE_CLAIMS.md).
 
 | Kind | Count (repo `docs/`) |
 | --- | --- |
-| ADRs | 36 (`ADR-001` … `ADR-036`) |
-| Design docs | ~31 |
-| Validation matrices | ~28 |
-| Delivery reports | ~32 |
-| Language/toolchain contracts | `AETHER_0.1`…`0.32` (+ modules/authoring) |
+| ADRs | 42 (`ADR-001` … `ADR-042`) |
+| Design docs | ~36 |
+| Validation matrices | ~32 |
+| Delivery reports | ~38 |
+| Language/toolchain contracts | `AETHER_0.1`…`0.35` (+ modules/authoring) |
 
 ### 11.2 Examples (`examples/*.ae`)
 
@@ -405,12 +435,13 @@ Representative fixtures (28 top-level programs), including:
 ```powershell
 pwsh -File .\tools\aether-gate.ps1 -Mode quick   # day-to-day
 pwsh -File .\tools\aether-gate.ps1 -Mode full    # includes seed forge identity
-cargo clippy --workspace -- -D warnings
-cargo test -p aether-core
-cargo test -p aether-cli
+pwsh -File .\tools\aether-gate.ps1 -Mode release # full proof + local package
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
 
 TP packaging helpers: `tools/package-preview.ps1`, `tools/verify-preview.ps1`.
+The channel remains local-only and `UNLICENSED`; no public release is implied.
 
 As of HEAD `c23f6dd`, **quick gate PASS** was recorded for the M19d delivery
 cycle (fmt, clippy, dual-compare examples including `spawn-arena.ae`).
@@ -450,7 +481,7 @@ Against [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md) pillars
 | Resource model | **3** | Bounded arenas; multi-weave; no reclaim mid-run |
 | Concurrency | **2–3** | Cooperative nurseries only |
 | Effects | **2–3** | Single `Error[Whole]` |
-| Comptime | **2** | Literal + name chain; no calls/control |
+| Comptime | **2–3** | Literal + name chain + restricted pure call; no control/recursion |
 | Host I/O | **3** | Grant-mediated; no ambient |
 | FFI | **2** | Whole-only pilot; residual risk accepted |
 | Tooling (test/LSP/edit) | **3** | Offline professional subset |
@@ -471,8 +502,9 @@ and law-gated.
 
 | Item | Why blocked |
 | --- | --- |
-| Mid-frame cancel destroy | Needs cancel model beyond cooperative M7 |
+| Broader task cancellation | M19e implements only verifier-checked parked task-frame cancellation. Handles, timeouts, manual cancellation, nested task nurseries, parallelism, and external-effect cancellation require a new ADR. |
 | Expanded FFI (Text/Bytes, headers, callbacks) | New threat + ADR |
+| Broader runtime / Unicode performance evidence | RTP-001 proves one local ASCII-heavy self-host workload only; other workloads and Unicode need declared measurements. |
 | Native / LLVM backend | Law fork F-NATIVE — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) |
 | Network registry | Law fork F-REGISTRY — [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md) |
 | Ambient guest capabilities | Rejected under current philosophy |
@@ -482,23 +514,26 @@ and law-gated.
 
 Pick **one track** at a time (ADR-014):
 
-1. **Human law-fork authorize** — post F-NATIVE and/or F-REGISTRY §3 phrase, then
+1. **Further offline package / stdlib polish** — only through a new scoped
+   design and matrix; PKG-001 is complete and does not authorize a registry.
+2. **Deeper T-CT** — direct seed evaluation or comptime control/recursion only
+   under a new fuel/DoS ADR.
+3. **Human law-fork authorize** — post F-NATIVE and/or F-REGISTRY §3 phrase, then
    vertical ADR (not free-form implement).  
-2. **Deeper T-CT** — comptime calls/control (new ADR; fuel/DoS story).  
-3. **Offline package polish** — richer workspace/stdlib without registry.  
-4. **Mid-frame cancel** — only after full ownership + destroy design.  
-5. **Authoring/LSP depth** — still offline; seed remains compile authority.
+4. **Authoring/LSP depth** — still offline; seed remains compile authority.
 
 ### 14.3 DOC-SYNC debt
 
-Primary product pins were refreshed in the 2026-08-05 DOC-SYNC honesty pass
-(NORTH_STAR, maturity baseline scorecard, MANIFEST M2 arena wording, Agents
-portfolio row, ADR-032 supersession note). **Product truth** remains:
+Primary product pins were refreshed in the 2026-08-05 DOC-SYNC honesty pass and
+again for M23, RTP-001, PKG-001, and M19e on 2026-08-08. M19e's implementation
+delivery updates the parser, verifier, VM, seed, authoring, compatibility, and
+evidence boundaries together.
+**Product truth** remains:
 
 1. `MANIFEST.md`  
-2. `AGENTS.md` stack pins  
-3. `CORE_CLAIMS.md`  
-4. Latest `AETHER_0.32.md` + relevant ADR/matrix  
+2. `CORE_CLAIMS.md`
+3. Latest `AETHER_0.36.md` + relevant ADR/matrix
+4. `SEED_PROFILE.md` for the exact product-emission boundary
 5. This progress report  
 
 Any remaining historical AETHER_0.x “current package” footers on older contracts
@@ -513,12 +548,21 @@ From repository root:
 ```powershell
 # Version
 cargo run -p aether-cli --release -- version
-# Expect: Aether 0.32.0
+# Expect: Aether 0.36.0
 
-# Seed dual-compare sample (M19d)
-cargo run -p aether-cli --release -- compile examples/spawn-arena.ae --output target/sa.seed.aeth
-cargo run -p aether-cli --release -- compile examples/spawn-arena.ae --output target/sa.boot.aeth --bootstrap
-# Byte-compare artifacts; run seed path → exit 7
+# PKG-001: preview then verify the checked-in locked workspace
+cargo run -p aether-cli --release -- workspace lock examples/workspace/aether.workspace.json
+cargo run -p aether-cli --release -- workspace verify examples/workspace/aether.workspace.json
+cargo run -p aether-cli --release -- workspace build examples/workspace/aether.workspace.json --package app --output target/workspace-app.aeth
+# Run target/workspace-app.aeth → exit 42
+
+# Seed-emitted dual-compare sample (M23)
+cargo run -p aether-cli --release -- compile examples/comptime-calls.ae --output target/m23.seed.aeth
+cargo run -p aether-cli --release -- compile examples/comptime-calls.ae --output target/m23.boot.aeth --bootstrap
+# Byte-compare artifacts; run seed-emitted path → exit 512
+
+# Scoped local release self-host measurement (build time excluded)
+pwsh -NoProfile -File .\tools\measure-seed-self-host.ps1
 
 # Foreign pilot (M21) — build pilot lib first
 cargo build -p aether-ffi-pilot --release
@@ -536,7 +580,7 @@ pwsh -File .\tools\aether-gate.ps1 -Mode quick
 
 | Rule ID | Status | Notes |
 | --- | --- | --- |
-| `DOC-SYNC-001` | Pass for report scope | Report matches MANIFEST 0.32 / HEAD pin; historical soft spots called out |
+| `DOC-SYNC-001` | Pass for report scope | Report matches MANIFEST 0.36 / M19e + M23 + RTP-001 + PKG-001 delivery working tree; historical soft spots called out |
 | `CONST-CONTRACT-001` | Pass | Scope = institutional progress record, not a fake 1.0 |
 | `RND-INVAR-001` | Pass | Dual-compare / residual-risk honesty preserved |
 | `SEC-INPUT-001` | Pass | Grant/foreign residual risk documented |
@@ -552,16 +596,21 @@ pwsh -File .\tools\aether-gate.ps1 -Mode quick
 | Path | `docs/PROGRESS_REPORT-FULL-PROJECT.md` |
 | Audience | Human directors, auditors, agents under Constitution |
 | Update trigger | Package bump, milestone Done, law fork, or HEAD pin for audits |
-| Related | `MANIFEST.md`, `AGENTS.md`, `CORE_CLAIMS.md`, `ROADMAP.md`, `ROADMAP-MAINSTREAM-MATURITY.md`, delivery reports under `docs/` |
+| Related | `MANIFEST.md`, `CORE_CLAIMS.md`, `ROADMAP.md`, `ROADMAP-MAINSTREAM-MATURITY.md`, delivery reports under `docs/` |
 
 ---
 
 ## 18. Bottom line
 
-Aether **0.32** is a **complete offline toolchain pilot** for a small, verified,
-capability-disciplined language: seed-hosted product compile, rich offline
+Aether **0.36** is a **complete offline toolchain pilot** for a small, verified,
+capability-disciplined language: seed-emitted product compile, rich offline
 tooling, bounded resources and effects, cooperative nurseries with multi-weave
-arenas, grant I/O, and a human-authorized Whole-only foreign pilot.
+arenas, deterministic checkpointed active-frame cancellation, grant I/O, a
+human-authorized Whole-only foreign pilot, and restricted
+pure compile-time helpers. Its current VM includes a measured local ASCII Text
+fast path without changing source or artifact semantics. PKG-001 adds optional
+locked local workspaces that bind nested project identity and unit locks before
+verification or locked artifact output.
 
 It is **ready for local technical-preview use** within those contracts.
 
@@ -571,4 +620,4 @@ further design, evidence, and in some cases explicit human law changes.
 
 ---
 
-*End of Full Project Progress Report (2026-08-05 / package 0.32.0).*
+*End of Full Project Progress Report (updated 2026-08-08 / package 0.36.0).*

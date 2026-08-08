@@ -1,6 +1,6 @@
 # Aether 0.30 Toolchain Contract (M17d structured test reports)
 
-**Status:** Historical package 0.30 — language **0.11** / AETH **v11** + optional test reports; current package is [AETHER_0.31.md](AETHER_0.31.md)  
+**Status:** Historical package 0.30 — language **0.11** / AETH **v11** + optional test reports; current package is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** ADR-033, M17  
 
 ## Surface

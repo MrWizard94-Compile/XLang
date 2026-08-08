@@ -1,0 +1,23 @@
+world task_frame_capacity
+
+task weave left [] -> Whole:
+  bind memory <- arena 32
+  checkpoint
+  release memory
+  yield 1
+
+task weave right [] -> Whole:
+  bind memory <- arena 48
+  checkpoint
+  release memory
+  yield 2
+
+weave main [] -> Whole:
+  bind memory <- arena 16
+  bind mutable left_result <- 0
+  bind mutable right_result <- 0
+  together:
+    spawn call left into left_result
+    spawn call right into right_result
+  release memory
+  yield sum left_result right_result

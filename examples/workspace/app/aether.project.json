@@ -4,5 +4,13 @@
   "version": "0.1.0",
   "units": [
     { "path": "main.ae", "role": "main" }
-  ]
+  ],
+  "lock": {
+    "units": [
+      {
+        "path": "main.ae",
+        "sha256": "c365c3c1156b4865e6fe320542cb80b93651314dc8b2c4aede2ebc51fd857c01"
+      }
+    ]
+  }
 }

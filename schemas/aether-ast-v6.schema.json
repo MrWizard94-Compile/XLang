@@ -151,7 +151,6 @@
         "body": { "type": "array", "items": { "$ref": "#/$defs/statement" } }
       }
     },
-,
     "together": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "kind", "span", "spawns"],

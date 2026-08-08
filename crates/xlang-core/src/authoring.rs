@@ -21,11 +21,11 @@ use crate::{
 };
 
 /// The JSON schema identifier emitted for a validated semantic document.
-pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v7";
+pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v8";
 /// The JSON protocol identifier accepted for a structural edit request.
-pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v7";
+pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v8";
 /// The JSON schema identifier used for machine-readable diagnostic envelopes.
-pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v7";
+pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v8";
 
 const MAX_STRUCTURAL_EDIT_BYTES: usize = 4_000_000;
 const MAX_STRUCTURAL_EDIT_OPERATIONS: usize = 32;
@@ -76,14 +76,14 @@ impl From<CompilerError> for StructuralEditError {
     }
 }
 
-/// Return deterministic, pretty-printed `aether.ast/v7` JSON for valid source.
+/// Return deterministic, pretty-printed `aether.ast/v8` JSON for valid source.
 /// Source spans always refer to the returned document's canonical LF source.
 pub fn structural_document_json(source: &str) -> Result<String, CompilerError> {
     let (program, canonical_source) = canonicalize_source(source)?;
     serialize_document(&canonical_source, &program).map_err(serialization_error)
 }
 
-/// Serialize a stable `aether.diagnostic/v7` envelope for any compiler or
+/// Serialize a stable `aether.diagnostic/v8` envelope for any compiler or
 /// structural-authoring diagnostic.
 #[must_use]
 pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
@@ -96,7 +96,7 @@ pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
     .to_string()
 }
 
-/// Apply one bounded `aether.edit/v7` document to matching source.
+/// Apply one bounded `aether.edit/v8` document to matching source.
 ///
 /// The function does not write files, invoke a model, execute code, or compile
 /// an artifact. It is intentionally pure apart from memory allocation. The CLI
@@ -303,6 +303,7 @@ fn weave_value(weave: &Weave, records: &[RecordDeclaration], shapes: &[ShapeDecl
         "parameters": parameters,
         "result": value_type_name(weave.result, records, shapes),
         "effect": effect_name(weave.effect),
+        "task": weave.task,
         "body": body,
     })
 }
@@ -336,6 +337,11 @@ fn statement_value(statement: &Statement, id: &str) -> Value {
             "kind": "Release",
             "span": span_value(*span),
             "name": name,
+        }),
+        Statement::Checkpoint { span } => json!({
+            "id": id,
+            "kind": "Checkpoint",
+            "span": span_value(*span),
         }),
         Statement::Speak { value, span } => json!({
             "id": id,
@@ -1596,7 +1602,15 @@ fn parse_weave_declaration(
 ) -> Result<Weave, StructuralEditError> {
     ensure_only_fields(
         object,
-        &["kind", "name", "parameters", "result", "effect", "body"],
+        &[
+            "kind",
+            "name",
+            "parameters",
+            "result",
+            "effect",
+            "task",
+            "body",
+        ],
         "Weave declaration",
     )?;
     require_kind(object, "Weave", "Weave declaration")?;
@@ -1619,6 +1633,7 @@ fn parse_weave_declaration(
             ));
         }
     };
+    let task = required_bool(object, "task", "Weave declaration")?;
     let body = parse_statements(
         required_array(object, "body", "Weave declaration")?,
         records,
@@ -1630,6 +1645,7 @@ fn parse_weave_declaration(
         parameters,
         result,
         effect,
+        task,
         body,
         span: synthetic_span(),
     })
@@ -1779,6 +1795,19 @@ fn parse_statement(
                     records,
                     node_budget,
                 )?,
+                span: synthetic_span(),
+            })
+        }
+        "Release" => {
+            ensure_only_fields(object, &["kind", "name"], "Release statement")?;
+            Ok(Statement::Release {
+                name: required_string(object, "name", "Release statement")?,
+                span: synthetic_span(),
+            })
+        }
+        "Checkpoint" => {
+            ensure_only_fields(object, &["kind"], "Checkpoint statement")?;
+            Ok(Statement::Checkpoint {
                 span: synthetic_span(),
             })
         }
@@ -2612,8 +2641,8 @@ mod tests {
     fn replacement_edit(base_source: &str, value: i64) -> String {
         format!(
             r#"{{
-  "protocol": "aether.edit/v7",
-  "schema": "aether.ast/v7",
+  "protocol": "aether.edit/v8",
+  "schema": "aether.ast/v8",
   "baseSource": {},
   "operations": [{{
     "op": "replace",
@@ -2624,6 +2653,7 @@ mod tests {
       "parameters": [],
       "result": "Whole",
       "effect": "Total",
+      "task": false,
       "body": [{{
         "kind": "Yield",
         "value": {{
@@ -2638,7 +2668,7 @@ mod tests {
         )
     }
 
-    fn shipped_examples() -> [(&'static str, &'static str); 15] {
+    fn shipped_examples() -> [(&'static str, &'static str); 19] {
         [
             ("welcome", include_str!("../../../examples/welcome.ae")),
             (
@@ -2681,10 +2711,23 @@ mod tests {
                 include_str!("../../../examples/arena-access-weave.ae"),
             ),
             (
+                "active-cancel",
+                include_str!("../../../examples/active-cancel.ae"),
+            ),
+            (
+                "task-frame-capacity",
+                include_str!("../../../examples/task-frame-capacity.ae"),
+            ),
+            ("task-loop", include_str!("../../../examples/task-loop.ae")),
+            (
                 "error-effect",
                 include_str!("../../../examples/error-effect.ae"),
             ),
             ("comptime", include_str!("../../../examples/comptime.ae")),
+            (
+                "comptime-calls",
+                include_str!("../../../examples/comptime-calls.ae"),
+            ),
         ]
     }
 
@@ -2753,6 +2796,85 @@ mod tests {
         let result = apply_structural_edit(canonical_source, &identity_edit_from_document(&parsed));
         assert_eq!(
             result.expect("M5 identity edit should apply").source,
+            canonical_source
+        );
+    }
+
+    #[test]
+    fn structural_document_round_trips_m19e_task_and_checkpoint_nodes() {
+        let source = "world author_task\n\ntask weave worker [] -> Whole:\n  checkpoint\n  yield 1\n\nweave main [] -> Whole:\n  bind mutable value <- 0\n  together:\n    spawn call worker into value\n  yield value\n";
+        let document = structural_document_json(source).expect("M19e source should describe");
+        let parsed: Value = serde_json::from_str(&document).expect("document must be JSON");
+        assert_eq!(parsed["schema"], STRUCTURAL_AST_SCHEMA_VERSION);
+        let worker = parsed["program"]["weaves"]
+            .as_array()
+            .expect("document must contain weaves")
+            .iter()
+            .find(|weave| weave["name"] == "worker")
+            .expect("document must retain the task weave");
+        assert_eq!(worker["task"], true);
+        assert_eq!(worker["body"][0]["kind"], "Checkpoint");
+
+        let canonical_source = parsed["canonicalSource"]
+            .as_str()
+            .expect("document must retain canonical source");
+        let identity =
+            apply_structural_edit(canonical_source, &identity_edit_from_document(&parsed))
+                .expect("M19e identity edit should preserve the closed task subset");
+        assert_eq!(identity.source, canonical_source);
+        let bytecode = compile_to_bytecode(&identity.source)
+            .expect("M19e authoring round trip must remain bootstrap-compilable");
+        assert_eq!(bytecode.bytecode[4], crate::ARTIFACT_VERSION_V12);
+
+        let mut invalid_worker = worker.clone();
+        remove_generated_provenance(&mut invalid_worker);
+        invalid_worker["body"] = json!([{
+            "kind": "Yield",
+            "value": {
+                "kind": "Atom",
+                "atom": { "kind": "Whole", "value": 1 },
+            },
+        }]);
+        let invalid_edit = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": canonical_source,
+            "operations": [{
+                "op": "replace",
+                "target": "weave:worker",
+                "declaration": invalid_worker,
+            }],
+        }))
+        .expect("invalid edit should serialize");
+        let error = apply_structural_edit(canonical_source, &invalid_edit)
+            .expect_err("structural edits must not bypass task checkpoint validation");
+        assert_eq!(error.diagnostic().code, "AE-TASK-004");
+    }
+
+    #[test]
+    fn structural_document_round_trips_m23_comptime_call_without_a_protocol_bump() {
+        let source = include_str!("../../../examples/comptime-calls.ae");
+        let document = structural_document_json(source).expect("M23 source should describe");
+        let parsed: Value = serde_json::from_str(&document).expect("document should be JSON");
+        assert_eq!(parsed["schema"], STRUCTURAL_AST_SCHEMA_VERSION);
+        let main = parsed["program"]["weaves"]
+            .as_array()
+            .expect("M23 document must contain weaves")
+            .iter()
+            .find(|weave| weave["name"] == "main")
+            .expect("M23 document must contain main");
+        let body = main["body"]
+            .as_array()
+            .expect("M23 main must contain a body");
+        assert_eq!(body[1]["stage"], "comptime");
+        assert_eq!(body[1]["value"]["kind"], "Call");
+        assert_eq!(body[1]["value"]["weave"], "double");
+        let canonical_source = parsed["canonicalSource"]
+            .as_str()
+            .expect("M23 document must include canonical source");
+        let result = apply_structural_edit(canonical_source, &identity_edit_from_document(&parsed));
+        assert_eq!(
+            result.expect("M23 identity edit should apply").source,
             canonical_source
         );
     }
@@ -2980,12 +3102,12 @@ mod tests {
 
     #[test]
     fn malformed_and_duplicate_edit_fields_are_rejected() {
-        let malformed = r#"{"protocol":"aether.edit/v7","schema":"aether.ast/v7","baseSource":"x","operations":[],"extra":true}"#;
+        let malformed = r#"{"protocol":"aether.edit/v8","schema":"aether.ast/v8","baseSource":"x","operations":[],"extra":true}"#;
         let malformed_error =
             apply_structural_edit(BASE_SOURCE, malformed).expect_err("unknown field must fail");
         assert_eq!(malformed_error.diagnostic().code, "AE-EDIT-001");
 
-        let duplicate = r#"{"protocol":"aether.edit/v7","protocol":"aether.edit/v7","schema":"aether.ast/v7","baseSource":"x","operations":[]}"#;
+        let duplicate = r#"{"protocol":"aether.edit/v8","protocol":"aether.edit/v8","schema":"aether.ast/v8","baseSource":"x","operations":[]}"#;
         let duplicate_error = apply_structural_edit(BASE_SOURCE, duplicate)
             .expect_err("duplicate JSON key must fail");
         assert_eq!(duplicate_error.diagnostic().code, "AE-EDIT-001");
@@ -2996,8 +3118,8 @@ mod tests {
     fn insert_and_delete_are_structural_top_level_operations() {
         let insert = format!(
             r#"{{
-  "protocol": "aether.edit/v7",
-  "schema": "aether.ast/v7",
+  "protocol": "aether.edit/v8",
+  "schema": "aether.ast/v8",
   "baseSource": {},
   "operations": [{{
     "op": "insertAfter",
@@ -3008,6 +3130,7 @@ mod tests {
       "parameters": [],
       "result": "Whole",
       "effect": "Total",
+      "task": false,
       "body": [{{"kind":"Yield","value":{{"kind":"Atom","atom":{{"kind":"Whole","value":1}}}}}}]
     }}
   }}]
@@ -3018,7 +3141,7 @@ mod tests {
         assert!(inserted.source.contains("weave helper [] -> Whole:"));
 
         let delete = format!(
-            r#"{{"protocol":"aether.edit/v7","schema":"aether.ast/v7","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
+            r#"{{"protocol":"aether.edit/v8","schema":"aether.ast/v8","baseSource":{},"operations":[{{"op":"delete","target":"weave:helper"}}]}}"#,
             serde_json::to_string(&inserted.source).expect("source string must serialize")
         );
         let deleted =
@@ -3030,7 +3153,7 @@ mod tests {
     fn inserting_a_record_reindexes_existing_record_type_references_by_name() {
         let source = include_str!("../../../examples/records.ae");
         let insert = format!(
-            r#"{{"protocol":"aether.edit/v7","schema":"aether.ast/v7","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
+            r#"{{"protocol":"aether.edit/v8","schema":"aether.ast/v8","baseSource":{},"operations":[{{"op":"insertAfter","target":"world","declaration":{{"kind":"Record","name":"badge","fields":[{{"kind":"RecordField","name":"rank","type":"Whole"}}]}}}}]}}"#,
             serde_json::to_string(&format_program(
                 &compile_source(source).expect("record source should parse")
             ))
@@ -3142,7 +3265,7 @@ mod tests {
         let envelope: Value = serde_json::from_str(&diagnostic_json(&diagnostic))
             .expect("diagnostic envelope must be JSON");
         let schema: Value = serde_json::from_str(include_str!(
-            "../../../schemas/aether-diagnostic-v7.schema.json"
+            "../../../schemas/aether-diagnostic-v8.schema.json"
         ))
         .expect("diagnostic schema must be JSON");
         assert_eq!(envelope["schema"], DIAGNOSTIC_SCHEMA_VERSION);
@@ -3150,10 +3273,45 @@ mod tests {
         assert_eq!(envelope["span"]["line"], 4);
         assert_eq!(
             schema["$id"],
-            "https://aether.local/schemas/aether-diagnostic-v7.schema.json"
+            "https://aether.local/schemas/aether-diagnostic-v8.schema.json"
         );
         assert!(schema["required"]
             .as_array()
             .is_some_and(|fields| fields.iter().any(|field| field == "span")));
+    }
+
+    #[test]
+    fn v8_authoring_schemas_describe_the_live_task_contract() {
+        let ast_schema: Value =
+            serde_json::from_str(include_str!("../../../schemas/aether-ast-v8.schema.json"))
+                .expect("v8 AST schema must be JSON");
+        let edit_schema: Value =
+            serde_json::from_str(include_str!("../../../schemas/aether-edit-v8.schema.json"))
+                .expect("v8 edit schema must be JSON");
+        let diagnostic_schema: Value = serde_json::from_str(include_str!(
+            "../../../schemas/aether-diagnostic-v8.schema.json"
+        ))
+        .expect("v8 diagnostic schema must be JSON");
+
+        assert_eq!(
+            ast_schema["properties"]["schema"]["const"],
+            STRUCTURAL_AST_SCHEMA_VERSION
+        );
+        assert_eq!(
+            ast_schema["$defs"]["weave"]["properties"]["task"]["type"],
+            "boolean"
+        );
+        assert_eq!(
+            ast_schema["$defs"]["checkpoint"]["properties"]["kind"]["const"],
+            "Checkpoint"
+        );
+        assert_eq!(
+            edit_schema["properties"]["protocol"]["const"],
+            STRUCTURAL_EDIT_PROTOCOL_VERSION
+        );
+        assert_eq!(
+            diagnostic_schema["properties"]["schema"]["const"],
+            DIAGNOSTIC_SCHEMA_VERSION
+        );
     }
 }

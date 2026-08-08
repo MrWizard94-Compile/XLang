@@ -1,9 +1,9 @@
 # Aether North Star
 
 **Status:** Human-approved product direction; not a language-version contract  
-**Date:** 2026-08-05 (pins refreshed for package 0.32)  
+**Date:** 2026-08-08 (pins refreshed for package 0.36; M19e bounded implementation is product)
 **Current executable contract:** [MANIFEST.md](../MANIFEST.md) and
-[AETHER_0.32.md](AETHER_0.32.md) (language keyword surface remains **0.11** forms)
+[AETHER_0.36.md](AETHER_0.36.md) (language keyword surface remains **0.11** forms plus bounded M19e task syntax)
 
 ## Vision
 
@@ -21,7 +21,7 @@ execution, and capability-constrained integration.
 
 | Level | What it means | Authoritative documents |
 | --- | --- | --- |
-| **Implemented Aether (package 0.32)** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.32.md](AETHER_0.32.md), [AETHER_0.11.md](AETHER_0.11.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md), [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md) |
+| **Implemented Aether (package 0.36)** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.36.md](AETHER_0.36.md), [AETHER_0.11.md](AETHER_0.11.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md), [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md) |
 | **North-star direction** | A planned design hypothesis and ordered research program. It is not an implementation claim or syntax promise. | This document, [CORE_CLAIMS.md](CORE_CLAIMS.md), [ROADMAP.md](ROADMAP.md), [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md), and [research/](research/) |
 
 No future-facing paragraph in this document changes the executable contract. A
@@ -79,24 +79,34 @@ flowchart LR
     Semantic -. future, separately approved .-> Interop["Narrow foreign/host interfaces"]
 ~~~
 
-The **implemented product (package 0.32)** covers a much larger portion of the
+The **implemented product (package 0.36)** covers a much larger portion of the
 stack than early pilots, while remaining deliberately bounded:
 
 - Seed-hosted product compile + dual-compare for the documented corpus  
-- AETH **v11** emit; verified **v4–v10** compatibility inputs  
+- AETH **v11** emit for non-task source and **v12** task-frame emit; verified
+  **v4–v11** compatibility inputs
 - Bounded resources (multi-weave total arenas under M19d), dual-layout tables,
   cooperative nurseries, `Error[Whole]`, literal + chained comptime  
+- M19e deterministic active-frame cancellation at explicit verifier-checked task
+  checkpoints; private lanes, reverse-slot teardown, and no external effects
 - Pure host pilot, grant-backed host I/O (M14), Whole-only foreign pilot (M21)  
-- Authoring `aether.ast/edit/diagnostic` **v7**; offline project/workspace/test/LSP  
+- Authoring `aether.ast/edit/diagnostic` **v8**; offline project/workspace/test/LSP
 - Stdlib layer 1; offline cross-package import  
 
-See [AETHER_0.32.md](AETHER_0.32.md), [AETHER_AUTHORING_PROTOCOL_v7.md](AETHER_AUTHORING_PROTOCOL_v7.md),
+See [AETHER_0.36.md](AETHER_0.36.md), [AETHER_AUTHORING_PROTOCOL_v8.md](AETHER_AUTHORING_PROTOCOL_v8.md),
 and [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md).
 
 It does **not** yet provide general typed effects/resumptions, OS-thread
 parallelism, generic type parameters, automatic AoS→SoA rewriting, C-header
 ingestion, a native backend, first-class resource outcomes, Buffer weave
-results, mid-frame cancel destroy, network registries, or ambient guest I/O.
+results, general mid-frame cancellation beyond the M19e closed subset, network
+registries, or ambient guest I/O.
+
+[M19e's active-frame cancellation design](DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md)
+and [ADR-042](ADR-042-m19e-active-frame-cancel.md) specify the implemented v12
+exception: an explicit task may park at a verifier-checked checkpoint and be
+cancelled by an eligible later sibling failure. It does not add general task
+handles, timeouts, manual cancellation, parallelism, or external-effect rollback.
 
 ## Explicit non-goals and constraints
 

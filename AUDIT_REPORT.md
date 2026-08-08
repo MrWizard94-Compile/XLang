@@ -1,5 +1,15 @@
 # Aether Migration Audit
 
+> **Historical audit snapshot.** This report describes the package 0.10 / AETH
+> v10 state captured before the current 0.36 implementation. It is retained as
+> audit history only and must not be used as the active product contract. The
+> current sources of truth are [MANIFEST.md](MANIFEST.md),
+> [docs/AETHER_0.36.md](docs/AETHER_0.36.md),
+> [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and
+> [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/PROGRESS_REPORT-FULL-PROJECT.md).
+> The former `legacy/` application/prototype trees referenced below were removed
+> from the active checkout by the user and are not build inputs.
+
 Date: 2026-08-04 (Aether 0.11: Stage 7 bounded resources, M3–M8 authoring/host,
 typed-error baseline, deterministic literal comptime, dual-layout tables, and
 structured nurseries; active Studio retirement; DOC-SYNC audit remediation)

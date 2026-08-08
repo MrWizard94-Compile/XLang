@@ -11,7 +11,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::modules::{source_requires_project_modules, validate_lib_module_source};
@@ -46,25 +46,25 @@ impl fmt::Display for ProjectError {
 
 impl std::error::Error for ProjectError {}
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectDocument {
     pub schema: String,
     pub name: String,
     pub version: String,
     pub units: Vec<ProjectUnit>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lock: Option<ProjectLock>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectUnit {
     pub path: String,
     pub role: ProjectUnitRole,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProjectUnitRole {
     Main,
@@ -73,13 +73,13 @@ pub enum ProjectUnitRole {
     Test,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectLock {
     pub units: Vec<ProjectLockUnit>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectLockUnit {
     pub path: String,
@@ -332,6 +332,70 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
         output.push_str(&format!("{byte:02x}"));
     }
     output
+}
+
+/// Derive a complete local unit lock after verifying an unlocked project view.
+///
+/// An existing valid-but-stale lock is intentionally ignored while deriving a
+/// replacement: refresh must repair a changed project rather than requiring
+/// authors to hand-delete its old hashes first. The source is still verified by
+/// the normal project pipeline before the replacement lock is returned.
+pub fn refresh_project_lock(
+    project_root: &Path,
+    document: &ProjectDocument,
+) -> Result<ProjectDocument, ProjectError> {
+    let mut unlocked = document.clone();
+    unlocked.lock = None;
+    let before = project_lock_units(project_root, &unlocked)?;
+    let _ = verify_project(project_root, &unlocked)?;
+    let after = project_lock_units(project_root, &unlocked)?;
+    if before != after {
+        return Err(ProjectError::new(
+            "AE-PROJECT-003",
+            "project source changed while project lock refresh was in progress",
+        ));
+    }
+
+    let mut refreshed = document.clone();
+    refreshed.lock = Some(ProjectLock { units: after });
+    validate_project_document(&refreshed)?;
+    Ok(refreshed)
+}
+
+/// Render a validated project document as canonical local JSON.
+pub fn serialize_project_document(document: &ProjectDocument) -> Result<String, ProjectError> {
+    validate_project_document(document)?;
+    serde_json::to_string_pretty(document)
+        .map(|json| format!("{json}\n"))
+        .map_err(|error| {
+            ProjectError::new(
+                "AE-PROJECT-001",
+                format!("could not serialize aether.project/v1 document: {error}"),
+            )
+        })
+}
+
+fn project_lock_units(
+    project_root: &Path,
+    document: &ProjectDocument,
+) -> Result<Vec<ProjectLockUnit>, ProjectError> {
+    document
+        .units
+        .iter()
+        .map(|unit| {
+            let path = resolve_unit_path(project_root, &unit.path)?;
+            let bytes = fs::read(&path).map_err(|error| {
+                ProjectError::new(
+                    "AE-PROJECT-002",
+                    format!("could not read unit {}: {error}", unit.path),
+                )
+            })?;
+            Ok(ProjectLockUnit {
+                path: unit.path.clone(),
+                sha256: sha256_hex(&bytes),
+            })
+        })
+        .collect()
 }
 
 /// Join project-document path segments under the project root.
@@ -748,6 +812,37 @@ mod tests {
         let document = parse_project_document(&wrong).expect("parse");
         let error = verify_project(&root, &document).expect_err("mismatch");
         assert_eq!(error.code, "AE-PROJECT-003");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn refresh_project_lock_replaces_a_stale_lock_after_validation() {
+        let root = temp_dir();
+        let source = "world lock_refresh\n\nweave main [] -> Whole:\n  yield 11\n";
+        fs::write(root.join("main.ae"), source).expect("write source");
+        let stale = format!(
+            r#"{{
+  "schema": "aether.project/v1",
+  "name": "lock_refresh",
+  "version": "0.1.0",
+  "units": [{{ "path": "main.ae", "role": "main" }}],
+  "lock": {{ "units": [{{ "path": "main.ae", "sha256": "{}" }}] }}
+}}"#,
+            "0".repeat(64)
+        );
+        let document = parse_project_document(&stale).expect("stale lock is structurally valid");
+
+        let refreshed = refresh_project_lock(&root, &document).expect("refresh project lock");
+        let lock = refreshed.lock.as_ref().expect("refreshed lock");
+        assert_eq!(lock.units.len(), 1);
+        assert_eq!(lock.units[0].path, "main.ae");
+        assert_eq!(lock.units[0].sha256, sha256_hex(source.as_bytes()));
+        assert_ne!(lock.units[0].sha256, "0".repeat(64));
+
+        let rendered = serialize_project_document(&refreshed).expect("serialize refreshed lock");
+        assert!(rendered.ends_with('\n'));
+        let reparsed = parse_project_document(&rendered).expect("parse canonical project document");
+        verify_project(&root, &reparsed).expect("refreshed project lock verifies");
         let _ = fs::remove_dir_all(&root);
     }
 }

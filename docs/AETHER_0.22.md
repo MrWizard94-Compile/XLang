@@ -1,6 +1,6 @@
 # Aether 0.22 Toolchain Contract (M17 offline test runner)
 
-**Status:** Current package contract — language surface remains **0.11** / AETH **v11**; package **0.22** adds `aether test`  
+**Status:** Historical package contract — language surface remains **0.11** / AETH **v11**; package **0.22** adds `aether test`; current package contract is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** seed-hosted compile, pure VM run, [ADR-021](ADR-021-m17-offline-test-runner.md)
 
 ## Purpose

@@ -1,6 +1,7 @@
 # Aether 0.11 Language Contract
 
-**Status:** Current executable product contract — M8 host ABI pilot
+**Status:** Historical executable product contract — M8 host ABI pilot; current
+package contract is [AETHER_0.35.md](AETHER_0.35.md)
 (capability-closed)
 
 **Artifact output:** AETH v11

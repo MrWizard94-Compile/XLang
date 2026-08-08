@@ -1,16 +1,28 @@
 # Aether Mainstream Maturity Roadmap
 
 **Document ID:** ROADMAP-MAINSTREAM-001  
-**Status:** Strategic plan (Level 4 product doc) — **not** a promise of schedule or superiority  
-**Date:** 2026-08-05 (baseline refreshed to package 0.32)  
-**Baseline product:** package **0.32.0** / language surface **0.11** forms / AETH **v11**  
-**Branch pin:** `codex/xlang-local-first-studio`  
-**Full status:** [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md)  
-**Binding law:** AGENTS Constitution + project `AGENTS.md` + `MANIFEST.md`  
+**Status:** Historical strategic plan (2026-08-05 baseline) — **not** a current
+product contract, schedule promise, or superiority claim
+**Historical baseline:** package **0.32.0** / language surface **0.11** forms /
+AETH **v11**
+**Current product contract:** package **0.36.0** is governed by
+[MANIFEST.md](../MANIFEST.md), [ROADMAP.md](ROADMAP.md),
+[AETHER_0.36.md](AETHER_0.36.md), and
+[PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md)
+**Governance:** AGENTS Constitution + current manifest and ADRs
 **Process law:** SOP phases 1–10 per increment (`SOP-PHASE-001`, `SOP-GATE-001`)  
 **Portfolio law:** [ADR-014](ADR-014-post-m10-track-portfolio.md)  
 **Claims law:** [CORE_CLAIMS.md](CORE_CLAIMS.md) — **CLM-011 prohibits** “better than all languages”  
 **North star:** [NORTH_STAR.md](NORTH_STAR.md) (direction ≠ current behavior)
+
+> **Historical numbering warning.** This document predates the current package
+> 0.36 package ledger. Its references to “M23” as a multi-package graph are
+> historical planning nomenclature only. In the authoritative current roadmap,
+> **M23 is pure comptime weave calls (T-CT), implemented in 0.33**; package 0.34
+> is the separate RTP-001 runtime-only increment, package 0.35 is PKG-001
+> offline workspace-lock tooling, and package 0.36 is M19e bounded v12
+> active-frame cancellation. Do not use
+> this document to authorize, rename, or infer the status of current work.
 
 ---
 

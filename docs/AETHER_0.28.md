@@ -1,6 +1,6 @@
 # Aether 0.28 Toolchain Contract (M17b project test)
 
-**Status:** Historical package 0.28 — language **0.11** / AETH **v11** + project `role: test`; current package is [AETHER_0.29.md](AETHER_0.29.md)  
+**Status:** Historical package 0.28 — language **0.11** / AETH **v11** + project `role: test`; current package is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** ADR-030, M17, M11  
 
 ## Surface

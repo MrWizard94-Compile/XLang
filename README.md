@@ -1,19 +1,30 @@
 # Aether in XLang
 
-This repository hosts Aether, a new local-first language and CLI toolchain for
-deterministic, AI-primary authorship. Aether toolchain package **0.31.0**
-(language surface **0.11**, AETH **v11**) parses only Aether source, emits
-deterministic AETH bytecode, verifies every artifact, and runs it in the Aether
-VM. It never translates source to Rust, C, JavaScript, LLVM, or another
-language. Verified AETH v4–v10 artifacts remain compatibility inputs with their
-original meanings; new compilation emits v11.
+This repository hosts Aether, a local-first language and CLI toolchain for
+deterministic, AI-primary authorship. Aether toolchain package **0.36.0**
+(language surface **0.11** plus bounded M19e task semantics) parses only Aether
+source, emits deterministic AETH bytecode, verifies every artifact,
+and runs it in the Aether VM. It never translates source to Rust, C,
+JavaScript, LLVM, or another language. Verified AETH v4–v10 artifacts remain
+compatibility inputs with their original meanings. Source without task frames
+emits v11; valid M19e task source emits v12.
 
-**Executable contract:** [MANIFEST.md](MANIFEST.md) · **Claims:** [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) · **Law:** [AGENTS.md](AGENTS.md)
+**Executable contract:** [MANIFEST.md](MANIFEST.md) · **Claims:**
+[docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) · **Current delta:**
+[docs/AETHER_0.36.md](docs/AETHER_0.36.md)
+
+**Current bounded task-frame behavior:**
+[M19e active-frame cancellation](docs/DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md) /
+[ADR-042](docs/ADR-042-m19e-active-frame-cancel.md). Package 0.36 accepts
+closed-subset `task weave` / `checkpoint` source, emits v12 task frames, and
+deterministically cancels parked frames on a later eligible sibling failure.
 
 ## Seed-hosted compile path, resources, effects, comptime, and layout
 
-**Default compilation is seed-hosted for user programs**, including M19a
-`release` and M19b nursery×resource Policy A (seed≡bootstrap proven).
+**Default compilation is seed-emitted for user programs**, including M19a
+`release`, M19b nursery×resource Policy A, M19d multi-weave arenas, M19e task
+frames, M21 foreign pilot declarations, and M23 after its explicit bootstrap
+materialization bridge.
 
 - `aether compile` invokes the **Aether-written seed compiler**
   (`seed/aether_seed.aeth`, embedded as `SEED_COMPILER_ARTIFACT`) through the
@@ -21,20 +32,26 @@ original meanings; new compilation emits v11.
 - The Rust core remains the **bootstrap**: rebuild the seed (`compile --bootstrap`),
   produce the AST for `check`, and verify seed output against bootstrap in tests.
 - The seed self-hosts, and the documented dual-compare corpus (shipped examples
-  on the seed path, M2–M8 fixtures, M19a release, M19b nursery+resource, M19d
-  multi-weave arenas, M21 foreign-pilot, modules via elaboration, etc.) produces
-  bytecode **byte-identical** to the Rust bootstrap where claimed in tests.
+  on the seed path, M2–M8 fixtures, M15 chaining, M19a release, M19b
+  nursery+resource, M19d multi-weave arenas, M21 foreign-pilot, M23 pure
+  comptime helpers, modules via elaboration, etc.) produces bytecode
+  **byte-identical** to the Rust bootstrap where claimed in tests.
 
 Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
 M6 layout, M7 nurseries, and M8 pure host weaves. Toolchain packages through
-**0.32** add offline projects/modules/LSP, grant-backed host I/O, a **bounded
+**0.36** add offline projects/modules/LSP, grant-backed host I/O, a **bounded
 foreign weave pilot** (Whole-only, explicit library grant; not sandboxed),
 comptime name chaining, resource+handle, `aether test` / `aether project test`
 (optional grants and reports), workspaces, stdlib layer 1, cross-package
 imports, product-path `release`, nursery×resource Policy A+, multi-weave arenas,
-and cooperative Policy B bounds. See
+cooperative Policy B bounds, pure bounded comptime helper calls, and M19e's
+restricted active-frame cancellation. Package 0.34 adds only the internal
+RTP-001 ASCII Text runtime fast path; 0.35 adds PKG-001 optional local workspace
+locks; and 0.36 adds `task weave`, `checkpoint`, AETH v12, and authoring v8.
+M19e adds no registry, network authority, guest cancellation API, or host
+capability. See
 [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
-[docs/AETHER_0.32.md](docs/AETHER_0.32.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+[docs/AETHER_0.36.md](docs/AETHER_0.36.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:
@@ -50,7 +67,8 @@ M4 is deliberately one bounded abortive `Error[Whole]` effect, not a general
 exception or algebraic-effects system. Effect boundaries are copy-only and
 cannot cross live owners, loans, arenas, buffers, or M2 outcomes.
 
-M5 is deliberately one bounded evaluator, not a macro or build-script system:
+M5/M15/M23 remain deliberately bounded evaluators, not a macro or build-script
+system:
 
 ```aether
 weave main [] -> Whole:
@@ -59,10 +77,12 @@ weave main [] -> Whole:
   yield sum table_width header_size
 ```
 
-It accepts exactly five checked literal `Whole` operations, has a fixed
-1,024-directive budget, and has no names, calls, loops, text, resource, effect,
-or host authority surface. See
-[docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md](docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md).
+M5 accepts five checked Whole arithmetic operations; M15 adds earlier comptime
+names; M23 adds one eligible pure helper call. The fixed 1,024-directive budget
+remains. Comptime has no control flow, recursion, Text/Bytes/Truth evaluation,
+resource/effect/host authority, macros, or configurable fuel. M23 source is
+bootstrap-materialized before seed emission as documented in
+[docs/AETHER_0.33.md](docs/AETHER_0.33.md).
 
 M6 adds author-visible layout for multi-field tables:
 
@@ -83,14 +103,15 @@ physical order. See
 
 ## Versioned structural authoring contract
 
-Aether 0.11 tooling exposes a local, machine-readable `aether.ast/v6` document
-and accepts bounded `aether.edit/v6` structural edits. The protocol
+Aether tooling exposes a local, machine-readable `aether.ast/v8` document and
+accepts bounded `aether.edit/v8` structural edits. The protocol
 uses exact canonical source revisions to reject stale requests, supports typed
 top-level record/shape/weave insert, replace, and delete operations, reparses the
 formatter-owned result, and seed-compiles it before the CLI writes source to an
 explicit output path. It exposes effect annotations, M4/M5/M6/M7 nodes, and a
-required `Bind.stage` (`runtime` or `comptime`) without reinterpreting v1–v4.
-See [docs/AETHER_AUTHORING_PROTOCOL_v5.md](docs/AETHER_AUTHORING_PROTOCOL_v5.md)
+required `Bind.stage` (`runtime` or `comptime`). V8 adds the explicit
+`Weave.task` Boolean and typed `Checkpoint` statement; M23 uses the existing
+`Call` expression node. See [docs/AETHER_AUTHORING_PROTOCOL_v8.md](docs/AETHER_AUTHORING_PROTOCOL_v8.md)
 and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-authoring-contract.md).
 
 ### Still honest limits
@@ -103,21 +124,23 @@ and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-auth
 - M4 supports only `Error[Whole]`, `Whole` erroring results, and terminal
   handling. It has no effect inference, resumption, cleanup, cancellation, or
   resource/effect composition.
-- M5 supports only one literal Whole arithmetic operation per explicit root
-  directive. It has no dependency chaining, compile-time calls, control flow,
-  macro expansion, build hooks, or configurable fuel.
+- M23 supports only one eligible pure Whole helper call per explicit root
+  directive. It has no recursion, control flow, nested calls, macro expansion,
+  build hooks, Text/Bytes/Truth evaluation, or configurable fuel.
+- M19e is limited to checkpointed, single-thread task-frame cancellation. It
+  has no task handles, timeouts, manual cancellation, arbitrary preemption,
+  external-effect rollback, nested task nurseries, or guest cleanup callbacks.
 - Host invocation accepts and returns primitives only; use an Aether weave to
   project a record field.
 - Future language extensions require their own seed-emission parity proof before
   they become part of the product compile surface.
 - Bootstrap rebuild of the seed is still required after changing the seed source.
-- M3 edits are deliberately top-level declaration operations. Fine-grained
-  statement/expression edits and any claim of universal syntax-error-proof AI
-  generation remain future, separately versioned work.
+- Structural edits are bounded by the v8 path grammar; they are not arbitrary
+  JSONPath or a claim of universal syntax-error-proof AI generation.
 
 ## North star and evidence-led roadmap
 
-Aether 0.8 is the current executable contract, not the full long-range language
+Aether 0.36 is the current executable contract, not the full long-range language
 vision. The project is deliberately designing for AI-primary authorship while
 keeping deterministic, locally verifiable compiler authority. Read the design
 set in this order:
@@ -126,23 +149,21 @@ set in this order:
    current-law constraints.
 2. [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) — proven facts, accepted
    directions, research hypotheses, and prohibited claims.
-3. [docs/research/](docs/research/) — primary-source reference study,
-   decomposition, and evidence plan.
-4. [docs/AETHER_0.8.md](docs/AETHER_0.8.md) and
-   [docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md)
-   — current resource contract and deliberate limits.
-5. [docs/AETHER_AUTHORING_PROTOCOL_v3.md](docs/AETHER_AUTHORING_PROTOCOL_v3.md)
-   and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-authoring-contract.md)
-   — implemented M3 authoring contract and its limits.
-6. [docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md](docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md),
-   [docs/ADR-007-m4-typed-error-effect.md](docs/ADR-007-m4-typed-error-effect.md),
-   and [docs/M4-VALIDATION-MATRIX.md](docs/M4-VALIDATION-MATRIX.md) — implemented
-   M4 design, executable semantic kernel, and proof matrix.
-7. [docs/ROADMAP.md](docs/ROADMAP.md) — completed M2/M3/M4/M5 scope,
-   and approved dependency order for future language work.
+3. [docs/AETHER_0.36.md](docs/AETHER_0.36.md),
+   [docs/ADR-041-pkg-001-offline-workspace-locks.md](docs/ADR-041-pkg-001-offline-workspace-locks.md),
+   [docs/ADR-040-runtime-text-ascii-fast-path.md](docs/ADR-040-runtime-text-ascii-fast-path.md),
+   [docs/ADR-039-m23-comptime-pure-calls.md](docs/ADR-039-m23-comptime-pure-calls.md),
+   and [docs/ADR-042-m19e-active-frame-cancel.md](docs/ADR-042-m19e-active-frame-cancel.md)
+   — current package-integrity, runtime, and language-surface boundaries.
+4. [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) — exact seed-emitted product
+   path and bootstrap responsibilities.
+5. [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/PROGRESS_REPORT-FULL-PROJECT.md)
+   — maturity, evidence, and residuals.
+6. [docs/ROADMAP.md](docs/ROADMAP.md) — implemented scope and approved
+   dependency order for future work.
 
-These documents do not claim general effects, concurrency, SoA lowering, C
-interop, fine-grained structural edits, or a native backend exist in 0.8.
+These documents do not claim general effects, parallel concurrency, broad FFI
+safety, a network registry, or a native backend exist in 0.36.
 
 ## Workspace
 
@@ -150,17 +171,24 @@ interop, fine-grained structural edits, or a native backend exist in 0.8.
   emitter/verifier/VM, forge API, seed path
 - `apps/xlang-cli` — `aether` CLI (seed compile by default)
 - `seed/` — Aether-written compiler source + checked-in artifact
-- `examples/` — programs proven seed-identical to bootstrap, including M2 cases
-- `AGENTS.md` — Level 4 entry → AGENTS Constitution pack
+- `examples/` — programs proven behaviorally and, where claimed,
+  seed-emitted byte-identical to bootstrap
 
 ## Command Line
 
 ```powershell
 Set-Location C:\WPAI\Software\XLang
-cargo run -p aether-cli -- check (Resolve-Path .\examples\comptime.ae)
-cargo run -p aether-cli -- structure (Resolve-Path .\examples\comptime.ae)
-cargo run -p aether-cli -- compile (Resolve-Path .\examples\comptime.ae) --output .\target\comptime.aeth
-cargo run -p aether-cli -- run .\target\comptime.aeth
+cargo run -p aether-cli -- check (Resolve-Path .\examples\comptime-calls.ae)
+cargo run -p aether-cli -- structure (Resolve-Path .\examples\comptime-calls.ae)
+cargo run -p aether-cli -- compile (Resolve-Path .\examples\comptime-calls.ae) --output .\target\comptime-calls.aeth
+cargo run -p aether-cli -- run .\target\comptime-calls.aeth
+
+# Refresh local package integrity locks explicitly; without --write each command
+# prints the candidate JSON and leaves disk unchanged.
+cargo run -p aether-cli -- project lock .\examples\workspace\util\aether.project.json --write
+cargo run -p aether-cli -- project lock .\examples\workspace\app\aether.project.json --write
+cargo run -p aether-cli -- workspace lock .\examples\workspace\aether.workspace.json --write
+cargo run -p aether-cli -- workspace verify .\examples\workspace\aether.workspace.json
 
 # Rebuild the seed safely after editing seed/aether_seed.ae.
 # Promote it only after the bootstrap and self-forged hashes are identical.
@@ -175,11 +203,27 @@ cargo build -p aether-cli
 
 The CLI is the shipped Aether product interface. It exposes canonical structure
 and validated structural edits locally without introducing an application, model,
-or network authority. The former Studio workbench was retired in
-[docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-studio.md);
-historical material remains under `legacy/` as reference only.
+or network authority. No Studio workbench or app is part of the current Aether
+product surface.
+
+## Local technical-preview package
+
+The supported distribution channel is a local, checksummed preview folder, not
+a public release. Build and verify the current package with:
+
+```powershell
+pwsh -NoProfile -File .\tools\aether-gate.ps1 -Mode release
+```
+
+This runs the full source/seed gate, builds `aether.exe`, stages the
+version-derived `dist\aether-0.36.0-tp` package, verifies its exact hashes and
+behavior as a consumer, and proves the verifier rejects an unlisted package
+file. It does not commit, tag, push, or publish anything. The package is
+`UNLICENSED`; public distribution requires a separate human licensing and
+release decision. See [the 0.36 preview notes](docs/RELEASE_NOTES-0.36-TECHNICAL-PREVIEW.md)
+and [current threat model](docs/THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md).
 
 ## Governance
 
-Binding quality law: [AGENTS.md](AGENTS.md) → universal AGENTS Constitution pack.
-Product contract: [MANIFEST.md](MANIFEST.md), [docs/](docs/).
+Product contract: [MANIFEST.md](MANIFEST.md), [docs/AETHER_0.36.md](docs/AETHER_0.36.md),
+and the linked ADR/matrix evidence.

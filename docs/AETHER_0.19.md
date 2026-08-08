@@ -1,6 +1,6 @@
 # Aether 0.19 Toolchain Contract (M14 host I/O)
 
-**Status:** Current package contract — language surface remains **0.11** / AETH **v11**; package **0.19** adds capability-mediated host I/O  
+**Status:** Historical package contract — language surface remains **0.11** / AETH **v11**; package **0.19** adds capability-mediated host I/O; current package contract is [AETHER_0.35.md](AETHER_0.35.md)
 **Depends on:** [AETHER_0.11.md](AETHER_0.11.md) (M8 pure host), [THREAT_MODEL-v2-CAPABLE-HOST.md](THREAT_MODEL-v2-CAPABLE-HOST.md), [ADR-018](ADR-018-m14-host-io-capabilities.md)
 
 ## Purpose
