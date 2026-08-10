@@ -26,3 +26,7 @@
 # Technical preview build output (local package; do not commit binaries)
 /dist/
 
+
+# Local archive junk (never product)
+*.zip
+
