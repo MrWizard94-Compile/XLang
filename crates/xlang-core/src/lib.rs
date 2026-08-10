@@ -2686,7 +2686,8 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 ///
 /// Does **not** bootstrap-parse or bootstrap-validate. Invalid Seed Profile
 /// inputs fail at seed forge or [`verify_bytecode`]. Full diagnostics remain
-/// bootstrap authority via CLI `check` / LSP.
+/// bootstrap authority via CLI `check` / LSP. Product-path errors use bounded
+/// `AE-SEED-*` codes (ADR-046 Phase 3a).
 pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> {
     debug_assert!(
         seed_interprets_m23_comptime_calls_natively(),
@@ -2696,22 +2697,64 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         product_path_forges_before_bootstrap_validate(),
         "BARP Phase 2 requires forge-first product emission"
     );
+    if seed_product_diagnostics_subset() {
+        if let Some(message) = seed_reject_odd_indentation(source) {
+            return Err(CompilerError::new(Span::synthetic(), message));
+        }
+    }
     let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
-        CompilerError::new(Span::synthetic(), format!("seed compiler failed: {error}"))
+        CompilerError::new(
+            Span::synthetic(),
+            format_seed_product_error("AE-SEED-001", &error.to_string()),
+        )
     })?;
     let InvocationValue::Bytes(bytecode) = forged.value else {
         return Err(CompilerError::new(
             Span::synthetic(),
-            "seed compiler must yield Bytes",
+            format_seed_product_error("AE-SEED-001", "seed compiler must yield Bytes"),
         ));
     };
     verify_bytecode(&bytecode).map_err(|error| {
         CompilerError::new(
             Span::synthetic(),
-            format!("seed compiler produced an invalid Aether artifact: {error}"),
+            format_seed_product_error("AE-SEED-002", &error.to_string()),
         )
     })?;
     Ok(bytecode)
+}
+
+fn format_seed_product_error(code: &str, detail: &str) -> String {
+    format!("{code}: product seed path failed ({detail}). Full diagnostics: aether check <source>")
+}
+
+/// BARP Phase 3a: reject indentation that is not a multiple of two spaces
+/// before forge (seed and product path honesty; bootstrap already rejects).
+fn seed_reject_odd_indentation(source: &str) -> Option<String> {
+    for (line_index, line) in source.lines().enumerate() {
+        if line.is_empty() {
+            continue;
+        }
+        let spaces = line.chars().take_while(|c| *c == ' ').count();
+        if spaces > 0 && spaces % 2 == 1 {
+            return Some(format_seed_product_error(
+                "AE-SEED-003",
+                &format!(
+                    "line {}: Aether indentation uses exact two-space levels (odd leading spaces)",
+                    line_index + 1
+                ),
+            ));
+        }
+        if line.starts_with('\t') {
+            return Some(format_seed_product_error(
+                "AE-SEED-003",
+                &format!(
+                    "line {}: Aether indentation uses exact two-space levels (tabs forbidden)",
+                    line_index + 1
+                ),
+            ));
+        }
+    }
+    None
 }
 
 /// Compile source with the Aether-written seed compiler (default product path).
@@ -2745,6 +2788,20 @@ pub const fn seed_interprets_m23_comptime_calls_natively() -> bool {
 /// Bootstrap remains `check`/AST diagnostics, seed rebuild, and dual-compare oracle.
 #[must_use]
 pub const fn product_path_forges_before_bootstrap_validate() -> bool {
+    true
+}
+
+/// BARP ADR-045: product multi-module/project emit does **not** require
+/// bootstrap dual-compare on every build (oracle remains tests/gate).
+#[must_use]
+pub const fn product_path_requires_bootstrap_dual_compare() -> bool {
+    false
+}
+
+/// BARP Phase 3a (ADR-046): bounded product-path `AE-SEED-*` diagnostics subset
+/// (not full bootstrap diagnostic parity).
+#[must_use]
+pub const fn seed_product_diagnostics_subset() -> bool {
     true
 }
 

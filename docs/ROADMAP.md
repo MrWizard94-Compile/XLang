@@ -343,15 +343,16 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` live-stamped 2026-08-08).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Next implementable:** Phase 1
-seed-native M23 (remove `lower_m23_comptime_calls_for_seed` materialization).
+reduce Rust bootstrap product-path authority. **Through Phase 3a:** seed-native
+M23, forge-first product path, oracle-only dual-compare (ADR-045), bounded
+`AE-SEED-*` diagnostics (ADR-046). **Next:** Phase 3b richer seed codes (new ADR).
 
 **Still blocked without a new ADR / law:** expanded FFI signatures,
 native/LLVM, network registry, task handles/timeouts/parallelism, and any
 broader resource/effect cancellation surface.
 
-**Human backlog (updated 2026-08-08):**
-1. **BARP Phase 1** — seed-native M23 pure comptime calls (ADR-043).
+**Human backlog (updated 2026-08-10):**
+1. **BARP Phase 3b** — richer seed-side diagnostic codes (optional; new ADR).
 2. Further offline package/stdlib polish only through a new scoped design and matrix.
 3. Broader task cancellation, task handles/timeouts/parallelism only through a new ADR.
 4. Law forks F-NATIVE / F-REGISTRY — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) /

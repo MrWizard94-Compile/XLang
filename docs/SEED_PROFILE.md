@@ -7,8 +7,10 @@ This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
 It covers the documented canonical Aether 0.11 source surface and the later
 seed-emitted product cases explicitly listed below. Product `compile` uses this
 profile via the seed artifact. Product bytecode is forge-first (BARP Phase 2 /
-ADR-044) without a bootstrap validate pre-gate. Rust bootstrap remains for seed
-rebuild, `check` AST diagnostics, and dual-compare proofs. A Seed Profile claim
+ADR-044) without a bootstrap validate pre-gate; multi-module product emit does
+not dual-compare-gate on bootstrap (ADR-045). Product failures use bounded
+`AE-SEED-*` codes (ADR-046 Phase 3a). Rust bootstrap remains for seed rebuild,
+`check` AST full diagnostics, and dual-compare **proofs**. A Seed Profile claim
 is not a claim of full bootstrap diagnostic parity for invalid input.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in

@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — Phase 0–2 complete; Phase 3 (seed diagnostics) later  
-**Date:** 2026-08-08 (Phase 1 2026-08-10; Phase 2 2026-08-10)  
-**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md), [ADR-044](ADR-044-barp-phase2-validate-light-product-path.md)  
+**Status:** Active program — Phase 0–2 complete; ADR-045 oracle-only dual-compare; Phase 3a diagnostics  
+**Date:** 2026-08-08 (Phase 1–2 2026-08-10; ADR-045/046 2026-08-10)  
+**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md), [ADR-044](ADR-044-barp-phase2-validate-light-product-path.md), [ADR-045](ADR-045-barp-product-dual-compare-oracle.md), [ADR-046](ADR-046-barp-phase3a-product-diagnostics.md)  
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -32,16 +32,16 @@ Bootstrap remains **required** for:
 
 | Site | Authority today |
 | --- | --- |
-| `compile_product_bytecode` | **Phase 2:** seed forge + verify only (no bootstrap pre-validate) |
+| `compile_product_bytecode` | **Phase 2:** seed forge + verify only; **Phase 3a** `AE-SEED-*` mapping |
 | `compile_with_seed` | Forge-first product bytes; bootstrap parse only for returned `Program` AST |
 | ~~`lower_m23_comptime_calls_for_seed`~~ | **Removed in Phase 1** — seed interprets raw M23 `call` |
-| Module elaborate | Host-side graph; then seed emit + dual-compare |
+| Module elaborate | Host-side graph; then **seed emit** (ADR-045: dual-compare not product gate) |
 | `apply-edit` | Bootstrap structure + **product** seed compile before write |
-| CLI `check` | Bootstrap only |
+| CLI `check` | Bootstrap only (full diagnostics) |
 
-**Primary product emission** is seed forge without bootstrap as a pre-gate
-(Phase 2). Bootstrap remains rebuild, `check`/AST diagnostics, and dual-compare
-oracle.
+**Primary product emission** is seed forge without bootstrap pre-gate or
+product dual-compare gate. Bootstrap remains rebuild, `check`/AST diagnostics,
+and dual-compare **oracle** (tests + aether-gate).
 
 ---
 
@@ -83,10 +83,23 @@ oracle.
 4. Honest claims: no seed diagnostic parity — **documented**.  
 5. Tracker `product_path_forges_before_bootstrap_validate() == true` — **done**.
 
-### Phase 3 — Seed diagnostics subset (later ADR)
+### Phase 3 — Seed diagnostics subset
 
-Bounded seed error messages for common invalid inputs; bootstrap remains full
-diagnostic authority.
+#### Phase 3a (**complete** 2026-08-10; ADR-046)
+
+1. Product-path stable `AE-SEED-001` / `002` / `003` codes + `aether check` hint — **done**  
+2. Odd indentation fail-closed on product path — **done**  
+3. Bootstrap remains full diagnostic authority — **unchanged**  
+
+#### Phase 3b+ (later ADR)
+
+Richer seed-side messages (unbound names, type errors as first-class seed codes)
+without claiming full bootstrap parity.
+
+### ADR-045 — Product dual-compare oracle-only (**complete** 2026-08-10)
+
+Project/workspace product build no longer bootstrap dual-compares on every
+emit; tests and gate remain the dual-compare oracle.
 
 ### Out of scope / never BARP
 
@@ -104,6 +117,8 @@ diagnostic authority.
 | Product emit engine | Seed forge (forge-first; Phase 2) |
 | M23 materialization bridge | **Removed** (Phase 1) |
 | Bootstrap product pre-validate | **Not required** (Phase 2) |
+| Product dual-compare gate | **Not required** (ADR-045); oracle in tests/gate |
+| Product diagnostics subset | **Phase 3a** `AE-SEED-*` (ADR-046) |
 | Bootstrap roles | Rebuild seed, check/AST, dual-compare oracle |
 | Gate | `aether-gate -Mode release` PASS |
 

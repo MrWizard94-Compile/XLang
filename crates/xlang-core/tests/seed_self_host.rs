@@ -1,8 +1,8 @@
 use aether_core::{
     compile_product_bytecode, compile_to_bytecode, compile_with_seed, forge_bytecode,
-    product_path_forges_before_bootstrap_validate, run_bytecode,
-    seed_interprets_m23_comptime_calls_natively, verify_bytecode, InvocationOutput,
-    InvocationValue, SEED_COMPILER_ARTIFACT,
+    product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
+    run_bytecode, seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_subset,
+    verify_bytecode, InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -342,6 +342,14 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
         product_path_forges_before_bootstrap_validate(),
         "Phase 2 tracker must be true"
     );
+    assert!(
+        !product_path_requires_bootstrap_dual_compare(),
+        "ADR-045: product path must not require dual-compare gates"
+    );
+    assert!(
+        seed_product_diagnostics_subset(),
+        "Phase 3a diagnostics subset tracker must be true"
+    );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")
         .bytecode;
@@ -357,6 +365,36 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
             .expect("product bytecode must run")
             .exit_code,
         512
+    );
+}
+
+#[test]
+fn barp_phase3a_product_path_rejects_odd_indent_with_ae_seed_code() {
+    let source = "world w\n\nweave main [] -> Whole:\n yield 1\n";
+    let error = compile_product_bytecode(source).expect_err("odd indent must fail closed");
+    let message = error.to_string();
+    assert!(
+        message.contains("AE-SEED-003"),
+        "expected AE-SEED-003, got {message}"
+    );
+    assert!(
+        message.contains("aether check"),
+        "expected check hint, got {message}"
+    );
+}
+
+#[test]
+fn barp_phase3a_product_path_maps_seed_forge_failure_to_ae_seed_code() {
+    let source = "world w\n\nweave main [] -> Whole:\n  yield missing_name\n";
+    let error = compile_product_bytecode(source).expect_err("unbound name must fail product path");
+    let message = error.to_string();
+    assert!(
+        message.contains("AE-SEED-001") || message.contains("AE-SEED-002"),
+        "expected AE-SEED-001/002, got {message}"
+    );
+    assert!(
+        message.contains("aether check"),
+        "expected check hint, got {message}"
     );
 }
 

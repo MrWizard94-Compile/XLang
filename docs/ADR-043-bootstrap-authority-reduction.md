@@ -1,7 +1,7 @@
 # ADR-043: Bootstrap Authority Reduction Program (BARP)
 
-**Status:** Accepted (program) — Phase 0–2 complete; Phase 3 later  
-**Date:** 2026-08-08 (Phase 1 2026-08-10; Phase 2 2026-08-10 via ADR-044)  
+**Status:** Accepted (program) — Phase 0–2 + ADR-045 + Phase 3a complete; Phase 3b later  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044 2026-08-10; ADR-045/046 2026-08-10)  
 **Related Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`  
 **Design:** [DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 
@@ -23,8 +23,12 @@ authority under Constitution.
 4. **Phase 2 (done; ADR-044):** validate-light product path — forge-first
    product bytecode without bootstrap validate pre-gate;
    `product_path_forges_before_bootstrap_validate() == true`.  
-5. Bootstrap remains seed-rebuild + diagnostic + dual-compare oracle authority.  
-6. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+5. **ADR-045 (done):** product multi-module emit without dual-compare product
+   gate; `product_path_requires_bootstrap_dual_compare() == false`.  
+6. **Phase 3a (done; ADR-046):** bounded product `AE-SEED-*` diagnostics + odd
+   indent fail-closed; `seed_product_diagnostics_subset() == true`.  
+7. Bootstrap remains seed-rebuild + full diagnostic + dual-compare oracle authority.  
+8. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 
@@ -48,7 +52,7 @@ authority under Constitution.
 
 ## Links
 
-- DESIGN-BARP-001, ADR-039 (M23), ADR-044 (Phase 2), SEED_PROFILE  
+- DESIGN-BARP-001, ADR-039 (M23), ADR-044, ADR-045, ADR-046, SEED_PROFILE  
 
 ---
 

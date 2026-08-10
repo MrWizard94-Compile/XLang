@@ -285,9 +285,9 @@ operation vocabulary, and compatibility policy are in
 
 | Path | Role |
 |------|------|
-| **Seed (default)** | `compile_product_bytecode` / CLI `compile` / `apply-edit` product gate — forge-first seed (BARP Phase 2) |
-| **Seed + AST** | `compile_with_seed` — product bytes then bootstrap `Program` for tooling / dual-compare callers |
-| **Bootstrap** | `compile_to_bytecode` / CLI `compile --bootstrap` / `check` AST — rebuild seed, diagnostics |
+| **Seed (default)** | `compile_product_bytecode` / CLI `compile` / project build / `apply-edit` product gate — forge-first (BARP Phase 2; ADR-045 no dual-compare product gate) |
+| **Seed + AST** | `compile_with_seed` — product bytes then bootstrap `Program` for tooling |
+| **Bootstrap** | `compile_to_bytecode` / CLI `compile --bootstrap` / `check` AST — rebuild seed, full diagnostics, dual-compare oracle |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |
 
 The seed artifact is checked in at `seed/aether_seed.aeth` and embedded as

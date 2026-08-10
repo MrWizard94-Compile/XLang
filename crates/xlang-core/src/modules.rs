@@ -1,8 +1,8 @@
 //! M11a language modules: import unit / export weave / project build.
 //!
-//! Multi-module programs are **bootstrap-compiled** via deterministic elaboration
-//! into one single-world Aether program (ADR-015 phase M11a). Seed multi-module
-//! authority is deferred to M11b.
+//! Multi-module programs are **host-elaborated** into one single-world Aether
+//! program (ADR-015 / M11a), then **seed-emitted** on the product path (M11b).
+//! Bootstrap dual-compare is test/oracle only (ADR-045).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -869,8 +869,8 @@ pub fn elaborate_project_entry_with_packages(
 /// Multi-module project build → one verified AETH (M11b).
 ///
 /// Host elaborates the import DAG to a deterministic single-file Aether program,
-/// then **seed-compiles** it. Bootstrap compilation of the same elaboration must
-/// match byte-for-byte before the seed artifact is returned (M11b dual-compare).
+/// then **seed-compiles** it (BARP product path). Dual-compare against bootstrap
+/// is an **oracle/test** obligation (ADR-045), not a product gate on every build.
 pub fn compile_project_modules(
     project_root: &Path,
     document: &ProjectDocument,
@@ -904,7 +904,7 @@ pub fn compile_project_modules_with_packages(
     )
 }
 
-/// Compile a selectable main/test entry with M11b dual-compare.
+/// Compile a selectable main/test entry on the seed product path (M11b).
 pub fn compile_project_entry(
     project_root: &Path,
     document: &ProjectDocument,
@@ -920,6 +920,9 @@ pub fn compile_project_entry(
 }
 
 /// Compile a selectable entry with workspace package roots.
+///
+/// Product path: host elaboration + seed emit (ADR-045). Bootstrap dual-compare
+/// is not required here; tests prove seed≡bootstrap for the elaboration corpus.
 pub fn compile_project_entry_with_packages(
     project_root: &Path,
     document: &ProjectDocument,
@@ -934,25 +937,16 @@ pub fn compile_project_entry_with_packages(
         package_roots,
         allowed_packages,
     )?;
-    let bootstrap = compile_to_bytecode(&source).map_err(|error| {
-        module_error(
-            "AE-PROJECT-004",
-            format!("module project bootstrap compile failed: {error}"),
-        )
-    })?;
-    let seed = compile_with_seed(&source).map_err(|error| {
+    debug_assert!(
+        !crate::product_path_requires_bootstrap_dual_compare(),
+        "ADR-045: product multi-module path must not gate on dual-compare"
+    );
+    compile_with_seed(&source).map_err(|error| {
         module_error(
             "AE-PROJECT-004",
             format!("module project seed compile failed: {error}"),
         )
-    })?;
-    if bootstrap.bytecode != seed.bytecode {
-        return Err(module_error(
-            "AE-PROJECT-004",
-            "M11b dual-compare failed: seed multi-module elaboration does not match bootstrap AETH bytes",
-        ));
-    }
-    Ok(seed)
+    })
 }
 
 /// M17b: compile and pure-run every `role: test` unit; require exit code 0.
@@ -1053,7 +1047,7 @@ impl ProjectTestReport {
 #[must_use]
 pub fn multi_module_authority_note() -> String {
     format!(
-        "{LANGUAGE_NAME} {LANGUAGE_VERSION} multi-module project build elaborates the import graph then seed-compiles (M11b; dual-compared to bootstrap)"
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} multi-module project build elaborates the import graph then seed-compiles (M11b; dual-compare is test/oracle only, ADR-045)"
     )
 }
 
