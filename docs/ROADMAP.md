@@ -339,17 +339,20 @@ and implementation records are
 [implementation delivery report](DELIVERY_REPORT-2026-08-08-M19E-T-RX-IMPLEMENTATION.md).
 
 The 0.36 local-preview release/stabilization increment is complete: the release
-gate builds, stages, consumer-verifies, and integrity-probes the package without
-committing or publishing it. The next engineering milestone must be a new
-ADR-backed scope. No subsequent language capability is implicitly approved by
-M19e's completion.
+gate builds, stages, consumer-verifies, and integrity-probes the package
+(`GATE PASS mode=release` live-stamped 2026-08-08).
+
+**Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
+reduce Rust bootstrap product-path authority. **Next implementable:** Phase 1
+seed-native M23 (remove `lower_m23_comptime_calls_for_seed` materialization).
 
 **Still blocked without a new ADR / law:** expanded FFI signatures,
 native/LLVM, network registry, task handles/timeouts/parallelism, and any
 broader resource/effect cancellation surface.
 
 **Human backlog (updated 2026-08-08):**
-1. Further offline package/stdlib polish only through a new scoped design and matrix.
-2. Broader task cancellation, task handles/timeouts/parallelism, or resource/effect cancellation only through a new ADR.
-3. Law forks F-NATIVE / F-REGISTRY — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) /
+1. **BARP Phase 1** — seed-native M23 pure comptime calls (ADR-043).
+2. Further offline package/stdlib polish only through a new scoped design and matrix.
+3. Broader task cancellation, task handles/timeouts/parallelism only through a new ADR.
+4. Law forks F-NATIVE / F-REGISTRY — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) /
    [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md) (§3 phrase required).

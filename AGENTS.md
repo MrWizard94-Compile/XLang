@@ -104,8 +104,9 @@ literals before seed emission (honest seed-surface limit).
 | M13 bounded LSP | [docs/DESIGN-M13-BOUNDED-LSP.md](docs/DESIGN-M13-BOUNDED-LSP.md), [docs/ADR-017-m13-bounded-lsp.md](docs/ADR-017-m13-bounded-lsp.md), [docs/M13-VALIDATION-MATRIX.md](docs/M13-VALIDATION-MATRIX.md) |
 | Mainstream maturity roadmap | [docs/ROADMAP-MAINSTREAM-MATURITY.md](docs/ROADMAP-MAINSTREAM-MATURITY.md) |
 | Law forks F-NATIVE / F-REGISTRY (design only; human authorize) | [docs/HUMAN-AUTHORIZE-NATIVE.md](docs/HUMAN-AUTHORIZE-NATIVE.md), [docs/HUMAN-AUTHORIZE-REGISTRY.md](docs/HUMAN-AUTHORIZE-REGISTRY.md), [docs/ADR-037-f-native-law-fork.md](docs/ADR-037-f-native-law-fork.md), [docs/ADR-038-f-registry-law-fork.md](docs/ADR-038-f-registry-law-fork.md), [docs/DELIVERY_REPORT-2026-08-05-LAW-FORKS-F-NATIVE-F-REGISTRY.md](docs/DELIVERY_REPORT-2026-08-05-LAW-FORKS-F-NATIVE-F-REGISTRY.md) |
-| Human ordered backlog (2026-08-05) | [docs/BACKLOG-HUMAN-2026-08-05.md](docs/BACKLOG-HUMAN-2026-08-05.md) — (1) T-CT M23 ADR-039 ready (2) offline polish (3) mid-frame cancel (4) law forks |
+| Human ordered backlog (2026-08-05) | [docs/BACKLOG-HUMAN-2026-08-05.md](docs/BACKLOG-HUMAN-2026-08-05.md) |
 | M23 T-CT pure comptime calls | [docs/DESIGN-M23-COMPTIME-PURE-CALLS.md](docs/DESIGN-M23-COMPTIME-PURE-CALLS.md), [docs/ADR-039-m23-comptime-pure-calls.md](docs/ADR-039-m23-comptime-pure-calls.md), [docs/M23-VALIDATION-MATRIX.md](docs/M23-VALIDATION-MATRIX.md) |
+| BARP bootstrap authority reduction | [docs/ADR-043-bootstrap-authority-reduction.md](docs/ADR-043-bootstrap-authority-reduction.md), [docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md) — Phase 1: seed-native M23 |
 | Legacy intake | [docs/LEGACY.md](docs/LEGACY.md) |
 
 ### Stack pins

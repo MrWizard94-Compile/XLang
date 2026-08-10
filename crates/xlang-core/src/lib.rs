@@ -2689,16 +2689,18 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 /// the `bytecode` is seed-produced and must match bootstrap for Seed Profile
 /// programs covered by self-host tests.
 pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
+    // Product emission is seed forge. Bootstrap currently still:
+    // (1) parses/validates the program, (2) materializes M23 pure comptime
+    // calls into M5 literal form the checked-in seed understands (BARP Phase 1
+    // removes this bridge when seed-native M23 lands — ADR-043).
     let program = compile_source(source)?;
-    // M23 is validated and folded by the bootstrap, then materialized into the
-    // existing literal M5 seed input. The seed remains the product emitter and
-    // the resulting artifact is required to match the direct bootstrap output.
-    // This bridge is deliberately narrow: only already-validated M23 call
-    // directives are rewritten, and no source, host, or runtime authority is
-    // exposed to compile-time evaluation.
-    let seed_source = lower_m23_comptime_calls_for_seed(&program)?
-        .map(|lowered| format_program(&lowered))
-        .unwrap_or_else(|| source.to_owned());
+    let seed_source = if m23_product_requires_bootstrap_materialization(&program) {
+        lower_m23_comptime_calls_for_seed(&program)?
+            .map(|lowered| format_program(&lowered))
+            .unwrap_or_else(|| source.to_owned())
+    } else {
+        source.to_owned()
+    };
     let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, &seed_source).map_err(|error| {
         CompilerError::new(Span::synthetic(), format!("seed compiler failed: {error}"))
     })?;
@@ -2717,11 +2719,40 @@ pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
     Ok(CompileOutput { program, bytecode })
 }
 
+/// BARP tracker: product path still needs bootstrap materialization for M23.
+/// Flips false when seed-native M23 evaluation is proven (ADR-043 Phase 1).
+#[must_use]
+pub const fn seed_interprets_m23_comptime_calls_natively() -> bool {
+    false
+}
+
+fn m23_product_requires_bootstrap_materialization(program: &Program) -> bool {
+    !seed_interprets_m23_comptime_calls_natively() && program_contains_m23_comptime_call(program)
+}
+
+fn program_contains_m23_comptime_call(program: &Program) -> bool {
+    fn block_has_call(statements: &[Statement]) -> bool {
+        statements.iter().any(|statement| match statement {
+            Statement::Bind {
+                comptime: true,
+                value,
+                ..
+            } => matches!(value.kind, ExpressionKind::Call { .. }),
+            Statement::Choose {
+                when_bright,
+                when_dim,
+                ..
+            } => block_has_call(when_bright) || block_has_call(when_dim),
+            Statement::While { body, .. } => block_has_call(body),
+            _ => false,
+        })
+    }
+    program.weaves.iter().any(|weave| block_has_call(&weave.body))
+}
+
 /// Materialize accepted M23 comptime calls into the literal M5 form understood
-/// by the checked-in seed compiler. This is an intentionally explicit product
-/// bridge, not a general source rewrite: the bootstrap has already validated
-/// the original program, the result is one `COMPTIME_WHOLE` immediate, and the
-/// original AST is retained for callers.
+/// by the checked-in seed compiler. Temporary BARP Phase 0/1 bridge (ADR-043):
+/// remove when [`seed_interprets_m23_comptime_calls_natively`] is true.
 fn lower_m23_comptime_calls_for_seed(program: &Program) -> Result<Option<Program>, CompilerError> {
     let mut lowered = program.clone();
     let mut changed = false;
