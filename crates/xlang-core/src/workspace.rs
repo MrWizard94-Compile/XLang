@@ -16,7 +16,7 @@ use crate::project::{
     parse_project_document, sha256_hex, verify_project, ProjectDocument, ProjectError,
     ProjectVerifyReport,
 };
-use crate::{CompileOutput, LANGUAGE_NAME, LANGUAGE_VERSION};
+use crate::{LANGUAGE_NAME, LANGUAGE_VERSION};
 
 pub const WORKSPACE_SCHEMA_VERSION: &str = "aether.workspace/v1";
 pub const WORKSPACE_PROJECT_FILE: &str = "aether.project.json";
@@ -711,7 +711,7 @@ pub fn compile_workspace_package(
     workspace_root: &Path,
     document: &WorkspaceDocument,
     package_name: &str,
-) -> Result<CompileOutput, WorkspaceError> {
+) -> Result<Vec<u8>, WorkspaceError> {
     validate_workspace_document(document)?;
     if document.lock.is_some() {
         let _ = verify_workspace(workspace_root, document)?;

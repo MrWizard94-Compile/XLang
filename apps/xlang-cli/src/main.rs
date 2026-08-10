@@ -402,9 +402,9 @@ fn workspace_build(
     let json = read_source(workspace_path)?;
     let document = parse_workspace_document(&json).map_err(|error| error.to_string())?;
     let root = project_root_for(workspace_path);
-    let compiled = compile_workspace_package(root, &document, package_name)
+    let bytecode = compile_workspace_package(root, &document, package_name)
         .map_err(|error| error.to_string())?;
-    write_artifact(output_path, compiled.bytecode)?;
+    write_artifact(output_path, bytecode)?;
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} workspace {} package {} built {} (seed multi-module via elaboration; M22)",
         document.name,
@@ -537,8 +537,8 @@ fn project_build(project_path: &Path, output_path: &Path) -> Result<(), String> 
     let json = read_source(project_path)?;
     let document = parse_project_document(&json).map_err(|error| error.to_string())?;
     let root = project_root_for(project_path);
-    let compiled = compile_project_modules(root, &document).map_err(|error| error.to_string())?;
-    write_artifact(output_path, compiled.bytecode)?;
+    let bytecode = compile_project_modules(root, &document).map_err(|error| error.to_string())?;
+    write_artifact(output_path, bytecode)?;
     println!("{}", multi_module_authority_note());
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} project {}@{} built {} (seed multi-module via elaboration)",

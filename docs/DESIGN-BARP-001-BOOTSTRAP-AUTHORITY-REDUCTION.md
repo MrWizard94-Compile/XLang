@@ -35,7 +35,7 @@ Bootstrap remains **required** for:
 | `compile_product_bytecode` | **Phase 2:** seed forge + verify only; **Phase 3a** `AE-SEED-*` mapping |
 | `compile_with_seed` | Forge-first product bytes; bootstrap parse only for returned `Program` AST |
 | ~~`lower_m23_comptime_calls_for_seed`~~ | **Removed in Phase 1** — seed interprets raw M23 `call` |
-| Module elaborate | Host-side graph; then **seed emit** (ADR-045: dual-compare not product gate) |
+| Module elaborate | Host-side graph; then **seed emit only** (ADR-045/047: no bootstrap dual-compare or AST) |
 | `apply-edit` | Bootstrap structure + **product** seed compile before write |
 | CLI `check` | Bootstrap only (full diagnostics) |
 
@@ -100,6 +100,11 @@ without claiming full bootstrap parity.
 
 Project/workspace product build no longer bootstrap dual-compares on every
 emit; tests and gate remain the dual-compare oracle.
+
+### ADR-047 — Multi-module product emit without bootstrap AST (**complete** 2026-08-10)
+
+Product project/workspace compile returns seed bytes via
+`compile_product_bytecode` only (`product_multi_module_invokes_bootstrap() == false`).
 
 ### Out of scope / never BARP
 

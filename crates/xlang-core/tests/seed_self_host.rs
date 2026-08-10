@@ -1,8 +1,9 @@
 use aether_core::{
     compile_product_bytecode, compile_to_bytecode, compile_with_seed, forge_bytecode,
-    product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
-    run_bytecode, seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_subset,
-    verify_bytecode, InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
+    product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
+    product_path_requires_bootstrap_dual_compare, run_bytecode,
+    seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_subset, verify_bytecode,
+    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -349,6 +350,10 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
     assert!(
         seed_product_diagnostics_subset(),
         "Phase 3a diagnostics subset tracker must be true"
+    );
+    assert!(
+        !product_multi_module_invokes_bootstrap(),
+        "ADR-047: multi-module product path must not invoke bootstrap"
     );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")

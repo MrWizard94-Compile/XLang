@@ -2805,6 +2805,13 @@ pub const fn seed_product_diagnostics_subset() -> bool {
     true
 }
 
+/// BARP ADR-047: multi-module product emit does **not** invoke the bootstrap
+/// compiler (no parse/validate/AST fill on the product path).
+#[must_use]
+pub const fn product_multi_module_invokes_bootstrap() -> bool {
+    false
+}
+
 #[must_use]
 pub fn format_program(program: &Program) -> String {
     let mut formatted = format!("world {}\n", program.world);

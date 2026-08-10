@@ -12,8 +12,8 @@ use crate::project::{
     resolve_unit_path, validate_unit_path, ProjectDocument, ProjectError, ProjectUnitRole,
 };
 use crate::{
-    compile_to_bytecode, compile_with_seed, run_bytecode, run_bytecode_with_grants,
-    verify_bytecode, CompileOutput, HostGrantConfig, LANGUAGE_NAME, LANGUAGE_VERSION,
+    compile_product_bytecode, compile_to_bytecode, run_bytecode, run_bytecode_with_grants,
+    verify_bytecode, HostGrantConfig, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -866,15 +866,14 @@ pub fn elaborate_project_entry_with_packages(
     Ok(elaborated)
 }
 
-/// Multi-module project build → one verified AETH (M11b).
+/// Multi-module project build → verified AETH bytes (M11b).
 ///
-/// Host elaborates the import DAG to a deterministic single-file Aether program,
-/// then **seed-compiles** it (BARP product path). Dual-compare against bootstrap
-/// is an **oracle/test** obligation (ADR-045), not a product gate on every build.
+/// Host elaborates the import DAG, then **seed product emit only** (ADR-047:
+/// no bootstrap parse/emit). Dual-compare is test/oracle (ADR-045).
 pub fn compile_project_modules(
     project_root: &Path,
     document: &ProjectDocument,
-) -> Result<CompileOutput, ProjectError> {
+) -> Result<Vec<u8>, ProjectError> {
     compile_project_modules_with_packages(
         project_root,
         document,
@@ -889,7 +888,7 @@ pub fn compile_project_modules_with_packages(
     document: &ProjectDocument,
     package_roots: &BTreeMap<String, PathBuf>,
     allowed_packages: &BTreeSet<String>,
-) -> Result<CompileOutput, ProjectError> {
+) -> Result<Vec<u8>, ProjectError> {
     let entry = document
         .units
         .iter()
@@ -909,7 +908,7 @@ pub fn compile_project_entry(
     project_root: &Path,
     document: &ProjectDocument,
     entry_path: &str,
-) -> Result<CompileOutput, ProjectError> {
+) -> Result<Vec<u8>, ProjectError> {
     compile_project_entry_with_packages(
         project_root,
         document,
@@ -921,15 +920,15 @@ pub fn compile_project_entry(
 
 /// Compile a selectable entry with workspace package roots.
 ///
-/// Product path: host elaboration + seed emit (ADR-045). Bootstrap dual-compare
-/// is not required here; tests prove seed≡bootstrap for the elaboration corpus.
+/// Product path: host elaboration + [`compile_product_bytecode`] only (ADR-047).
+/// No bootstrap dual-compare gate (ADR-045); no bootstrap AST parse.
 pub fn compile_project_entry_with_packages(
     project_root: &Path,
     document: &ProjectDocument,
     entry_path: &str,
     package_roots: &BTreeMap<String, PathBuf>,
     allowed_packages: &BTreeSet<String>,
-) -> Result<CompileOutput, ProjectError> {
+) -> Result<Vec<u8>, ProjectError> {
     let source = elaborate_project_entry_with_packages(
         project_root,
         document,
@@ -941,7 +940,11 @@ pub fn compile_project_entry_with_packages(
         !crate::product_path_requires_bootstrap_dual_compare(),
         "ADR-045: product multi-module path must not gate on dual-compare"
     );
-    compile_with_seed(&source).map_err(|error| {
+    debug_assert!(
+        !crate::product_multi_module_invokes_bootstrap(),
+        "ADR-047: product multi-module path must not invoke bootstrap"
+    );
+    compile_product_bytecode(&source).map_err(|error| {
         module_error(
             "AE-PROJECT-004",
             format!("module project seed compile failed: {error}"),
@@ -979,17 +982,17 @@ pub fn run_project_tests_with_grants(
         && grants.env_names.is_empty();
     let mut results = Vec::new();
     for unit in tests {
-        let compiled = compile_project_entry(project_root, document, &unit.path)?;
-        verify_bytecode(&compiled.bytecode).map_err(|error| {
+        let bytecode = compile_project_entry(project_root, document, &unit.path)?;
+        verify_bytecode(&bytecode).map_err(|error| {
             module_error(
                 "AE-PROJECT-004",
                 format!("test unit {} produced invalid artifact: {error}", unit.path),
             )
         })?;
         let run_result = if pure {
-            run_bytecode(&compiled.bytecode)
+            run_bytecode(&bytecode)
         } else {
-            run_bytecode_with_grants(&compiled.bytecode, grants.clone())
+            run_bytecode_with_grants(&bytecode, grants.clone())
         };
         match run_result {
             Ok(output) if output.exit_code == 0 => results.push(ProjectTestResult {
@@ -1047,7 +1050,7 @@ impl ProjectTestReport {
 #[must_use]
 pub fn multi_module_authority_note() -> String {
     format!(
-        "{LANGUAGE_NAME} {LANGUAGE_VERSION} multi-module project build elaborates the import graph then seed-compiles (M11b; dual-compare is test/oracle only, ADR-045)"
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} multi-module project build elaborates the import graph then seed-emits (M11b; no bootstrap on product path, ADR-047; dual-compare is test/oracle only)"
     )
 }
 
@@ -1139,13 +1142,13 @@ mod tests {
         let elaborated = elaborate_project_modules(&root, &document).unwrap();
         assert!(elaborated.contains("weave m_lib_math_double"));
         assert!(!elaborated.contains("import unit"));
-        let compiled = compile_project_modules(&root, &document).unwrap();
-        let run = run_bytecode(&compiled.bytecode).unwrap();
+        let product = compile_project_modules(&root, &document).unwrap();
+        let run = run_bytecode(&product).unwrap();
         assert_eq!(run.exit_code, 42);
-        // M11b: product path is seed bytecode, dual-compared to bootstrap.
+        // Oracle: product seed bytes dual-compare to bootstrap (tests only).
         let bootstrap = crate::compile_to_bytecode(&elaborated).unwrap();
         assert_eq!(
-            compiled.bytecode, bootstrap.bytecode,
+            product, bootstrap.bytecode,
             "product build must return seed bytes identical to bootstrap"
         );
 
@@ -1174,8 +1177,8 @@ mod tests {
             "examples/project-modules elaboration must dual-compare"
         );
         let product = compile_project_modules(&root, &document).unwrap();
-        assert_eq!(product.bytecode, seed.bytecode);
-        let run = run_bytecode(&product.bytecode).unwrap();
+        assert_eq!(product, seed.bytecode);
+        let run = run_bytecode(&product).unwrap();
         assert_eq!(run.exit_code, 42);
     }
 

@@ -343,9 +343,9 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` live-stamped 2026-08-08).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through Phase 3a:** seed-native
-M23, forge-first product path, oracle-only dual-compare (ADR-045), bounded
-`AE-SEED-*` diagnostics (ADR-046). **Next:** Phase 3b richer seed codes (new ADR).
+reduce Rust bootstrap product-path authority. **Through ADR-047:** seed-native
+M23, forge-first product path, oracle-only dual-compare, Phase 3a `AE-SEED-*`,
+multi-module product without bootstrap AST. **Next:** Phase 3b richer seed codes.
 
 **Still blocked without a new ADR / law:** expanded FFI signatures,
 native/LLVM, network registry, task handles/timeouts/parallelism, and any
