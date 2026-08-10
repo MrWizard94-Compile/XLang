@@ -11,11 +11,11 @@ use aether_core::{
     apply_structural_edit, canonical_ast, compile_product_bytecode, compile_project_modules,
     compile_source, compile_to_bytecode, compile_with_seed, compile_workspace_package,
     forge_bytecode, format_project, format_source, multi_module_authority_note,
-    parse_project_document, parse_workspace_document, refresh_project_lock,
-    refresh_workspace_lock, run_bytecode, run_bytecode_with_grants,
-    run_project_tests_with_grants, serialize_project_document, serialize_workspace_document,
-    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
-    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    parse_project_document, parse_workspace_document, refresh_project_lock, refresh_workspace_lock,
+    run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
+    serialize_project_document, serialize_workspace_document, structural_document_json,
+    unit_artifact_file_name, verify_bytecode, verify_project, verify_workspace, HostGrantConfig,
+    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
@@ -446,8 +446,7 @@ fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), 
             let source_path = aether_core::resolve_unit_path(root, &unit.path)
                 .map_err(|error| error.to_string())?;
             let source = read_source(&source_path)?;
-            let bytecode =
-                compile_product_bytecode(&source).map_err(|error| error.to_string())?;
+            let bytecode = compile_product_bytecode(&source).map_err(|error| error.to_string())?;
             let artifact_path = dir.join(unit_artifact_file_name(&unit.path));
             write_artifact(&artifact_path, bytecode)?;
         }
