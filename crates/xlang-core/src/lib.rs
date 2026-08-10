@@ -2880,29 +2880,32 @@ fn seed_reject_missing_main_weave(source: &str) -> Option<String> {
 /// Compile source with the Aether-written seed compiler (product path).
 ///
 /// **Product success** is seed forge + verify only ([`compile_product_bytecode`];
-/// ADR-044/049). Bootstrap no longer fails this call after product success.
+/// ADR-044/049/051). This path **never** invokes the bootstrap compiler.
 ///
-/// [`CompileOutput::program`] is a **best-effort** bootstrap AST when bootstrap
-/// accepts the same source; if bootstrap rejects after product success, `program`
-/// is an empty placeholder and must not be used as a semantic document — call
-/// [`compile_source`] / CLI `check` for diagnostics or dual-compare oracles.
+/// [`CompileOutput::program`] is always an **empty placeholder** and must not be
+/// used as a semantic document — call [`compile_source`] / CLI `check` (bootstrap)
+/// for AST diagnostics, or dual-compare oracles via [`compile_to_bytecode`].
+/// Prefer [`compile_product_bytecode`] when only bytes are required.
 pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
     debug_assert!(
         compile_with_seed_product_authoritative(),
         "ADR-049: compile_with_seed product success must not require bootstrap"
     );
+    debug_assert!(
+        !compile_with_seed_invokes_bootstrap(),
+        "ADR-051: compile_with_seed must not invoke bootstrap"
+    );
     let bytecode = compile_product_bytecode(source)?;
-    let program = match compile_source(source) {
-        Ok(program) => program,
-        Err(_) => Program {
+    Ok(CompileOutput {
+        program: Program {
             world: String::new(),
             records: Vec::new(),
             shapes: Vec::new(),
             host_weaves: Vec::new(),
             weaves: Vec::new(),
         },
-    };
-    Ok(CompileOutput { program, bytecode })
+        bytecode,
+    })
 }
 
 /// BARP Phase 1: seed evaluates M23 pure comptime calls (D2a body subset) and
@@ -2958,6 +2961,18 @@ pub const fn compile_with_seed_product_authoritative() -> bool {
 /// legacy heuristics) in addition to 001–004.
 #[must_use]
 pub const fn seed_product_preflight_phase3b() -> bool {
+    true
+}
+
+/// BARP ADR-051: [`compile_with_seed`] never calls bootstrap (empty Program only).
+#[must_use]
+pub const fn compile_with_seed_invokes_bootstrap() -> bool {
+    false
+}
+
+/// BARP ADR-051: CLI `aether check --product` validates via product seed only.
+#[must_use]
+pub const fn product_cli_check_without_bootstrap() -> bool {
     true
 }
 

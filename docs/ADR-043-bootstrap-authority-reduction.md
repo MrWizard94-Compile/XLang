@@ -1,7 +1,7 @@
 # ADR-043: Bootstrap Authority Reduction Program (BARP)
 
-**Status:** Accepted (program) — through ADR-050  
-**Date:** 2026-08-08 (Phase 1–2 / ADR-044–050 2026-08-10)  
+**Status:** Accepted (program) — through ADR-051  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044–051 2026-08-10)  
 **Related Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`  
 **Design:** [DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 
@@ -36,8 +36,12 @@ authority under Constitution.
    `compile_with_seed_product_authoritative() == true`.  
 10. **ADR-050 (done):** Phase 3b product preflight `AE-SEED-005`–`007` + roadmap DOC-SYNC;
     `seed_product_preflight_phase3b() == true`.  
-11. Bootstrap remains seed recovery rebuild + full diagnostic + dual-compare oracle.  
-12. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+11. **ADR-051 (done):** `compile_with_seed` never invokes bootstrap; CLI
+    `check --product` is seed-only; `compile_with_seed_invokes_bootstrap() == false`,
+    `product_cli_check_without_bootstrap() == true`.  
+12. Bootstrap remains seed recovery rebuild + default `check`/AST + format/LSP +
+    dual-compare oracle.  
+13. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 
@@ -61,7 +65,7 @@ authority under Constitution.
 
 ## Links
 
-- DESIGN-BARP-001, ADR-039, ADR-044–050, SEED_PROFILE  
+- DESIGN-BARP-001, ADR-039, ADR-044–051, SEED_PROFILE  
 
 ---
 

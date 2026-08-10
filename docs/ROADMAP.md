@@ -5,7 +5,7 @@ M20/M20b, M17b–d, M21, M22, and M23 pure comptime calls; RTP-001 runtime
 performance increment; PKG-001 offline workspace locks; package **0.36**
 current. M19e is implemented as the verifier-checked v12 task-frame slice
 (ADR-042); TP-1/TP-2 delivered; portfolio ADR-014
-**Date:** 2026-08-10 (BARP through ADR-050; product authority reduction active)
+**Date:** 2026-08-10 (BARP through ADR-051; product authority reduction active)
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
 constitution gate.
@@ -343,11 +343,13 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` live-stamped 2026-08-08).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-050:** seed-native
-M23, product-authoritative emit, gate product seed self-rebuild, Phase 3a/3b
-`AE-SEED-001`–`007` product preflights, multi-module/edit product gates.
+reduce Rust bootstrap product-path authority. **Through ADR-051:** seed-native
+M23, bootstrap-free `compile_with_seed`, product CLI `check --product`, gate
+product seed self-rebuild, Phase 3a/3b `AE-SEED-001`–`007` product preflights,
+multi-module/edit product gates.
 **Next:** deeper seed-side diagnostics (optional); optional seed elaboration
-(large ADR).
+(large ADR). Residual bootstrap: default `check`/format/structure/LSP AST,
+`--bootstrap` seed rebuild, dual-compare oracle.
 
 **Still blocked without a new ADR / law:** expanded FFI signatures,
 native/LLVM, network registry, task handles/timeouts/parallelism, and any

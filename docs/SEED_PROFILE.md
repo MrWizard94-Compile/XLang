@@ -15,10 +15,11 @@ from `seed/aether_seed.ae` byte-identically (independence proof; bootstrap
 remains the recovery rebuild path). Rust bootstrap remains for seed recovery
 rebuild, `check` AST full diagnostics, and dual-compare **proofs**. A Seed
 Profile claim is not a claim of full bootstrap diagnostic parity for invalid input.
-`compile_with_seed` product success does not require bootstrap (ADR-049); prefer
-`compile_product_bytecode` for emit-only. Product preflight codes
+`compile_with_seed` never invokes bootstrap (ADR-051; empty placeholder `Program`
+only); prefer `compile_product_bytecode` for emit-only. Product preflight codes
 `AE-SEED-001`–`007` (ADR-046/050) are host/product fail-closed helpers, not full
-seed diagnostic parity.
+seed diagnostic parity. CLI `aether check --product` validates the seed product
+path without bootstrap AST (default `check` remains full diagnostics).
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,
@@ -81,8 +82,9 @@ The profile does not silently expand that language surface.
     `comptime bind name <- call weave args...` under the D2a body subset
     (Whole `bind` / `revise` / terminal `yield`, prior total Whole guest
     callees, literals or prior comptime args), folds to `COMPTIME_WHOLE` (56),
-    and dual-compares with bootstrap for `examples/comptime-calls.ae`. Bootstrap
-    still validates on the product path; no materialization rewrite is applied
+    and dual-compares with bootstrap for `examples/comptime-calls.ae`. Product
+    emission is forge-first (no bootstrap pre-validate; ADR-044); no
+    materialization rewrite is applied
     (`seed_interprets_m23_comptime_calls_natively` is true; ADR-043 Phase 1).
 18. Parses `task weave` and `checkpoint`, emits v12 task flags,
     `frame_arena_capacity`, and `TASK_CHECKPOINT` (67), preserves verifier-safe
