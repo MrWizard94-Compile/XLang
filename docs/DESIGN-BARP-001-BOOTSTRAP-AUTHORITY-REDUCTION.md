@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — Phase 0–3c complete; ADR-045–052 product authority reductions  
-**Date:** 2026-08-08 (Phase 1–2 / ADR-044–052 2026-08-10)  
-**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-052](ADR-052-barp-product-lib-validate-phase3c-diagnostics.md)  
+**Status:** Active program — Phase 0–3c complete; ADR-045–053 product authority reductions  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044–053 2026-08-10)  
+**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-053](ADR-053-barp-product-format-apply-edit-cli.md)  
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -39,7 +39,9 @@ Bootstrap remains **required** for:
 | Lib project verify | **Product seed probe** with synthetic main (ADR-052; was bootstrap) |
 | `apply-edit` | Bootstrap base parse AST; **product seed accept** (ADR-048); CLI product write gate |
 | CLI `check` | Bootstrap full diagnostics (default); **`check --product`** seed-only (ADR-051) |
-| CLI `format` / structure / LSP | Bootstrap AST (authoring) |
+| CLI `format` | Bootstrap AST rewrite (default); **`format --product`** LF + seed accept (ADR-053) |
+| CLI `apply-edit` | Bootstrap base parse; product accept in core; **CLI does not re-forge** (ADR-053) |
+| structure / LSP | Bootstrap AST (authoring) |
 
 **Primary product emission** is seed forge without bootstrap pre-gate or
 product dual-compare gate. Bootstrap remains rebuild, default `check`/AST
@@ -127,6 +129,11 @@ via seed only. Default `check` remains full bootstrap diagnostics.
 Project-verify lib probes use product seed; forge/verify map to
 `AE-SEED-008` / `010` / `011` (host classification, not full parity).
 
+### ADR-053 — Product format + apply-edit CLI trust (**complete** 2026-08-10)
+
+`format --product` is LF normalize + product accept (no bootstrap AST rewrite).
+CLI apply-edit trusts core product accept (no second forge).
+
 ### ADR-045 — Product dual-compare oracle-only (**complete** 2026-08-10)
 
 Project/workspace product build no longer bootstrap dual-compares on every
@@ -157,8 +164,9 @@ Product project/workspace compile returns seed bytes via
 | Product diagnostics subset | **Phase 3a–3c** `AE-SEED-001`–`011` (ADR-046/050/052) |
 | `compile_with_seed` bootstrap | **None** (ADR-051) |
 | Product CLI check | **`check --product`** (ADR-051) |
+| Product CLI format | **`format --product`** LF+accept (ADR-053) |
 | Lib unit project verify | **Product seed probe** (ADR-052) |
-| Bootstrap roles | Rebuild seed, default check/AST, format/LSP, dual-compare oracle |
+| Bootstrap roles | Rebuild seed, default check/AST format, structure/LSP, dual-compare oracle |
 | Gate | `aether-gate -Mode release` PASS |
 
 ---

@@ -8,19 +8,21 @@ mod lsp;
 mod test_runner;
 
 use aether_core::{
-    apply_structural_edit, canonical_ast, compile_product_bytecode, compile_project_modules,
-    compile_source, compile_to_bytecode, compile_workspace_package, forge_bytecode, format_project,
-    format_source, multi_module_authority_note, parse_project_document, parse_workspace_document,
-    product_cli_check_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
-    run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
-    serialize_project_document, serialize_workspace_document, structural_document_json,
-    unit_artifact_file_name, verify_bytecode, verify_project, verify_workspace, HostGrantConfig,
-    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    apply_edit_cli_trusts_product_accept, apply_structural_edit, canonical_ast,
+    compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
+    compile_workspace_package, forge_bytecode, format_project, format_source,
+    format_source_product, multi_module_authority_note, parse_project_document,
+    parse_workspace_document, product_cli_check_without_bootstrap,
+    product_format_without_bootstrap, refresh_project_lock, refresh_workspace_lock, run_bytecode,
+    run_bytecode_with_grants, run_project_tests_with_grants, serialize_project_document,
+    serialize_workspace_document, structural_document_json, unit_artifact_file_name,
+    verify_bytecode, verify_project, verify_workspace, HostGrantConfig, InvocationValue,
+    LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether check --product <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncheck uses bootstrap full diagnostics + canonical AST by default.\ncheck --product validates via the seed product path only (forge + verify + AE-SEED preflights; no bootstrap AST).\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nstructure emits aether.ast/v8 JSON. apply-edit accepts aether.edit/v8 (including statement-level ops), validates canonical source, then seed-compiles before writing.\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics / dual-compare proofs)."
+        "Usage:\n  aether check <source-file>\n  aether check --product <source-file>\n  aether structure <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --product <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncheck uses bootstrap full diagnostics + canonical AST by default.\ncheck --product validates via the seed product path only (forge + verify + AE-SEED preflights; no bootstrap AST).\nformat uses bootstrap AST-canonical rewrite by default.\nformat --product LF-normalizes and product-accepts only (no bootstrap AST rewrite).\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nstructure emits aether.ast/v8 JSON. apply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (bootstrap diagnostics; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics / dual-compare proofs)."
     );
 }
 
@@ -88,12 +90,12 @@ fn structure(source_path: &Path) -> Result<(), String> {
 fn apply_edit(source_path: &Path, edit_path: &Path, output_path: &Path) -> Result<(), String> {
     let source = read_source(source_path)?;
     let edit = read_source(edit_path)?;
+    // ADR-048/053: core apply_structural_edit product-seed accepts; CLI does not re-forge.
+    debug_assert!(
+        apply_edit_cli_trusts_product_accept(),
+        "ADR-053: apply-edit CLI must trust core product accept"
+    );
     let result = apply_structural_edit(&source, &edit).map_err(|error| error.to_string())?;
-    compile_product_bytecode(&result.source).map_err(|error| {
-        format!(
-            "refusing to write structurally edited source because seed compilation failed: {error}"
-        )
-    })?;
     write_source(output_path, &result.source)?;
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} applied {} validated structural edit(s) from {} to {}",
@@ -361,13 +363,26 @@ fn parse_project_test_tail(
     Ok((grants, report_json, report_junit))
 }
 
-fn format_file(source_path: &Path, output_path: Option<&Path>) -> Result<(), String> {
+fn format_file(
+    source_path: &Path,
+    output_path: Option<&Path>,
+    product: bool,
+) -> Result<(), String> {
     let source = read_source(source_path)?;
-    let formatted = format_source(&source).map_err(|error| error.to_string())?;
+    let formatted = if product {
+        debug_assert!(
+            product_format_without_bootstrap(),
+            "ADR-053: product format must not require bootstrap"
+        );
+        format_source_product(&source).map_err(|error| error.to_string())?
+    } else {
+        format_source(&source).map_err(|error| error.to_string())?
+    };
     if let Some(output) = output_path {
         write_source(output, &formatted)?;
+        let mode = if product { "product " } else { "" };
         println!(
-            "{LANGUAGE_NAME} {LANGUAGE_VERSION} formatted {} to {}",
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} {mode}formatted {} to {}",
             source_path.display(),
             output.display()
         );
@@ -730,22 +745,29 @@ fn run() -> Result<(), String> {
             }
         }
         "format" => {
-            let source = next_argument(&mut arguments, "source file")?;
+            let first = next_argument(&mut arguments, "source file or --product")?;
+            let mut product = false;
+            let source = if first == "--product" {
+                product = true;
+                next_argument(&mut arguments, "source file")?
+            } else {
+                first
+            };
             let mut output = None;
-            if let Some(flag) = arguments.next() {
-                if flag != "--output" {
-                    return Err("format accepts optional --output <source-file>".to_owned());
-                }
-                let path = next_argument(&mut arguments, "source output file")?;
-                if arguments.next().is_some() {
+            while let Some(flag) = arguments.next() {
+                if flag == "--product" {
+                    product = true;
+                } else if flag == "--output" {
+                    let path = next_argument(&mut arguments, "source output file")?;
+                    output = Some(path);
+                } else {
                     return Err(
-                        "format accepts one source file and optional --output <source-file>"
+                        "format accepts <source-file> [--product] [--output <source-file>] or --product <source-file> [--output <source-file>]"
                             .to_owned(),
                     );
                 }
-                output = Some(path);
             }
-            format_file(Path::new(&source), output.as_ref().map(Path::new))
+            format_file(Path::new(&source), output.as_ref().map(Path::new), product)
         }
         "project" => {
             let subcommand = next_argument(&mut arguments, "project subcommand")?;
@@ -995,6 +1017,25 @@ mod tests {
         )
         .expect("source should write");
         check(&source_path, true).expect("product check must accept valid seed surface");
+    }
+
+    #[test]
+    fn product_format_normalizes_crlf_without_bootstrap() {
+        assert!(
+            product_format_without_bootstrap(),
+            "ADR-053 tracker must be true"
+        );
+        let temporary = TemporaryDirectory::create();
+        let source_path = temporary.path.join("crlf.ae");
+        let output_path = temporary.path.join("out.ae");
+        fs::write(
+            &source_path,
+            "world cli\r\n\r\nweave main [] -> Whole:\r\n  yield 0\r\n",
+        )
+        .expect("source should write");
+        format_file(&source_path, Some(&output_path), true).expect("product format");
+        let written = fs::read_to_string(&output_path).expect("read");
+        assert_eq!(written, "world cli\n\nweave main [] -> Whole:\n  yield 0\n");
     }
 
     #[test]

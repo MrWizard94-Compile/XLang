@@ -588,6 +588,21 @@ pub fn format_source(source: &str) -> Result<String, CompilerError> {
     Ok(crate::format_program(&program))
 }
 
+/// Product-path format: LF normalize + seed accept (ADR-053).
+///
+/// Does **not** invoke the bootstrap compiler and does **not** rewrite to full
+/// AST-canonical form ([`format_source`] / `format_program`). Use default
+/// [`format_source`] when bootstrap-canonical rewrite is required.
+pub fn format_source_product(source: &str) -> Result<String, CompilerError> {
+    debug_assert!(
+        crate::product_format_without_bootstrap(),
+        "ADR-053: product format must not require bootstrap"
+    );
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    crate::compile_product_bytecode(&normalized)?;
+    Ok(normalized)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -656,6 +671,20 @@ mod tests {
             formatted,
             "world fmt\n\nweave main [] -> Whole:\n  yield sum 1 2\n"
         );
+    }
+
+    #[test]
+    fn format_source_product_normalizes_lf_and_accepts_without_bootstrap() {
+        assert!(crate::product_format_without_bootstrap(), "ADR-053 tracker");
+        let crlf = "world fmt\r\n\r\nweave main [] -> Whole:\r\n  yield 1\r\n";
+        let formatted = format_source_product(crlf).expect("product format");
+        assert_eq!(
+            formatted,
+            "world fmt\n\nweave main [] -> Whole:\n  yield 1\n"
+        );
+        let legacy = format_source_product("world w\n\nfn main() -> Int { return 0; }\n")
+            .expect_err("legacy must fail product format");
+        assert!(legacy.to_string().contains("AE-SEED-007"), "got {legacy}");
     }
 
     #[test]

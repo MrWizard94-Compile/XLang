@@ -19,8 +19,10 @@ Profile claim is not a claim of full bootstrap diagnostic parity for invalid inp
 only); prefer `compile_product_bytecode` for emit-only. Product preflight codes
 `AE-SEED-001`–`011` (ADR-046/050/052) are host/product fail-closed helpers, not full
 seed diagnostic parity. CLI `aether check --product` validates the seed product
-path without bootstrap AST (default `check` remains full diagnostics). Project
-verify validates lib units via product seed probes (ADR-052).
+path without bootstrap AST (default `check` remains full diagnostics).
+`format --product` LF-normalizes and product-accepts without bootstrap AST rewrite
+(default `format` remains full bootstrap canonical; ADR-053). Project verify
+validates lib units via product seed probes (ADR-052).
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,

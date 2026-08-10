@@ -1,7 +1,8 @@
 use aether_core::{
-    compile_product_bytecode, compile_to_bytecode, compile_with_seed,
-    compile_with_seed_invokes_bootstrap, compile_with_seed_product_authoritative, forge_bytecode,
-    lib_module_validates_via_product_seed, product_cli_check_without_bootstrap,
+    apply_edit_cli_trusts_product_accept, compile_product_bytecode, compile_to_bytecode,
+    compile_with_seed, compile_with_seed_invokes_bootstrap,
+    compile_with_seed_product_authoritative, forge_bytecode, lib_module_validates_via_product_seed,
+    product_cli_check_without_bootstrap, product_format_without_bootstrap,
     product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
     product_path_requires_bootstrap_dual_compare, run_bytecode,
     seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_phase3c,
@@ -386,6 +387,14 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
     assert!(
         seed_product_diagnostics_phase3c(),
         "ADR-052: Phase 3c product diagnostic classification"
+    );
+    assert!(
+        product_format_without_bootstrap(),
+        "ADR-053: product format without bootstrap"
+    );
+    assert!(
+        apply_edit_cli_trusts_product_accept(),
+        "ADR-053: apply-edit CLI trusts product accept"
     );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")

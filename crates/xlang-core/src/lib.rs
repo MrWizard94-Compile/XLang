@@ -50,11 +50,11 @@ pub use modules::{
     validate_lib_module_source, ProjectTestReport, ProjectTestResult,
 };
 pub use project::{
-    format_project, format_source, parse_project_document, refresh_project_lock, resolve_unit_path,
-    serialize_project_document, sha256_hex, unit_artifact_file_name, validate_unit_path,
-    verify_project, ProjectDocument, ProjectError, ProjectFormatReport, ProjectFormatUnit,
-    ProjectLock, ProjectLockUnit, ProjectUnit, ProjectUnitReport, ProjectUnitRole,
-    ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
+    format_project, format_source, format_source_product, parse_project_document,
+    refresh_project_lock, resolve_unit_path, serialize_project_document, sha256_hex,
+    unit_artifact_file_name, validate_unit_path, verify_project, ProjectDocument, ProjectError,
+    ProjectFormatReport, ProjectFormatUnit, ProjectLock, ProjectLockUnit, ProjectUnit,
+    ProjectUnitReport, ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
 };
 pub use workspace::{
     compile_workspace_package, parse_workspace_document, refresh_workspace_lock,
@@ -3037,6 +3037,18 @@ pub const fn lib_module_validates_via_product_seed() -> bool {
 /// BARP ADR-052 Phase 3c: product forge/verify map to AE-SEED-008/010/011 subset.
 #[must_use]
 pub const fn seed_product_diagnostics_phase3c() -> bool {
+    true
+}
+
+/// BARP ADR-053: [`format_source_product`] / `format --product` is seed-only (LF + accept).
+#[must_use]
+pub const fn product_format_without_bootstrap() -> bool {
+    true
+}
+
+/// BARP ADR-053: CLI apply-edit trusts core product accept (no second forge).
+#[must_use]
+pub const fn apply_edit_cli_trusts_product_accept() -> bool {
     true
 }
 
