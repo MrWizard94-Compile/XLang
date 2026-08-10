@@ -33,6 +33,9 @@ subset** without claiming full parity.
 | `AE-SEED-002` | Seed produced bytes that failed `verify_bytecode` |
 | `AE-SEED-003` | Seed rejected non-canonical indentation (odd space count) |
 | `AE-SEED-004` | Phase 3b: missing top-level `weave main` / `task weave main` (host preflight) |
+| `AE-SEED-005` | Phase 3b (ADR-050): empty / whitespace-only source |
+| `AE-SEED-006` | Phase 3b (ADR-050): missing top-level `world` |
+| `AE-SEED-007` | Phase 3b (ADR-050): legacy / non-Aether syntax heuristics |
 | hint | Always include: use `aether check <source>` for bootstrap diagnostics |
 
 ## Consequences

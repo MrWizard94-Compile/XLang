@@ -5,7 +5,7 @@ M20/M20b, M17b–d, M21, M22, and M23 pure comptime calls; RTP-001 runtime
 performance increment; PKG-001 offline workspace locks; package **0.36**
 current. M19e is implemented as the verifier-checked v12 task-frame slice
 (ADR-042); TP-1/TP-2 delivered; portfolio ADR-014
-**Date:** 2026-08-08
+**Date:** 2026-08-10 (BARP through ADR-050; product authority reduction active)
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
 constitution gate.
@@ -104,7 +104,7 @@ invalid-source diagnostic parity.
 | M20b | Stdlib layer 1 | M20 | Expand pure Whole helpers; add Truth + Text modules; multi-import demo. | Project build dual-compare; `aether test`; exit 42 demo. | **Implemented in package 0.27 (ADR-029)** |
 | M21 | Foreign ABI pilot (T-FFI) | M8, threat v3 | Narrow foreign weave + explicit library path grant. | Matrix green; human residual-risk accepted; seed≡bootstrap foreign corpus. | **Pilot implemented in package 0.31 (ADR-025); seed dual-compare proven** |
 | M22 | Cross-package import | M11, M18 | `import unit "…" from package name as alias` + `workspace build --package`. | Matrix green; depends_on jail. | **Implemented in package 0.24 (ADR-026)** |
-| M23 | Pure comptime weave calls (T-CT) | M15 | `comptime bind <- call` pure total Whole helpers; COMPTIME_WHOLE fold. | Matrix green; bootstrap materialization + seed emission ≡ bootstrap; no host/effect/resource callees. | **Implemented in package 0.33 (ADR-039)** |
+| M23 | Pure comptime weave calls (T-CT) | M15 | `comptime bind <- call` pure total Whole helpers; COMPTIME_WHOLE fold. | Matrix green; seed-native D2a eval (BARP Phase 1); product dual-compare ≡ bootstrap; no host/effect/resource callees. | **Implemented in package 0.33 (ADR-039); BARP Phase 1 seed-native (ADR-043)** |
 | RTP-001 | Runtime Text ASCII fast path | Current VM | Private cached ASCII provenance for scalar-equivalent Text operations; no source or AETH change. | Unicode boundary tests, full debug/release suites, and scoped local self-host measurement. | **Implemented in package 0.34 (ADR-040)** |
 | PKG-001 | Offline workspace locks | M9, M18, M22 | Explicit project/workspace lock refresh; complete local package identity pins; locked build preflight. | Matrix green; project-manifest + nested unit lock checks; no-registry boundary preserved. | **Implemented in package 0.35 (ADR-041)** |
 
@@ -343,17 +343,18 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` live-stamped 2026-08-08).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-049:** seed-native
-M23, product-authoritative emit, gate product seed self-rebuild identity,
-Phase 3a/3b `AE-SEED-*`, multi-module/edit product gates. **Next:** richer
-seed-side codes; optional seed elaboration (large).
+reduce Rust bootstrap product-path authority. **Through ADR-050:** seed-native
+M23, product-authoritative emit, gate product seed self-rebuild, Phase 3a/3b
+`AE-SEED-001`–`007` product preflights, multi-module/edit product gates.
+**Next:** deeper seed-side diagnostics (optional); optional seed elaboration
+(large ADR).
 
 **Still blocked without a new ADR / law:** expanded FFI signatures,
 native/LLVM, network registry, task handles/timeouts/parallelism, and any
 broader resource/effect cancellation surface.
 
 **Human backlog (updated 2026-08-10):**
-1. **BARP Phase 3b** — richer seed-side diagnostic codes (optional; new ADR).
+1. **BARP** — deeper seed-side diagnostic codes beyond host preflight (optional ADR).
 2. Further offline package/stdlib polish only through a new scoped design and matrix.
 3. Broader task cancellation, task handles/timeouts/parallelism only through a new ADR.
 4. Law forks F-NATIVE / F-REGISTRY — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) /

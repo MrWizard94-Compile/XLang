@@ -238,6 +238,12 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-seed-007") {
+        "AE-SEED-007"
+    } else if normalized.contains("ae-seed-006") {
+        "AE-SEED-006"
+    } else if normalized.contains("ae-seed-005") {
+        "AE-SEED-005"
     } else if normalized.contains("ae-seed-004") {
         "AE-SEED-004"
     } else if normalized.contains("ae-seed-003") {
@@ -2710,6 +2716,15 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         "BARP Phase 2 requires forge-first product emission"
     );
     if seed_product_diagnostics_subset() {
+        if let Some(message) = seed_reject_empty_source(source) {
+            return Err(CompilerError::new(Span::synthetic(), message));
+        }
+        if let Some(message) = seed_reject_missing_world(source) {
+            return Err(CompilerError::new(Span::synthetic(), message));
+        }
+        if let Some(message) = seed_reject_legacy_syntax_heuristics(source) {
+            return Err(CompilerError::new(Span::synthetic(), message));
+        }
         if let Some(message) = seed_reject_odd_indentation(source) {
             return Err(CompilerError::new(Span::synthetic(), message));
         }
@@ -2740,6 +2755,65 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
 
 fn format_seed_product_error(code: &str, detail: &str) -> String {
     format!("{code}: product seed path failed ({detail}). Full diagnostics: aether check <source>")
+}
+
+/// BARP Phase 3b (ADR-050): empty product input.
+fn seed_reject_empty_source(source: &str) -> Option<String> {
+    if source.trim().is_empty() {
+        return Some(format_seed_product_error("AE-SEED-005", "source is empty"));
+    }
+    None
+}
+
+/// BARP Phase 3b (ADR-050): require a top-level `world` declaration line.
+fn seed_reject_missing_world(source: &str) -> Option<String> {
+    let has_world = source.lines().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("world ")
+    });
+    if !has_world {
+        return Some(format_seed_product_error(
+            "AE-SEED-006",
+            "program requires a top-level world declaration",
+        ));
+    }
+    None
+}
+
+/// BARP Phase 3b (ADR-050): reject obvious non-Aether / legacy syntax without
+/// running the bootstrap compiler.
+fn seed_reject_legacy_syntax_heuristics(source: &str) -> Option<String> {
+    for (line_index, line) in source.lines().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() {
+            continue;
+        }
+        // Aether admits `import unit …`; reject other `import` shapes as legacy.
+        let non_aether_import =
+            trimmed.starts_with("import ") && !trimmed.starts_with("import unit ");
+        let legacy = trimmed.starts_with("fn ")
+            || trimmed.starts_with("fn\t")
+            || trimmed.starts_with("return ")
+            || trimmed.starts_with("return;")
+            || trimmed.starts_with("let ")
+            || trimmed.starts_with("pub ")
+            || trimmed.starts_with("use ")
+            || non_aether_import
+            || trimmed.contains("-> Int")
+            || trimmed.contains("-> i64");
+        // Aether does not use brace blocks; `{`/`}` on a line is legacy/hostile.
+        let brace = trimmed.contains('{') || trimmed.contains('}');
+        if legacy || brace {
+            return Some(format_seed_product_error(
+                "AE-SEED-007",
+                &format!(
+                    "line {}: source looks like legacy or non-Aether syntax (use Aether forms; aether check for details)",
+                    line_index + 1
+                ),
+            ));
+        }
+    }
+    None
 }
 
 /// BARP Phase 3a: reject indentation that is not a multiple of two spaces
@@ -2877,6 +2951,13 @@ pub const fn structural_edit_accepts_via_product_seed() -> bool {
 /// AST is best-effort fill and does not gate product Ok.
 #[must_use]
 pub const fn compile_with_seed_product_authoritative() -> bool {
+    true
+}
+
+/// BARP ADR-050: Phase 3b product preflight codes AE-SEED-005–007 (empty, world,
+/// legacy heuristics) in addition to 001–004.
+#[must_use]
+pub const fn seed_product_preflight_phase3b() -> bool {
     true
 }
 

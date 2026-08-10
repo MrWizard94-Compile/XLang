@@ -148,6 +148,11 @@ pub fn apply_structural_edit(
 fn canonicalize_source(source: &str) -> Result<(Program, String), CompilerError> {
     let parsed = compile_source(source)?;
     let canonical_source = format_program(&parsed);
+    // ADR-050: skip a second bootstrap compile when already canonical (LF form).
+    let normalized_input = source.replace("\r\n", "\n").replace('\r', "\n");
+    if normalized_input == canonical_source {
+        return Ok((parsed, canonical_source));
+    }
     let canonical_program = compile_source(&canonical_source)?;
     Ok((canonical_program, canonical_source))
 }

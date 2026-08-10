@@ -4,8 +4,8 @@ use aether_core::{
     product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
     product_path_requires_bootstrap_dual_compare, run_bytecode,
     seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_subset,
-    structural_edit_accepts_via_product_seed, verify_bytecode, InvocationOutput, InvocationValue,
-    SEED_COMPILER_ARTIFACT,
+    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed, verify_bytecode,
+    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -365,6 +365,10 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
         compile_with_seed_product_authoritative(),
         "ADR-049: compile_with_seed product-authoritative"
     );
+    assert!(
+        seed_product_preflight_phase3b(),
+        "ADR-050: Phase 3b product preflight expansion"
+    );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")
         .bytecode;
@@ -422,6 +426,38 @@ fn barp_phase3b_product_path_rejects_missing_main_with_ae_seed_004() {
         message.contains("AE-SEED-004"),
         "expected AE-SEED-004, got {message}"
     );
+}
+
+#[test]
+fn barp_phase3b_product_path_rejects_empty_missing_world_and_legacy() {
+    let empty = compile_product_bytecode("   \n\t\n").expect_err("empty must fail");
+    assert!(empty.to_string().contains("AE-SEED-005"), "got {}", empty);
+
+    let no_world = compile_product_bytecode("weave main [] -> Whole:\n  yield 1\n")
+        .expect_err("missing world must fail");
+    assert!(
+        no_world.to_string().contains("AE-SEED-006"),
+        "got {}",
+        no_world
+    );
+
+    let legacy = compile_product_bytecode("world w\n\nfn main() -> Int { return 0; }\n")
+        .expect_err("legacy syntax must fail");
+    assert!(legacy.to_string().contains("AE-SEED-007"), "got {}", legacy);
+
+    // Valid Aether import must not be rejected by AE-SEED-007.
+    let import_ok = concat!(
+        "world demo\n\n",
+        "import unit \"lib.ae\" as lib\n\n",
+        "weave main [] -> Whole:\n  yield 1\n"
+    );
+    // May fail product for missing file / elaborate — but not AE-SEED-007.
+    if let Err(error) = compile_product_bytecode(import_ok) {
+        assert!(
+            !error.to_string().contains("AE-SEED-007"),
+            "import unit must not trip legacy preflight: {error}"
+        );
+    }
 }
 
 #[test]

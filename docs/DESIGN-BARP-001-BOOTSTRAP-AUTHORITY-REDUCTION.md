@@ -91,11 +91,14 @@ and dual-compare **oracle** (tests + aether-gate).
 2. Odd indentation fail-closed on product path — **done**  
 3. Bootstrap remains full diagnostic authority — **unchanged**  
 
-#### Phase 3b (**partial** 2026-08-10)
+#### Phase 3b (**host preflight complete** 2026-08-10; ADR-050)
 
-1. `AE-SEED-004` missing `weave main` host preflight — **done**  
-2. Richer seed-side messages (unbound names, type errors as first-class seed codes)
-   without claiming full bootstrap parity — **later**  
+1. `AE-SEED-004` missing `weave main` — **done**  
+2. `AE-SEED-005` empty source — **done**  
+3. `AE-SEED-006` missing `world` — **done**  
+4. `AE-SEED-007` legacy-syntax heuristics — **done**  
+5. Deeper **seed-side** messages (unbound names, types as first-class seed codes)
+   without claiming full bootstrap parity — **later ADR**  
 
 ### ADR-048 — Structural-edit product accept (**complete** 2026-08-10)
 
@@ -105,6 +108,11 @@ Post-edit accept gate is product seed; base parse remains bootstrap for authorin
 
 Product Ok no longer requires bootstrap after seed verify; gate seed identity is
 bootstrap ≡ product ≡ forged ≡ checked-in.
+
+### ADR-050 — Phase 3b preflight expansion + roadmap DOC-SYNC (**complete** 2026-08-10)
+
+`AE-SEED-005`–`007`; authoring canonicalize skips redundant second bootstrap
+compile when already canonical.
 
 ### ADR-045 — Product dual-compare oracle-only (**complete** 2026-08-10)
 
