@@ -2682,21 +2682,19 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
     Ok(CompileOutput { program, bytecode })
 }
 
-/// Compile source with the Aether-written seed compiler (default product path).
+/// Product emission: seed forge + verify only (BARP Phase 2 / ADR-044).
 ///
-/// Uses [`SEED_COMPILER_ARTIFACT`] through the forge ABI. The returned
-/// `program` AST still comes from the Rust bootstrap for tooling/diagnostics;
-/// the `bytecode` is seed-produced and must match bootstrap for Seed Profile
-/// programs covered by self-host tests.
-pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
-    // Product emission is seed forge. Bootstrap still parses/validates for the
-    // returned AST and fail-closed diagnostics (BARP Phase 2 may lighten that).
-    // M23 pure comptime calls are evaluated natively by the seed (ADR-043 Phase 1);
-    // original source is forged without a materialization rewrite.
-    let program = compile_source(source)?;
+/// Does **not** bootstrap-parse or bootstrap-validate. Invalid Seed Profile
+/// inputs fail at seed forge or [`verify_bytecode`]. Full diagnostics remain
+/// bootstrap authority via CLI `check` / LSP.
+pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> {
     debug_assert!(
         seed_interprets_m23_comptime_calls_natively(),
         "BARP Phase 1 requires seed-native M23; materialization bridge removed"
+    );
+    debug_assert!(
+        product_path_forges_before_bootstrap_validate(),
+        "BARP Phase 2 requires forge-first product emission"
     );
     let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
         CompilerError::new(Span::synthetic(), format!("seed compiler failed: {error}"))
@@ -2713,6 +2711,26 @@ pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
             format!("seed compiler produced an invalid Aether artifact: {error}"),
         )
     })?;
+    Ok(bytecode)
+}
+
+/// Compile source with the Aether-written seed compiler (default product path).
+///
+/// Product **bytecode** is seed-forged first without a bootstrap validation
+/// precondition (ADR-044). The returned `program` AST still comes from the Rust
+/// bootstrap for tooling and dual-compare callers; if bootstrap rejects source
+/// after seed produced verified bytecode, this fails closed as an oracle
+/// mismatch (dual-compare would also fail for that program).
+pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
+    let bytecode = compile_product_bytecode(source)?;
+    let program = compile_source(source).map_err(|error| {
+        CompilerError::new(
+            Span::synthetic(),
+            format!(
+                "seed produced verified bytecode but bootstrap rejected source (oracle mismatch): {error}"
+            ),
+        )
+    })?;
     Ok(CompileOutput { program, bytecode })
 }
 
@@ -2720,6 +2738,13 @@ pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
 /// emits `COMPTIME_WHOLE` without a bootstrap materialization rewrite.
 #[must_use]
 pub const fn seed_interprets_m23_comptime_calls_natively() -> bool {
+    true
+}
+
+/// BARP Phase 2: product emission forges seed before any bootstrap validate.
+/// Bootstrap remains `check`/AST diagnostics, seed rebuild, and dual-compare oracle.
+#[must_use]
+pub const fn product_path_forges_before_bootstrap_validate() -> bool {
     true
 }
 
@@ -17126,7 +17151,7 @@ mod tests {
         let seeded = compile_with_seed(source).expect("M23 source should seed compile");
         assert_eq!(
             seeded.bytecode, bootstrap.bytecode,
-            "M23 bootstrap materialization plus seed emission must be byte-identical"
+            "M23 seed-native product path must match bootstrap byte-for-byte"
         );
         assert_eq!(
             run_bytecode(&seeded.bytecode)

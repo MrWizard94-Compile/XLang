@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — Phase 0 complete; **Phase 1 complete** (seed-native M23)  
-**Date:** 2026-08-08 (Phase 1 implemented 2026-08-10)  
-**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)  
+**Status:** Active program — Phase 0–2 complete; Phase 3 (seed diagnostics) later  
+**Date:** 2026-08-08 (Phase 1 2026-08-10; Phase 2 2026-08-10)  
+**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md), [ADR-044](ADR-044-barp-phase2-validate-light-product-path.md)  
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -32,15 +32,16 @@ Bootstrap remains **required** for:
 
 | Site | Authority today |
 | --- | --- |
-| `compile_with_seed` | Bootstrap **parse + validate** entire program before forge (Phase 2 may lighten) |
+| `compile_product_bytecode` | **Phase 2:** seed forge + verify only (no bootstrap pre-validate) |
+| `compile_with_seed` | Forge-first product bytes; bootstrap parse only for returned `Program` AST |
 | ~~`lower_m23_comptime_calls_for_seed`~~ | **Removed in Phase 1** — seed interprets raw M23 `call` |
 | Module elaborate | Host-side graph; then seed emit + dual-compare |
-| `apply-edit` | Bootstrap structure + seed-compile before write |
+| `apply-edit` | Bootstrap structure + **product** seed compile before write |
 | CLI `check` | Bootstrap only |
 
-**Primary product emission** is seed forge. After Phase 1 the remaining
-**product-critical** bootstrap authority is primarily **validation** (plus
-rebuild / dual-compare oracle roles).
+**Primary product emission** is seed forge without bootstrap as a pre-gate
+(Phase 2). Bootstrap remains rebuild, `check`/AST diagnostics, and dual-compare
+oracle.
 
 ---
 
@@ -71,11 +72,16 @@ rebuild / dual-compare oracle roles).
 5. Emit `COMPTIME_WHOLE` (56) with folded value (same as arithmetic path)  
 6. Bootstrap still validates product path; dual-compare is the correctness gate  
 
-### Phase 2 — Validate-light product path (later ADR)
+### Phase 2 — Validate-light product path (**complete** 2026-08-10; ADR-044)
 
-Optional: product compile may forge seed first and use bootstrap only as
-dual-compare oracle in tests (not required for every CLI compile). Requires
-seed fail-closed parity for all product surface errors of interest.
+**Done when:**
+
+1. Product bytecode path forges seed first without bootstrap validate pre-gate — **done**
+   (`compile_product_bytecode`; CLI default `compile` uses it).  
+2. Dual-compare tests remain the oracle — **unchanged**.  
+3. CLI `check` / LSP remain bootstrap diagnostics — **unchanged**.  
+4. Honest claims: no seed diagnostic parity — **documented**.  
+5. Tracker `product_path_forges_before_bootstrap_validate() == true` — **done**.
 
 ### Phase 3 — Seed diagnostics subset (later ADR)
 
@@ -95,8 +101,9 @@ diagnostic authority.
 
 | Metric | Target |
 | --- | --- |
-| Product emit engine | Seed forge |
+| Product emit engine | Seed forge (forge-first; Phase 2) |
 | M23 materialization bridge | **Removed** (Phase 1) |
+| Bootstrap product pre-validate | **Not required** (Phase 2) |
 | Bootstrap roles | Rebuild seed, check/AST, dual-compare oracle |
 | Gate | `aether-gate -Mode release` PASS |
 

@@ -4,8 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use aether_core::{
-    compile_with_seed, run_bytecode, run_bytecode_with_grants, verify_bytecode, HostGrantConfig,
-    LANGUAGE_NAME, LANGUAGE_VERSION,
+    compile_product_bytecode, run_bytecode, run_bytecode_with_grants, verify_bytecode,
+    HostGrantConfig, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,8 +142,8 @@ pub fn run_one_test_with_grants(source_path: &Path, grants: HostGrantConfig) -> 
             };
         }
     };
-    let compiled = match compile_with_seed(&source) {
-        Ok(output) => output,
+    let bytecode = match compile_product_bytecode(&source) {
+        Ok(bytes) => bytes,
         Err(error) => {
             return TestResult {
                 path,
@@ -152,7 +152,7 @@ pub fn run_one_test_with_grants(source_path: &Path, grants: HostGrantConfig) -> 
             };
         }
     };
-    if let Err(error) = verify_bytecode(&compiled.bytecode) {
+    if let Err(error) = verify_bytecode(&bytecode) {
         return TestResult {
             path,
             ok: false,
@@ -163,9 +163,9 @@ pub fn run_one_test_with_grants(source_path: &Path, grants: HostGrantConfig) -> 
         && grants.write_roots.is_empty()
         && grants.env_names.is_empty()
     {
-        run_bytecode(&compiled.bytecode)
+        run_bytecode(&bytecode)
     } else {
-        run_bytecode_with_grants(&compiled.bytecode, grants)
+        run_bytecode_with_grants(&bytecode, grants)
     };
     match run_result {
         Ok(output) if output.exit_code == 0 => TestResult {

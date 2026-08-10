@@ -1,6 +1,8 @@
 use aether_core::{
-    compile_to_bytecode, compile_with_seed, forge_bytecode, run_bytecode, verify_bytecode,
-    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
+    compile_product_bytecode, compile_to_bytecode, compile_with_seed, forge_bytecode,
+    product_path_forges_before_bootstrap_validate, run_bytecode,
+    seed_interprets_m23_comptime_calls_natively, verify_bytecode, InvocationOutput,
+    InvocationValue, SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -327,6 +329,34 @@ fn seed_hosted_product_path_forges_m23_comptime_calls_byte_identically() {
             .exit_code,
         512,
         "M23 comptime helper chain should exit 512"
+    );
+}
+
+#[test]
+fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
+    assert!(
+        seed_interprets_m23_comptime_calls_natively(),
+        "Phase 1 tracker must remain true"
+    );
+    assert!(
+        product_path_forges_before_bootstrap_validate(),
+        "Phase 2 tracker must be true"
+    );
+    let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
+        .expect("M23 fixture must bootstrap")
+        .bytecode;
+    let product = compile_product_bytecode(M23_COMPTIME_CALL_SOURCE)
+        .expect("product bytecode path must forge M23 without bootstrap pre-validate");
+    verify_bytecode(&product).expect("product bytecode must verify");
+    assert_eq!(
+        product, bootstrap,
+        "forge-first product path must dual-compare with bootstrap"
+    );
+    assert_eq!(
+        run_bytecode(&product)
+            .expect("product bytecode must run")
+            .exit_code,
+        512
     );
 }
 

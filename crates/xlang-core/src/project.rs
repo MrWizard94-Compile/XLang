@@ -15,7 +15,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::modules::{source_requires_project_modules, validate_lib_module_source};
-use crate::{compile_with_seed, verify_bytecode, CompilerError, LANGUAGE_NAME, LANGUAGE_VERSION};
+use crate::{
+    compile_product_bytecode, verify_bytecode, CompilerError, LANGUAGE_NAME, LANGUAGE_VERSION,
+};
 
 pub const PROJECT_SCHEMA_VERSION: &str = "aether.project/v1";
 
@@ -511,19 +513,19 @@ pub fn verify_project(
             }
             0
         } else {
-            let compiled = compile_with_seed(&source).map_err(|error: CompilerError| {
+            let bytecode = compile_product_bytecode(&source).map_err(|error: CompilerError| {
                 ProjectError::new(
                     "AE-PROJECT-004",
                     format!("unit {} failed seed compile: {error}", unit.path),
                 )
             })?;
-            verify_bytecode(&compiled.bytecode).map_err(|error| {
+            verify_bytecode(&bytecode).map_err(|error| {
                 ProjectError::new(
                     "AE-PROJECT-004",
                     format!("unit {} produced an invalid artifact: {error}", unit.path),
                 )
             })?;
-            compiled.bytecode.len()
+            bytecode.len()
         };
         reports.push(ProjectUnitReport {
             path: unit.path.clone(),

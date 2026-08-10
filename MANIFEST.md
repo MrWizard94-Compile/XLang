@@ -285,7 +285,8 @@ operation vocabulary, and compatibility policy are in
 
 | Path | Role |
 |------|------|
-| **Seed (default)** | `compile_with_seed` / CLI `compile` / CLI `apply-edit` validation — Aether-written compiler |
+| **Seed (default)** | `compile_product_bytecode` / CLI `compile` / `apply-edit` product gate — forge-first seed (BARP Phase 2) |
+| **Seed + AST** | `compile_with_seed` — product bytes then bootstrap `Program` for tooling / dual-compare callers |
 | **Bootstrap** | `compile_to_bytecode` / CLI `compile --bootstrap` / `check` AST — rebuild seed, diagnostics |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |
 

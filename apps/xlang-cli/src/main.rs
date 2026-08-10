@@ -8,14 +8,14 @@ mod lsp;
 mod test_runner;
 
 use aether_core::{
-    apply_structural_edit, canonical_ast, compile_project_modules, compile_source,
-    compile_to_bytecode, compile_with_seed, compile_workspace_package, forge_bytecode,
-    format_project, format_source, multi_module_authority_note, parse_project_document,
-    parse_workspace_document, refresh_project_lock, refresh_workspace_lock, run_bytecode,
-    run_bytecode_with_grants, run_project_tests_with_grants, serialize_project_document,
-    serialize_workspace_document, structural_document_json, unit_artifact_file_name,
-    verify_bytecode, verify_project, verify_workspace, HostGrantConfig, InvocationValue,
-    LANGUAGE_NAME, LANGUAGE_VERSION,
+    apply_structural_edit, canonical_ast, compile_product_bytecode, compile_project_modules,
+    compile_source, compile_to_bytecode, compile_with_seed, compile_workspace_package,
+    forge_bytecode, format_project, format_source, multi_module_authority_note,
+    parse_project_document, parse_workspace_document, refresh_project_lock,
+    refresh_workspace_lock, run_bytecode, run_bytecode_with_grants,
+    run_project_tests_with_grants, serialize_project_document, serialize_workspace_document,
+    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
+    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
@@ -46,12 +46,16 @@ fn check(source_path: &Path) -> Result<(), String> {
 
 fn compile(source_path: &Path, output_path: &Path, use_bootstrap: bool) -> Result<(), String> {
     let source = read_source(source_path)?;
-    let output = if use_bootstrap {
-        compile_to_bytecode(&source).map_err(|error| error.to_string())?
+    // BARP Phase 2 (ADR-044): default product compile forges seed bytecode without
+    // a bootstrap validate precondition. --bootstrap remains rebuild/oracle path.
+    let bytecode = if use_bootstrap {
+        compile_to_bytecode(&source)
+            .map_err(|error| error.to_string())?
+            .bytecode
     } else {
-        compile_with_seed(&source).map_err(|error| error.to_string())?
+        compile_product_bytecode(&source).map_err(|error| error.to_string())?
     };
-    write_artifact(output_path, output.bytecode)?;
+    write_artifact(output_path, bytecode)?;
     let engine = if use_bootstrap { "bootstrap" } else { "seed" };
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} compiled {} to {} ({engine})",
@@ -72,7 +76,7 @@ fn apply_edit(source_path: &Path, edit_path: &Path, output_path: &Path) -> Resul
     let source = read_source(source_path)?;
     let edit = read_source(edit_path)?;
     let result = apply_structural_edit(&source, &edit).map_err(|error| error.to_string())?;
-    compile_with_seed(&result.source).map_err(|error| {
+    compile_product_bytecode(&result.source).map_err(|error| {
         format!(
             "refusing to write structurally edited source because seed compilation failed: {error}"
         )
@@ -442,9 +446,10 @@ fn project_verify(project_path: &Path, output_dir: Option<&Path>) -> Result<(), 
             let source_path = aether_core::resolve_unit_path(root, &unit.path)
                 .map_err(|error| error.to_string())?;
             let source = read_source(&source_path)?;
-            let compiled = compile_with_seed(&source).map_err(|error| error.to_string())?;
+            let bytecode =
+                compile_product_bytecode(&source).map_err(|error| error.to_string())?;
             let artifact_path = dir.join(unit_artifact_file_name(&unit.path));
-            write_artifact(&artifact_path, compiled.bytecode)?;
+            write_artifact(&artifact_path, bytecode)?;
         }
     }
     println!(

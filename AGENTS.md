@@ -106,7 +106,7 @@ D2a body subset (`seed_interprets_m23_comptime_calls_natively`; ADR-043 Phase 1)
 | Law forks F-NATIVE / F-REGISTRY (design only; human authorize) | [docs/HUMAN-AUTHORIZE-NATIVE.md](docs/HUMAN-AUTHORIZE-NATIVE.md), [docs/HUMAN-AUTHORIZE-REGISTRY.md](docs/HUMAN-AUTHORIZE-REGISTRY.md), [docs/ADR-037-f-native-law-fork.md](docs/ADR-037-f-native-law-fork.md), [docs/ADR-038-f-registry-law-fork.md](docs/ADR-038-f-registry-law-fork.md), [docs/DELIVERY_REPORT-2026-08-05-LAW-FORKS-F-NATIVE-F-REGISTRY.md](docs/DELIVERY_REPORT-2026-08-05-LAW-FORKS-F-NATIVE-F-REGISTRY.md) |
 | Human ordered backlog (2026-08-05) | [docs/BACKLOG-HUMAN-2026-08-05.md](docs/BACKLOG-HUMAN-2026-08-05.md) |
 | M23 T-CT pure comptime calls | [docs/DESIGN-M23-COMPTIME-PURE-CALLS.md](docs/DESIGN-M23-COMPTIME-PURE-CALLS.md), [docs/ADR-039-m23-comptime-pure-calls.md](docs/ADR-039-m23-comptime-pure-calls.md), [docs/M23-VALIDATION-MATRIX.md](docs/M23-VALIDATION-MATRIX.md) |
-| BARP bootstrap authority reduction | [docs/ADR-043-bootstrap-authority-reduction.md](docs/ADR-043-bootstrap-authority-reduction.md), [docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md) — Phase 1: seed-native M23 |
+| BARP bootstrap authority reduction | [docs/ADR-043-bootstrap-authority-reduction.md](docs/ADR-043-bootstrap-authority-reduction.md), [docs/ADR-044-barp-phase2-validate-light-product-path.md](docs/ADR-044-barp-phase2-validate-light-product-path.md), [docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md) — Phases 0–2 complete |
 | Legacy intake | [docs/LEGACY.md](docs/LEGACY.md) |
 
 ### Stack pins
@@ -117,9 +117,9 @@ D2a body subset (`seed_interprets_m23_comptime_calls_natively`; ADR-043 Phase 1)
 | Core crate | `aether-core` at `crates/xlang-core` (package version **0.36.0**) |
 | CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` **0.36.0**) |
 | Artifact format | AETH **v4–v11** compatibility input + deterministic **v11** default / **v12** when M19e task frames present (`TASK_CHECKPOINT` 67; `RELEASE` 66) |
-| Product compile | Seed-hosted for documented surface; M23 pure comptime calls seed-native (D2a) + dual-compare; M19e task frames v12 |
+| Product compile | Seed forge-first (BARP Phase 2); M23 D2a seed-native; dual-compare oracle; M19e task frames v12 |
 | Foreign ABI (M21) | Whole-only pilot; `--grant-lib KEY=PATH`; host load after verify; residual native risk accepted by human; seed dual-compare proven |
-| Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` |
+| Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` / dual-compare oracle |
 | Seed compiler | `seed/aether_seed.ae` + checked-in `seed/aether_seed.aeth` |
 | Authoring | `aether.ast/v8`, `aether.edit/v8`, `aether.diagnostic/v8` |
 
