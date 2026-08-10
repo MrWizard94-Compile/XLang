@@ -7,8 +7,8 @@ This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
 It covers the documented canonical Aether 0.11 source surface and the later
 seed-emitted product cases explicitly listed below. Product `compile` uses this
 profile via the seed artifact. Rust bootstrap remains for seed rebuild, `check`
-AST, M23 materialization, and dual-compare proofs. A Seed Profile claim is not
-a claim of full bootstrap diagnostic parity for invalid input.
+AST, and dual-compare proofs. A Seed Profile claim is not a claim of full
+bootstrap diagnostic parity for invalid input.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,
@@ -67,11 +67,13 @@ The profile does not silently expand that language surface.
     `--grant-lib`; the seed does not load libraries.
 16. Accepts multi-weave total `arena N` declarations (M19d) and sums capacities
     into the AETH header, matching bootstrap for `examples/spawn-arena.ae`.
-17. For M23 pure comptime calls, the product path bootstrap-validates and folds
-    the narrow call subset, materializes an equivalent M5 literal directive,
-    and then forges through this seed. The resulting artifact is byte-identical
-    to direct bootstrap output for `examples/comptime-calls.ae`. The checked-in
-     seed does **not** independently interpret raw M23 call source.
+17. For M23 pure comptime calls, the seed interprets raw
+    `comptime bind name <- call weave args...` under the D2a body subset
+    (Whole `bind` / `revise` / terminal `yield`, prior total Whole guest
+    callees, literals or prior comptime args), folds to `COMPTIME_WHOLE` (56),
+    and dual-compares with bootstrap for `examples/comptime-calls.ae`. Bootstrap
+    still validates on the product path; no materialization rewrite is applied
+    (`seed_interprets_m23_comptime_calls_natively` is true; ADR-043 Phase 1).
 18. Parses `task weave` and `checkpoint`, emits v12 task flags,
     `frame_arena_capacity`, and `TASK_CHECKPOINT` (67), preserves verifier-safe
     task loop back edges, and computes the exact main-plus-largest-task-nursery
@@ -131,8 +133,8 @@ compiled from source, including `main`.
 - Nested blocks may `revise` existing locals but must not introduce bindings.
 - `bind` / `bind mutable` establish runtime locals; `revise` replaces a live
   local. M5/M15 `comptime bind` establishes one immutable checked `Whole` local
-  under the fixed 1,024-directive budget. M23 calls are materialized before the
-  seed sees them.
+  under the fixed 1,024-directive budget. M23 pure calls are evaluated natively
+  by the seed under the D2a body subset and folded to `COMPTIME_WHOLE`.
 - Hex `bytes "ff…"` literals decode to raw bytes. Text literals decode the five
   defined escapes (`\\`, `\"`, `\n`, `\r`, `\t`) and record **byte** length of
   UTF-8 content after decoding (not scalar count).
@@ -150,7 +152,7 @@ Supported forms:
 | `bind name <- expression` | Immutable local |
 | `bind mutable name <- expression` | Mutable local |
 | `comptime bind name <- op left right` | Root-only immutable M5/M15 Whole result; operands are literals or prior comptime names |
-| `comptime bind name <- call weave args...` | M23 product form; bootstrap validates/folds/materializes before seed forge |
+| `comptime bind name <- call weave args...` | M23 product form; seed interprets D2a callee body and emits `COMPTIME_WHOLE` |
 | `revise name <- expression` | Same-type replacement |
 | `speak expression` | Expression must be `Text` |
 | `release name` | Root-only logical destruction of a live unique/resource owner; emits `RELEASE` (66) |
@@ -197,11 +199,11 @@ Supported operations (by seed emitter opcode mapping):
   two-exit metadata and branch targets; M4's source/type/ownership restrictions
   are verified by the product artifact before output is accepted.
 - Comptime: the seed directly accepts one M5/M15 signed-`Whole` binary operation
-  over literals or prior same-weave comptime names. M23 pure calls are
-  bootstrap-folded and materialized before seed input. There are no loops,
-  recursion, text/bytes evaluation, effects, resources, host calls, or
-  source-configurable fuel; at most 1,024 directives occur in one source
-  program.
+  over literals or prior same-weave comptime names, and M23 pure `call` forms
+  under the D2a body subset (seed-native evaluation; BARP Phase 1). There are
+  no comptime loops, recursion, text/bytes evaluation, effects, resources, host
+  calls, or source-configurable fuel; at most 1,024 directives occur in one
+  source program.
 
 ## Multi-weave emission
 
@@ -240,8 +242,9 @@ for:
 - Full Aether diagnostic fidelity (invalid Seed Profile input may fail late or
   produce a rejectable artifact; the bootstrap compiler remains the complete
   diagnostic authority for invalid Aether input)
-- Direct raw-M23 seed evaluation; 0.33 uses the documented bootstrap
-  materialization bridge
+- M23 callees beyond the D2a body subset (nested calls, choose/while, effects,
+  resources, host/foreign targets) — bootstrap rejects; seed must dual-compare
+  only the proven corpus
 - General async/parallel tasks, task handles, timeout or manual cancellation,
   nested task nurseries, arbitrary preemption, task external effects, or guest
   cancellation handlers beyond the M19e closed task/checkpoint subset
@@ -280,8 +283,9 @@ All three SHA-256 digests must match. The regression tests also forge:
     `examples/foreign-sum.ae`) dual-compare and fail closed without a library grant.
 12. The M19d spawn-arena fixture (`examples/spawn-arena.ae`) dual-compares with
     header capacity equal to the sum of arena declarations.
-13. The M23 pure-call fixture (`examples/comptime-calls.ae`) bootstrap-folds,
-    seed-emits, dual-compares, and exits 512.
+13. The M23 pure-call fixture (`examples/comptime-calls.ae`) is forged from raw
+    call source by the seed (no materialization), dual-compares with bootstrap,
+    and exits 512.
 14. The M19e active-frame fixtures (`examples/active-cancel.ae`,
     `examples/task-frame-capacity.ae`, and `examples/task-loop.ae`) plus a
     forward-declared task fixture dual-compare as v12 and run with their

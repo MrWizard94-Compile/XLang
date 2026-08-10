@@ -12,10 +12,10 @@ Aether-written seed compiler** (forge ABI) for the documented seed surface,
 including multi-weave arenas / resourceful total spawn callees
 (`examples/spawn-arena.ae`), M19e task frames, and the M21 foreign weave pilot.
 Multi-module and workspace build elaborate then seed-compile.
-For M23 source, the bootstrap validates and folds the restricted pure call, then
-materializes its literal comptime result before seed emission; the product
-artifact is byte-identical to direct bootstrap output. This does not claim that
-the checked-in seed independently interprets raw M23 call syntax.
+For M23 source, the bootstrap validates the restricted pure call; the seed
+interprets raw `comptime bind <- call` under the D2a body subset and emits
+`COMPTIME_WHOLE` without a materialization rewrite. The product artifact is
+byte-identical to direct bootstrap output (`examples/comptime-calls.ae`).
 Package 0.34 adds RTP-001, a private cached-ASCII VM Text representation that
 accelerates scalar-equivalent operations for ASCII input. It changes no source
 syntax, AETH version or bytes, verifier rule, seed artifact, host authority, or
@@ -160,15 +160,16 @@ and `COMPTIME_WHOLE` emission are unchanged. Forward refs, runtime names,
 control flow, and host observation remain rejected; calls remain rejected
 except for the later M23 subset below.
 
-M23 (package 0.33) admits `comptime bind name <- call weave args...` only for a
-textually prior total **guest** weave with owned `Whole` parameters/result and a
-restricted Whole-only `bind`/`revise`/terminal-`yield` body. Arguments are Whole
-literals or earlier same-weave comptime names. The call is evaluated by the
-bootstrap without host, foreign, resource, effect, nursery, control-flow, or
-nested-call authority, and folds to existing `COMPTIME_WHOLE` (56). The product
-path materializes that result into the M5 literal seed input before forge and
-proves byte identity; it does not claim a raw-M23 seed evaluator. See
-[docs/AETHER_0.33.md](docs/AETHER_0.33.md) and [ADR-039](docs/ADR-039-m23-comptime-pure-calls.md).
+M23 (package 0.33; BARP Phase 1 seed-native) admits
+`comptime bind name <- call weave args...` only for a textually prior total
+**guest** weave with owned `Whole` parameters/result and a restricted
+Whole-only `bind`/`revise`/terminal-`yield` body. Arguments are Whole literals
+or earlier same-weave comptime names. Bootstrap validates; the seed evaluates
+the D2a callee body without host, foreign, resource, effect, nursery,
+control-flow, or nested-call authority, and folds to existing `COMPTIME_WHOLE`
+(56). Product path forges original source and dual-compares with bootstrap. See
+[docs/AETHER_0.33.md](docs/AETHER_0.33.md), [ADR-039](docs/ADR-039-m23-comptime-pure-calls.md),
+and [ADR-043](docs/ADR-043-bootstrap-authority-reduction.md).
 
 RTP-001 (package 0.34) is an implementation-only VM change. Runtime `Text`
 stores cached ASCII provenance; ASCII `measure`, `glyph`, `cut`, and `seek` use

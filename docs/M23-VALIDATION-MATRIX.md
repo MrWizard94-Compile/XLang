@@ -10,7 +10,7 @@
 | P1 | `comptime bind x <- call double 21` pure total Whole weave | Folded helper result; behavior test |
 | P2 | Call args from prior comptime names | `cell -> wide` in `comptime-calls.ae` |
 | P3 | Multi-arg pure helper (`area w h`) | Exit 512 corpus |
-| P4 | Seed-emitted product path ≡ bootstrap for M23 + M5/M15 | Byte identity |
+| P4 | Seed-emitted product path ≡ bootstrap for M23 + M5/M15 (raw M23; no materialization) | Byte identity |
 | N1 | Call host weave | AE-COMPTIME-001 |
 | N2 | Call foreign weave | AE-COMPTIME-001 |
 | N3 | Call `raises Whole` weave | AE-COMPTIME-001 |
@@ -29,6 +29,7 @@
 - [x] Seed-emitted product-path dual-compare
 - [x] DOC-SYNC 0.33
 - [x] Delivery report
+- [x] BARP Phase 1: seed-native raw M23 (ADR-043; no materialization bridge)
 
 ---
 

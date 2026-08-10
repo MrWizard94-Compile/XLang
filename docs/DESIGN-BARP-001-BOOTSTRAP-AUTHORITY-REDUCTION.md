@@ -1,7 +1,7 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — Phase 0 inventory + Phase 1 design  
-**Date:** 2026-08-08  
+**Status:** Active program — Phase 0 complete; **Phase 1 complete** (seed-native M23)  
+**Date:** 2026-08-08 (Phase 1 implemented 2026-08-10)  
 **Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)  
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
@@ -32,14 +32,15 @@ Bootstrap remains **required** for:
 
 | Site | Authority today |
 | --- | --- |
-| `compile_with_seed` | Bootstrap **parse + validate** entire program before forge |
-| `lower_m23_comptime_calls_for_seed` | Bootstrap **folds** M23 `call` → M5 literal form for seed input |
+| `compile_with_seed` | Bootstrap **parse + validate** entire program before forge (Phase 2 may lighten) |
+| ~~`lower_m23_comptime_calls_for_seed`~~ | **Removed in Phase 1** — seed interprets raw M23 `call` |
 | Module elaborate | Host-side graph; then seed emit + dual-compare |
 | `apply-edit` | Bootstrap structure + seed-compile before write |
 | CLI `check` | Bootstrap only |
 
-**Primary product emission** is already seed forge. The remaining **product-critical**
-bootstrap authority is: **validation + M23 materialization**.
+**Primary product emission** is seed forge. After Phase 1 the remaining
+**product-critical** bootstrap authority is primarily **validation** (plus
+rebuild / dual-compare oracle roles).
 
 ---
 
@@ -51,24 +52,24 @@ bootstrap authority is: **validation + M23 materialization**.
 - Document inventory (this file)  
 - ADR-043 accepted as program law  
 
-### Phase 1 — Seed-native M23 (next implementable)
+### Phase 1 — Seed-native M23 (**complete** 2026-08-10)
 
 **Done when:**
 
-1. Seed evaluates M23 pure comptime calls under the same D2a rules as ADR-039  
-2. `compile_with_seed` forges **original** source (no `lower_m23_*` rewrite)  
-3. `examples/comptime-calls.ae` seed≡bootstrap without materialization  
-4. Seed Profile claim 17 updated to **seed interprets M23**  
-5. Dual-compare + release gate green  
+1. Seed evaluates M23 pure comptime calls under the same D2a rules as ADR-039 — **done**  
+2. `compile_with_seed` forges **original** source (no `lower_m23_*` rewrite) — **done**  
+3. `examples/comptime-calls.ae` seed≡bootstrap without materialization — **done**  
+4. Seed Profile claim 17 updated to **seed interprets M23** — **done**  
+5. Dual-compare + release gate green — verify at ship  
 
-**Algorithm (seed):**
+**Algorithm (seed) — implemented:**
 
 1. When `comptime` directive (`v89 = 56`) and RHS starts with `call`:  
 2. Resolve args (literals + prior comptime env `v103`)  
-3. Resolve callee among **prior** total Whole guest weaves  
+3. Resolve callee by scanning prior `weave name [` definitions in source  
 4. Interpret callee body: Whole `bind` / `revise` / terminal `yield` only  
 5. Emit `COMPTIME_WHOLE` (56) with folded value (same as arithmetic path)  
-6. Fail closed (`invalid` / no silent CALL opcode under comptime)  
+6. Bootstrap still validates product path; dual-compare is the correctness gate  
 
 ### Phase 2 — Validate-light product path (later ADR)
 
@@ -95,7 +96,7 @@ diagnostic authority.
 | Metric | Target |
 | --- | --- |
 | Product emit engine | Seed forge |
-| M23 materialization bridge | **Removed** after Phase 1 |
+| M23 materialization bridge | **Removed** (Phase 1) |
 | Bootstrap roles | Rebuild seed, check/AST, dual-compare oracle |
 | Gate | `aether-gate -Mode release` PASS |
 

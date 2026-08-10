@@ -104,12 +104,21 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
     );
 
     // Insert a fresh unused local so the variant differs without colliding with
-    // the seed's existing high-numbered slots (v103 through v123 are bound).
-    let variant = SEED_SOURCE.replacen(
-        "  bind mutable v65 <- 0\n",
-        "  bind mutable v65 <- 0\n  bind mutable v124 <- 0\n",
-        1,
-    );
+    // the seed's existing high-numbered slots (v103 through v130 are bound for
+    // M23 body-interpreter temps / BARP Phase 1).
+    let variant = if SEED_SOURCE.contains("  bind mutable v65 <- 0\r\n") {
+        SEED_SOURCE.replacen(
+            "  bind mutable v65 <- 0\r\n",
+            "  bind mutable v65 <- 0\r\n  bind mutable v131 <- 0\r\n",
+            1,
+        )
+    } else {
+        SEED_SOURCE.replacen(
+            "  bind mutable v65 <- 0\n",
+            "  bind mutable v65 <- 0\n  bind mutable v131 <- 0\n",
+            1,
+        )
+    };
     assert_ne!(
         variant, SEED_SOURCE,
         "the variant fixture must differ from the seed"
@@ -310,7 +319,7 @@ fn seed_hosted_product_path_forges_m23_comptime_calls_byte_identically() {
     verify_bytecode(&seeded).expect("M23 seed-produced artifact must verify");
     assert_eq!(
         seeded, bootstrap,
-        "M23 bootstrap materialization and seed emission must match byte-for-byte"
+        "M23 seed-native evaluation and bootstrap emission must match byte-for-byte"
     );
     assert_eq!(
         run_bytecode(&seeded)

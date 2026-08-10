@@ -2689,19 +2689,16 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 /// the `bytecode` is seed-produced and must match bootstrap for Seed Profile
 /// programs covered by self-host tests.
 pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
-    // Product emission is seed forge. Bootstrap currently still:
-    // (1) parses/validates the program, (2) materializes M23 pure comptime
-    // calls into M5 literal form the checked-in seed understands (BARP Phase 1
-    // removes this bridge when seed-native M23 lands — ADR-043).
+    // Product emission is seed forge. Bootstrap still parses/validates for the
+    // returned AST and fail-closed diagnostics (BARP Phase 2 may lighten that).
+    // M23 pure comptime calls are evaluated natively by the seed (ADR-043 Phase 1);
+    // original source is forged without a materialization rewrite.
     let program = compile_source(source)?;
-    let seed_source = if m23_product_requires_bootstrap_materialization(&program) {
-        lower_m23_comptime_calls_for_seed(&program)?
-            .map(|lowered| format_program(&lowered))
-            .unwrap_or_else(|| source.to_owned())
-    } else {
-        source.to_owned()
-    };
-    let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, &seed_source).map_err(|error| {
+    debug_assert!(
+        seed_interprets_m23_comptime_calls_natively(),
+        "BARP Phase 1 requires seed-native M23; materialization bridge removed"
+    );
+    let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
         CompilerError::new(Span::synthetic(), format!("seed compiler failed: {error}"))
     })?;
     let InvocationValue::Bytes(bytecode) = forged.value else {
@@ -2719,96 +2716,11 @@ pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
     Ok(CompileOutput { program, bytecode })
 }
 
-/// BARP tracker: product path still needs bootstrap materialization for M23.
-/// Flips false when seed-native M23 evaluation is proven (ADR-043 Phase 1).
+/// BARP Phase 1: seed evaluates M23 pure comptime calls (D2a body subset) and
+/// emits `COMPTIME_WHOLE` without a bootstrap materialization rewrite.
 #[must_use]
 pub const fn seed_interprets_m23_comptime_calls_natively() -> bool {
-    false
-}
-
-fn m23_product_requires_bootstrap_materialization(program: &Program) -> bool {
-    !seed_interprets_m23_comptime_calls_natively() && program_contains_m23_comptime_call(program)
-}
-
-fn program_contains_m23_comptime_call(program: &Program) -> bool {
-    fn block_has_call(statements: &[Statement]) -> bool {
-        statements.iter().any(|statement| match statement {
-            Statement::Bind {
-                comptime: true,
-                value,
-                ..
-            } => matches!(value.kind, ExpressionKind::Call { .. }),
-            Statement::Choose {
-                when_bright,
-                when_dim,
-                ..
-            } => block_has_call(when_bright) || block_has_call(when_dim),
-            Statement::While { body, .. } => block_has_call(body),
-            _ => false,
-        })
-    }
-    program.weaves.iter().any(|weave| block_has_call(&weave.body))
-}
-
-/// Materialize accepted M23 comptime calls into the literal M5 form understood
-/// by the checked-in seed compiler. Temporary BARP Phase 0/1 bridge (ADR-043):
-/// remove when [`seed_interprets_m23_comptime_calls_natively`] is true.
-fn lower_m23_comptime_calls_for_seed(program: &Program) -> Result<Option<Program>, CompilerError> {
-    let mut lowered = program.clone();
-    let mut changed = false;
-
-    for weave_index in 0..program.weaves.len() {
-        let original_weave = &program.weaves[weave_index];
-        let lowered_weave = &mut lowered.weaves[weave_index];
-        let mut comptime_env = BTreeMap::new();
-
-        for (original_statement, lowered_statement) in
-            original_weave.body.iter().zip(&mut lowered_weave.body)
-        {
-            let (
-                Statement::Bind {
-                    comptime: true,
-                    value: original_value,
-                    ..
-                },
-                Statement::Bind {
-                    value: lowered_value,
-                    ..
-                },
-            ) = (original_statement, lowered_statement)
-            else {
-                continue;
-            };
-
-            let folded = evaluate_comptime_whole(
-                original_value,
-                &comptime_env,
-                &program.weaves[..weave_index],
-            )?;
-            if matches!(&original_value.kind, ExpressionKind::Call { .. }) {
-                *lowered_value = Expression {
-                    kind: ExpressionKind::Binary {
-                        operation: BinaryOperation::Sum,
-                        left: Atom {
-                            kind: AtomKind::Whole(folded),
-                            span: original_value.span,
-                        },
-                        right: Atom {
-                            kind: AtomKind::Whole(0),
-                            span: original_value.span,
-                        },
-                    },
-                    span: original_value.span,
-                };
-                changed = true;
-            }
-            if let Statement::Bind { name, .. } = original_statement {
-                comptime_env.insert(name.clone(), folded);
-            }
-        }
-    }
-
-    Ok(changed.then_some(lowered))
+    true
 }
 
 #[must_use]
