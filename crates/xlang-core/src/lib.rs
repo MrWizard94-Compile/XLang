@@ -238,6 +238,12 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-seed-011") {
+        "AE-SEED-011"
+    } else if normalized.contains("ae-seed-010") {
+        "AE-SEED-010"
+    } else if normalized.contains("ae-seed-008") {
+        "AE-SEED-008"
     } else if normalized.contains("ae-seed-007") {
         "AE-SEED-007"
     } else if normalized.contains("ae-seed-006") {
@@ -2733,9 +2739,10 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         }
     }
     let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
+        let detail = error.to_string();
         CompilerError::new(
             Span::synthetic(),
-            format_seed_product_error("AE-SEED-001", &error.to_string()),
+            format_seed_product_error(classify_seed_forge_error(&detail), &detail),
         )
     })?;
     let InvocationValue::Bytes(bytecode) = forged.value else {
@@ -2745,9 +2752,10 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         ));
     };
     verify_bytecode(&bytecode).map_err(|error| {
+        let detail = error.to_string();
         CompilerError::new(
             Span::synthetic(),
-            format_seed_product_error("AE-SEED-002", &error.to_string()),
+            format_seed_product_error(classify_seed_verify_error(&detail), &detail),
         )
     })?;
     Ok(bytecode)
@@ -2755,6 +2763,50 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
 
 fn format_seed_product_error(code: &str, detail: &str) -> String {
     format!("{code}: product seed path failed ({detail}). Full diagnostics: aether check <source>")
+}
+
+/// BARP Phase 3c (ADR-052): map forge/VM detail strings to stable product codes
+/// without claiming full bootstrap diagnostic parity.
+fn classify_seed_forge_error(detail: &str) -> &'static str {
+    let normalized = detail.to_ascii_lowercase();
+    if normalized.contains("unknown weave")
+        || normalized.contains("no weave named")
+        || normalized.contains("call references an unknown")
+    {
+        return "AE-SEED-011";
+    }
+    // Opaque seed VM failures often mean incomplete parse/bind (e.g. unbound name).
+    if normalized.contains("unpack16")
+        || normalized.contains("unpack32")
+        || normalized.contains("index is invalid")
+        || normalized.contains("seek ")
+        || normalized.contains("poke ")
+    {
+        return "AE-SEED-008";
+    }
+    "AE-SEED-001"
+}
+
+fn classify_seed_verify_error(detail: &str) -> &'static str {
+    let normalized = detail.to_ascii_lowercase();
+    if normalized.contains("unknown weave")
+        || normalized.contains("no weave named")
+        || normalized.contains("call references an unknown")
+    {
+        return "AE-SEED-011";
+    }
+    if normalized.contains("requires whole")
+        || normalized.contains("stack has")
+        || normalized.contains("type mismatch")
+        || normalized.contains("wrong type")
+        || normalized.contains("expected whole")
+        || normalized.contains("expected text")
+        || normalized.contains("expected truth")
+        || normalized.contains("expected bytes")
+    {
+        return "AE-SEED-010";
+    }
+    "AE-SEED-002"
 }
 
 /// BARP Phase 3b (ADR-050): empty product input.
@@ -2973,6 +3025,18 @@ pub const fn compile_with_seed_invokes_bootstrap() -> bool {
 /// BARP ADR-051: CLI `aether check --product` validates via product seed only.
 #[must_use]
 pub const fn product_cli_check_without_bootstrap() -> bool {
+    true
+}
+
+/// BARP ADR-052: project-verify lib units validate via product seed probe.
+#[must_use]
+pub const fn lib_module_validates_via_product_seed() -> bool {
+    true
+}
+
+/// BARP ADR-052 Phase 3c: product forge/verify map to AE-SEED-008/010/011 subset.
+#[must_use]
+pub const fn seed_product_diagnostics_phase3c() -> bool {
     true
 }
 

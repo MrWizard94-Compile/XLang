@@ -12,8 +12,8 @@ use crate::project::{
     resolve_unit_path, validate_unit_path, ProjectDocument, ProjectError, ProjectUnitRole,
 };
 use crate::{
-    compile_product_bytecode, compile_to_bytecode, run_bytecode, run_bytecode_with_grants,
-    verify_bytecode, HostGrantConfig, LANGUAGE_NAME, LANGUAGE_VERSION,
+    compile_product_bytecode, run_bytecode, run_bytecode_with_grants, verify_bytecode,
+    HostGrantConfig, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -336,17 +336,21 @@ pub fn validate_lib_module_source(path: &str, source: &str) -> Result<(), Projec
         // Imports need the full graph; structure-only check already passed.
         return Ok(());
     }
-    // Bootstrap-compile with a synthetic total main to catch invalid weave bodies.
+    // ADR-052: product-seed probe with a synthetic total main (no bootstrap).
+    debug_assert!(
+        crate::lib_module_validates_via_product_seed(),
+        "ADR-052: lib module validation must use product seed"
+    );
     let body = strip_export_keyword(&parsed.body_source);
     let probe = format!(
         "world {}\n\n{}\nweave main [] -> Whole:\n  yield 0\n",
         parsed.world,
         body.trim_end()
     );
-    compile_to_bytecode(&probe).map_err(|error| {
+    compile_product_bytecode(&probe).map_err(|error| {
         module_error(
             "AE-PROJECT-004",
-            format!("lib unit {path} failed validation compile: {error}"),
+            format!("lib unit {path} failed product validation compile: {error}"),
         )
     })?;
     Ok(())

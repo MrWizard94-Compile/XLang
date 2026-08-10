@@ -61,7 +61,7 @@ Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), default `check`
 AST / format / structure / LSP, and proof dual-compare. Product acceptance
 without bootstrap AST is `aether check --product` (ADR-051); `compile_with_seed`
-is seed-only. Seed Profile self-host, all shipped seed-path examples,
+is seed-only; project-verify lib probes use product seed (ADR-052). Seed Profile self-host, all shipped seed-path examples,
 the complete prior canonical surface (including records), the documented M2–M8
 corpora, the M19a release corpus, the M19b nursery-resource corpus, the M19d
 spawn-arena corpus, the M21 foreign-pilot corpus, and the M23/M19e documented

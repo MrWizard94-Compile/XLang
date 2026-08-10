@@ -1,11 +1,13 @@
 use aether_core::{
     compile_product_bytecode, compile_to_bytecode, compile_with_seed,
     compile_with_seed_invokes_bootstrap, compile_with_seed_product_authoritative, forge_bytecode,
-    product_cli_check_without_bootstrap, product_multi_module_invokes_bootstrap,
-    product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
-    run_bytecode, seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_subset,
-    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed, verify_bytecode,
-    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
+    lib_module_validates_via_product_seed, product_cli_check_without_bootstrap,
+    product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
+    product_path_requires_bootstrap_dual_compare, run_bytecode,
+    seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_phase3c,
+    seed_product_diagnostics_subset, seed_product_preflight_phase3b,
+    structural_edit_accepts_via_product_seed, verify_bytecode, InvocationOutput, InvocationValue,
+    SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -377,6 +379,14 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
         product_cli_check_without_bootstrap(),
         "ADR-051: product CLI check without bootstrap"
     );
+    assert!(
+        lib_module_validates_via_product_seed(),
+        "ADR-052: lib modules validate via product seed"
+    );
+    assert!(
+        seed_product_diagnostics_phase3c(),
+        "ADR-052: Phase 3c product diagnostic classification"
+    );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")
         .bytecode;
@@ -416,12 +426,46 @@ fn barp_phase3a_product_path_maps_seed_forge_failure_to_ae_seed_code() {
     let error = compile_product_bytecode(source).expect_err("unbound name must fail product path");
     let message = error.to_string();
     assert!(
-        message.contains("AE-SEED-001") || message.contains("AE-SEED-002"),
-        "expected AE-SEED-001/002, got {message}"
+        message.contains("AE-SEED-008")
+            || message.contains("AE-SEED-001")
+            || message.contains("AE-SEED-002"),
+        "expected AE-SEED-008/001/002 for unbound, got {message}"
     );
     assert!(
         message.contains("aether check"),
         "expected check hint, got {message}"
+    );
+}
+
+#[test]
+fn barp_phase3c_classifies_type_and_unknown_weave_product_failures() {
+    assert!(
+        seed_product_diagnostics_phase3c(),
+        "Phase 3c tracker must be true"
+    );
+    let type_err =
+        compile_product_bytecode("world w\n\nweave main [] -> Whole:\n  yield \"text\"\n")
+            .expect_err("type mismatch must fail product path");
+    assert!(
+        type_err.to_string().contains("AE-SEED-010"),
+        "expected AE-SEED-010, got {type_err}"
+    );
+
+    let unknown = compile_product_bytecode(
+        "world w\n\nweave main [] -> Whole:\n  bind x <- call nope 1\n  yield x\n",
+    )
+    .expect_err("unknown weave must fail product path");
+    assert!(
+        unknown.to_string().contains("AE-SEED-011"),
+        "expected AE-SEED-011, got {unknown}"
+    );
+
+    let unbound =
+        compile_product_bytecode("world w\n\nweave main [] -> Whole:\n  yield missing_name\n")
+            .expect_err("unbound must fail");
+    assert!(
+        unbound.to_string().contains("AE-SEED-008"),
+        "expected AE-SEED-008 for opaque seed bind failure, got {unbound}"
     );
 }
 
