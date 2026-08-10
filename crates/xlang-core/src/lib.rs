@@ -238,6 +238,14 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-seed-004") {
+        "AE-SEED-004"
+    } else if normalized.contains("ae-seed-003") {
+        "AE-SEED-003"
+    } else if normalized.contains("ae-seed-002") {
+        "AE-SEED-002"
+    } else if normalized.contains("ae-seed-001") || normalized.contains("product seed path") {
+        "AE-SEED-001"
     } else if normalized.contains("ae-host-003") {
         "AE-HOST-003"
     } else if normalized.contains("ae-host-002") {
@@ -252,7 +260,11 @@ fn diagnostic_code(message: &str) -> &'static str {
         "AE-TASK-005"
     } else if normalized.contains("ae-task-003") {
         "AE-TASK-003"
-    } else if normalized.contains("ae-task-004") {
+    } else if normalized.contains("ae-task-004")
+        || normalized.contains("task_checkpoint")
+        || normalized.contains("task checkpoint")
+        || normalized.contains("task frame requires")
+    {
         "AE-TASK-004"
     } else if normalized.contains("ae-task-002") {
         "AE-TASK-002"
@@ -2701,6 +2713,9 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         if let Some(message) = seed_reject_odd_indentation(source) {
             return Err(CompilerError::new(Span::synthetic(), message));
         }
+        if let Some(message) = seed_reject_missing_main_weave(source) {
+            return Err(CompilerError::new(Span::synthetic(), message));
+        }
     }
     let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
         CompilerError::new(
@@ -2753,6 +2768,37 @@ fn seed_reject_odd_indentation(source: &str) -> Option<String> {
                 ),
             ));
         }
+    }
+    None
+}
+
+/// BARP Phase 3b: fail closed when no top-level `weave main` / `task weave main`
+/// is present (host preflight — not bootstrap semantic analysis).
+fn seed_reject_missing_main_weave(source: &str) -> Option<String> {
+    let mut saw_weave = false;
+    let mut saw_main = false;
+    for line in source.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if trimmed.starts_with("weave ") || trimmed.starts_with("task weave ") {
+            saw_weave = true;
+            let after_task = trimmed.strip_prefix("task ").unwrap_or(trimmed);
+            if let Some(rest) = after_task.strip_prefix("weave ") {
+                let name = rest.split([' ', '[']).next().unwrap_or("");
+                if name == "main" {
+                    saw_main = true;
+                    break;
+                }
+            }
+        }
+    }
+    if saw_weave && !saw_main {
+        return Some(format_seed_product_error(
+            "AE-SEED-004",
+            "program requires a top-level weave main (or task weave main)",
+        ));
     }
     None
 }
@@ -2810,6 +2856,13 @@ pub const fn seed_product_diagnostics_subset() -> bool {
 #[must_use]
 pub const fn product_multi_module_invokes_bootstrap() -> bool {
     false
+}
+
+/// BARP ADR-048: structural-edit post-edit accept gate is product seed, not
+/// bootstrap re-validate (base parse remains bootstrap for authoring AST).
+#[must_use]
+pub const fn structural_edit_accepts_via_product_seed() -> bool {
+    true
 }
 
 #[must_use]

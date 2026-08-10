@@ -36,7 +36,7 @@ Bootstrap remains **required** for:
 | `compile_with_seed` | Forge-first product bytes; bootstrap parse only for returned `Program` AST |
 | ~~`lower_m23_comptime_calls_for_seed`~~ | **Removed in Phase 1** — seed interprets raw M23 `call` |
 | Module elaborate | Host-side graph; then **seed emit only** (ADR-045/047: no bootstrap dual-compare or AST) |
-| `apply-edit` | Bootstrap structure + **product** seed compile before write |
+| `apply-edit` | Bootstrap base parse AST; **product seed accept** (ADR-048); CLI product write gate |
 | CLI `check` | Bootstrap only (full diagnostics) |
 
 **Primary product emission** is seed forge without bootstrap pre-gate or
@@ -91,10 +91,15 @@ and dual-compare **oracle** (tests + aether-gate).
 2. Odd indentation fail-closed on product path — **done**  
 3. Bootstrap remains full diagnostic authority — **unchanged**  
 
-#### Phase 3b+ (later ADR)
+#### Phase 3b (**partial** 2026-08-10)
 
-Richer seed-side messages (unbound names, type errors as first-class seed codes)
-without claiming full bootstrap parity.
+1. `AE-SEED-004` missing `weave main` host preflight — **done**  
+2. Richer seed-side messages (unbound names, type errors as first-class seed codes)
+   without claiming full bootstrap parity — **later**  
+
+### ADR-048 — Structural-edit product accept (**complete** 2026-08-10)
+
+Post-edit accept gate is product seed; base parse remains bootstrap for authoring AST.
 
 ### ADR-045 — Product dual-compare oracle-only (**complete** 2026-08-10)
 

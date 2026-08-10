@@ -32,6 +32,7 @@ subset** without claiming full parity.
 | `AE-SEED-001` | Seed forge failed (VM/runtime while interpreting guest source) |
 | `AE-SEED-002` | Seed produced bytes that failed `verify_bytecode` |
 | `AE-SEED-003` | Seed rejected non-canonical indentation (odd space count) |
+| `AE-SEED-004` | Phase 3b: missing top-level `weave main` / `task weave main` (host preflight) |
 | hint | Always include: use `aether check <source>` for bootstrap diagnostics |
 
 ## Consequences

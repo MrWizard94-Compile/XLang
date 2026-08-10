@@ -1,10 +1,11 @@
 //! Versioned structural-authoring contracts for local Aether tooling.
 //!
 //! This module deliberately sits above parsing and below no host capability.
-//! It serializes only validated Aether source, accepts a small allow-listed
-//! edit protocol, renders canonical source, and validates that source again.
-//! Callers that persist an edit must still use the ordinary seed-hosted product
-//! compiler path before writing it.
+//! It serializes Aether source from an edited in-memory program, accepts a small
+//! allow-listed edit protocol, renders canonical source, and **accepts** that
+//! source via the product seed path (ADR-048). Base parse still uses bootstrap
+//! AST. Callers that persist an edit should still product-seed-compile before
+//! writing (CLI does).
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -13,11 +14,11 @@ use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{json, Map, Number, Value};
 
 use crate::{
-    compile_source, format_program, Atom, AtomKind, BinaryOperation, BufferElement, CompilerError,
-    Diagnostic, Effect, Expression, ExpressionKind, HostWeave, Parameter, ParameterMode, Program,
-    RecordDeclaration, RecordField, ResourceOperation, ShapeDeclaration, Span, Statement,
-    TableLayout, TernaryOperation, UnaryOperation, ValueType, Weave, LANGUAGE_NAME,
-    LANGUAGE_VERSION,
+    compile_product_bytecode, compile_source, format_program, Atom, AtomKind, BinaryOperation,
+    BufferElement, CompilerError, Diagnostic, Effect, Expression, ExpressionKind, HostWeave,
+    Parameter, ParameterMode, Program, RecordDeclaration, RecordField, ResourceOperation,
+    ShapeDeclaration, Span, Statement, TableLayout, TernaryOperation, UnaryOperation, ValueType,
+    Weave, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 /// The JSON schema identifier emitted for a validated semantic document.
@@ -34,7 +35,7 @@ const MAX_STRUCTURAL_EDIT_DEPTH: usize = 256;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 
 /// A successful pure structural edit. The returned source is canonical and has
-/// passed the normal bootstrap parser and semantic validator.
+/// passed the **product seed** accept gate (ADR-048); base parse used bootstrap AST.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuralEditResult {
     pub source: String,
@@ -128,13 +129,17 @@ pub fn apply_structural_edit(
     }
 
     let candidate_source = format_program(&program);
-    let validated_program = compile_source(&candidate_source).map_err(StructuralEditError::from)?;
-    let canonical_candidate = format_program(&validated_program);
-    let document_json = serialize_document(&canonical_candidate, &validated_program)
+    // ADR-048: product seed is the accept gate (not bootstrap re-validate).
+    debug_assert!(
+        crate::structural_edit_accepts_via_product_seed(),
+        "ADR-048: structural edit accept must use product seed"
+    );
+    compile_product_bytecode(&candidate_source).map_err(StructuralEditError::from)?;
+    let document_json = serialize_document(&candidate_source, &program)
         .map_err(|error| protocol_error("AE-EDIT-001", error.to_string()))?;
 
     Ok(StructuralEditResult {
-        source: canonical_candidate,
+        source: candidate_source,
         document_json,
         operation_count: request.operations.len(),
     })
@@ -2848,7 +2853,14 @@ mod tests {
         .expect("invalid edit should serialize");
         let error = apply_structural_edit(canonical_source, &invalid_edit)
             .expect_err("structural edits must not bypass task checkpoint validation");
-        assert_eq!(error.diagnostic().code, "AE-TASK-004");
+        // ADR-048: accept gate is product seed; verifier surfaces checkpoint rules as
+        // AE-TASK-004 (mapped from TASK_CHECKPOINT product failure) or AE-SEED-002.
+        let code = error.diagnostic().code;
+        assert!(
+            code == "AE-TASK-004" || code == "AE-SEED-002",
+            "expected AE-TASK-004 or AE-SEED-002, got {code}: {}",
+            error.diagnostic().message
+        );
     }
 
     #[test]

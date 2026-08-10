@@ -2,8 +2,9 @@ use aether_core::{
     compile_product_bytecode, compile_to_bytecode, compile_with_seed, forge_bytecode,
     product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
     product_path_requires_bootstrap_dual_compare, run_bytecode,
-    seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_subset, verify_bytecode,
-    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
+    seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_subset,
+    structural_edit_accepts_via_product_seed, verify_bytecode, InvocationOutput, InvocationValue,
+    SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -355,6 +356,10 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
         !product_multi_module_invokes_bootstrap(),
         "ADR-047: multi-module product path must not invoke bootstrap"
     );
+    assert!(
+        structural_edit_accepts_via_product_seed(),
+        "ADR-048: structural edit accept via product seed"
+    );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")
         .bytecode;
@@ -400,6 +405,30 @@ fn barp_phase3a_product_path_maps_seed_forge_failure_to_ae_seed_code() {
     assert!(
         message.contains("aether check"),
         "expected check hint, got {message}"
+    );
+}
+
+#[test]
+fn barp_phase3b_product_path_rejects_missing_main_with_ae_seed_004() {
+    let source = "world w\n\nweave helper [] -> Whole:\n  yield 1\n";
+    let error = compile_product_bytecode(source).expect_err("missing main must fail closed");
+    let message = error.to_string();
+    assert!(
+        message.contains("AE-SEED-004"),
+        "expected AE-SEED-004, got {message}"
+    );
+}
+
+#[test]
+fn product_path_rebuilds_seed_compiler_byte_identically() {
+    // Aether independence: the embedded seed forges its own source to the
+    // checked-in artifact without bootstrap emit (oracle still dual-compared).
+    let product =
+        compile_product_bytecode(SEED_SOURCE).expect("product path must forge the seed source");
+    assert_eq!(
+        product.as_slice(),
+        CHECKED_IN_SEED_ARTIFACT,
+        "product seed rebuild must match the checked-in seed artifact"
     );
 }
 
