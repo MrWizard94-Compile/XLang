@@ -9,13 +9,12 @@ mod test_runner;
 
 use aether_core::{
     apply_structural_edit, canonical_ast, compile_product_bytecode, compile_project_modules,
-    compile_source, compile_to_bytecode, compile_with_seed, compile_workspace_package,
-    forge_bytecode, format_project, format_source, multi_module_authority_note,
-    parse_project_document, parse_workspace_document, refresh_project_lock, refresh_workspace_lock,
-    run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
-    serialize_project_document, serialize_workspace_document, structural_document_json,
-    unit_artifact_file_name, verify_bytecode, verify_project, verify_workspace, HostGrantConfig,
-    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    compile_source, compile_to_bytecode, compile_workspace_package, forge_bytecode, format_project,
+    format_source, multi_module_authority_note, parse_project_document, parse_workspace_document,
+    refresh_project_lock, refresh_workspace_lock, run_bytecode, run_bytecode_with_grants,
+    run_project_tests_with_grants, serialize_project_document, serialize_workspace_document,
+    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
+    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
@@ -895,6 +894,7 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aether_core::compile_with_seed;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
