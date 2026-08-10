@@ -33,7 +33,7 @@ Bootstrap remains **required** for:
 | Site | Authority today |
 | --- | --- |
 | `compile_product_bytecode` | **Phase 2:** seed forge + verify only; **Phase 3a** `AE-SEED-*` mapping |
-| `compile_with_seed` | Forge-first product bytes; bootstrap parse only for returned `Program` AST |
+| `compile_with_seed` | **ADR-049:** product bytes authoritative; bootstrap `Program` best-effort only |
 | ~~`lower_m23_comptime_calls_for_seed`~~ | **Removed in Phase 1** — seed interprets raw M23 `call` |
 | Module elaborate | Host-side graph; then **seed emit only** (ADR-045/047: no bootstrap dual-compare or AST) |
 | `apply-edit` | Bootstrap base parse AST; **product seed accept** (ADR-048); CLI product write gate |
@@ -100,6 +100,11 @@ and dual-compare **oracle** (tests + aether-gate).
 ### ADR-048 — Structural-edit product accept (**complete** 2026-08-10)
 
 Post-edit accept gate is product seed; base parse remains bootstrap for authoring AST.
+
+### ADR-049 — Product-authoritative `compile_with_seed` + product seed rebuild in gate (**complete** 2026-08-10)
+
+Product Ok no longer requires bootstrap after seed verify; gate seed identity is
+bootstrap ≡ product ≡ forged ≡ checked-in.
 
 ### ADR-045 — Product dual-compare oracle-only (**complete** 2026-08-10)
 

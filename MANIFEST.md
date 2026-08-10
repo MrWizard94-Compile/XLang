@@ -286,7 +286,7 @@ operation vocabulary, and compatibility policy are in
 | Path | Role |
 |------|------|
 | **Seed (default)** | `compile_product_bytecode` / CLI `compile` / project+workspace build / apply-edit accept — forge-first; multi-module no bootstrap (ADR-047/048) |
-| **Seed + AST** | `compile_with_seed` — product bytes then bootstrap `Program` for tooling |
+| **Seed + optional AST** | `compile_with_seed` — product bytes authoritative (ADR-049); bootstrap `Program` best-effort |
 | **Bootstrap** | `compile_to_bytecode` / CLI `compile --bootstrap` / `check` AST — rebuild seed, full diagnostics, dual-compare oracle |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |
 

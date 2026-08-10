@@ -2803,23 +2803,31 @@ fn seed_reject_missing_main_weave(source: &str) -> Option<String> {
     None
 }
 
-/// Compile source with the Aether-written seed compiler (default product path).
+/// Compile source with the Aether-written seed compiler (product path).
 ///
-/// Product **bytecode** is seed-forged first without a bootstrap validation
-/// precondition (ADR-044). The returned `program` AST still comes from the Rust
-/// bootstrap for tooling and dual-compare callers; if bootstrap rejects source
-/// after seed produced verified bytecode, this fails closed as an oracle
-/// mismatch (dual-compare would also fail for that program).
+/// **Product success** is seed forge + verify only ([`compile_product_bytecode`];
+/// ADR-044/049). Bootstrap no longer fails this call after product success.
+///
+/// [`CompileOutput::program`] is a **best-effort** bootstrap AST when bootstrap
+/// accepts the same source; if bootstrap rejects after product success, `program`
+/// is an empty placeholder and must not be used as a semantic document — call
+/// [`compile_source`] / CLI `check` for diagnostics or dual-compare oracles.
 pub fn compile_with_seed(source: &str) -> Result<CompileOutput, CompilerError> {
+    debug_assert!(
+        compile_with_seed_product_authoritative(),
+        "ADR-049: compile_with_seed product success must not require bootstrap"
+    );
     let bytecode = compile_product_bytecode(source)?;
-    let program = compile_source(source).map_err(|error| {
-        CompilerError::new(
-            Span::synthetic(),
-            format!(
-                "seed produced verified bytecode but bootstrap rejected source (oracle mismatch): {error}"
-            ),
-        )
-    })?;
+    let program = match compile_source(source) {
+        Ok(program) => program,
+        Err(_) => Program {
+            world: String::new(),
+            records: Vec::new(),
+            shapes: Vec::new(),
+            host_weaves: Vec::new(),
+            weaves: Vec::new(),
+        },
+    };
     Ok(CompileOutput { program, bytecode })
 }
 
@@ -2862,6 +2870,13 @@ pub const fn product_multi_module_invokes_bootstrap() -> bool {
 /// bootstrap re-validate (base parse remains bootstrap for authoring AST).
 #[must_use]
 pub const fn structural_edit_accepts_via_product_seed() -> bool {
+    true
+}
+
+/// BARP ADR-049: [`compile_with_seed`] product success is seed-only; bootstrap
+/// AST is best-effort fill and does not gate product Ok.
+#[must_use]
+pub const fn compile_with_seed_product_authoritative() -> bool {
     true
 }
 

@@ -1,5 +1,6 @@
 use aether_core::{
-    compile_product_bytecode, compile_to_bytecode, compile_with_seed, forge_bytecode,
+    compile_product_bytecode, compile_to_bytecode, compile_with_seed,
+    compile_with_seed_product_authoritative, forge_bytecode,
     product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
     product_path_requires_bootstrap_dual_compare, run_bytecode,
     seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_subset,
@@ -359,6 +360,10 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
     assert!(
         structural_edit_accepts_via_product_seed(),
         "ADR-048: structural edit accept via product seed"
+    );
+    assert!(
+        compile_with_seed_product_authoritative(),
+        "ADR-049: compile_with_seed product-authoritative"
     );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")

@@ -231,30 +231,39 @@ if (Test-Path -LiteralPath $modFile) {
 
 # --- Full: seed forge identity ---
 if ($Mode -ne "quick") {
-    Write-Step "Seed bootstrap + forge hash identity"
+    Write-Step "Seed bootstrap + product + forge hash identity (ADR-049)"
     $seedAe = Join-Path $RepoRoot "seed\aether_seed.ae"
     $seedBoot = Join-Path $RepoRoot "target\aether_seed.gate.bootstrap.aeth"
+    $seedProduct = Join-Path $RepoRoot "target\aether_seed.gate.product.aeth"
     $seedForged = Join-Path $RepoRoot "target\aether_seed.gate.forged.aeth"
     $seedCheckedIn = Join-Path $RepoRoot "seed\aether_seed.aeth"
 
     cargo run -q -p aether-cli -- compile $seedAe --output $seedBoot --bootstrap
     if ($LASTEXITCODE -ne 0) { Fail "seed bootstrap compile failed" }
 
+    # Product path self-rebuild (no --bootstrap): Aether independence proof.
+    cargo run -q -p aether-cli -- compile $seedAe --output $seedProduct
+    if ($LASTEXITCODE -ne 0) { Fail "seed product compile failed" }
+
     cargo run -q -p aether-cli -- forge $seedBoot $seedAe --output $seedForged
     if ($LASTEXITCODE -ne 0) { Fail "seed forge failed" }
 
     $hb = (Get-FileHash -Algorithm SHA256 -LiteralPath $seedBoot).Hash
+    $hp = (Get-FileHash -Algorithm SHA256 -LiteralPath $seedProduct).Hash
     $hf = (Get-FileHash -Algorithm SHA256 -LiteralPath $seedForged).Hash
     $hc = (Get-FileHash -Algorithm SHA256 -LiteralPath $seedCheckedIn).Hash
 
     if ($hb -ne $hf) {
         Fail "bootstrap≠forged: bootstrap=$hb forged=$hf"
     }
+    if ($hb -ne $hp) {
+        Fail "bootstrap≠product seed rebuild: bootstrap=$hb product=$hp"
+    }
     if ($hb -ne $hc) {
         Fail "bootstrap≠checked-in seed/aether_seed.aeth: bootstrap=$hb checked-in=$hc"
     }
     Write-Host "  seed SHA-256: $hb"
-    Write-Host "  bootstrap ≡ forged ≡ checked-in OK"
+    Write-Host "  bootstrap ≡ product ≡ forged ≡ checked-in OK"
 }
 
 # --- Release: package and consumer verification ---

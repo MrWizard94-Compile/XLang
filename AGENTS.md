@@ -106,7 +106,7 @@ D2a body subset (`seed_interprets_m23_comptime_calls_natively`; ADR-043 Phase 1)
 | Law forks F-NATIVE / F-REGISTRY (design only; human authorize) | [docs/HUMAN-AUTHORIZE-NATIVE.md](docs/HUMAN-AUTHORIZE-NATIVE.md), [docs/HUMAN-AUTHORIZE-REGISTRY.md](docs/HUMAN-AUTHORIZE-REGISTRY.md), [docs/ADR-037-f-native-law-fork.md](docs/ADR-037-f-native-law-fork.md), [docs/ADR-038-f-registry-law-fork.md](docs/ADR-038-f-registry-law-fork.md), [docs/DELIVERY_REPORT-2026-08-05-LAW-FORKS-F-NATIVE-F-REGISTRY.md](docs/DELIVERY_REPORT-2026-08-05-LAW-FORKS-F-NATIVE-F-REGISTRY.md) |
 | Human ordered backlog (2026-08-05) | [docs/BACKLOG-HUMAN-2026-08-05.md](docs/BACKLOG-HUMAN-2026-08-05.md) |
 | M23 T-CT pure comptime calls | [docs/DESIGN-M23-COMPTIME-PURE-CALLS.md](docs/DESIGN-M23-COMPTIME-PURE-CALLS.md), [docs/ADR-039-m23-comptime-pure-calls.md](docs/ADR-039-m23-comptime-pure-calls.md), [docs/M23-VALIDATION-MATRIX.md](docs/M23-VALIDATION-MATRIX.md) |
-| BARP bootstrap authority reduction | [docs/ADR-043-bootstrap-authority-reduction.md](docs/ADR-043-bootstrap-authority-reduction.md)–[docs/ADR-048-barp-authoring-product-validate.md](docs/ADR-048-barp-authoring-product-validate.md), [docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md) — through ADR-048 |
+| BARP bootstrap authority reduction | [docs/ADR-043-bootstrap-authority-reduction.md](docs/ADR-043-bootstrap-authority-reduction.md)–[docs/ADR-049-barp-product-authoritative-compile-with-seed.md](docs/ADR-049-barp-product-authoritative-compile-with-seed.md), [docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md) — through ADR-049 |
 | Legacy intake | [docs/LEGACY.md](docs/LEGACY.md) |
 
 ### Stack pins
@@ -117,7 +117,7 @@ D2a body subset (`seed_interprets_m23_comptime_calls_natively`; ADR-043 Phase 1)
 | Core crate | `aether-core` at `crates/xlang-core` (package version **0.36.0**) |
 | CLI binary | `aether` via `apps/xlang-cli` (package `aether-cli` **0.36.0**) |
 | Artifact format | AETH **v4–v11** compatibility input + deterministic **v11** default / **v12** when M19e task frames present (`TASK_CHECKPOINT` 67; `RELEASE` 66) |
-| Product compile | Seed forge-first; multi-module no bootstrap AST (ADR-047); edit accept product seed (ADR-048); `AE-SEED-*`; dual-compare tests/gate; M19e v12 |
+| Product compile | Seed forge-first (ADR-049 product-authoritative); multi-module/edit product-only gates; `AE-SEED-*`; dual-compare tests/gate; M19e v12 |
 | Foreign ABI (M21) | Whole-only pilot; `--grant-lib KEY=PATH`; host load after verify; residual native risk accepted by human; seed dual-compare proven |
 | Bootstrap | `compile --bootstrap` / `check` AST / rebuild `seed/*.aeth` / dual-compare oracle |
 | Seed compiler | `seed/aether_seed.ae` + checked-in `seed/aether_seed.aeth` |

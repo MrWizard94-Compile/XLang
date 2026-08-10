@@ -15,6 +15,8 @@ from `seed/aether_seed.ae` byte-identically (independence proof; bootstrap
 remains the recovery rebuild path). Rust bootstrap remains for seed recovery
 rebuild, `check` AST full diagnostics, and dual-compare **proofs**. A Seed
 Profile claim is not a claim of full bootstrap diagnostic parity for invalid input.
+`compile_with_seed` product success does not require bootstrap (ADR-049); prefer
+`compile_product_bytecode` for emit-only.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,
