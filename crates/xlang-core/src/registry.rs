@@ -132,6 +132,178 @@ pub const fn registry_key_rotation_policy() -> bool {
     true
 }
 
+/// M24e: multi-root trust policy document is product.
+#[must_use]
+pub const fn registry_multi_root_trust_policy() -> bool {
+    true
+}
+
+pub const REGISTRY_TRUST_POLICY_FILE: &str = "aether.registry-trust-policy.json";
+pub const REGISTRY_TRUST_POLICY_SCHEMA: &str = "aether.registry-trust-policy/v1";
+
+/// Offline multi-root trust policy for a registry cache (M24e).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryTrustPolicy {
+    pub schema: String,
+    /// When true, every pin must carry a signature + key_id.
+    #[serde(default)]
+    pub require_signature: bool,
+    /// Allow HMAC-SHA256 keys (default true).
+    #[serde(default = "default_true")]
+    pub allow_hmac: bool,
+    /// Allow Ed25519 keys (default true).
+    #[serde(default = "default_true")]
+    pub allow_ed25519: bool,
+    /// Maximum number of non-revoked keys (0 = unlimited).
+    #[serde(default)]
+    pub max_active_keys: u32,
+    /// Preferred root key ids in verification preference order (optional).
+    #[serde(default)]
+    pub preferred_roots: Vec<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+pub fn default_registry_trust_policy() -> RegistryTrustPolicy {
+    RegistryTrustPolicy {
+        schema: REGISTRY_TRUST_POLICY_SCHEMA.to_owned(),
+        require_signature: false,
+        allow_hmac: true,
+        allow_ed25519: true,
+        max_active_keys: 0,
+        preferred_roots: Vec::new(),
+    }
+}
+
+pub fn parse_registry_trust_policy(json: &str) -> Result<RegistryTrustPolicy, RegistryError> {
+    let policy: RegistryTrustPolicy = serde_json::from_str(json).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-001",
+            format!("invalid registry trust policy JSON: {error}"),
+        )
+    })?;
+    if policy.schema != REGISTRY_TRUST_POLICY_SCHEMA {
+        return Err(RegistryError::new(
+            "AE-REG-001",
+            format!(
+                "unsupported trust policy schema {} (want {REGISTRY_TRUST_POLICY_SCHEMA})",
+                policy.schema
+            ),
+        ));
+    }
+    Ok(policy)
+}
+
+pub fn serialize_registry_trust_policy(
+    policy: &RegistryTrustPolicy,
+) -> Result<String, RegistryError> {
+    serde_json::to_string_pretty(policy).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-001",
+            format!("could not serialize trust policy: {error}"),
+        )
+    })
+}
+
+pub fn load_or_default_trust_policy(
+    cache_root: &Path,
+) -> Result<RegistryTrustPolicy, RegistryError> {
+    let path = cache_root.join(REGISTRY_TRUST_POLICY_FILE);
+    if !path.is_file() {
+        return Ok(default_registry_trust_policy());
+    }
+    let json = fs::read_to_string(&path).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-005",
+            format!("could not read trust policy: {error}"),
+        )
+    })?;
+    parse_registry_trust_policy(&json)
+}
+
+pub fn write_trust_policy(
+    cache_root: &Path,
+    policy: &RegistryTrustPolicy,
+) -> Result<(), RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_multi_root_trust_policy(),
+        "ADR-084: multi-root trust policy"
+    );
+    fs::create_dir_all(cache_root).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-005",
+            format!("could not create cache root: {error}"),
+        )
+    })?;
+    let json = serialize_registry_trust_policy(policy)?;
+    fs::write(cache_root.join(REGISTRY_TRUST_POLICY_FILE), json).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-005",
+            format!("could not write trust policy: {error}"),
+        )
+    })
+}
+
+fn enforce_trust_policy(
+    cache_root: &Path,
+    document: &RegistryCacheDocument,
+) -> Result<(), RegistryError> {
+    if !registry_multi_root_trust_policy() {
+        return Ok(());
+    }
+    let policy = load_or_default_trust_policy(cache_root)?;
+    let trust = load_or_empty_trust(cache_root)?;
+    let active: Vec<_> = trust.keys.iter().filter(|k| !k.revoked).collect();
+    if policy.max_active_keys > 0 && active.len() as u32 > policy.max_active_keys {
+        return Err(RegistryError::new(
+            "AE-REG-010",
+            format!(
+                "trust policy max_active_keys={} exceeded (have {})",
+                policy.max_active_keys,
+                active.len()
+            ),
+        ));
+    }
+    for key in &trust.keys {
+        if key.algorithm == REGISTRY_ALG_HMAC_SHA256 && !policy.allow_hmac {
+            return Err(RegistryError::new(
+                "AE-REG-010",
+                format!("trust policy disallows hmac-sha256 key {}", key.key_id),
+            ));
+        }
+        if key.algorithm == REGISTRY_ALG_ED25519 && !policy.allow_ed25519 {
+            return Err(RegistryError::new(
+                "AE-REG-010",
+                format!("trust policy disallows ed25519 key {}", key.key_id),
+            ));
+        }
+    }
+    if policy.require_signature {
+        for package in &document.packages {
+            if package.signature.is_none() || package.key_id.is_none() {
+                return Err(RegistryError::new(
+                    "AE-REG-010",
+                    format!(
+                        "trust policy requires signatures; package {}@{} is unsigned",
+                        package.name, package.version
+                    ),
+                ));
+            }
+        }
+    }
+    for root in &policy.preferred_roots {
+        if !trust.keys.iter().any(|k| k.key_id == *root) {
+            return Err(RegistryError::new(
+                "AE-REG-010",
+                format!("preferred root {root} is not installed in trust store"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub fn empty_registry_cache() -> RegistryCacheDocument {
     RegistryCacheDocument {
         schema: REGISTRY_CACHE_SCHEMA.to_owned(),
@@ -747,6 +919,7 @@ pub fn verify_registry_cache(cache_root: &Path) -> Result<RegistryCacheDocument,
         "ADR-060: registry offline pilot"
     );
     let document = load_or_empty_cache(cache_root)?;
+    enforce_trust_policy(cache_root, &document)?;
     for package in &document.packages {
         validate_pin_fields(package)?;
         let path = resolve_cache_path(cache_root, &package.artifact)?;
@@ -1337,6 +1510,26 @@ mod tests {
         let err = pin_local_package_signed(&root, "demo", "1.0.2", &artifact, "v2")
             .expect_err("revoked v2");
         assert_eq!(err.code, "AE-REG-009");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn multi_root_trust_policy_require_signature() {
+        assert!(registry_multi_root_trust_policy());
+        let root = temp_dir();
+        install_trust_key(&root, "ops", b"policy-hmac-key-material!!!!").expect("key");
+        let artifact = root.join("payload.bin");
+        fs::write(&artifact, b"AETH\x0bpolicy").expect("write");
+        pin_local_package(&root, "demo", "1.0.0", &artifact).expect("unsigned pin");
+        verify_registry_cache(&root).expect("default policy allows unsigned");
+        let mut policy = default_registry_trust_policy();
+        policy.require_signature = true;
+        policy.preferred_roots = vec!["ops".to_owned()];
+        write_trust_policy(&root, &policy).expect("write policy");
+        let err = verify_registry_cache(&root).expect_err("require signature");
+        assert_eq!(err.code, "AE-REG-010");
+        pin_local_package_signed(&root, "demo", "1.0.0", &artifact, "ops").expect("signed");
+        verify_registry_cache(&root).expect("signed under policy");
         let _ = fs::remove_dir_all(&root);
     }
 }

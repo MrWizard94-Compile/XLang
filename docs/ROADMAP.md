@@ -344,24 +344,24 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-078:** product
-auto-accepts multi-source envelopes; SPEAK-format packets + seed SPEAK diagnostic
-merge. Bootstrap is recovery/oracle only.
-**Next:** systematic seed-binary SPEAK packets; seed-native multi-file elaboration.
+reduce Rust bootstrap product-path authority. **Through ADR-082:** stable SPEAK
+packet protocol + product multi-file host forge path. Bootstrap is recovery/oracle
+only.
+**Next:** seed.ae systematic SPEAK emit (rebuild + dual-compare); seed-native
+multi-file elaboration.
 Residual bootstrap: dual-compare oracle emit, recovery `--bootstrap` flags, full
 `aether.ast/v8`.
 
-**Law forks (reaffirmed 2026-08-10):** F-NATIVE through **M35e** (native object
-emit via host cc, ADR-059–079); F-REGISTRY through **M24d** key rotation/revoke/
-validity (ADR-060–080). M21 FFI pilot remains product.
+**Law forks (reaffirmed 2026-08-10):** F-NATIVE through **M35f** (LLVM IR text
+emit, ADR-059–083); F-REGISTRY through **M24e** multi-root trust policy
+(ADR-060–084). M21 FFI pilot remains product.
 
-**Still needing new ADR / matrix:** expanded FFI signatures, LLVM IR product path,
-CA hierarchy, systematic seed SPEAK packets, seed-native multi-file forge,
-implementable task handles/timeouts/parallelism ([ADR-081](ADR-081-broader-task-model-design.md)
-design only).
+**Still needing new ADR / matrix:** expanded FFI signatures, full LLVM object
+product path, X.509 CA hierarchy, seed.ae SPEAK emit, seed-native multi-file,
+task handles/timeouts/parallelism (ADR-081 design; ADR-085 surface-only).
 
 **Human backlog (updated 2026-08-10):**
-1. **BARP** — systematic seed-binary SPEAK + seed-native multi-file.
-2. F-NATIVE M35f+ (LLVM IR when authorized).
-3. F-REGISTRY M24e CA / multi-root trust polish.
-4. Task handles/timeouts/parallelism — implement only via new ADR after ADR-081.
+1. **BARP** — seed.ae SPEAK emit + seed-native multi-file.
+2. F-NATIVE M35g+ (LLVM object/linker product path).
+3. F-REGISTRY M24f X.509 / CA hierarchy if authorized.
+4. Task handles/timeouts/parallelism — new implementable ADR under ADR-081.

@@ -34,7 +34,7 @@ A human must write **exactly** (or clearly equivalent):
 (clearly equivalent intent); full residual-risk bounds above are enforced as fork law.
 
 **Reaffirmed (2026-08-10):** human again wrote `I authorize Aether law fork F-REGISTRY`
-when directing M24b–d work (ADR-074/077/080), including key rotation policy.
+when directing M24b–e work (ADR-074/077/080/084), including multi-root trust policy.
 
 ## 4. After §3 — still not free-form implement
 

@@ -18,6 +18,8 @@
 | M24D-001 | rotate-key revokes old, new signs | PASS |
 | M24D-002 | revoke-key blocks sign/verify | FAIL closed AE-REG-009 |
 | M24D-003 | set-key-validity out of window | FAIL closed AE-REG-009 |
+| M24E-001 | require_signature policy rejects unsigned | AE-REG-010 |
+| M24E-002 | signed pins pass under require_signature | PASS |
 
 ---
 

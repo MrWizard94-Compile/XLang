@@ -16,6 +16,8 @@
 | M35D-002 | when cc present, native exit matches VM | FAIL closed on diverge |
 | M35E-001 | native object emit without cc | FAIL closed AE-NATIVE-004 |
 | M35E-002 | native object emit with cc | object file produced |
+| M35F-001 | pure multi-weave+speak lowers to LLVM IR text | IR has main, mul, puts |
+| M35F-002 | unverified AETH rejected before IR lower | AE-NATIVE-001 |
 
 ---
 

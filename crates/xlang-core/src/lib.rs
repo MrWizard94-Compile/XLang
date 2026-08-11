@@ -56,10 +56,11 @@ pub use modules::{
     ProjectTestResult, MULTI_SOURCE_ENVELOPE_SCHEMA,
 };
 pub use native::{
-    f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_native_object,
-    native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot, native_aeth_to_c_speak_multiweave_pilot,
-    native_dual_run_vm_exit, native_host_cc_dual_exec, native_host_cc_dual_exec_pilot,
-    native_object_emit_product, NativeDualExecReport, NativeError,
+    f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
+    lower_verified_aeth_to_native_object, native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot,
+    native_aeth_to_c_speak_multiweave_pilot, native_dual_run_vm_exit, native_host_cc_dual_exec,
+    native_host_cc_dual_exec_pilot, native_llvm_ir_emit_product, native_object_emit_product,
+    NativeDualExecReport, NativeError,
 };
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
@@ -69,15 +70,18 @@ pub use project::{
     ProjectUnitReport, ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
 };
 pub use registry::{
-    empty_registry_cache, empty_registry_trust, f_registry_authorized, fetch_signed_package,
-    generate_ed25519_trust_key, install_trust_key, install_trust_key_with_algorithm,
-    parse_registry_cache, parse_registry_trust, pin_local_package, pin_local_package_signed,
-    registry_ed25519_https_pilot, registry_key_rotation_policy, registry_offline_cache_verify,
-    registry_signed_fetch_pilot, revoke_trust_key, rotate_trust_key, serialize_registry_cache,
-    serialize_registry_trust, set_trust_key_validity, sign_package_binding, verify_registry_cache,
+    default_registry_trust_policy, empty_registry_cache, empty_registry_trust,
+    f_registry_authorized, fetch_signed_package, generate_ed25519_trust_key, install_trust_key,
+    install_trust_key_with_algorithm, load_or_default_trust_policy, parse_registry_cache,
+    parse_registry_trust, parse_registry_trust_policy, pin_local_package, pin_local_package_signed,
+    registry_ed25519_https_pilot, registry_key_rotation_policy, registry_multi_root_trust_policy,
+    registry_offline_cache_verify, registry_signed_fetch_pilot, revoke_trust_key, rotate_trust_key,
+    serialize_registry_cache, serialize_registry_trust, serialize_registry_trust_policy,
+    set_trust_key_validity, sign_package_binding, verify_registry_cache, write_trust_policy,
     RegistryCacheDocument, RegistryError, RegistryPackagePin, RegistryTrustDocument,
-    RegistryTrustKey, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256, REGISTRY_CACHE_SCHEMA,
-    REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_SCHEMA,
+    RegistryTrustKey, RegistryTrustPolicy, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256,
+    REGISTRY_CACHE_SCHEMA, REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_POLICY_FILE,
+    REGISTRY_TRUST_POLICY_SCHEMA, REGISTRY_TRUST_SCHEMA,
 };
 pub use workspace::{
     compile_workspace_package, parse_workspace_document, refresh_workspace_lock,
@@ -3451,6 +3455,123 @@ pub const fn product_compile_accepts_multi_source_envelope() -> bool {
 #[must_use]
 pub const fn seed_speak_packet_diagnostic_merge() -> bool {
     true
+}
+
+/// BARP ADR-082: SPEAK packet line protocol for seed/host is stable
+/// (`AETHER_SEED_ERROR:` + `aether.seed-error/v1` JSON).
+#[must_use]
+pub const fn seed_speak_error_protocol_stable() -> bool {
+    true
+}
+
+/// BARP ADR-082 honesty: product multi-file forge is host elaborate + seed emit;
+/// seed does **not** natively parse multi-source envelopes.
+#[must_use]
+pub const fn product_multi_file_forge_host_path() -> bool {
+    true
+}
+
+/// Prefix seed (and host) must use for structured SPEAK error packets.
+pub const SEED_SPEAK_ERROR_PREFIX: &str = "AETHER_SEED_ERROR:";
+
+/// Format one SPEAK line the seed binary should emit for a packet (ADR-082 protocol).
+#[must_use]
+pub fn format_seed_speak_error_line(packet: &SeedErrorPacket) -> String {
+    match serde_json::to_string(packet) {
+        Ok(json) => format!("{SEED_SPEAK_ERROR_PREFIX}{json}"),
+        Err(_) => format!(
+            "{SEED_SPEAK_ERROR_PREFIX}{{\"schema\":\"{SEED_ERROR_PACKET_SCHEMA}\",\"code\":\"AE-SEED-001\",\"message\":\"packet serialize failed\",\"line\":1,\"column\":1,\"origin\":\"host-classify\"}}"
+        ),
+    }
+}
+
+/// Product task-frame surface discovered from verified AETH (ADR-085 / M19e tool path).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProductTaskFrameSurface {
+    pub artifact_version: u8,
+    pub task_weave_names: Vec<String>,
+    pub task_weave_count: usize,
+    pub total_task_frame_arena_capacity: u32,
+}
+
+/// Inspect verified bytecode for M19e task-frame surface without executing.
+///
+/// Read-only product tooling under ADR-081/085. Does not add handles, timeouts,
+/// or parallelism.
+pub fn product_task_frame_surface(
+    bytecode: &[u8],
+) -> Result<ProductTaskFrameSurface, BytecodeError> {
+    debug_assert!(
+        product_task_frame_surface_api(),
+        "ADR-085: product task-frame surface API"
+    );
+    verify_bytecode(bytecode)?;
+    let artifact = parse_artifact(bytecode)?;
+    let mut task_weave_names = Vec::new();
+    let mut total_task_frame_arena_capacity = 0u32;
+    for function in &artifact.functions {
+        if function.is_task() {
+            task_weave_names.push(function.name.clone());
+            total_task_frame_arena_capacity =
+                total_task_frame_arena_capacity.saturating_add(function.frame_arena_capacity);
+        }
+    }
+    let task_weave_count = task_weave_names.len();
+    Ok(ProductTaskFrameSurface {
+        artifact_version: artifact.version,
+        task_weave_names,
+        task_weave_count,
+        total_task_frame_arena_capacity,
+    })
+}
+
+/// ADR-085: product task-frame surface inspection API is available.
+#[must_use]
+pub const fn product_task_frame_surface_api() -> bool {
+    true
+}
+
+#[cfg(test)]
+mod product_task_frame_surface_tests {
+    use super::*;
+
+    #[test]
+    fn product_task_frame_surface_reports_m19e_task_weaves() {
+        assert!(product_task_frame_surface_api());
+        let source = include_str!("../../../examples/active-cancel.ae");
+        let bytecode = compile_product_bytecode(source).expect("product m19e");
+        let surface = product_task_frame_surface(&bytecode).expect("surface");
+        assert!(
+            surface.artifact_version >= 12
+                || surface.task_weave_count > 0
+                || surface.task_weave_count == 0
+        );
+        // active-cancel uses task weaves under M19e.
+        assert!(
+            surface.task_weave_count >= 1,
+            "expected task weaves, got {:?}",
+            surface.task_weave_names
+        );
+        assert!(!surface.task_weave_names.is_empty());
+    }
+
+    #[test]
+    fn seed_speak_protocol_formats_stable_line() {
+        assert!(seed_speak_error_protocol_stable());
+        let packet = SeedErrorPacket {
+            schema: SEED_ERROR_PACKET_SCHEMA.to_owned(),
+            code: "AE-SEED-005".to_owned(),
+            message: "empty".to_owned(),
+            line: 1,
+            column: 1,
+            origin: "seed-speak".to_owned(),
+        };
+        let line = format_seed_speak_error_line(&packet);
+        assert!(line.starts_with(SEED_SPEAK_ERROR_PREFIX));
+        let parsed = try_parse_seed_speak_error_packet(&line).expect("parse");
+        assert_eq!(parsed.code, "AE-SEED-005");
+        assert_eq!(parsed.origin, "seed-speak");
+    }
 }
 
 /// BARP ADR-062: default `format_source` prefers product AE-SEED when both reject.
