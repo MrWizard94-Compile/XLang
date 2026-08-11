@@ -287,7 +287,7 @@ operation vocabulary, and compatibility policy are in
 |------|------|
 | **Seed (default)** | Default CLI `compile` (incl. seed rebuild ADR-067) / `check` / `format` / `structure` / `project format` + LSP diagnostics/format/symbols/hover/definition — product seed path (ADR-064–066) |
 | **Seed product API** | `compile_with_seed` / `product_diagnostics` / `product_surface_symbols` — never bootstrap |
-| **Structural top-level weaves** | Product text-splice replace/insertAfter/delete without bootstrap base AST (ADR-065/068); statement/record ops residual bootstrap AST |
+| **Structural product edits** | Top-level weave + weave-body statements + primitive records without bootstrap base AST (ADR-065/068/069); nested body lists residual bootstrap AST |
 | **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
 | **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; structural-edit ops outside product weave-replace; dual-compare tests/gate |
 | **F-NATIVE M35a/b** | `compile --native-c` — verified AETH → ISO C pure Whole + locals/arithmetic (ADR-059/062); VM remains default |

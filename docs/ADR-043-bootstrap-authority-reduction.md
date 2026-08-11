@@ -72,9 +72,11 @@ authority under Constitution.
     `product_seed_rebuild_without_bootstrap()`.  
 25. **ADR-068 (done):** product top-level weave insertAfter/delete (with replace);
     `structural_edit_product_top_level_weave_ops()`.  
-26. Residual bootstrap: dual-compare oracle, recovery flags, statement/record
+26. **ADR-069 (done):** product weave-body statement ops + primitive record ops;
+    `structural_edit_product_statement_and_record_ops()`.  
+27. Residual bootstrap: dual-compare oracle, recovery flags, nested body-list
     structural AST, full `aether.ast/v8`.  
-27. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+28. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 

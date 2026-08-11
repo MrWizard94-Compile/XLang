@@ -3182,12 +3182,12 @@ pub const fn product_default_cli_toolchain() -> bool {
     true
 }
 
-/// BARP ADR-064–068 honesty: bootstrap is recovery/oracle only — not the
-/// default product toolchain. Residual bootstrap roles after ADR-068:
-/// dual-compare oracle, recovery flags (`--bootstrap`), statement-level and
-/// record structural edits, and full `aether.ast/v8` structure. Product owns
-/// seed rebuild, top-level weave replace/insert/delete, and LSP product-surface
-/// hover/definition.
+/// BARP ADR-064–069 honesty: bootstrap is recovery/oracle only — not the
+/// default product toolchain. Residual bootstrap roles after ADR-069:
+/// dual-compare oracle, recovery flags (`--bootstrap`), nested body-list
+/// structural edits (choose/while paths), and full `aether.ast/v8` structure.
+/// Product owns seed rebuild, top-level weave/record ops, weave-body statements,
+/// and LSP product-surface hover/definition.
 #[must_use]
 pub const fn bootstrap_is_recovery_oracle_only() -> bool {
     true
@@ -3204,6 +3204,13 @@ pub const fn structural_edit_product_weave_replace() -> bool {
 /// product-accepted base source without bootstrap `Program` base parse.
 #[must_use]
 pub const fn structural_edit_product_top_level_weave_ops() -> bool {
+    true
+}
+
+/// BARP ADR-069: weave-body statement ops and top-level primitive record ops
+/// without bootstrap `Program` base parse (nested choose/while lists residual).
+#[must_use]
+pub const fn structural_edit_product_statement_and_record_ops() -> bool {
     true
 }
 

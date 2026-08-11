@@ -5,11 +5,12 @@
 //! allow-listed edit protocol, renders canonical source, and **accepts** that
 //! source via the product seed path (ADR-048).
 //!
-//! **ADR-065/068:** top-level **weave** replace / insertAfter / delete on
-//! product-accepted base source take a product text-splice path (no bootstrap
-//! `Program` base parse). Statement-level and record ops still use bootstrap AST.
-//! Callers that persist an edit should still product-seed-compile before writing
-//! (CLI trusts core product accept per ADR-053).
+//! **ADR-065/068/069:** product text-splice path (no bootstrap `Program` base
+//! parse) for: top-level weave replace/insertAfter/delete; weave-body statement
+//! replace/insert/delete; top-level primitive record replace/insertAfter/delete.
+//! Nested body lists (choose/while) and non-primitive record types still use
+//! bootstrap AST. Callers that persist an edit should still product-seed-compile
+//! before writing (CLI trusts core product accept per ADR-053).
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -43,8 +44,9 @@ const MAX_STRUCTURAL_EDIT_DEPTH: usize = 256;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 
 /// A successful pure structural edit. The returned source is product-accepted
-/// (ADR-048). Top-level weave replace/insertAfter/delete may omit bootstrap AST
-/// (ADR-065/068); statement/record ops still base-parse via bootstrap.
+/// (ADR-048). Product text-splice may omit bootstrap AST for top-level weaves,
+/// weave-body statements, and primitive records (ADR-065/068/069); nested body
+/// lists still base-parse via bootstrap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuralEditResult {
     pub source: String,
@@ -137,9 +139,9 @@ pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
 /// an artifact. It is intentionally pure apart from memory allocation. The CLI
 /// trusts product accept on returned source (ADR-053).
 ///
-/// **ADR-065/068:** when the base product-accepts and every operation is a
-/// top-level weave `replace` / `insertAfter` / `delete`, the edit runs without
-/// bootstrap `Program` base parse.
+/// **ADR-065/068/069:** product text-splice without bootstrap `Program` when the
+/// base product-accepts and every operation is in the product subset (top-level
+/// weave, weave-body statement, or primitive top-level record).
 pub fn apply_structural_edit(
     source: &str,
     edit_json: &str,
@@ -154,6 +156,15 @@ pub fn apply_structural_edit(
     // ADR-065/068: product top-level weave ops (no bootstrap base AST) when eligible.
     if crate::structural_edit_product_top_level_weave_ops() {
         if let Some(result) = try_product_top_level_weave_ops(source, edit_json)? {
+            return Ok(result);
+        }
+    }
+    // ADR-069: product weave-body statement ops and primitive record ops.
+    if crate::structural_edit_product_statement_and_record_ops() {
+        if let Some(result) = try_product_weave_body_statement_ops(source, edit_json)? {
+            return Ok(result);
+        }
+        if let Some(result) = try_product_top_level_record_ops(source, edit_json)? {
             return Ok(result);
         }
     }
@@ -282,8 +293,249 @@ fn try_product_top_level_weave_ops(
     }
 
     compile_product_bytecode(&candidate).map_err(StructuralEditError::from)?;
-    let document_json = serialize_product_edit_document(&candidate, request.operations.len())
-        .map_err(|error| protocol_error("AE-EDIT-001", error.to_string()))?;
+    let document_json = serialize_product_edit_document(
+        &candidate,
+        request.operations.len(),
+        "product-top-level-weave-ops",
+    )
+    .map_err(|error| protocol_error("AE-EDIT-001", error.to_string()))?;
+    Ok(Some(StructuralEditResult {
+        source: candidate,
+        document_json,
+        operation_count: request.operations.len(),
+    }))
+}
+
+/// ADR-069: product weave-body statement ops (not nested choose/while lists).
+fn try_product_weave_body_statement_ops(
+    source: &str,
+    edit_json: &str,
+) -> Result<Option<StructuralEditResult>, StructuralEditError> {
+    debug_assert!(
+        crate::structural_edit_product_statement_and_record_ops(),
+        "ADR-069: product statement ops"
+    );
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    if compile_product_bytecode(&normalized).is_err() {
+        return Ok(None);
+    }
+    let request = parse_request(edit_json)?;
+    if request.base_source != normalized || request.operations.is_empty() {
+        return Ok(None);
+    }
+    for operation in &request.operations {
+        match operation.kind {
+            EditOperationKind::ReplaceStatement
+            | EditOperationKind::InsertStatementAfter
+            | EditOperationKind::DeleteStatement => {
+                let Some(path) = operation.path.as_ref() else {
+                    return Ok(None);
+                };
+                if !matches!(path.list, BodyListRef::WeaveBody { .. }) {
+                    return Ok(None);
+                }
+            }
+            EditOperationKind::InsertStatementAt => {
+                let Some(list) = operation.list.as_ref() else {
+                    return Ok(None);
+                };
+                if !matches!(list, BodyListRef::WeaveBody { .. }) {
+                    return Ok(None);
+                }
+            }
+            _ => return Ok(None),
+        }
+    }
+
+    let empty_program = Program {
+        world: "product".to_owned(),
+        records: Vec::new(),
+        shapes: Vec::new(),
+        host_weaves: Vec::new(),
+        weaves: Vec::new(),
+    };
+    let mut candidate = normalized;
+    let mut node_budget = NodeBudget::default();
+    for operation in &request.operations {
+        match operation.kind {
+            EditOperationKind::ReplaceStatement => {
+                let path = operation.path.as_ref().expect("checked");
+                let BodyListRef::WeaveBody { weave } = &path.list else {
+                    return Ok(None);
+                };
+                let statement =
+                    match parse_operation_statement(&empty_program, operation, &mut node_budget) {
+                        Ok(statement) => statement,
+                        Err(_) => return Ok(None),
+                    };
+                let stmt_text = format_body_statement_text(&statement);
+                candidate =
+                    replace_weave_body_statement(&candidate, weave, path.index, &stmt_text)?;
+            }
+            EditOperationKind::InsertStatementAfter => {
+                let path = operation.path.as_ref().expect("checked");
+                let BodyListRef::WeaveBody { weave } = &path.list else {
+                    return Ok(None);
+                };
+                let statement =
+                    match parse_operation_statement(&empty_program, operation, &mut node_budget) {
+                        Ok(statement) => statement,
+                        Err(_) => return Ok(None),
+                    };
+                let stmt_text = format_body_statement_text(&statement);
+                candidate =
+                    insert_weave_body_statement_after(&candidate, weave, path.index, &stmt_text)?;
+            }
+            EditOperationKind::InsertStatementAt => {
+                let list = operation.list.as_ref().expect("checked");
+                let BodyListRef::WeaveBody { weave } = list else {
+                    return Ok(None);
+                };
+                let index = operation.index.ok_or_else(|| {
+                    protocol_error("AE-EDIT-011", "insertStatementAt requires index")
+                })?;
+                let statement =
+                    match parse_operation_statement(&empty_program, operation, &mut node_budget) {
+                        Ok(statement) => statement,
+                        Err(_) => return Ok(None),
+                    };
+                let stmt_text = format_body_statement_text(&statement);
+                candidate = insert_weave_body_statement_at(&candidate, weave, index, &stmt_text)?;
+            }
+            EditOperationKind::DeleteStatement => {
+                let path = operation.path.as_ref().expect("checked");
+                let BodyListRef::WeaveBody { weave } = &path.list else {
+                    return Ok(None);
+                };
+                candidate = delete_weave_body_statement(&candidate, weave, path.index)?;
+            }
+            _ => return Ok(None),
+        }
+    }
+
+    compile_product_bytecode(&candidate).map_err(StructuralEditError::from)?;
+    let document_json = serialize_product_edit_document(
+        &candidate,
+        request.operations.len(),
+        "product-weave-body-statement-ops",
+    )
+    .map_err(|error| protocol_error("AE-EDIT-001", error.to_string()))?;
+    Ok(Some(StructuralEditResult {
+        source: candidate,
+        document_json,
+        operation_count: request.operations.len(),
+    }))
+}
+
+/// ADR-069: product top-level primitive record replace/insertAfter/delete.
+fn try_product_top_level_record_ops(
+    source: &str,
+    edit_json: &str,
+) -> Result<Option<StructuralEditResult>, StructuralEditError> {
+    debug_assert!(
+        crate::structural_edit_product_statement_and_record_ops(),
+        "ADR-069: product record ops"
+    );
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    if compile_product_bytecode(&normalized).is_err() {
+        return Ok(None);
+    }
+    let request = parse_request(edit_json)?;
+    if request.base_source != normalized || request.operations.is_empty() {
+        return Ok(None);
+    }
+    for operation in &request.operations {
+        match (&operation.kind, &operation.target) {
+            (
+                EditOperationKind::Replace | EditOperationKind::Delete,
+                Some(EditTarget::Record(_)),
+            ) => {}
+            (EditOperationKind::InsertAfter, Some(EditTarget::World | EditTarget::Record(_))) => {}
+            _ => return Ok(None),
+        }
+    }
+
+    let empty_program = Program {
+        world: "product".to_owned(),
+        records: Vec::new(),
+        shapes: Vec::new(),
+        host_weaves: Vec::new(),
+        weaves: Vec::new(),
+    };
+    let mut candidate = normalized;
+    let mut node_budget = NodeBudget::default();
+    for operation in &request.operations {
+        match operation.kind {
+            EditOperationKind::Replace => {
+                let Some(EditTarget::Record(name)) = operation.target.as_ref() else {
+                    return Ok(None);
+                };
+                let record = match parse_operation_declaration(
+                    &empty_program,
+                    operation,
+                    &mut node_budget,
+                ) {
+                    Ok(EditableDeclaration::Record(record)) => record,
+                    Ok(EditableDeclaration::Weave(_)) => {
+                        return Err(protocol_error(
+                            "AE-EDIT-005",
+                            "replacement declaration kind must match its target kind",
+                        ));
+                    }
+                    Err(_) => return Ok(None),
+                };
+                if record.name != *name {
+                    return Err(protocol_error(
+                        "AE-EDIT-005",
+                        "replacement Record name must match its record target",
+                    ));
+                }
+                let text = format_record_text(&record);
+                candidate = replace_top_level_record_text(&candidate, name, &text)?;
+            }
+            EditOperationKind::InsertAfter => {
+                let record = match parse_operation_declaration(
+                    &empty_program,
+                    operation,
+                    &mut node_budget,
+                ) {
+                    Ok(EditableDeclaration::Record(record)) => record,
+                    Ok(EditableDeclaration::Weave(_)) => {
+                        return Err(protocol_error(
+                            "AE-EDIT-005",
+                            "only a Record may be inserted after the world node or a record",
+                        ));
+                    }
+                    Err(_) => return Ok(None),
+                };
+                let text = format_record_text(&record);
+                match operation.target.as_ref() {
+                    Some(EditTarget::World) => {
+                        candidate = insert_record_after_world(&candidate, &text)?;
+                    }
+                    Some(EditTarget::Record(after)) => {
+                        candidate = insert_record_after_record(&candidate, after, &text)?;
+                    }
+                    _ => return Ok(None),
+                }
+            }
+            EditOperationKind::Delete => {
+                let Some(EditTarget::Record(name)) = operation.target.as_ref() else {
+                    return Ok(None);
+                };
+                candidate = delete_top_level_record_text(&candidate, name)?;
+            }
+            _ => return Ok(None),
+        }
+    }
+
+    compile_product_bytecode(&candidate).map_err(StructuralEditError::from)?;
+    let document_json = serialize_product_edit_document(
+        &candidate,
+        request.operations.len(),
+        "product-top-level-record-ops",
+    )
+    .map_err(|error| protocol_error("AE-EDIT-001", error.to_string()))?;
     Ok(Some(StructuralEditResult {
         source: candidate,
         document_json,
@@ -331,6 +583,330 @@ fn format_weave_text(weave: &Weave) -> String {
     let mut out = body.join("\n");
     out.push('\n');
     out
+}
+
+/// Format one body statement at weave-body indentation (2 spaces) via formatter.
+fn format_body_statement_text(statement: &Statement) -> String {
+    let weave = Weave {
+        name: "tmp".to_owned(),
+        parameters: Vec::new(),
+        result: ValueType::Whole,
+        effect: Effect::Total,
+        task: false,
+        body: vec![statement.clone()],
+        span: Span { line: 1, column: 1 },
+    };
+    let full = format_weave_text(&weave);
+    let mut lines = full.lines();
+    let _header = lines.next();
+    let body: Vec<&str> = lines.collect();
+    if body.is_empty() {
+        return String::new();
+    }
+    let mut out = body.join("\n");
+    out.push('\n');
+    out
+}
+
+fn format_record_text(record: &RecordDeclaration) -> String {
+    let program = Program {
+        world: "product".to_owned(),
+        records: vec![record.clone()],
+        shapes: Vec::new(),
+        host_weaves: Vec::new(),
+        weaves: Vec::new(),
+    };
+    let formatted = format_program(&program);
+    let mut lines = formatted.lines().peekable();
+    while let Some(line) = lines.peek() {
+        if line.starts_with("world ") || line.is_empty() {
+            lines.next();
+            continue;
+        }
+        break;
+    }
+    let body: Vec<&str> = lines.collect();
+    if body.is_empty() {
+        return String::new();
+    }
+    let mut out = body.join("\n");
+    out.push('\n');
+    out
+}
+
+/// Absolute byte ranges of top-level body statements inside a named weave.
+fn weave_body_statement_ranges(
+    source: &str,
+    weave_name: &str,
+) -> Result<Vec<(usize, usize)>, StructuralEditError> {
+    let (w_start, w_end) = find_top_level_weave_range(source, weave_name)?;
+    let weave_text = &source[w_start..w_end];
+    let mut lines = weave_text.split_inclusive('\n');
+    let Some(header) = lines.next() else {
+        return Ok(Vec::new());
+    };
+    let mut offset = w_start + header.len();
+    let mut body_lines: Vec<(usize, &str)> = Vec::new();
+    for line_with_nl in lines {
+        let line = line_with_nl.trim_end_matches(['\n', '\r']);
+        body_lines.push((offset, line));
+        offset += line_with_nl.len();
+    }
+    if body_lines.is_empty() {
+        return Ok(Vec::new());
+    }
+    let base_indent = body_lines
+        .iter()
+        .find(|(_, line)| !line.is_empty())
+        .map(|(_, line)| leading_space_count(line))
+        .unwrap_or(2);
+    let mut ranges = Vec::new();
+    let mut i = 0usize;
+    while i < body_lines.len() {
+        let (start, line) = body_lines[i];
+        if line.is_empty() {
+            i += 1;
+            continue;
+        }
+        let indent = leading_space_count(line);
+        if indent != base_indent {
+            // Unexpected deeper line without a statement start — skip (malformed).
+            i += 1;
+            continue;
+        }
+        let mut end = start + line.len();
+        if source.as_bytes().get(end) == Some(&b'\n') {
+            end += 1;
+        } else if source.as_bytes().get(end) == Some(&b'\r') {
+            end += 1;
+            if source.as_bytes().get(end) == Some(&b'\n') {
+                end += 1;
+            }
+        }
+        i += 1;
+        while i < body_lines.len() {
+            let (next_start, next_line) = body_lines[i];
+            if next_line.is_empty() {
+                // Blank inside multi-line is rare; treat as end of statement.
+                break;
+            }
+            let next_indent = leading_space_count(next_line);
+            let continues = next_indent > base_indent
+                || (next_indent == base_indent && next_line.trim_start().starts_with("otherwise:"));
+            if !continues {
+                break;
+            }
+            end = next_start + next_line.len();
+            if source.as_bytes().get(end) == Some(&b'\n') {
+                end += 1;
+            }
+            i += 1;
+        }
+        // Cap end at weave end.
+        end = end.min(w_end);
+        ranges.push((start, end));
+    }
+    Ok(ranges)
+}
+
+fn leading_space_count(line: &str) -> usize {
+    line.chars().take_while(|c| *c == ' ').count()
+}
+
+fn replace_weave_body_statement(
+    source: &str,
+    weave: &str,
+    index: usize,
+    statement_text: &str,
+) -> Result<String, StructuralEditError> {
+    let ranges = weave_body_statement_ranges(source, weave)?;
+    if index >= ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {index} is out of range"),
+        ));
+    }
+    let (start, end) = ranges[index];
+    let mut out = String::with_capacity(source.len() + statement_text.len());
+    out.push_str(&source[..start]);
+    out.push_str(statement_text.trim_end_matches('\n'));
+    out.push('\n');
+    out.push_str(&source[end..]);
+    Ok(out)
+}
+
+fn insert_weave_body_statement_at(
+    source: &str,
+    weave: &str,
+    index: usize,
+    statement_text: &str,
+) -> Result<String, StructuralEditError> {
+    let ranges = weave_body_statement_ranges(source, weave)?;
+    if index > ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!(
+                "insert index {index} is out of range for body length {}",
+                ranges.len()
+            ),
+        ));
+    }
+    let insert_at = if index < ranges.len() {
+        ranges[index].0
+    } else if let Some((_, end)) = ranges.last() {
+        *end
+    } else {
+        // Empty body: insert after weave header line.
+        let (w_start, _) = find_top_level_weave_range(source, weave)?;
+        source[w_start..]
+            .find('\n')
+            .map(|i| w_start + i + 1)
+            .unwrap_or(source.len())
+    };
+    let mut out = String::with_capacity(source.len() + statement_text.len());
+    out.push_str(&source[..insert_at]);
+    out.push_str(statement_text.trim_end_matches('\n'));
+    out.push('\n');
+    out.push_str(&source[insert_at..]);
+    Ok(out)
+}
+
+fn insert_weave_body_statement_after(
+    source: &str,
+    weave: &str,
+    index: usize,
+    statement_text: &str,
+) -> Result<String, StructuralEditError> {
+    let ranges = weave_body_statement_ranges(source, weave)?;
+    if index >= ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {index} is out of range"),
+        ));
+    }
+    let insert_at = ranges[index].1;
+    let mut out = String::with_capacity(source.len() + statement_text.len());
+    out.push_str(&source[..insert_at]);
+    out.push_str(statement_text.trim_end_matches('\n'));
+    out.push('\n');
+    out.push_str(&source[insert_at..]);
+    Ok(out)
+}
+
+fn delete_weave_body_statement(
+    source: &str,
+    weave: &str,
+    index: usize,
+) -> Result<String, StructuralEditError> {
+    let ranges = weave_body_statement_ranges(source, weave)?;
+    if index >= ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {index} is out of range"),
+        ));
+    }
+    let (start, end) = ranges[index];
+    let mut out = String::with_capacity(source.len());
+    out.push_str(&source[..start]);
+    out.push_str(&source[end..]);
+    Ok(out)
+}
+
+fn find_top_level_record_range(
+    source: &str,
+    name: &str,
+) -> Result<(usize, usize), StructuralEditError> {
+    let mut offset = 0usize;
+    for line_with_nl in source.split_inclusive('\n') {
+        let line = line_with_nl.trim_end_matches(['\n', '\r']);
+        if line_declares_record(line, name) {
+            let end = offset + line_with_nl.len();
+            return Ok((offset, end));
+        }
+        offset += line_with_nl.len();
+    }
+    Err(protocol_error(
+        "AE-EDIT-004",
+        format!("record target {name:?} does not exist"),
+    ))
+}
+
+fn line_declares_record(line: &str, name: &str) -> bool {
+    let trimmed = line.trim_start();
+    let Some(rest) = trimmed.strip_prefix("record ") else {
+        return false;
+    };
+    let decl_name = rest.split([' ', '[']).next().unwrap_or("");
+    decl_name == name
+}
+
+fn replace_top_level_record_text(
+    source: &str,
+    name: &str,
+    new_record: &str,
+) -> Result<String, StructuralEditError> {
+    let (start, end) = find_top_level_record_range(source, name)?;
+    let mut out = String::with_capacity(source.len() + new_record.len());
+    out.push_str(&source[..start]);
+    out.push_str(new_record.trim_end_matches('\n'));
+    out.push('\n');
+    out.push_str(&source[end..]);
+    Ok(out)
+}
+
+fn insert_record_after_world(
+    source: &str,
+    record_text: &str,
+) -> Result<String, StructuralEditError> {
+    let mut offset = 0usize;
+    for line_with_nl in source.split_inclusive('\n') {
+        let line = line_with_nl.trim_end_matches(['\n', '\r']);
+        if line.starts_with("world ") {
+            let insert_at = offset + line_with_nl.len();
+            let mut out = String::with_capacity(source.len() + record_text.len() + 2);
+            out.push_str(&source[..insert_at]);
+            out.push('\n');
+            out.push_str(record_text.trim_end_matches('\n'));
+            out.push('\n');
+            out.push_str(&source[insert_at..]);
+            return Ok(out);
+        }
+        offset += line_with_nl.len();
+    }
+    Err(protocol_error(
+        "AE-EDIT-004",
+        "world node does not exist for record insertAfter",
+    ))
+}
+
+fn insert_record_after_record(
+    source: &str,
+    after_name: &str,
+    record_text: &str,
+) -> Result<String, StructuralEditError> {
+    let (_start, end) = find_top_level_record_range(source, after_name)?;
+    let mut out = String::with_capacity(source.len() + record_text.len() + 1);
+    out.push_str(&source[..end]);
+    out.push_str(record_text.trim_end_matches('\n'));
+    out.push('\n');
+    out.push_str(&source[end..]);
+    Ok(out)
+}
+
+fn delete_top_level_record_text(source: &str, name: &str) -> Result<String, StructuralEditError> {
+    let (start, end) = find_top_level_record_range(source, name)?;
+    let mut range_start = start;
+    // Drop a preceding blank line when present.
+    if range_start >= 2
+        && source.as_bytes()[range_start - 2] == b'\n'
+        && source.as_bytes()[range_start - 1] == b'\n'
+    {
+        range_start -= 1;
+    }
+    let mut out = String::with_capacity(source.len());
+    out.push_str(&source[..range_start]);
+    out.push_str(&source[end..]);
+    Ok(out)
 }
 
 /// Byte-range splice: replace the top-level weave named `name` with `new_weave`.
@@ -468,6 +1044,7 @@ fn line_declares_weave(line: &str, name: &str) -> bool {
 fn serialize_product_edit_document(
     source: &str,
     operation_count: usize,
+    path: &str,
 ) -> Result<String, serde_json::Error> {
     serde_json::to_string_pretty(&json!({
         "schema": PRODUCT_EDIT_SCHEMA_VERSION,
@@ -477,7 +1054,7 @@ fn serialize_product_edit_document(
         },
         "canonicalSource": source,
         "productAccepted": true,
-        "path": "product-top-level-weave-ops",
+        "path": path,
         "operationCount": operation_count,
     }))
 }
@@ -3448,6 +4025,92 @@ mod tests {
             serde_json::from_str(&deleted.document_json).expect("product-edit JSON");
         assert_eq!(del_doc["path"], "product-top-level-weave-ops");
         compile_with_seed(&deleted.source).expect("after product insert/delete must seed compile");
+    }
+
+    #[test]
+    fn product_weave_body_statement_ops_without_bootstrap_ast() {
+        assert!(crate::structural_edit_product_statement_and_record_ops());
+        let source = "world app\n\nweave main [] -> Whole:\n  bind n <- 20\n  yield n\n";
+        let yield_stmt = json!({
+            "kind": "Yield",
+            "value": {
+                "kind": "Binary",
+                "operation": "sum",
+                "left": { "kind": "Name", "name": "n" },
+                "right": { "kind": "Whole", "value": 1 }
+            }
+        });
+        let edit = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": source,
+            "operations": [{
+                "op": "replaceStatement",
+                "path": "weave:main/body/1",
+                "statement": yield_stmt,
+            }],
+        }))
+        .expect("serialize");
+        let result = apply_structural_edit(source, &edit).expect("product replaceStatement");
+        assert!(result.source.contains("yield sum n 1"));
+        let document: Value =
+            serde_json::from_str(&result.document_json).expect("product-edit JSON");
+        assert_eq!(document["path"], "product-weave-body-statement-ops");
+        assert!(document.get("program").is_none());
+        compile_with_seed(&result.source).expect("seed after product statement replace");
+
+        let bind = json!({
+            "kind": "Bind",
+            "name": "m",
+            "mutable": false,
+            "stage": "runtime",
+            "value": { "kind": "Atom", "atom": { "kind": "Whole", "value": 3 } }
+        });
+        let insert = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": source,
+            "operations": [{
+                "op": "insertStatementAt",
+                "list": "weave:main/body",
+                "index": 0,
+                "statement": bind,
+            }],
+        }))
+        .expect("serialize insert");
+        let inserted = apply_structural_edit(source, &insert).expect("product insertStatementAt");
+        assert!(inserted.source.contains("bind m <- 3"));
+        compile_with_seed(&inserted.source).expect("seed after product statement insert");
+    }
+
+    #[test]
+    fn product_record_insert_after_world_without_bootstrap_ast() {
+        assert!(crate::structural_edit_product_statement_and_record_ops());
+        // Product-accepted unit with a primitive record surface.
+        let source =
+            "world records\n\nrecord card [rank: Whole]\n\nweave main [] -> Whole:\n  yield 0\n";
+        let insert = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": source,
+            "operations": [{
+                "op": "insertAfter",
+                "target": "world",
+                "declaration": {
+                    "kind": "Record",
+                    "name": "badge",
+                    "fields": [{ "kind": "RecordField", "name": "rank", "type": "Whole" }]
+                }
+            }],
+        }))
+        .expect("serialize");
+        let result = apply_structural_edit(source, &insert).expect("product record insert");
+        assert!(result.source.contains("record badge [rank: Whole]"));
+        assert!(result.source.contains("record card [rank: Whole]"));
+        let document: Value =
+            serde_json::from_str(&result.document_json).expect("product-edit JSON");
+        assert_eq!(document["path"], "product-top-level-record-ops");
+        compile_with_seed(&result.source).expect("seed after product record insert");
     }
 
     #[test]

@@ -62,8 +62,8 @@ bootstrap remains for seed rebuild (`compile --bootstrap`), default `check`
 AST / format / structure / LSP, and proof dual-compare. Product acceptance
 Default CLI check/format/structure, product compile, and seed rebuild are seed path
 (ADR-064/067); bootstrap is recovery/oracle (`--bootstrap`, dual-compare, residual
-statement/record structural AST — top-level weave ops product ADR-065/068). LSP
-hover/definition are product-surface (ADR-066). Multi-module is host elaborate + seed emit (ADR-056). Seed Profile self-host, all shipped seed-path examples,
+nested body-list structural AST — product owns top-level weave/record + weave-body
+statements ADR-065/068/069). LSP hover/definition are product-surface (ADR-066). Multi-module is host elaborate + seed emit (ADR-056). Seed Profile self-host, all shipped seed-path examples,
 the complete prior canonical surface (including records), the documented M2–M8
 corpora, the M19a release corpus, the M19b nursery-resource corpus, the M19d
 spawn-arena corpus, the M21 foreign-pilot corpus, and the M23/M19e documented
