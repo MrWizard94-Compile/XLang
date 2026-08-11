@@ -47,8 +47,8 @@ Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTR
 
 | Fork | Through | Highlights |
 | --- | --- | --- |
-| **F-NATIVE** | **M35j** (ADR-059–099) | AETH→C / object / LLVM IR / LLVM object / exe; host dual-run; probe + hermetic env; cross-target matrix (`AE-NATIVE-007`) |
-| **F-REGISTRY** | **M24i** (ADR-060–100) | Offline pin/verify; HMAC/Ed25519; explicit fetch; rotation; multi-root policy; multi-level key certs; X.509-lite + CA store (`AE-REG-012/013`) |
+| **F-NATIVE** | **M35j** (ADR-059–099) | AETH→C / object / LLVM IR / LLVM object / exe; `--target` closed matrix; host dual-run, cross link-only; probe + hermetic env (`AE-NATIVE-007`) |
+| **F-REGISTRY** | **M24i** (ADR-060–100) | Offline pin/verify; HMAC/Ed25519; explicit fetch; rotation; multi-root policy; CLI root/certified-key setup; date-checked X.509-lite CA store included in cache verification (`AE-REG-012/013`) |
 
 ### 2.4 Task model
 
@@ -124,12 +124,14 @@ work has been **independence and infrastructure maturity** without a package bum
 ### 5.2 F-NATIVE (M35a → M35j)
 
 C pilot → locals → SPEAK/multi-weave → host-cc dual-exec → object → LLVM IR →
-LLVM object → native exe → toolchain probe/hermetic → **cross-compile target matrix**
+LLVM object → native exe → toolchain probe/hermetic → **operator `--target`
+matrix (host dual-run; cross link-only)**
 
 ### 5.3 F-REGISTRY (M24a → M24i)
 
 Offline pin → HMAC signed → Ed25519/HTTPS → rotation → multi-root policy →
-root certs → multi-level chains → X.509-lite → **CA store + chain verify**
+root certs → multi-level chains → **explicit CLI root/certified-key setup** →
+X.509-lite → **CA store + chain verify + cache-gate validation**
 
 ### 5.4 Recent tip commits (illustrative)
 

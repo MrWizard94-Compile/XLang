@@ -456,6 +456,12 @@ pub fn native_target_is_supported(target: &str) -> bool {
     native_supported_target_triples().contains(&target)
 }
 
+/// True when `target` is the current host's native triple.
+#[must_use]
+pub fn native_target_is_host(target: &str) -> bool {
+    default_host_target_triple().as_deref() == Some(target)
+}
+
 /// Lower verified AETH → native exe for an explicit target triple (M35j).
 ///
 /// - Target must be in [`native_supported_target_triples`] (`AE-NATIVE-007`).
@@ -481,9 +487,16 @@ pub fn lower_verified_aeth_to_native_exe_for_target(
             ),
         ));
     }
-    let host = default_host_target_triple().unwrap_or_default();
-    if target == host {
+    if native_target_is_host(target) {
         return lower_verified_aeth_to_native_exe(bytecode, exe_path, verify_exit);
+    }
+    if verify_exit {
+        return Err(NativeError::new(
+            "AE-NATIVE-007",
+            format!(
+                "verify_exit is not supported for cross target {target}; cross binaries cannot run on this host"
+            ),
+        ));
     }
     // Cross path: C lower then clang -target.
     let c_source = lower_verified_aeth_to_c(bytecode)?;
@@ -559,13 +572,6 @@ pub fn lower_verified_aeth_to_native_exe_for_target(
         return Err(NativeError::new(
             "AE-NATIVE-007",
             format!("cross-compile to {target} failed with {cc}: {last_err}"),
-        ));
-    }
-    // Cross binaries are not dual-run on host when target differs.
-    if verify_exit {
-        return Err(NativeError::new(
-            "AE-NATIVE-007",
-            format!("verify_exit is not supported for cross target {target} on host {host}"),
         ));
     }
     Ok(NativeExeReport {
@@ -1664,6 +1670,31 @@ weave main [] -> Whole:
         .expect_err("unsupported");
         assert_eq!(err.code, "AE-NATIVE-007");
         let host = default_host_target_triple().expect("host triple");
+        assert!(native_target_is_host(&host));
+        let cross_target = native_supported_target_triples()
+            .iter()
+            .copied()
+            .find(|target| *target != host)
+            .expect("the matrix contains a non-host target");
+        let cross_dir = std::env::temp_dir().join(format!(
+            "aether-m35j-cross-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&cross_dir).expect("cross temp");
+        let cross_exe = cross_dir.join(if cfg!(windows) { "out.exe" } else { "out" });
+        let cross_error =
+            lower_verified_aeth_to_native_exe_for_target(&bytecode, &cross_exe, cross_target, true)
+                .expect_err("cross targets cannot claim a host dual-run");
+        assert_eq!(cross_error.code, "AE-NATIVE-007");
+        assert!(
+            !cross_exe.exists(),
+            "cross dual-run rejection occurs before native output is written"
+        );
+        let _ = std::fs::remove_dir_all(&cross_dir);
         if native_target_is_supported(&host) {
             let dir = std::env::temp_dir().join(format!(
                 "aether-m35j-host-{}-{}",

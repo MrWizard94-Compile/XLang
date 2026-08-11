@@ -294,8 +294,8 @@ operation vocabulary, and compatibility policy are in
 | **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; full `aether.ast/v8`; dual-compare tests/gate |
 | **Product seed-error packets** | SPEAK protocol + forge SPEAK merge (ADR-082–094/098); seed multi-code pilot 004/005/006/012; full matrix residual |
 | **Multi-source forge** | Product multi-file host path + unit digests (ADR-075–086/094/098); seed-native residual |
-| **F-NATIVE M35c–j** | AETH→C/object/LLVM/exe + probe + cross target matrix (ADR-073–099) |
-| **F-REGISTRY M24b–i** | HMAC/Ed25519/HTTPS/rotation/policy/certs + X.509-lite CA store (ADR-074–100); no auto-fetch |
+| **F-NATIVE M35c–j** | AETH→C/object/LLVM/exe + probe + `--native-exe --target` closed target matrix; host dual-run, cross link-only (ADR-073–099) |
+| **F-REGISTRY M24b–i** | HMAC/Ed25519/HTTPS/rotation/policy/certs + date-checked X.509-lite CA store; `verify-cache` validates the store; no auto-fetch (ADR-074–100) |
 | **Task model** | ADR-081 design; surface/inventory (ADR-085/093/097); reserved 014; checkpoint required 015 (ADR-101) |
 | **F-NATIVE M35a/b** | `compile --native-c` — verified AETH → ISO C pure Whole + locals/arithmetic (ADR-059/062); VM remains default |
 | **F-REGISTRY M24a** | `registry pin-local` / `verify-cache` — offline digest pins only (ADR-060); no network |

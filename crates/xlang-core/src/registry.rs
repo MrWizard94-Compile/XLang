@@ -4,6 +4,7 @@
 //! Guest AETH remains network-free. Host CLI may fetch only via explicit
 //! `registry fetch-signed` after trust-root verify. Compile never requires network.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -173,6 +174,7 @@ pub const fn registry_x509_lite_ca_store() -> bool {
 
 pub const REGISTRY_X509_LITE_STORE_FILE: &str = "aether.registry-x509-lite-store.json";
 pub const REGISTRY_X509_LITE_STORE_SCHEMA: &str = "aether.registry-x509-lite-store/v1";
+const MAX_X509_LITE_CERTIFICATES: usize = 256;
 
 pub const REGISTRY_X509_LITE_SCHEMA: &str = "aether.registry-x509-lite/v1";
 pub const REGISTRY_X509_LITE_PEM_BEGIN: &str = "-----BEGIN AETHER CERT-----";
@@ -234,12 +236,16 @@ pub fn issue_x509_lite_certificate(
         f_registry_authorized() && registry_x509_lite_certificates(),
         "ADR-096: X.509-lite certificates"
     );
-    validate_iso_date(not_before)?;
-    validate_iso_date(not_after)?;
-    if serial.is_empty() || serial.len() > 64 {
+    validate_certificate_date_window(not_before, not_after)?;
+    if serial.is_empty()
+        || serial.len() > 64
+        || !serial
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
         return Err(RegistryError::new(
             "AE-REG-012",
-            "certificate serial must be 1..=64 characters",
+            "certificate serial must be 1..=64 ASCII alphanumeric or '-' characters",
         ));
     }
     let issuer = load_trust_key_meta(cache_root, issuer_key_id)?;
@@ -300,14 +306,65 @@ pub fn verify_x509_lite_certificate(
     cache_root: &Path,
     cert: &RegistryX509LiteCert,
 ) -> Result<(), RegistryError> {
+    verify_x509_lite_certificate_at(cache_root, cert, &utc_today_ymd())
+}
+
+fn verify_x509_lite_certificate_at(
+    cache_root: &Path,
+    cert: &RegistryX509LiteCert,
+    today: &str,
+) -> Result<(), RegistryError> {
     debug_assert!(
         f_registry_authorized() && registry_x509_lite_certificates(),
         "ADR-096: X.509-lite certificates"
     );
+    validate_iso_date(today).map_err(|_| {
+        RegistryError::new(
+            "AE-REG-012",
+            "certificate verification clock must be a valid YYYY-MM-DD date",
+        )
+    })?;
     if cert.tbs.schema != REGISTRY_X509_LITE_SCHEMA {
         return Err(RegistryError::new(
             "AE-REG-012",
             format!("unsupported certificate schema {}", cert.tbs.schema),
+        ));
+    }
+    if cert.tbs.version != 1 {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            format!("unsupported certificate version {}", cert.tbs.version),
+        ));
+    }
+    validate_certificate_date_window(&cert.tbs.not_before, &cert.tbs.not_after)?;
+    if today < cert.tbs.not_before.as_str() {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            format!(
+                "certificate for {} is not yet valid (not_before={})",
+                cert.tbs.subject, cert.tbs.not_before
+            ),
+        ));
+    }
+    if today > cert.tbs.not_after.as_str() {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            format!(
+                "certificate for {} is expired (not_after={})",
+                cert.tbs.subject, cert.tbs.not_after
+            ),
+        ));
+    }
+    if cert.tbs.subject_key_id != cert.tbs.subject {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            "certificate subject_key_id must match subject",
+        ));
+    }
+    if cert.tbs.public_key_algorithm != REGISTRY_ALG_ED25519 {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            "certificate public key algorithm must be ed25519",
         ));
     }
     if cert.signature_algorithm != REGISTRY_ALG_ED25519 {
@@ -316,11 +373,47 @@ pub fn verify_x509_lite_certificate(
             "X.509-lite signature algorithm must be ed25519",
         ));
     }
-    let issuer = load_trust_key_meta(cache_root, &cert.tbs.issuer)?;
-    if issuer.revoked {
+    let issuer = load_trust_key_meta_unchecked(cache_root, &cert.tbs.issuer).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-012",
+            format!(
+                "certificate issuer key {} cannot be loaded: {}",
+                cert.tbs.issuer, error.message
+            ),
+        )
+    })?;
+    trust_key_is_active_on(&issuer, today).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-012",
+            format!(
+                "issuer key {} is inactive for this certificate: {}",
+                cert.tbs.issuer, error.message
+            ),
+        )
+    })?;
+    let subject =
+        load_trust_key_meta_unchecked(cache_root, &cert.tbs.subject).map_err(|error| {
+            RegistryError::new(
+                "AE-REG-012",
+                format!(
+                    "certificate subject key {} cannot be loaded: {}",
+                    cert.tbs.subject, error.message
+                ),
+            )
+        })?;
+    trust_key_is_active_on(&subject, today).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-012",
+            format!(
+                "subject key {} is inactive for this certificate: {}",
+                cert.tbs.subject, error.message
+            ),
+        )
+    })?;
+    if subject.algorithm != REGISTRY_ALG_ED25519 {
         return Err(RegistryError::new(
             "AE-REG-012",
-            format!("issuer key {} is revoked", cert.tbs.issuer),
+            "X.509-lite subject must be Ed25519",
         ));
     }
     let subject_material = load_trust_key_bytes(cache_root, &cert.tbs.subject)?;
@@ -392,6 +485,28 @@ pub struct RegistryX509LiteStore {
     pub certificates: Vec<RegistryX509LiteCert>,
 }
 
+fn validate_x509_lite_store(store: &RegistryX509LiteStore) -> Result<(), RegistryError> {
+    if store.certificates.len() > MAX_X509_LITE_CERTIFICATES {
+        return Err(RegistryError::new(
+            "AE-REG-013",
+            format!("X.509-lite store exceeds the {MAX_X509_LITE_CERTIFICATES}-certificate bound"),
+        ));
+    }
+    let mut subjects = BTreeSet::new();
+    for certificate in &store.certificates {
+        if !subjects.insert(certificate.tbs.subject.as_str()) {
+            return Err(RegistryError::new(
+                "AE-REG-013",
+                format!(
+                    "X.509-lite store contains multiple active certificates for subject {}",
+                    certificate.tbs.subject
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Empty certificate store document.
 #[must_use]
 pub fn empty_x509_lite_store() -> RegistryX509LiteStore {
@@ -431,6 +546,7 @@ pub fn load_or_empty_x509_lite_store(
             format!("unsupported X.509-lite store schema {}", store.schema),
         ));
     }
+    validate_x509_lite_store(&store)?;
     Ok(store)
 }
 
@@ -439,6 +555,13 @@ pub fn write_x509_lite_store(
     cache_root: &Path,
     store: &RegistryX509LiteStore,
 ) -> Result<(), RegistryError> {
+    if store.schema != REGISTRY_X509_LITE_STORE_SCHEMA {
+        return Err(RegistryError::new(
+            "AE-REG-013",
+            format!("unsupported X.509-lite store schema {}", store.schema),
+        ));
+    }
+    validate_x509_lite_store(store)?;
     fs::create_dir_all(cache_root).map_err(|error| {
         RegistryError::new(
             "AE-REG-013",
@@ -481,13 +604,14 @@ pub fn store_x509_lite_certificate(
         not_before,
         not_after,
     )?;
-    verify_x509_lite_certificate(cache_root, &cert)?;
     let mut store = load_or_empty_x509_lite_store(cache_root)?;
-    // Replace same serial+subject if present.
-    store.certificates.retain(|existing| {
-        !(existing.tbs.serial == cert.tbs.serial && existing.tbs.subject == cert.tbs.subject)
-    });
+    // Each subject has one active certificate. Replacement makes re-issuance
+    // deterministic and prevents ambiguous issuer-chain walks.
+    store
+        .certificates
+        .retain(|existing| existing.tbs.subject != cert.tbs.subject);
     store.certificates.push(cert.clone());
+    verify_x509_lite_store_chain_in_store(cache_root, &cert, &store, &utc_today_ymd())?;
     write_x509_lite_store(cache_root, &store)?;
     Ok(cert)
 }
@@ -505,15 +629,43 @@ pub fn verify_x509_lite_store_chain(
         f_registry_authorized() && registry_x509_lite_ca_store(),
         "ADR-100: X.509-lite CA store chain"
     );
-    verify_x509_lite_certificate(cache_root, leaf)?;
     let store = load_or_empty_x509_lite_store(cache_root)?;
+    verify_x509_lite_store_chain_in_store(cache_root, leaf, &store, &utc_today_ymd())
+}
+
+fn verify_x509_lite_store_chain_in_store(
+    cache_root: &Path,
+    leaf: &RegistryX509LiteCert,
+    store: &RegistryX509LiteStore,
+    today: &str,
+) -> Result<(), RegistryError> {
+    validate_x509_lite_store(store)?;
     let mut current = leaf.clone();
+    let mut visited_subjects = BTreeSet::new();
     for _ in 0..8 {
-        if current.tbs.issuer == current.tbs.subject {
-            // Self-signed root cert — already signature-verified.
-            return Ok(());
+        verify_x509_lite_certificate_at(cache_root, &current, today)?;
+        if !visited_subjects.insert(current.tbs.subject.clone()) {
+            return Err(RegistryError::new(
+                "AE-REG-013",
+                format!(
+                    "X.509-lite certificate chain for {} contains a subject cycle",
+                    leaf.tbs.subject
+                ),
+            ));
         }
         let issuer_meta = load_trust_key_meta(cache_root, &current.tbs.issuer)?;
+        if current.tbs.issuer == current.tbs.subject {
+            if issuer_meta.is_root {
+                return Ok(());
+            }
+            return Err(RegistryError::new(
+                "AE-REG-013",
+                format!(
+                    "self-signed certificate for {} is not anchored by a configured trust root",
+                    current.tbs.subject
+                ),
+            ));
+        }
         if issuer_meta.is_root {
             return Ok(());
         }
@@ -531,7 +683,6 @@ pub fn verify_x509_lite_store_chain(
                 )
             })?
             .clone();
-        verify_x509_lite_certificate(cache_root, &parent)?;
         current = parent;
     }
     Err(RegistryError::new(
@@ -541,6 +692,20 @@ pub fn verify_x509_lite_store_chain(
             leaf.tbs.subject
         ),
     ))
+}
+
+/// Verify every stored X.509-lite certificate chains to an active trust root.
+pub fn verify_x509_lite_store(cache_root: &Path) -> Result<RegistryX509LiteStore, RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_x509_lite_ca_store(),
+        "ADR-100: X.509-lite CA store verification"
+    );
+    let store = load_or_empty_x509_lite_store(cache_root)?;
+    let today = utc_today_ymd();
+    for certificate in &store.certificates {
+        verify_x509_lite_store_chain_in_store(cache_root, certificate, &store, &today)?;
+    }
+    Ok(store)
 }
 
 pub const REGISTRY_TRUST_POLICY_FILE: &str = "aether.registry-trust-policy.json";
@@ -1201,6 +1366,14 @@ pub fn set_trust_key_validity(
     if let Some(date) = not_after {
         validate_iso_date(date)?;
     }
+    if let (Some(not_before), Some(not_after)) = (not_before, not_after) {
+        if not_before > not_after {
+            return Err(RegistryError::new(
+                "AE-REG-006",
+                "trust key not_before must not be after not_after",
+            ));
+        }
+    }
     let mut trust = load_or_empty_trust(cache_root)?;
     let key = trust
         .keys
@@ -1268,22 +1441,104 @@ fn validate_iso_date(date: &str) -> Result<(), RegistryError> {
     {
         return Err(RegistryError::new(
             "AE-REG-006",
-            format!("trust key validity date must be YYYY-MM-DD, got {date:?}"),
+            format!("date must be YYYY-MM-DD, got {date:?}"),
+        ));
+    }
+    let parse_part = |part: &str| {
+        part.parse::<u32>().map_err(|_| {
+            RegistryError::new(
+                "AE-REG-006",
+                format!("date must be YYYY-MM-DD, got {date:?}"),
+            )
+        })
+    };
+    let year = parse_part(parts[0])?;
+    let month = parse_part(parts[1])?;
+    let day = parse_part(parts[2])?;
+    let max_day = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        2 => 28,
+        _ => 0,
+    };
+    if year == 0 || day == 0 || day > max_day {
+        return Err(RegistryError::new(
+            "AE-REG-006",
+            format!("date must be a real Gregorian calendar day, got {date:?}"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_certificate_date_window(
+    not_before: &str,
+    not_after: &str,
+) -> Result<(), RegistryError> {
+    validate_iso_date(not_before).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-012",
+            format!("certificate not_before is invalid: {}", error.message),
+        )
+    })?;
+    validate_iso_date(not_after).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-012",
+            format!("certificate not_after is invalid: {}", error.message),
+        )
+    })?;
+    if not_before > not_after {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            "certificate not_before must not be after not_after",
         ));
     }
     Ok(())
 }
 
 fn trust_key_is_active(key: &RegistryTrustKey) -> Result<(), RegistryError> {
+    trust_key_is_active_on(key, &utc_today_ymd())
+}
+
+fn trust_key_is_active_on(key: &RegistryTrustKey, today: &str) -> Result<(), RegistryError> {
+    validate_iso_date(today).map_err(|_| {
+        RegistryError::new(
+            "AE-REG-009",
+            "trust key verification clock must be a valid YYYY-MM-DD date",
+        )
+    })?;
     if key.revoked {
         return Err(RegistryError::new(
             "AE-REG-009",
             format!("trust key {} is revoked", key.key_id),
         ));
     }
-    let today = utc_today_ymd();
     if let Some(not_before) = &key.not_before {
-        if today.as_str() < not_before.as_str() {
+        validate_iso_date(not_before).map_err(|_| {
+            RegistryError::new(
+                "AE-REG-009",
+                format!("trust key {} has an invalid not_before date", key.key_id),
+            )
+        })?;
+    }
+    if let Some(not_after) = &key.not_after {
+        validate_iso_date(not_after).map_err(|_| {
+            RegistryError::new(
+                "AE-REG-009",
+                format!("trust key {} has an invalid not_after date", key.key_id),
+            )
+        })?;
+    }
+    if let (Some(not_before), Some(not_after)) = (&key.not_before, &key.not_after) {
+        if not_before > not_after {
+            return Err(RegistryError::new(
+                "AE-REG-009",
+                format!("trust key {} has a reversed validity window", key.key_id),
+            ));
+        }
+    }
+    if let Some(not_before) = &key.not_before {
+        if today < not_before.as_str() {
             return Err(RegistryError::new(
                 "AE-REG-009",
                 format!(
@@ -1294,7 +1549,7 @@ fn trust_key_is_active(key: &RegistryTrustKey) -> Result<(), RegistryError> {
         }
     }
     if let Some(not_after) = &key.not_after {
-        if today.as_str() > not_after.as_str() {
+        if today > not_after.as_str() {
             return Err(RegistryError::new(
                 "AE-REG-009",
                 format!(
@@ -1319,12 +1574,12 @@ fn trust_key_is_active_in_cache(
 }
 
 fn utc_today_ymd() -> String {
-    // Use system local date as YYYY-MM-DD (operator host clock).
+    // Use the UTC date from the operator host clock as YYYY-MM-DD.
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    // Approximate civil date from UNIX days (good enough for policy tests).
+    // Exact proleptic Gregorian conversion from UTC UNIX days.
     let days = (now / 86_400) as i64;
     let (y, m, d) = unix_days_to_ymd(days);
     format!("{y:04}-{m:02}-{d:02}")
@@ -1529,6 +1784,9 @@ pub fn verify_registry_cache(cache_root: &Path) -> Result<RegistryCacheDocument,
         f_registry_authorized() && registry_offline_cache_verify(),
         "ADR-060: registry offline pilot"
     );
+    // Registry cache validation includes any persisted X.509-lite CA store.
+    // An absent store is valid; a malformed or unanchored store fails closed.
+    let _certificate_store = verify_x509_lite_store(cache_root)?;
     let document = load_or_empty_cache(cache_root)?;
     enforce_trust_policy(cache_root, &document)?;
     for package in &document.packages {
@@ -1789,7 +2047,10 @@ fn write_trust_index(
     })
 }
 
-fn load_trust_key_meta(cache_root: &Path, key_id: &str) -> Result<RegistryTrustKey, RegistryError> {
+fn load_trust_key_meta_unchecked(
+    cache_root: &Path,
+    key_id: &str,
+) -> Result<RegistryTrustKey, RegistryError> {
     let trust = load_or_empty_trust(cache_root)?;
     let key = trust
         .keys
@@ -1802,6 +2063,11 @@ fn load_trust_key_meta(cache_root: &Path, key_id: &str) -> Result<RegistryTrustK
                 format!("unknown trust key_id {key_id}; install with registry trust-key"),
             )
         })?;
+    Ok(key)
+}
+
+fn load_trust_key_meta(cache_root: &Path, key_id: &str) -> Result<RegistryTrustKey, RegistryError> {
+    let key = load_trust_key_meta_unchecked(cache_root, key_id)?;
     trust_key_is_active_in_cache(cache_root, &key)?;
     Ok(key)
 }
@@ -2219,7 +2485,7 @@ mod tests {
         install_trust_key_with_algorithm(&root, "leaf", &leaf_seed, REGISTRY_ALG_ED25519)
             .expect("leaf");
         let cert =
-            issue_x509_lite_certificate(&root, "ca-root", "leaf", "1", "2026-01-01", "2027-01-01")
+            issue_x509_lite_certificate(&root, "ca-root", "leaf", "1", "2000-01-01", "2100-01-01")
                 .expect("issue");
         assert_eq!(cert.tbs.schema, REGISTRY_X509_LITE_SCHEMA);
         assert_eq!(cert.tbs.issuer, "ca-root");
@@ -2235,6 +2501,67 @@ mod tests {
         bad.signature = "00".repeat(64);
         let err = verify_x509_lite_certificate(&root, &bad).expect_err("bad sig");
         assert_eq!(err.code, "AE-REG-012");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn x509_lite_rejects_invalid_windows_and_non_root_self_signed_anchors() {
+        let root = temp_dir();
+        let mut root_seed = [0u8; 32];
+        root_seed[0] = 41;
+        install_trust_root(&root, "ca-root", &root_seed).expect("root");
+        let mut leaf_seed = [0u8; 32];
+        leaf_seed[0] = 42;
+        install_trust_key_with_algorithm(&root, "leaf", &leaf_seed, REGISTRY_ALG_ED25519)
+            .expect("leaf");
+        let cert =
+            issue_x509_lite_certificate(&root, "ca-root", "leaf", "42", "2000-01-01", "2100-01-01")
+                .expect("issue");
+        let not_yet_valid = verify_x509_lite_certificate_at(&root, &cert, "1999-12-31")
+            .expect_err("not-yet-valid certificate must fail");
+        assert_eq!(not_yet_valid.code, "AE-REG-012");
+        let expired = verify_x509_lite_certificate_at(&root, &cert, "2100-01-02")
+            .expect_err("expired certificate must fail");
+        assert_eq!(expired.code, "AE-REG-012");
+        set_trust_key_validity(&root, "leaf", Some("2100-01-01"), None).expect("leaf validity");
+        let inactive_subject = verify_x509_lite_certificate_at(&root, &cert, "2099-12-31")
+            .expect_err("certificate subject key must be active");
+        assert_eq!(inactive_subject.code, "AE-REG-012");
+        set_trust_key_validity(&root, "leaf", None, None).expect("clear leaf validity");
+        set_trust_key_validity(&root, "ca-root", None, Some("2001-01-01")).expect("root validity");
+        let inactive_issuer = verify_x509_lite_certificate_at(&root, &cert, "2099-12-31")
+            .expect_err("certificate issuer key must be active");
+        assert_eq!(inactive_issuer.code, "AE-REG-012");
+        let reversed =
+            issue_x509_lite_certificate(&root, "ca-root", "leaf", "43", "2100-01-01", "2000-01-01")
+                .expect_err("reversed certificate window must fail");
+        assert_eq!(reversed.code, "AE-REG-012");
+        let invalid_calendar =
+            issue_x509_lite_certificate(&root, "ca-root", "leaf", "44", "2026-02-29", "2027-01-01")
+                .expect_err("invalid calendar day must fail");
+        assert_eq!(invalid_calendar.code, "AE-REG-012");
+
+        let mut untrusted_seed = [0u8; 32];
+        untrusted_seed[0] = 43;
+        install_trust_key_with_algorithm(&root, "non-root", &untrusted_seed, REGISTRY_ALG_ED25519)
+            .expect("non-root key");
+        let self_signed = store_x509_lite_certificate(
+            &root,
+            "non-root",
+            "non-root",
+            "45",
+            "2000-01-01",
+            "2100-01-01",
+        )
+        .expect_err("non-root self-signed certificate must not anchor a chain");
+        assert_eq!(self_signed.code, "AE-REG-013");
+        assert!(
+            load_or_empty_x509_lite_store(&root)
+                .expect("load store")
+                .certificates
+                .is_empty(),
+            "failed store operation must not persist an unanchored certificate"
+        );
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -2258,21 +2585,27 @@ mod tests {
             "ca-root",
             "ca-mid",
             "10",
-            "2026-01-01",
-            "2028-01-01",
+            "2000-01-01",
+            "2100-01-01",
         )
         .expect("store mid");
         assert_eq!(mid_cert.tbs.subject, "ca-mid");
         let leaf_cert =
-            store_x509_lite_certificate(&root, "ca-mid", "leaf", "11", "2026-01-01", "2027-06-01")
+            store_x509_lite_certificate(&root, "ca-mid", "leaf", "11", "2000-01-01", "2100-01-01")
                 .expect("store leaf");
         verify_x509_lite_store_chain(&root, &leaf_cert).expect("chain");
+        let verified_store = verify_x509_lite_store(&root).expect("store verification");
+        assert_eq!(verified_store.certificates.len(), 2);
+        verify_registry_cache(&root).expect("registry cache also verifies the CA store");
         // Missing parent store entry fails when mid cert removed.
         let mut store = load_or_empty_x509_lite_store(&root).expect("load");
         store.certificates.retain(|c| c.tbs.subject != "ca-mid");
         write_x509_lite_store(&root, &store).expect("write");
         // ca-mid is not a trust root → chain fails.
         let err = verify_x509_lite_store_chain(&root, &leaf_cert).expect_err("missing mid");
+        assert_eq!(err.code, "AE-REG-013");
+        let err =
+            verify_registry_cache(&root).expect_err("cache verification must include CA store");
         assert_eq!(err.code, "AE-REG-013");
         let _ = fs::remove_dir_all(&root);
     }

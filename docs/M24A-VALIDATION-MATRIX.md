@@ -30,6 +30,12 @@
 | M24I-001 | store mid+leaf certs | PASS |
 | M24I-002 | store chain verify to root | PASS |
 | M24I-003 | missing issuer cert in store | FAIL closed AE-REG-013 |
+| M24I-004 | invalid/reversed/expired certificate date window | FAIL closed AE-REG-012 |
+| M24I-005 | non-root self-signed anchor | FAIL closed AE-REG-013; failed store does not persist |
+| M24I-006 | `verify-cache` with malformed/unanchored CA store | FAIL closed AE-REG-013 before package-cache acceptance |
+| M24I-007 | `trust-root` / `certify-ed25519-key` CLI key setup | explicit local 32-byte seed files create a root → intermediate → leaf chain; root rejects a parent flag |
+| M24I-008 | `store-x509-lite` / `verify-x509-lite-store` CLI argument contract | exact one of each mandatory certificate field; duplicate/missing field rejected |
+| M24I-009 | inactive issuer or subject trust-key window | FAIL closed AE-REG-012 on the same verification date |
 
 ---
 

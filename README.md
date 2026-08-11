@@ -7,7 +7,8 @@ source, emits deterministic AETH bytecode, verifies every artifact,
 and runs it in the Aether VM. **Default product path** is seed→AETH→VM; it does
 not translate Aether source to Rust, C, JavaScript, or another language as the
 product compiler. Optional F-NATIVE lowers **already-verified** AETH to C/object/
-LLVM/exe when the operator requests it (host toolchain required). Verified AETH
+LLVM/exe when the operator requests it (host toolchain required); `--target` is
+closed to the M35j matrix, with host dual-run and cross link-only behavior. Verified AETH
 v4–v10 artifacts remain compatibility inputs with their original meanings.
 Source without task frames emits v11; valid M19e task source emits v12.
 
@@ -168,7 +169,9 @@ set in this order:
 
 **Honest law-fork surface (authorized, bounded):** F-NATIVE lowers **verified**
 AETH to optional C/object/LLVM/exe (M35a–j; host toolchain required); F-REGISTRY
-is host CLI offline pin + explicit signed fetch/CA (M24a–i). Default product
+is host CLI offline pin + explicit signed fetch/CA (M24a–i), with the bounded
+X.509-lite store checked as part of `registry verify-cache` and explicit local
+Ed25519 root/certified-key setup. Default product
 compile remains seed→AETH→VM. These docs do **not** claim general effects,
 OS-thread parallel concurrency, broad FFI safety, full RFC 5280 X.509, or a
 bundled hermetic native toolchain.

@@ -11,25 +11,30 @@ use aether_core::{
     apply_edit_cli_trusts_product_accept, apply_structural_edit, canonical_ast,
     compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
     compile_workspace_package, encode_x509_lite_pem, fetch_signed_package, forge_bytecode,
-    format_project, format_source, format_source_product, install_trust_key,
-    issue_x509_lite_certificate, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
-    lower_verified_aeth_to_llvm_object, lower_verified_aeth_to_native_exe,
-    lower_verified_aeth_to_native_object, multi_module_authority_note, parse_project_document,
-    parse_workspace_document, pin_local_package, pin_local_package_signed, probe_native_toolchain,
-    product_cli_check_without_bootstrap, product_default_cli_toolchain,
+    format_project, format_source, format_source_product, install_certified_signing_key,
+    install_trust_key, install_trust_root, issue_x509_lite_certificate, lower_verified_aeth_to_c,
+    lower_verified_aeth_to_llvm_ir, lower_verified_aeth_to_llvm_object,
+    lower_verified_aeth_to_native_exe, lower_verified_aeth_to_native_exe_for_target,
+    lower_verified_aeth_to_native_object, multi_module_authority_note, native_target_is_host,
+    parse_project_document, parse_workspace_document, pin_local_package, pin_local_package_signed,
+    probe_native_toolchain, product_cli_check_without_bootstrap, product_default_cli_toolchain,
     product_format_without_bootstrap, product_project_format_without_bootstrap,
     product_seed_rebuild_without_bootstrap, product_structure_json,
     product_structure_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
     require_hermetic_native_toolchain, revoke_trust_key, rotate_trust_key, run_bytecode,
     run_bytecode_with_grants, run_project_tests_with_grants, serialize_project_document,
-    serialize_workspace_document, set_trust_key_validity, structural_document_json,
-    unit_artifact_file_name, verify_bytecode, verify_project, verify_registry_cache,
-    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    serialize_workspace_document, set_trust_key_validity, store_x509_lite_certificate,
+    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
+    verify_registry_cache, verify_workspace, verify_x509_lite_store, HostGrantConfig,
+    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c|--native-exe]\n  aether native probe\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether registry issue-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-c / --native-exe for F-NATIVE lower (M35c–h); aether native probe is M35i hermetic/toolchain discovery.\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b+; issue-x509-lite is M24h (not full RFC 5280)."
+        "M24f/g key setup:\n  aether registry trust-root <cache-root> --key-id <id> --seed-file <32-byte-path>\n  aether registry certify-ed25519-key <cache-root> --key-id <id> --seed-file <32-byte-path> --parent-key-id <id>\nThe supplied Ed25519 seed files remain local and must be exactly 32 bytes."
+    );
+    eprintln!(
+        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c|--native-exe [--target <triple>]]\n  aether native probe\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether registry issue-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry store-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry verify-x509-lite-store <cache-root>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-exe --target <triple> for the closed F-NATIVE M35j matrix; host targets retain dual-run and cross targets are link-only.\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b+; issue-x509-lite is M24h; store-x509-lite / verify-x509-lite-store are M24i (not full RFC 5280)."
     );
 }
 
@@ -95,6 +100,7 @@ fn compile(
     native_llvm_ir: bool,
     native_llvm_object: bool,
     native_exe: bool,
+    native_target: Option<&str>,
 ) -> Result<(), String> {
     let source = read_source(source_path)?;
     // BARP Phase 2 (ADR-044): default product compile forges seed bytecode without
@@ -120,6 +126,9 @@ fn compile(
             "compile accepts only one native lower flag (--native-c, --native-object, --native-llvm-ir, --native-llvm-object, --native-exe)"
                 .to_owned(),
         );
+    }
+    if native_target.is_some() && !native_exe {
+        return Err("compile --target requires --native-exe".to_owned());
     }
     // ADR-067: product path (no --bootstrap) is seed rebuild + product compile.
     // --bootstrap remains dual-compare / recovery oracle emit only.
@@ -172,13 +181,33 @@ fn compile(
         return Ok(());
     }
     if native_exe {
-        let report = lower_verified_aeth_to_native_exe(&bytecode, output_path, true)
+        if let Some(target) = native_target {
+            let report = lower_verified_aeth_to_native_exe_for_target(
+                &bytecode,
+                output_path,
+                target,
+                native_target_is_host(target),
+            )
             .map_err(|error| error.to_string())?;
-        println!(
-            "{LANGUAGE_NAME} {LANGUAGE_VERSION} linked verified AETH to native exe {} via {} (F-NATIVE M35h)",
-            output_path.display(),
-            report.cc_command
-        );
+            let mode = if native_target_is_host(target) {
+                "host dual-run"
+            } else {
+                "cross link-only"
+            };
+            println!(
+                "{LANGUAGE_NAME} {LANGUAGE_VERSION} linked verified AETH to native exe {} for {target} via {} ({mode}; F-NATIVE M35j)",
+                output_path.display(),
+                report.cc_command
+            );
+        } else {
+            let report = lower_verified_aeth_to_native_exe(&bytecode, output_path, true)
+                .map_err(|error| error.to_string())?;
+            println!(
+                "{LANGUAGE_NAME} {LANGUAGE_VERSION} linked verified AETH to native exe {} via {} (F-NATIVE M35h)",
+                output_path.display(),
+                report.cc_command
+            );
+        }
         return Ok(());
     }
     write_artifact(output_path, bytecode)?;
@@ -230,6 +259,42 @@ fn registry_trust_key(cache_root: &Path, key_id: &str, key_file: &Path) -> Resul
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry trust key {} installed at {}",
         key.key_id, key.key_path
+    );
+    Ok(())
+}
+
+fn registry_trust_root(cache_root: &Path, key_id: &str, seed_file: &Path) -> Result<(), String> {
+    let seed = fs::read(seed_file).map_err(|error| {
+        format!(
+            "could not read Ed25519 seed {}: {error}",
+            seed_file.display()
+        )
+    })?;
+    let key = install_trust_root(cache_root, key_id, &seed).map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry Ed25519 trust root {} installed at {}",
+        key.key_id, key.key_path
+    );
+    Ok(())
+}
+
+fn registry_certify_ed25519_key(
+    cache_root: &Path,
+    key_id: &str,
+    seed_file: &Path,
+    parent_key_id: &str,
+) -> Result<(), String> {
+    let seed = fs::read(seed_file).map_err(|error| {
+        format!(
+            "could not read Ed25519 seed {}: {error}",
+            seed_file.display()
+        )
+    })?;
+    let key = install_certified_signing_key(cache_root, key_id, &seed, parent_key_id)
+        .map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry certified Ed25519 key {} under {} at {}",
+        key.key_id, parent_key_id, key.key_path
     );
     Ok(())
 }
@@ -833,6 +898,15 @@ fn next_argument(
     arguments.next().ok_or_else(|| format!("missing {name}"))
 }
 
+fn next_string_argument(
+    arguments: &mut impl Iterator<Item = OsString>,
+    name: &str,
+) -> Result<String, String> {
+    Ok(next_argument(arguments, name)?
+        .to_string_lossy()
+        .into_owned())
+}
+
 fn parse_optional_write_flag(
     arguments: &mut impl Iterator<Item = OsString>,
     command: &str,
@@ -877,6 +951,262 @@ fn parse_product_default_source_flag(
     Ok((bootstrap, source))
 }
 
+#[derive(Debug)]
+struct CompileArguments {
+    source: OsString,
+    output: OsString,
+    use_bootstrap: bool,
+    native_c: bool,
+    native_object: bool,
+    native_llvm_ir: bool,
+    native_llvm_object: bool,
+    native_exe: bool,
+    native_target: Option<String>,
+}
+
+#[derive(Debug)]
+struct X509LiteCertificateRequest {
+    issuer: String,
+    subject: String,
+    serial: String,
+    not_before: String,
+    not_after: String,
+    output: Option<PathBuf>,
+}
+
+#[derive(Debug)]
+struct RegistryEd25519KeyRequest {
+    key_id: String,
+    seed_file: PathBuf,
+    parent_key_id: Option<String>,
+}
+
+fn parse_registry_ed25519_key_request(
+    arguments: &mut impl Iterator<Item = OsString>,
+    command: &str,
+    requires_parent: bool,
+) -> Result<RegistryEd25519KeyRequest, String> {
+    let mut key_id = None;
+    let mut seed_file = None;
+    let mut parent_key_id = None;
+    while let Some(flag) = arguments.next() {
+        if flag == "--key-id" {
+            if key_id
+                .replace(next_string_argument(arguments, "key id")?)
+                .is_some()
+            {
+                return Err(format!("registry {command} accepts --key-id once"));
+            }
+        } else if flag == "--seed-file" {
+            if seed_file
+                .replace(PathBuf::from(next_argument(
+                    arguments,
+                    "Ed25519 seed file",
+                )?))
+                .is_some()
+            {
+                return Err(format!("registry {command} accepts --seed-file once"));
+            }
+        } else if flag == "--parent-key-id" && requires_parent {
+            if parent_key_id
+                .replace(next_string_argument(arguments, "parent key id")?)
+                .is_some()
+            {
+                return Err(format!("registry {command} accepts --parent-key-id once"));
+            }
+        } else if requires_parent {
+            return Err(format!(
+                "registry {command} accepts --key-id --seed-file --parent-key-id"
+            ));
+        } else {
+            return Err(format!("registry {command} accepts --key-id --seed-file"));
+        }
+    }
+    Ok(RegistryEd25519KeyRequest {
+        key_id: key_id.ok_or_else(|| format!("registry {command} requires --key-id"))?,
+        seed_file: seed_file.ok_or_else(|| format!("registry {command} requires --seed-file"))?,
+        parent_key_id: if requires_parent {
+            Some(
+                parent_key_id
+                    .ok_or_else(|| format!("registry {command} requires --parent-key-id"))?,
+            )
+        } else {
+            None
+        },
+    })
+}
+
+fn parse_x509_lite_certificate_request(
+    arguments: &mut impl Iterator<Item = OsString>,
+    command: &str,
+) -> Result<X509LiteCertificateRequest, String> {
+    let mut issuer = None;
+    let mut subject = None;
+    let mut serial = None;
+    let mut not_before = None;
+    let mut not_after = None;
+    let mut output = None;
+    while let Some(flag) = arguments.next() {
+        if flag == "--issuer" {
+            if issuer
+                .replace(next_string_argument(arguments, "issuer key id")?)
+                .is_some()
+            {
+                return Err(format!("registry {command} accepts --issuer once"));
+            }
+        } else if flag == "--subject" {
+            if subject
+                .replace(next_string_argument(arguments, "subject key id")?)
+                .is_some()
+            {
+                return Err(format!("registry {command} accepts --subject once"));
+            }
+        } else if flag == "--serial" {
+            if serial
+                .replace(next_string_argument(arguments, "serial")?)
+                .is_some()
+            {
+                return Err(format!("registry {command} accepts --serial once"));
+            }
+        } else if flag == "--not-before" {
+            if not_before
+                .replace(next_string_argument(arguments, "not-before date")?)
+                .is_some()
+            {
+                return Err(format!("registry {command} accepts --not-before once"));
+            }
+        } else if flag == "--not-after" {
+            if not_after
+                .replace(next_string_argument(arguments, "not-after date")?)
+                .is_some()
+            {
+                return Err(format!("registry {command} accepts --not-after once"));
+            }
+        } else if flag == "--output" {
+            if output
+                .replace(PathBuf::from(next_argument(arguments, "PEM output")?))
+                .is_some()
+            {
+                return Err(format!("registry {command} accepts --output once"));
+            }
+        } else {
+            return Err(format!(
+                "registry {command} accepts --issuer --subject --serial --not-before --not-after [--output]"
+            ));
+        }
+    }
+    Ok(X509LiteCertificateRequest {
+        issuer: issuer.ok_or_else(|| format!("registry {command} requires --issuer"))?,
+        subject: subject.ok_or_else(|| format!("registry {command} requires --subject"))?,
+        serial: serial.ok_or_else(|| format!("registry {command} requires --serial"))?,
+        not_before: not_before
+            .ok_or_else(|| format!("registry {command} requires --not-before"))?,
+        not_after: not_after.ok_or_else(|| format!("registry {command} requires --not-after"))?,
+        output,
+    })
+}
+
+fn write_or_print_x509_lite_pem(
+    cert: &aether_core::RegistryX509LiteCert,
+    output: Option<PathBuf>,
+    action: &str,
+) -> Result<(), String> {
+    let pem = encode_x509_lite_pem(cert);
+    if let Some(path) = output {
+        fs::write(&path, &pem)
+            .map_err(|error| format!("could not write {}: {error}", path.display()))?;
+        println!(
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry {action} X.509-lite cert {} -> {} to {}",
+            cert.tbs.issuer,
+            cert.tbs.subject,
+            path.display()
+        );
+    } else {
+        print!("{pem}");
+    }
+    Ok(())
+}
+
+fn parse_compile_arguments(
+    arguments: &mut impl Iterator<Item = OsString>,
+) -> Result<CompileArguments, String> {
+    let source = next_argument(arguments, "source file")?;
+    let output_flag = next_argument(arguments, "--output flag")?;
+    if output_flag != "--output" {
+        return Err("compile requires --output <artifact-file>".to_owned());
+    }
+    let output = next_argument(arguments, "artifact output file")?;
+    let mut use_bootstrap = false;
+    let mut native_c = false;
+    let mut native_object = false;
+    let mut native_llvm_ir = false;
+    let mut native_llvm_object = false;
+    let mut native_exe = false;
+    let mut native_target = None;
+    while let Some(extra) = arguments.next() {
+        if extra == "--bootstrap" {
+            use_bootstrap = true;
+        } else if extra == "--native-c" {
+            native_c = true;
+        } else if extra == "--native-object" {
+            native_object = true;
+        } else if extra == "--native-llvm-ir" {
+            native_llvm_ir = true;
+        } else if extra == "--native-llvm-object" {
+            native_llvm_object = true;
+        } else if extra == "--native-exe" {
+            native_exe = true;
+        } else if extra == "--target" {
+            let target = next_argument(arguments, "target triple")?
+                .to_string_lossy()
+                .into_owned();
+            if native_target.replace(target).is_some() {
+                return Err("compile accepts --target at most once".to_owned());
+            }
+        } else {
+            return Err(
+                "compile accepts --output <file>, optional --bootstrap or one native lower flag, and --target only with --native-exe"
+                    .to_owned(),
+            );
+        }
+    }
+    let native_modes = [
+        native_c,
+        native_object,
+        native_llvm_ir,
+        native_llvm_object,
+        native_exe,
+    ]
+    .into_iter()
+    .filter(|enabled| *enabled)
+    .count();
+    if native_modes > 0 && use_bootstrap {
+        return Err(
+            "compile accepts either --bootstrap or a native lower flag, not both".to_owned(),
+        );
+    }
+    if native_modes > 1 {
+        return Err(
+            "compile accepts only one native lower flag (--native-c, --native-object, --native-llvm-ir, --native-llvm-object, --native-exe)"
+                .to_owned(),
+        );
+    }
+    if native_target.is_some() && !native_exe {
+        return Err("compile --target requires --native-exe".to_owned());
+    }
+    Ok(CompileArguments {
+        source,
+        output,
+        use_bootstrap,
+        native_c,
+        native_object,
+        native_llvm_ir,
+        native_llvm_object,
+        native_exe,
+        native_target,
+    })
+}
+
 fn run() -> Result<(), String> {
     let mut arguments = env::args_os();
     let _program = arguments.next();
@@ -908,47 +1238,17 @@ fn run() -> Result<(), String> {
             apply_edit(Path::new(&source), Path::new(&edit), Path::new(&output))
         }
         "compile" => {
-            let source = next_argument(&mut arguments, "source file")?;
-            let output_flag = next_argument(&mut arguments, "--output flag")?;
-            if output_flag != "--output" {
-                return Err("compile requires --output <artifact-file>".to_owned());
-            }
-            let output = next_argument(&mut arguments, "artifact output file")?;
-            let mut use_bootstrap = false;
-            let mut native_c = false;
-            let mut native_object = false;
-            let mut native_llvm_ir = false;
-            let mut native_llvm_object = false;
-            let mut native_exe = false;
-            for extra in arguments.by_ref() {
-                if extra == "--bootstrap" {
-                    use_bootstrap = true;
-                } else if extra == "--native-c" {
-                    native_c = true;
-                } else if extra == "--native-object" {
-                    native_object = true;
-                } else if extra == "--native-llvm-ir" {
-                    native_llvm_ir = true;
-                } else if extra == "--native-llvm-object" {
-                    native_llvm_object = true;
-                } else if extra == "--native-exe" {
-                    native_exe = true;
-                } else {
-                    return Err(
-                        "compile accepts --output <file> and optional --bootstrap or one native lower flag"
-                            .to_owned(),
-                    );
-                }
-            }
+            let options = parse_compile_arguments(&mut arguments)?;
             compile(
-                Path::new(&source),
-                Path::new(&output),
-                use_bootstrap,
-                native_c,
-                native_object,
-                native_llvm_ir,
-                native_llvm_object,
-                native_exe,
+                Path::new(&options.source),
+                Path::new(&options.output),
+                options.use_bootstrap,
+                options.native_c,
+                options.native_object,
+                options.native_llvm_ir,
+                options.native_llvm_object,
+                options.native_exe,
+                options.native_target.as_deref(),
             )
         }
         "native" => {
@@ -1031,6 +1331,36 @@ fn run() -> Result<(), String> {
                         Path::new(&root),
                         &key_id.to_string_lossy(),
                         Path::new(&key_file),
+                    )
+                }
+                "trust-root" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let request = parse_registry_ed25519_key_request(
+                        &mut arguments,
+                        "trust-root",
+                        false,
+                    )?;
+                    registry_trust_root(
+                        Path::new(&root),
+                        &request.key_id,
+                        &request.seed_file,
+                    )
+                }
+                "certify-ed25519-key" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let request = parse_registry_ed25519_key_request(
+                        &mut arguments,
+                        "certify-ed25519-key",
+                        true,
+                    )?;
+                    let parent_key_id = request.parent_key_id.as_deref().ok_or_else(|| {
+                        "registry certify-ed25519-key requires --parent-key-id".to_owned()
+                    })?;
+                    registry_certify_ed25519_key(
+                        Path::new(&root),
+                        &request.key_id,
+                        &request.seed_file,
+                        parent_key_id,
                     )
                 }
                 "pin-local-signed" => {
@@ -1237,72 +1567,53 @@ fn run() -> Result<(), String> {
                 }
                 "issue-x509-lite" => {
                     let root = next_argument(&mut arguments, "cache root")?;
-                    let mut issuer = None;
-                    let mut subject = None;
-                    let mut serial = None;
-                    let mut not_before = None;
-                    let mut not_after = None;
-                    let mut output = None;
-                    let mut args = arguments;
-                    while let Some(flag) = args.next() {
-                        if flag == "--issuer" {
-                            issuer = Some(next_argument(&mut args, "issuer key id")?);
-                        } else if flag == "--subject" {
-                            subject = Some(next_argument(&mut args, "subject key id")?);
-                        } else if flag == "--serial" {
-                            serial = Some(next_argument(&mut args, "serial")?);
-                        } else if flag == "--not-before" {
-                            not_before = Some(next_argument(&mut args, "not-before")?);
-                        } else if flag == "--not-after" {
-                            not_after = Some(next_argument(&mut args, "not-after")?);
-                        } else if flag == "--output" {
-                            output = Some(next_argument(&mut args, "pem output")?);
-                        } else {
-                            return Err(
-                                "registry issue-x509-lite accepts --issuer --subject --serial --not-before --not-after [--output]"
-                                    .to_owned(),
-                            );
-                        }
-                    }
-                    let issuer = issuer
-                        .ok_or_else(|| "registry issue-x509-lite requires --issuer".to_owned())?;
-                    let subject = subject
-                        .ok_or_else(|| "registry issue-x509-lite requires --subject".to_owned())?;
-                    let serial = serial
-                        .ok_or_else(|| "registry issue-x509-lite requires --serial".to_owned())?;
-                    let not_before = not_before.ok_or_else(|| {
-                        "registry issue-x509-lite requires --not-before".to_owned()
-                    })?;
-                    let not_after = not_after.ok_or_else(|| {
-                        "registry issue-x509-lite requires --not-after".to_owned()
-                    })?;
+                    let request =
+                        parse_x509_lite_certificate_request(&mut arguments, "issue-x509-lite")?;
                     let cert = issue_x509_lite_certificate(
                         Path::new(&root),
-                        &issuer.to_string_lossy(),
-                        &subject.to_string_lossy(),
-                        &serial.to_string_lossy(),
-                        &not_before.to_string_lossy(),
-                        &not_after.to_string_lossy(),
+                        &request.issuer,
+                        &request.subject,
+                        &request.serial,
+                        &request.not_before,
+                        &request.not_after,
                     )
                     .map_err(|error| error.to_string())?;
-                    let pem = encode_x509_lite_pem(&cert);
-                    if let Some(path) = output {
-                        fs::write(Path::new(&path), &pem).map_err(|error| {
-                            format!("could not write {}: {error}", path.to_string_lossy())
-                        })?;
-                        println!(
-                            "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry issued X.509-lite cert {} -> {} to {}",
-                            cert.tbs.issuer,
-                            cert.tbs.subject,
-                            path.to_string_lossy()
+                    write_or_print_x509_lite_pem(&cert, request.output, "issued")
+                }
+                "store-x509-lite" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let request =
+                        parse_x509_lite_certificate_request(&mut arguments, "store-x509-lite")?;
+                    let cert = store_x509_lite_certificate(
+                        Path::new(&root),
+                        &request.issuer,
+                        &request.subject,
+                        &request.serial,
+                        &request.not_before,
+                        &request.not_after,
+                    )
+                    .map_err(|error| error.to_string())?;
+                    write_or_print_x509_lite_pem(&cert, request.output, "stored")
+                }
+                "verify-x509-lite-store" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    if arguments.next().is_some() {
+                        return Err(
+                            "registry verify-x509-lite-store accepts one cache root directory"
+                                .to_owned(),
                         );
-                    } else {
-                        print!("{pem}");
                     }
+                    let store =
+                        verify_x509_lite_store(Path::new(&root)).map_err(|error| error.to_string())?;
+                    println!(
+                        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry X.509-lite store verified {} certificate(s) at {}",
+                        store.certificates.len(),
+                        Path::new(&root).display()
+                    );
                     Ok(())
                 }
                 other => Err(format!(
-                    "unknown registry subcommand {other} (use verify-cache, pin-local, trust-key, pin-local-signed, fetch-signed, revoke-key, rotate-key, set-key-validity, or issue-x509-lite)"
+                    "unknown registry subcommand {other} (use verify-cache, pin-local, trust-key, trust-root, certify-ed25519-key, pin-local-signed, fetch-signed, revoke-key, rotate-key, set-key-validity, issue-x509-lite, store-x509-lite, or verify-x509-lite-store)"
                 )),
             }
         }
@@ -1851,6 +2162,181 @@ mod tests {
         let error = parse_optional_write_flag(&mut trailing, "workspace lock")
             .expect_err("trailing argument is rejected");
         assert!(error.contains("optional --write flag only"), "{error}");
+    }
+
+    #[test]
+    fn compile_target_flag_is_closed_and_native_exe_only() {
+        let mut valid = [
+            "input.ae",
+            "--output",
+            "out.exe",
+            "--native-exe",
+            "--target",
+            "aarch64-unknown-linux-gnu",
+        ]
+        .map(OsString::from)
+        .into_iter();
+        let parsed = parse_compile_arguments(&mut valid).expect("cross target arguments");
+        assert!(parsed.native_exe);
+        assert_eq!(
+            parsed.native_target.as_deref(),
+            Some("aarch64-unknown-linux-gnu")
+        );
+
+        let mut wrong_mode = [
+            "input.ae",
+            "--output",
+            "out.c",
+            "--native-c",
+            "--target",
+            "aarch64-unknown-linux-gnu",
+        ]
+        .map(OsString::from)
+        .into_iter();
+        let error = parse_compile_arguments(&mut wrong_mode)
+            .expect_err("target without native executable must fail");
+        assert!(error.contains("requires --native-exe"), "{error}");
+
+        let mut duplicate = [
+            "input.ae",
+            "--output",
+            "out.exe",
+            "--native-exe",
+            "--target",
+            "x86_64-unknown-linux-gnu",
+            "--target",
+            "aarch64-unknown-linux-gnu",
+        ]
+        .map(OsString::from)
+        .into_iter();
+        let error =
+            parse_compile_arguments(&mut duplicate).expect_err("duplicate target must fail");
+        assert!(error.contains("at most once"), "{error}");
+    }
+
+    #[test]
+    fn x509_lite_cli_request_requires_one_of_each_field() {
+        let mut valid = [
+            "--issuer",
+            "ca-root",
+            "--subject",
+            "leaf",
+            "--serial",
+            "1",
+            "--not-before",
+            "2000-01-01",
+            "--not-after",
+            "2100-01-01",
+        ]
+        .map(OsString::from)
+        .into_iter();
+        let parsed = parse_x509_lite_certificate_request(&mut valid, "store-x509-lite")
+            .expect("complete certificate request");
+        assert_eq!(parsed.issuer, "ca-root");
+        assert_eq!(parsed.subject, "leaf");
+        assert!(parsed.output.is_none());
+
+        let mut duplicate = [
+            "--issuer",
+            "ca-root",
+            "--issuer",
+            "other-root",
+            "--subject",
+            "leaf",
+            "--serial",
+            "1",
+            "--not-before",
+            "2000-01-01",
+            "--not-after",
+            "2100-01-01",
+        ]
+        .map(OsString::from)
+        .into_iter();
+        let error = parse_x509_lite_certificate_request(&mut duplicate, "store-x509-lite")
+            .expect_err("duplicate issuer must fail");
+        assert!(error.contains("--issuer once"), "{error}");
+    }
+
+    #[test]
+    fn ed25519_ca_operator_key_requests_are_closed_and_complete() {
+        let mut root = ["--key-id", "ca-root", "--seed-file", "root.seed"]
+            .map(OsString::from)
+            .into_iter();
+        let parsed = parse_registry_ed25519_key_request(&mut root, "trust-root", false)
+            .expect("root key request");
+        assert_eq!(parsed.key_id, "ca-root");
+        assert_eq!(parsed.seed_file, PathBuf::from("root.seed"));
+        assert!(parsed.parent_key_id.is_none());
+
+        let mut child = [
+            "--key-id",
+            "ca-mid",
+            "--seed-file",
+            "mid.seed",
+            "--parent-key-id",
+            "ca-root",
+        ]
+        .map(OsString::from)
+        .into_iter();
+        let parsed = parse_registry_ed25519_key_request(&mut child, "certify-ed25519-key", true)
+            .expect("certified key request");
+        assert_eq!(parsed.parent_key_id.as_deref(), Some("ca-root"));
+
+        let mut root_with_parent = [
+            "--key-id",
+            "ca-root",
+            "--seed-file",
+            "root.seed",
+            "--parent-key-id",
+            "other",
+        ]
+        .map(OsString::from)
+        .into_iter();
+        let error = parse_registry_ed25519_key_request(&mut root_with_parent, "trust-root", false)
+            .expect_err("root command cannot accept a parent");
+        assert!(error.contains("--key-id --seed-file"), "{error}");
+    }
+
+    #[test]
+    fn ed25519_ca_operator_helpers_prepare_a_storable_chain() {
+        let temporary = TemporaryDirectory::create();
+        let root_seed_file = temporary.path.join("root.seed");
+        let mid_seed_file = temporary.path.join("mid.seed");
+        let leaf_seed_file = temporary.path.join("leaf.seed");
+        fs::write(&root_seed_file, [51u8; 32]).expect("root seed");
+        fs::write(&mid_seed_file, [52u8; 32]).expect("intermediate seed");
+        fs::write(&leaf_seed_file, [53u8; 32]).expect("leaf seed");
+        registry_trust_root(temporary.path.as_path(), "ca-root", &root_seed_file)
+            .expect("root command helper");
+        registry_certify_ed25519_key(
+            temporary.path.as_path(),
+            "ca-mid",
+            &mid_seed_file,
+            "ca-root",
+        )
+        .expect("intermediate command helper");
+        registry_certify_ed25519_key(temporary.path.as_path(), "leaf", &leaf_seed_file, "ca-mid")
+            .expect("leaf command helper");
+        store_x509_lite_certificate(
+            temporary.path.as_path(),
+            "ca-root",
+            "ca-mid",
+            "1",
+            "2000-01-01",
+            "2100-01-01",
+        )
+        .expect("intermediate certificate");
+        store_x509_lite_certificate(
+            temporary.path.as_path(),
+            "ca-mid",
+            "leaf",
+            "2",
+            "2000-01-01",
+            "2100-01-01",
+        )
+        .expect("leaf certificate");
+        let store = verify_x509_lite_store(temporary.path.as_path()).expect("store verify");
+        assert_eq!(store.certificates.len(), 2);
     }
 
     #[test]

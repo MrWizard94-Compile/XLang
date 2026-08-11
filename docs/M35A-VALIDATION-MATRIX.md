@@ -27,6 +27,8 @@
 | M35I-003 | `aether native probe` CLI | prints probe line |
 | M35J-001 | unsupported target triple | FAIL closed AE-NATIVE-007 |
 | M35J-002 | host triple lower path | M35h dual-run or AE-NATIVE-004 without cc |
+| M35J-003 | `compile --native-exe --target <triple>` | host target dual-runs; cross target is link-only |
+| M35J-004 | cross target with dual-run request | FAIL closed AE-NATIVE-007 before output is written |
 
 ---
 
