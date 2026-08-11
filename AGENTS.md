@@ -61,9 +61,9 @@ Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), default `check`
 AST / format / structure / LSP, and proof dual-compare. Product acceptance
 Default CLI check/format/structure, product compile, and seed rebuild are seed path
-(ADR-064/067); bootstrap is recovery/oracle (`--bootstrap`, dual-compare, residual
-nested body-list structural AST — product owns top-level weave/record + weave-body
-statements ADR-065/068/069). LSP hover/definition are product-surface (ADR-066). Multi-module is host elaborate + seed emit (ADR-056). Seed Profile self-host, all shipped seed-path examples,
+(ADR-064/067); bootstrap is recovery/oracle (`--bootstrap`, dual-compare, full
+`aether.ast/v8` — product owns top-level weave/record, weave-body statements, and
+nested choose/while body lists ADR-065/068/069/071). LSP hover/definition are product-surface (ADR-066). Multi-module is host elaborate + seed emit (ADR-056). Seed Profile self-host, all shipped seed-path examples,
 the complete prior canonical surface (including records), the documented M2–M8
 corpora, the M19a release corpus, the M19b nursery-resource corpus, the M19d
 spawn-arena corpus, the M21 foreign-pilot corpus, and the M23/M19e documented
@@ -125,7 +125,7 @@ D2a body subset (`seed_interprets_m23_comptime_calls_natively`; ADR-043 Phase 1)
 | Artifact format | AETH **v4–v11** compatibility input + deterministic **v11** default / **v12** when M19e task frames present (`TASK_CHECKPOINT` 67; `RELEASE` 66) |
 | Product compile | Seed forge-first (ADR-049); multi-module/edit product gates; `AE-SEED-001`–`007` preflights (ADR-050); dual-compare tests/gate; M19e v12 |
 | Foreign ABI (M21) | Whole-only pilot; `--grant-lib KEY=PATH`; host load after verify; residual native risk accepted by human; seed dual-compare proven |
-| Bootstrap | recovery `--bootstrap` / dual-compare oracle / residual structural AST (product owns seed rebuild ADR-067) |
+| Bootstrap | recovery `--bootstrap` / dual-compare oracle / full `aether.ast/v8` (product owns seed rebuild ADR-067 and structural product ops ADR-065–071) |
 | Seed compiler | `seed/aether_seed.ae` + checked-in `seed/aether_seed.aeth` |
 | Authoring | `aether.ast/v8`, `aether.edit/v8`, `aether.diagnostic/v8` |
 

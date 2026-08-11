@@ -112,8 +112,9 @@ Tauri bundle, installer, or model-status requirement.
 
 Default CLI compilation and seed rebuild use the Aether-written seed artifact
 (ADR-067). Bootstrap remains for dual-compare proofs, recovery `--bootstrap`
-AST diagnostics, and residual nested body-list structural AST (top-level weave,
-weave-body statements, and primitive records are product ADR-065/068/069). All shipped examples and the complete canonical-surface corpus,
+AST diagnostics, and full `aether.ast/v8` (top-level weave, weave-body
+statements, nested choose/while body lists, and primitive records are product
+ADR-065/068/069/071). All shipped examples and the complete canonical-surface corpus,
 including the record, M2, M4, and M5 surfaces, match bootstrap byte-for-byte
 under seed compile where claimed.
 

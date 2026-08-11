@@ -36,11 +36,12 @@ LLVM. Optional **verified AETH → ISO C** is an authorized F-NATIVE pilot only
 Package **0.36.0** combines:
 
 1. **Seed-hosted product compilation** as the default CLI path.  
-2. **BARP** (Bootstrap Authority Reduction Program, ADR-043–069): product owns
+2. **BARP** (Bootstrap Authority Reduction Program, ADR-043–071): product owns
    default check/format/structure, LSP diagnostics/symbols/hover/definition,
-   seed rebuild, and nearly all structural-edit ops on product units.  
+   seed rebuild, and structural-edit ops on product units (including nested
+   choose/while body lists).  
 3. **Rust bootstrap as recovery/oracle only** (`--bootstrap`, dual-compare,
-   nested body-list AST residual, full `aether.ast/v8`).  
+   full `aether.ast/v8`).  
 4. Bounded language surface through M19e/M21/M23; offline projects, workspaces,
    tests, stdlib, LSP; local technical-preview packaging.  
 5. Authorized law-fork pilots: **F-NATIVE** (AETH→C), **F-REGISTRY** (offline
@@ -54,7 +55,7 @@ The project is deliberately strongest where it differentiates:
 | Explicit authority | No ambient guest FS/process/shell/network/model |
 | Evidence-led self-host | Seed≡bootstrap dual-compare on claimed corpora; product seed rebuild identity |
 | AI-oriented authoring without model authority | Versioned AST/edit/diagnostic protocol; product accept gates |
-| Honest residual claims | Nested body AST, seed packets, multi-file forge, network registry still open |
+| Honest residual claims | Seed packets, multi-file forge, network registry still open |
 
 It remains early relative to mature ecosystems: no general generics, public
 registry, broad FFI, parallel runtime, large stdlib, public license channel, or
@@ -67,7 +68,7 @@ consumer IDE product beyond bounded offline LSP.
 | Aether source → AETH → verify → VM | **Implemented** | Aether-only VM default; no source transpile |
 | Product default compile / check / format / structure | **Proven (ADR-064)** | Recovery via `--bootstrap` |
 | Product seed rebuild (no `--bootstrap`) | **Proven (ADR-067)** | Dual-compare still uses bootstrap emit |
-| Structural top-level weave + weave-body stmt + primitive record | **Proven product path (ADR-065/068/069)** | Nested choose/while body lists residual bootstrap |
+| Structural top-level weave + weave-body + nested body lists + primitive record | **Proven product path (ADR-065/068/069/071)** | Full `aether.ast/v8` still recovery bootstrap |
 | LSP diagnostics / symbols / hover / definition | **Product-primary (ADR-058/063/066)** | Not a second product AETH emitter |
 | Multi-module / workspace | **Host elaborate + seed emit (ADR-056)** | Seed-native multi-file = false |
 | M23 pure comptime calls | **Seed-native D2a (ADR-043 Phase 1)** | No nested calls / control-flow callees |
@@ -177,16 +178,15 @@ User source
     │
     ├─ Product path (DEFAULT) ── seed forge ── verify ── AETH
     │     compile / check / format / structure / LSP / seed rebuild
-    │     structural product ops (ADR-065/068/069)
+    │     structural product ops (ADR-065/068/069/071)
     │
     └─ Bootstrap path (RECOVERY/ORACLE)
           --bootstrap check/format/structure/compile
           dual-compare proofs
-          nested body-list structural AST residual
           full aether.ast/v8
 ```
 
-### 4.2 BARP ledger (ADR-043 → ADR-069)
+### 4.2 BARP ledger (ADR-043 → ADR-071)
 
 | ADR | Outcome |
 | --- | --- |
@@ -198,14 +198,15 @@ User source
 | 062–064 | M35b locals; product default CLI toolchain |
 | 065–067 | Product weave replace; LSP surface hover/def; product seed rebuild |
 | 068–069 | Product top-level weave insert/delete; weave-body statements; primitive records |
+| 070 | Product yield-in-truth-choose fail-closed; multi-module choose+revise |
+| 071 | Product nested choose/while body-list statement ops |
 
 ### 4.3 Residual Rust bootstrap (honest)
 
 1. Dual-compare oracle emit (`compile --bootstrap` in tests/gate).  
 2. Recovery flags: `check|format|structure|project format --bootstrap`.  
-3. Nested structural body lists (choose/while paths).  
-4. Full authoring tree `aether.ast/v8` (product structure is envelope).  
-5. Bootstrap remains the **proof** authority; product is the **default product**
+3. Full authoring tree `aether.ast/v8` (product structure is envelope).  
+4. Bootstrap remains the **proof** authority; product is the **default product**
    authority.
 
 ---
@@ -216,7 +217,7 @@ User source
 | --- | --- | --- |
 | `aether compile` | Product default seed | `--bootstrap` oracle; `--native-c` F-NATIVE |
 | `aether check` / `format` / `structure` | Product default | Recovery AST with `--bootstrap` |
-| `aether apply-edit` | Product accept + product ops subset | Nested residual bootstrap base |
+| `aether apply-edit` | Product accept + product ops subset | Full ast/v8 still recovery bootstrap |
 | `aether project` / `workspace` | Offline verify/lock/build/test/format | PKG-001 locks |
 | `aether test` / `project test` | Offline discovery + optional grants/reports | Exit 0 = pass |
 | `aether lsp` | Offline stdio M13a+b | Product diagnostics/symbols/hover/def |
@@ -328,8 +329,8 @@ dual-compare, seed identity, package + consumer verify).
 
 ## 11. Recommended next work (lawful order)
 
-1. **BARP residual:** nested body-list product structural paths; then ADR-061
-   seed error packets / multi-file forge direction as vertical slices.  
+1. **BARP residual:** ADR-061 seed error packets / multi-file forge direction as
+   vertical slices.  
 2. **F-NATIVE M35c+:** SPEAK/Text, multi-weave, dual-run with host `cc` when
    available (new ADR + matrix).  
 3. **F-REGISTRY M24b:** signed fetch only with explicit network + threat update.  

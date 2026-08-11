@@ -3252,12 +3252,13 @@ pub const fn product_default_cli_toolchain() -> bool {
     true
 }
 
-/// BARP ADR-064–070 honesty: bootstrap is recovery/oracle only — not the
-/// default product toolchain. Residual bootstrap roles after ADR-070:
-/// dual-compare oracle, recovery flags (`--bootstrap`), nested body-list
-/// structural edits, and full `aether.ast/v8`. Product owns seed rebuild,
-/// structural product ops, multi-module choose-revise, yield-in-truth-choose
-/// fail-closed preflight, and LSP product-surface navigation.
+/// BARP ADR-064–071 honesty: bootstrap is recovery/oracle only — not the
+/// default product toolchain. Residual bootstrap roles after ADR-071:
+/// dual-compare oracle, recovery flags (`--bootstrap`), and full
+/// `aether.ast/v8`. Product owns seed rebuild, structural product ops
+/// (including nested choose/while body lists), multi-module choose-revise,
+/// yield-in-truth-choose fail-closed preflight, and LSP product-surface
+/// navigation.
 #[must_use]
 pub const fn bootstrap_is_recovery_oracle_only() -> bool {
     true
@@ -3278,9 +3279,16 @@ pub const fn structural_edit_product_top_level_weave_ops() -> bool {
 }
 
 /// BARP ADR-069: weave-body statement ops and top-level primitive record ops
-/// without bootstrap `Program` base parse (nested choose/while lists residual).
+/// without bootstrap `Program` base parse.
 #[must_use]
 pub const fn structural_edit_product_statement_and_record_ops() -> bool {
+    true
+}
+
+/// BARP ADR-071: nested choose/while body-list statement ops (`whenBright` /
+/// `whenDim` / while `body`) without bootstrap `Program` base parse.
+#[must_use]
+pub const fn structural_edit_product_nested_body_list_ops() -> bool {
     true
 }
 

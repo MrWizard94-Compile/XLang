@@ -5,10 +5,11 @@
 //! allow-listed edit protocol, renders canonical source, and **accepts** that
 //! source via the product seed path (ADR-048).
 //!
-//! **ADR-065/068/069:** product text-splice path (no bootstrap `Program` base
+//! **ADR-065/068/069/071:** product text-splice path (no bootstrap `Program` base
 //! parse) for: top-level weave replace/insertAfter/delete; weave-body statement
-//! replace/insert/delete; top-level primitive record replace/insertAfter/delete.
-//! Nested body lists (choose/while) and non-primitive record types still use
+//! replace/insert/delete; nested choose/while body lists (`whenBright` /
+//! `whenDim` / while `body`); top-level primitive record replace/insertAfter/
+//! delete. Non-primitive record types and full `aether.ast/v8` still use
 //! bootstrap AST. Callers that persist an edit should still product-seed-compile
 //! before writing (CLI trusts core product accept per ADR-053).
 
@@ -45,8 +46,8 @@ const MAX_SOURCE_BYTES: usize = 1_000_000;
 
 /// A successful pure structural edit. The returned source is product-accepted
 /// (ADR-048). Product text-splice may omit bootstrap AST for top-level weaves,
-/// weave-body statements, and primitive records (ADR-065/068/069); nested body
-/// lists still base-parse via bootstrap.
+/// weave-body statements, nested choose/while body lists, and primitive records
+/// (ADR-065/068/069/071).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuralEditResult {
     pub source: String,
@@ -139,9 +140,10 @@ pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
 /// an artifact. It is intentionally pure apart from memory allocation. The CLI
 /// trusts product accept on returned source (ADR-053).
 ///
-/// **ADR-065/068/069:** product text-splice without bootstrap `Program` when the
-/// base product-accepts and every operation is in the product subset (top-level
-/// weave, weave-body statement, or primitive top-level record).
+/// **ADR-065/068/069/071:** product text-splice without bootstrap `Program` when
+/// the base product-accepts and every operation is in the product subset
+/// (top-level weave, weave-body or nested choose/while statement, or primitive
+/// top-level record).
 pub fn apply_structural_edit(
     source: &str,
     edit_json: &str,
@@ -165,6 +167,12 @@ pub fn apply_structural_edit(
             return Ok(result);
         }
         if let Some(result) = try_product_top_level_record_ops(source, edit_json)? {
+            return Ok(result);
+        }
+    }
+    // ADR-071: product nested choose/while body-list statement ops.
+    if crate::structural_edit_product_nested_body_list_ops() {
+        if let Some(result) = try_product_nested_body_list_ops(source, edit_json)? {
             return Ok(result);
         }
     }
@@ -306,7 +314,7 @@ fn try_product_top_level_weave_ops(
     }))
 }
 
-/// ADR-069: product weave-body statement ops (not nested choose/while lists).
+/// ADR-069: product weave-body statement ops (nested choose/while: ADR-071).
 fn try_product_weave_body_statement_ops(
     source: &str,
     edit_json: &str,
@@ -608,6 +616,132 @@ fn format_body_statement_text(statement: &Statement) -> String {
     out
 }
 
+/// Format a statement for a nested choose/while body (one indent deeper than weave body).
+fn format_nested_body_statement_text(statement: &Statement) -> String {
+    let base = format_body_statement_text(statement);
+    let mut out = String::with_capacity(base.len() + base.lines().count() * 2);
+    for line in base.lines() {
+        if line.is_empty() {
+            out.push('\n');
+        } else {
+            out.push_str("  ");
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// ADR-071: product nested choose/while body-list statement ops without bootstrap AST.
+fn try_product_nested_body_list_ops(
+    source: &str,
+    edit_json: &str,
+) -> Result<Option<StructuralEditResult>, StructuralEditError> {
+    debug_assert!(
+        crate::structural_edit_product_nested_body_list_ops(),
+        "ADR-071: product nested body-list ops"
+    );
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    if compile_product_bytecode(&normalized).is_err() {
+        return Ok(None);
+    }
+    let request = parse_request(edit_json)?;
+    if request.base_source != normalized || request.operations.is_empty() {
+        return Ok(None);
+    }
+    for operation in &request.operations {
+        match operation.kind {
+            EditOperationKind::ReplaceStatement
+            | EditOperationKind::InsertStatementAfter
+            | EditOperationKind::DeleteStatement => {
+                let Some(path) = operation.path.as_ref() else {
+                    return Ok(None);
+                };
+                if matches!(path.list, BodyListRef::WeaveBody { .. }) {
+                    return Ok(None);
+                }
+            }
+            EditOperationKind::InsertStatementAt => {
+                let Some(list) = operation.list.as_ref() else {
+                    return Ok(None);
+                };
+                if matches!(list, BodyListRef::WeaveBody { .. }) {
+                    return Ok(None);
+                }
+            }
+            _ => return Ok(None),
+        }
+    }
+
+    let empty_program = Program {
+        world: "product".to_owned(),
+        records: Vec::new(),
+        shapes: Vec::new(),
+        host_weaves: Vec::new(),
+        weaves: Vec::new(),
+    };
+    let mut candidate = normalized;
+    let mut node_budget = NodeBudget::default();
+    for operation in &request.operations {
+        match operation.kind {
+            EditOperationKind::ReplaceStatement => {
+                let path = operation.path.as_ref().expect("checked");
+                let statement =
+                    match parse_operation_statement(&empty_program, operation, &mut node_budget) {
+                        Ok(statement) => statement,
+                        Err(_) => return Ok(None),
+                    };
+                let stmt_text = format_nested_body_statement_text(&statement);
+                candidate =
+                    replace_nested_body_statement(&candidate, &path.list, path.index, &stmt_text)?;
+            }
+            EditOperationKind::InsertStatementAfter => {
+                let path = operation.path.as_ref().expect("checked");
+                let statement =
+                    match parse_operation_statement(&empty_program, operation, &mut node_budget) {
+                        Ok(statement) => statement,
+                        Err(_) => return Ok(None),
+                    };
+                let stmt_text = format_nested_body_statement_text(&statement);
+                candidate = insert_nested_body_statement_after(
+                    &candidate, &path.list, path.index, &stmt_text,
+                )?;
+            }
+            EditOperationKind::InsertStatementAt => {
+                let list = operation.list.as_ref().expect("checked");
+                let index = operation.index.ok_or_else(|| {
+                    protocol_error("AE-EDIT-011", "insertStatementAt requires index")
+                })?;
+                let statement =
+                    match parse_operation_statement(&empty_program, operation, &mut node_budget) {
+                        Ok(statement) => statement,
+                        Err(_) => return Ok(None),
+                    };
+                let stmt_text = format_nested_body_statement_text(&statement);
+                candidate = insert_nested_body_statement_at(&candidate, list, index, &stmt_text)?;
+            }
+            EditOperationKind::DeleteStatement => {
+                let path = operation.path.as_ref().expect("checked");
+                candidate = delete_nested_body_statement(&candidate, &path.list, path.index)?;
+            }
+            _ => return Ok(None),
+        }
+    }
+
+    compile_product_bytecode(&candidate).map_err(StructuralEditError::from)?;
+    let document_json = serialize_product_edit_document(
+        &candidate,
+        request.operations.len(),
+        "product-nested-body-list-ops",
+    )
+    .map_err(|error| protocol_error("AE-EDIT-001", error.to_string()))?;
+    Ok(Some(StructuralEditResult {
+        source: candidate,
+        document_json,
+        operation_count: request.operations.len(),
+    }))
+}
+
 fn format_record_text(record: &RecordDeclaration) -> String {
     let program = Program {
         world: "product".to_owned(),
@@ -660,6 +794,22 @@ fn weave_body_statement_ranges(
         .find(|(_, line)| !line.is_empty())
         .map(|(_, line)| leading_space_count(line))
         .unwrap_or(2);
+    Ok(statement_ranges_from_lines(
+        source,
+        &body_lines,
+        base_indent,
+        w_end,
+    ))
+}
+
+/// Group body lines into statement absolute ranges at `base_indent`.
+/// Multi-line statements continue while deeper-indented or `otherwise:` at base.
+fn statement_ranges_from_lines(
+    source: &str,
+    body_lines: &[(usize, &str)],
+    base_indent: usize,
+    region_end: usize,
+) -> Vec<(usize, usize)> {
     let mut ranges = Vec::new();
     let mut i = 0usize;
     while i < body_lines.len() {
@@ -674,15 +824,7 @@ fn weave_body_statement_ranges(
             i += 1;
             continue;
         }
-        let mut end = start + line.len();
-        if source.as_bytes().get(end) == Some(&b'\n') {
-            end += 1;
-        } else if source.as_bytes().get(end) == Some(&b'\r') {
-            end += 1;
-            if source.as_bytes().get(end) == Some(&b'\n') {
-                end += 1;
-            }
-        }
+        let mut end = line_end_including_newline(source, start, line.len());
         i += 1;
         while i < body_lines.len() {
             let (next_start, next_line) = body_lines[i];
@@ -696,21 +838,331 @@ fn weave_body_statement_ranges(
             if !continues {
                 break;
             }
-            end = next_start + next_line.len();
-            if source.as_bytes().get(end) == Some(&b'\n') {
-                end += 1;
-            }
+            end = line_end_including_newline(source, next_start, next_line.len());
             i += 1;
         }
-        // Cap end at weave end.
-        end = end.min(w_end);
+        end = end.min(region_end);
         ranges.push((start, end));
     }
-    Ok(ranges)
+    ranges
+}
+
+fn line_end_including_newline(source: &str, start: usize, line_len: usize) -> usize {
+    let mut end = start + line_len;
+    if source.as_bytes().get(end) == Some(&b'\n') {
+        end += 1;
+    } else if source.as_bytes().get(end) == Some(&b'\r') {
+        end += 1;
+        if source.as_bytes().get(end) == Some(&b'\n') {
+            end += 1;
+        }
+    }
+    end
 }
 
 fn leading_space_count(line: &str) -> usize {
     line.chars().take_while(|c| *c == ' ').count()
+}
+
+/// Nested list kind for product text-splice (ADR-071).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NestedListKind {
+    ChooseBright,
+    ChooseDim,
+    WhileBody,
+}
+
+fn nested_list_kind(list: &BodyListRef) -> Option<(String, usize, NestedListKind)> {
+    match list {
+        BodyListRef::ChooseBright { weave, statement } => {
+            Some((weave.clone(), *statement, NestedListKind::ChooseBright))
+        }
+        BodyListRef::ChooseDim { weave, statement } => {
+            Some((weave.clone(), *statement, NestedListKind::ChooseDim))
+        }
+        BodyListRef::WhileBody { weave, statement } => {
+            Some((weave.clone(), *statement, NestedListKind::WhileBody))
+        }
+        BodyListRef::WeaveBody { .. } => None,
+    }
+}
+
+/// Absolute ranges of statements inside a choose/while nested body list.
+fn nested_body_list_statement_ranges(
+    source: &str,
+    list: &BodyListRef,
+) -> Result<Vec<(usize, usize)>, StructuralEditError> {
+    let Some((weave, outer_index, kind)) = nested_list_kind(list) else {
+        return Err(protocol_error(
+            "AE-EDIT-010",
+            "nested body list requires choose/while path",
+        ));
+    };
+    let outer_ranges = weave_body_statement_ranges(source, &weave)?;
+    if outer_index >= outer_ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("outer statement index {outer_index} is out of range"),
+        ));
+    }
+    let (o_start, o_end) = outer_ranges[outer_index];
+    let region = &source[o_start..o_end];
+    let mut body_lines: Vec<(usize, &str)> = Vec::new();
+    let mut offset = o_start;
+    for line_with_nl in region.split_inclusive('\n') {
+        let line = line_with_nl.trim_end_matches(['\n', '\r']);
+        body_lines.push((offset, line));
+        offset += line_with_nl.len();
+    }
+    if body_lines.is_empty() {
+        return Ok(Vec::new());
+    }
+    let header = body_lines[0].1;
+    let header_indent = leading_space_count(header);
+    let header_trim = header.trim_start();
+    match kind {
+        NestedListKind::ChooseBright | NestedListKind::ChooseDim => {
+            if !header_trim.starts_with("choose ") {
+                return Err(protocol_error(
+                    "AE-EDIT-013",
+                    "nested whenBright/whenDim path requires a Choose statement",
+                ));
+            }
+        }
+        NestedListKind::WhileBody => {
+            if !header_trim.starts_with("while ") {
+                return Err(protocol_error(
+                    "AE-EDIT-013",
+                    "nested body path requires a While statement",
+                ));
+            }
+        }
+    }
+
+    // Locate the nested list's lines (exclude header / otherwise marker).
+    let nested_lines: Vec<(usize, &str)> = match kind {
+        NestedListKind::ChooseBright => {
+            let mut lines = Vec::new();
+            for entry in body_lines.iter().skip(1) {
+                let (start, line) = *entry;
+                if line.is_empty() {
+                    continue;
+                }
+                let indent = leading_space_count(line);
+                if indent == header_indent && line.trim_start().starts_with("otherwise:") {
+                    break;
+                }
+                if indent > header_indent {
+                    lines.push((start, line));
+                }
+            }
+            lines
+        }
+        NestedListKind::ChooseDim => {
+            let mut after_otherwise = false;
+            let mut lines = Vec::new();
+            for entry in body_lines.iter().skip(1) {
+                let (start, line) = *entry;
+                if !after_otherwise {
+                    if !line.is_empty()
+                        && leading_space_count(line) == header_indent
+                        && line.trim_start().starts_with("otherwise:")
+                    {
+                        after_otherwise = true;
+                    }
+                    continue;
+                }
+                if line.is_empty() {
+                    continue;
+                }
+                let indent = leading_space_count(line);
+                if indent == header_indent {
+                    break;
+                }
+                if indent > header_indent {
+                    lines.push((start, line));
+                }
+            }
+            if !after_otherwise {
+                return Err(protocol_error(
+                    "AE-EDIT-013",
+                    "choose dim path requires an otherwise branch",
+                ));
+            }
+            lines
+        }
+        NestedListKind::WhileBody => {
+            let mut lines = Vec::new();
+            for entry in body_lines.iter().skip(1) {
+                let (start, line) = *entry;
+                if line.is_empty() {
+                    continue;
+                }
+                let indent = leading_space_count(line);
+                if indent <= header_indent {
+                    break;
+                }
+                lines.push((start, line));
+            }
+            lines
+        }
+    };
+
+    if nested_lines.is_empty() {
+        return Ok(Vec::new());
+    }
+    let base_indent = nested_lines
+        .iter()
+        .find(|(_, line)| !line.is_empty())
+        .map(|(_, line)| leading_space_count(line))
+        .unwrap_or(header_indent + 2);
+    Ok(statement_ranges_from_lines(
+        source,
+        &nested_lines,
+        base_indent,
+        o_end,
+    ))
+}
+
+/// Byte offset to insert into an empty nested list (after choose/while header or otherwise:).
+fn nested_list_empty_insert_point(
+    source: &str,
+    list: &BodyListRef,
+) -> Result<usize, StructuralEditError> {
+    let Some((weave, outer_index, kind)) = nested_list_kind(list) else {
+        return Err(protocol_error(
+            "AE-EDIT-010",
+            "nested body list requires choose/while path",
+        ));
+    };
+    let outer_ranges = weave_body_statement_ranges(source, &weave)?;
+    if outer_index >= outer_ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("outer statement index {outer_index} is out of range"),
+        ));
+    }
+    let (o_start, o_end) = outer_ranges[outer_index];
+    let region = &source[o_start..o_end];
+    match kind {
+        NestedListKind::ChooseBright | NestedListKind::WhileBody => {
+            // After the first line (header).
+            let insert = region.find('\n').map(|i| o_start + i + 1).unwrap_or(o_end);
+            Ok(insert)
+        }
+        NestedListKind::ChooseDim => {
+            let mut offset = o_start;
+            for line_with_nl in region.split_inclusive('\n') {
+                let line = line_with_nl.trim_end_matches(['\n', '\r']);
+                let header_indent = leading_space_count(region.lines().next().unwrap_or(""));
+                if !line.is_empty()
+                    && leading_space_count(line) == header_indent
+                    && line.trim_start().starts_with("otherwise:")
+                {
+                    return Ok(offset + line_with_nl.len());
+                }
+                offset += line_with_nl.len();
+            }
+            Err(protocol_error(
+                "AE-EDIT-013",
+                "choose dim path requires an otherwise branch",
+            ))
+        }
+    }
+}
+
+fn replace_nested_body_statement(
+    source: &str,
+    list: &BodyListRef,
+    index: usize,
+    statement_text: &str,
+) -> Result<String, StructuralEditError> {
+    let ranges = nested_body_list_statement_ranges(source, list)?;
+    if index >= ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {index} is out of range"),
+        ));
+    }
+    let (start, end) = ranges[index];
+    let mut out = String::with_capacity(source.len() + statement_text.len());
+    out.push_str(&source[..start]);
+    out.push_str(statement_text.trim_end_matches('\n'));
+    out.push('\n');
+    out.push_str(&source[end..]);
+    Ok(out)
+}
+
+fn insert_nested_body_statement_at(
+    source: &str,
+    list: &BodyListRef,
+    index: usize,
+    statement_text: &str,
+) -> Result<String, StructuralEditError> {
+    let ranges = nested_body_list_statement_ranges(source, list)?;
+    if index > ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!(
+                "insert index {index} is out of range for body length {}",
+                ranges.len()
+            ),
+        ));
+    }
+    let insert_at = if index < ranges.len() {
+        ranges[index].0
+    } else if let Some((_, end)) = ranges.last() {
+        *end
+    } else {
+        nested_list_empty_insert_point(source, list)?
+    };
+    let mut out = String::with_capacity(source.len() + statement_text.len());
+    out.push_str(&source[..insert_at]);
+    out.push_str(statement_text.trim_end_matches('\n'));
+    out.push('\n');
+    out.push_str(&source[insert_at..]);
+    Ok(out)
+}
+
+fn insert_nested_body_statement_after(
+    source: &str,
+    list: &BodyListRef,
+    index: usize,
+    statement_text: &str,
+) -> Result<String, StructuralEditError> {
+    let ranges = nested_body_list_statement_ranges(source, list)?;
+    if index >= ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {index} is out of range"),
+        ));
+    }
+    let insert_at = ranges[index].1;
+    let mut out = String::with_capacity(source.len() + statement_text.len());
+    out.push_str(&source[..insert_at]);
+    out.push_str(statement_text.trim_end_matches('\n'));
+    out.push('\n');
+    out.push_str(&source[insert_at..]);
+    Ok(out)
+}
+
+fn delete_nested_body_statement(
+    source: &str,
+    list: &BodyListRef,
+    index: usize,
+) -> Result<String, StructuralEditError> {
+    let ranges = nested_body_list_statement_ranges(source, list)?;
+    if index >= ranges.len() {
+        return Err(protocol_error(
+            "AE-EDIT-011",
+            format!("statement index {index} is out of range"),
+        ));
+    }
+    let (start, end) = ranges[index];
+    let mut out = String::with_capacity(source.len());
+    out.push_str(&source[..start]);
+    out.push_str(&source[end..]);
+    Ok(out)
 }
 
 fn replace_weave_body_statement(
@@ -4111,6 +4563,108 @@ mod tests {
             serde_json::from_str(&result.document_json).expect("product-edit JSON");
         assert_eq!(document["path"], "product-top-level-record-ops");
         compile_with_seed(&result.source).expect("seed after product record insert");
+    }
+
+    #[test]
+    fn product_nested_body_list_ops_without_bootstrap_ast() {
+        assert!(crate::structural_edit_product_nested_body_list_ops());
+        // Product-legal choose+revise and while body (no yield inside truth-choose).
+        let source = "\
+world nested
+
+weave main [] -> Whole:
+  bind mutable n <- 0
+  while less n 2:
+    revise n <- sum n 1
+  bind mutable code <- 1
+  choose same n 2:
+    revise code <- 0
+  otherwise:
+    revise code <- 9
+  yield code
+";
+        let revise_seven = json!({
+            "kind": "Revise",
+            "name": "n",
+            "value": {
+                "kind": "Atom",
+                "atom": { "kind": "Whole", "value": 7 }
+            }
+        });
+        // while body: replace first statement at weave:main/body/1/body/0
+        let while_edit = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": source,
+            "operations": [{
+                "op": "replaceStatement",
+                "path": "weave:main/body/1/body/0",
+                "statement": revise_seven,
+            }],
+        }))
+        .expect("serialize while edit");
+        let while_result =
+            apply_structural_edit(source, &while_edit).expect("product nested while replace");
+        assert!(while_result.source.contains("revise n <- 7"));
+        let while_doc: Value =
+            serde_json::from_str(&while_result.document_json).expect("product-edit JSON");
+        assert_eq!(while_doc["schema"], PRODUCT_EDIT_SCHEMA_VERSION);
+        assert_eq!(while_doc["path"], "product-nested-body-list-ops");
+        assert!(while_doc.get("program").is_none());
+        compile_with_seed(&while_result.source).expect("seed after nested while replace");
+
+        let revise_code = json!({
+            "kind": "Revise",
+            "name": "code",
+            "value": {
+                "kind": "Atom",
+                "atom": { "kind": "Whole", "value": 3 }
+            }
+        });
+        // choose whenBright: replace revise at weave:main/body/3/whenBright/0
+        let bright_edit = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": source,
+            "operations": [{
+                "op": "replaceStatement",
+                "path": "weave:main/body/3/whenBright/0",
+                "statement": revise_code,
+            }],
+        }))
+        .expect("serialize bright edit");
+        let bright_result =
+            apply_structural_edit(source, &bright_edit).expect("product nested whenBright replace");
+        assert!(bright_result.source.contains("revise code <- 3"));
+        compile_with_seed(&bright_result.source).expect("seed after nested bright replace");
+
+        let dim_extra = json!({
+            "kind": "Revise",
+            "name": "code",
+            "value": {
+                "kind": "Atom",
+                "atom": { "kind": "Whole", "value": 8 }
+            }
+        });
+        let dim_insert = serde_json::to_string(&json!({
+            "protocol": STRUCTURAL_EDIT_PROTOCOL_VERSION,
+            "schema": STRUCTURAL_AST_SCHEMA_VERSION,
+            "baseSource": source,
+            "operations": [{
+                "op": "insertStatementAfter",
+                "path": "weave:main/body/3/whenDim/0",
+                "statement": dim_extra,
+            }],
+        }))
+        .expect("serialize dim insert");
+        let dim_result =
+            apply_structural_edit(source, &dim_insert).expect("product nested whenDim insert");
+        assert!(dim_result.source.contains("revise code <- 9"));
+        assert!(dim_result.source.contains("revise code <- 8"));
+        let dim_doc: Value =
+            serde_json::from_str(&dim_result.document_json).expect("product-edit JSON");
+        assert_eq!(dim_doc["path"], "product-nested-body-list-ops");
+        compile_with_seed(&dim_result.source).expect("seed after nested dim insert");
     }
 
     #[test]

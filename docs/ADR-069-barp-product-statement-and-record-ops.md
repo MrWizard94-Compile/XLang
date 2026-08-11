@@ -28,9 +28,10 @@ common M12 authoring paths.
    - `insertAfter` on `world` or `record:<name>` with primitive `Record` payload  
 3. Result documents use `aether.product-edit/v1` with path  
    `product-weave-body-statement-ops` or `product-top-level-record-ops`.  
-4. **Residual bootstrap:** nested body lists (`whenBright` / `whenDim` / while
-   body paths), non-primitive declaration types that need record indexes, full
-   `aether.ast/v8`, dual-compare oracle, recovery `--bootstrap`.  
+4. **Residual (at ship):** nested body lists were still bootstrap (closed by
+   [ADR-071](ADR-071-barp-product-nested-body-list-ops.md)); non-primitive
+   declaration types that need record indexes, full `aether.ast/v8`, dual-compare
+   oracle, recovery `--bootstrap` remain.  
 5. Tracker: `structural_edit_product_statement_and_record_ops() == true`.  
 
 ## Consequences
@@ -39,16 +40,16 @@ common M12 authoring paths.
 
 - M12 weave-body surgery and simple record inserts no longer require bootstrap
   parse on product units  
-- Clear residual: nested control-flow body paths  
 
 ### Costs
 
 - Span scan is indent-heuristic (honest, product-accept gated)  
-- Nested choose/while statement targets still use bootstrap AST  
+- Nested choose/while statement targets closed later in ADR-071  
 
 ## Links
 
-- ADR-016, ADR-065, ADR-068, DESIGN-BARP-001  
+- ADR-016, ADR-065, ADR-068, ADR-071, DESIGN-BARP-001  
+
 
 ---
 

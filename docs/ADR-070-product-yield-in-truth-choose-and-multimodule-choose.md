@@ -60,7 +60,8 @@ That pattern dual-compares seed≡bootstrap for multi-module projects.
 ### Costs / residual
 
 - Preflight is host-side (not seed-internal packets; ADR-061 still open)  
-- Nested structural body lists still residual bootstrap  
+- Nested structural body lists closed later in ADR-071  
+
 
 ## Links
 

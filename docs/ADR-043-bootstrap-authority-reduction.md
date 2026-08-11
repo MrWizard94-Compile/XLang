@@ -77,9 +77,10 @@ authority under Constitution.
 27. **ADR-070 (done):** product fail-closed yield-in-truth-choose (`AE-SEED-013`);
     multi-module choose+revise supported (`product_rejects_yield_in_truth_choose`,
     `multi_module_product_choose_revise_supported`). Showcase-driven.  
-28. Residual bootstrap: dual-compare oracle, recovery flags, nested body-list
-    structural AST, full `aether.ast/v8`.  
-29. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+28. **ADR-071 (done):** product nested choose/while body-list statement ops;
+    `structural_edit_product_nested_body_list_ops()`.  
+29. Residual bootstrap: dual-compare oracle, recovery flags, full `aether.ast/v8`.  
+30. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 

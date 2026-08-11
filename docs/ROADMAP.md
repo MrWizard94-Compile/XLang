@@ -344,13 +344,14 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-070:** product is the
+reduce Rust bootstrap product-path authority. **Through ADR-071:** product is the
 **default** CLI/LSP toolchain; multi-module choose+revise is product-supported;
-yield-in-truth-choose fails closed with `AE-SEED-013` without bootstrap AST
-(showcase-driven). Bootstrap is recovery/oracle only.
-**Next:** nested body-list product structural paths; seed-internal error packets;
-multi-file forge (ADR-061). Residual bootstrap: dual-compare oracle emit, recovery
-`--bootstrap` flags, nested body-list structural AST, full `aether.ast/v8`.
+yield-in-truth-choose fails closed with `AE-SEED-013`; nested choose/while
+body-list structural ops are product path (no bootstrap base AST). Bootstrap is
+recovery/oracle only.
+**Next:** seed-internal error packets; multi-file forge (ADR-061). Residual
+bootstrap: dual-compare oracle emit, recovery `--bootstrap` flags, full
+`aether.ast/v8`.
 
 **Law forks (authorized 2026-08-10):** F-NATIVE (M35a/b AETH→C pure pilot with
 Whole locals, ADR-059/062); F-REGISTRY (M24a offline cache pin/verify, ADR-060 —
