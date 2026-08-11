@@ -79,16 +79,17 @@ Seed does **not** natively parse multi-source envelopes
 (`seed_native_multi_module_elaboration() == false`). A future seed-native
 multi-file ABI would require a new forge weave signature and Seed Profile claim.
 
-## Seed SPEAK diagnostic contract (ADR-082/086/090/094/098/102/103)
+## Seed SPEAK diagnostic contract (ADR-082/086/090/094/098/102/103/106)
 
 When the seed compiler fails, SPEAK lines of the form:
 
     AETHER_SEED_ERROR:{"schema":"aether.seed-error/v1",...}
 
 are the preferred structured diagnostic channel. Host product preflights already
-emit the same line format. **ADR-094/098/102/103:** seed.ae SPEAKs
-AE-SEED-003/004/005/006/007/012/014 pilot codes (origin `seed-speak`); 003 and
-007 are bounded line-start lexical checks, and 014 is a canonical-lowercase
-line-prefix guard for reserved task proposals. Host merges SPEAK on forge **and**
-verify failure. Full seed SPEAK matrix remains residual
+emit the same line format. **ADR-094/098/102/103/106:** seed.ae SPEAKs
+AE-SEED-003/004/005/006/007/012/014/015 pilot codes (origin `seed-speak`); 003
+and 007 are bounded line-start lexical checks, 014 is a canonical-lowercase
+line-prefix guard for reserved task proposals, and 015 is a canonical top-level
+task-body scan that requires an exact indented `checkpoint` line. Host merges
+SPEAK on forge **and** verify failure. Full seed SPEAK matrix remains residual
 (`seed_speak_emit_conformance_complete() == false`).

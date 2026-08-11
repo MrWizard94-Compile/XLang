@@ -587,6 +587,10 @@ fn barp_adr072_product_seed_error_packet_abi() {
         aether_core::seed_speak_emit_reserved_task_pilot(),
         "ADR-103: reserved-task seed SPEAK pilot"
     );
+    assert!(
+        aether_core::seed_speak_emit_task_checkpoint_pilot(),
+        "ADR-106: exact task-checkpoint seed SPEAK pilot"
+    );
     let empty = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield 1\n");
     assert!(empty.is_empty());
     let packets = product_error_packets("");

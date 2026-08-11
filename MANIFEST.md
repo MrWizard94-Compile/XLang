@@ -35,6 +35,12 @@ pre-admitted task lanes, and VM-internal reverse-slot teardown/zeroization on a
 later eligible companion failure. It preserves v11 for source without task
 frames and adds no host effect, task handle, timeout, manual cancellation, or
 parallel execution. See [docs/AETHER_0.36.md](docs/AETHER_0.36.md).
+Post-0.36 BARP maturity keeps that package contract unchanged while reducing
+direct-seed diagnostic residual: the checked-in seed SPEAK pilot covers
+AE-SEED-003/004/005/006/007/012/014/015, including a canonical task-body scan
+that requires an exact indented `checkpoint` statement. It changes no accepted
+valid source, AETH schema, VM behavior, host authority, or full-diagnostic
+parity claim. See [docs/ADR-106-barp-seed-speak-checkpoint-pilot.md](docs/ADR-106-barp-seed-speak-checkpoint-pilot.md).
 Authoring uses `aether.ast/v8`, `aether.edit/v8`, and
 `aether.diagnostic/v8`. The CLI provides offline
 project/workspace verify, `aether test` / `aether project test` (optional
@@ -314,7 +320,7 @@ operation vocabulary, and compatibility policy are in
 | **Structural product edits** | Top-level weave + weave-body statements + nested choose/while body lists + primitive records without bootstrap base AST (ADR-065/068/069/071) |
 | **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
 | **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; full `aether.ast/v8`; dual-compare tests/gate |
-| **Product seed-error packets** | SPEAK protocol + forge SPEAK merge (ADR-082–094/098/102/103); seed pilot 003/004/005/006/007/012/014, bounded lexical 003/007 plus canonical reserved-task prefixes 014; full matrix residual |
+| **Product seed-error packets** | SPEAK protocol + forge SPEAK merge (ADR-082–094/098/102/103/106); seed pilot 003/004/005/006/007/012/014/015, bounded lexical 003/007 plus canonical reserved-task prefixes 014 and exact task-checkpoint 015 detection; full matrix residual |
 | **Multi-source forge** | Product multi-file host path + unit digests (ADR-075–086/094/098); seed-native residual |
 | **F-NATIVE M35c–j** | AETH→C/object/LLVM/exe + probe + `--native-exe --target` closed target matrix; host dual-run, cross link-only (ADR-073–099) |
 | **F-REGISTRY M24b–i** | HMAC/Ed25519/HTTPS/rotation/policy/certs + date-checked X.509-lite CA store; `verify-cache` validates the store; no auto-fetch (ADR-074–100) |

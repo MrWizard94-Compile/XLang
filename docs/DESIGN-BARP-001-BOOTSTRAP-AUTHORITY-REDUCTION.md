@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064–072; bounded pilot increments through ADR-103); residual recovery bootstrap
-**Date:** 2026-08-11 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-103)
-**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-103](ADR-103-barp-seed-speak-reserved-task-pilot.md)
+**Status:** Active program — product-default toolchain (ADR-064–072; bounded pilot increments through ADR-106); residual recovery bootstrap
+**Date:** 2026-08-11 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-106)
+**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-106](ADR-106-barp-seed-speak-checkpoint-pilot.md)
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -202,7 +202,7 @@ Product project/workspace compile returns seed bytes via
 | Structural top-level weaves | **Product path** (ADR-065/068 replace/insert/delete) |
 | Structural statements/records | **Product path** weave-body + primitive records (ADR-069) |
 | Nested body lists | **Product path** choose/while `whenBright`/`whenDim`/`body` (ADR-071) |
-| Seed-error packets | **Host packet ABI** `aether.seed-error/v1` (ADR-072); seed SPEAK pilot 003/004/005/006/007/012/014, with bounded lexical 003/007 and line-aware canonical reserved-task 014 detection (ADR-094/098/102/103); full matrix residual |
+| Seed-error packets | **Host packet ABI** `aether.seed-error/v1` (ADR-072); seed SPEAK pilot 003/004/005/006/007/012/014/015, with bounded lexical 003/007, line-aware canonical reserved-task 014, and exact task-checkpoint 015 detection (ADR-094/098/102/103/106); full matrix residual |
 | Yield-in-truth-choose | **Product fail-closed** `AE-SEED-013` (ADR-070); multi-module choose+revise supported |
 | Seed rebuild | **Product compile** (ADR-067); `--bootstrap` oracle only |
 | Lib unit project verify | **Product seed probe** (ADR-052) |

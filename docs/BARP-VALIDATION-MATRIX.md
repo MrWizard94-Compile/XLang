@@ -15,12 +15,19 @@
 | BARP-SPEAK-011 | Canonical reserved-task prefix after any ASCII-space indentation | Seed SPEAK `AE-SEED-014` for `timeout `, `task handle `, `handle task `, `parallel together`, or `together parallel` |
 | BARP-SPEAK-012 | Valid `speak` Text literal containing `timeout ` | Does not trigger the line-aware reserved-task pilot |
 | BARP-SPEAK-013 | Missing `world` plus a reserved-task prefix | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-014 | Canonical top-level task weave with no checkpoint before the next top-level line | Seed SPEAK `AE-SEED-015`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-015 | Canonical top-level task weave with no checkpoint at end of source | Seed SPEAK `AE-SEED-015` |
+| BARP-SPEAK-016 | Valid task while body whose first nested statement is exact `checkpoint` | Does not SPEAK; seed emits verified AETH v12 |
+| BARP-SPEAK-017 | `checkpointed`, `checkpoint later`, or `speak "checkpoint"` inside a task | Does not satisfy the pilot; Seed SPEAK `AE-SEED-015` |
+| BARP-SPEAK-018 | Reserved task surface plus a missing task checkpoint | Existing higher-priority seed pilot remains `AE-SEED-014` |
+| BARP-SPEAK-019 | Product-path missing/typo checkpoint diagnostic packet | `AE-SEED-015`, `origin: host-preflight` |
 
 ## Boundary
 
 This matrix covers only the named seed-SPEAK pilot conditions. It does not claim
 seed-internal parser packets, full indentation diagnostics, complete legacy
-syntax classification, source spans, or seed-native multi-file elaboration.
+syntax classification, source spans, parser parity, or seed-native multi-file
+elaboration.
 
 ---
 

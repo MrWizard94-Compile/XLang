@@ -26,8 +26,8 @@ deterministically cancels parked frames on a later eligible sibling failure.
 
 **Default compilation is seed-emitted for user programs**, including M19a
 `release`, M19b nursery×resource Policy A, M19d multi-weave arenas, M19e task
-frames, M21 foreign pilot declarations, and M23 after its explicit bootstrap
-materialization bridge.
+frames, M21 foreign pilot declarations, and M23's documented seed-native
+raw-source evaluator (with no bootstrap materialization bridge).
 
 - `aether compile` invokes the **Aether-written seed compiler**
   (`seed/aether_seed.aeth`, embedded as `SEED_COMPILER_ARTIFACT`) through the
@@ -57,6 +57,12 @@ capability. See
 [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
 [docs/AETHER_0.36.md](docs/AETHER_0.36.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
+BARP's bounded direct-seed diagnostic pilot now SPEAKs
+AE-SEED-003/004/005/006/007/012/014/015. Its task-checkpoint portion recognizes
+only canonical top-level task headers and exact indented `checkpoint`
+statements; it neither changes accepted valid source nor claims full diagnostic
+parity. See [ADR-106](docs/ADR-106-barp-seed-speak-checkpoint-pilot.md).
+
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:
   raise value
@@ -85,8 +91,8 @@ M5 accepts five checked Whole arithmetic operations; M15 adds earlier comptime
 names; M23 adds one eligible pure helper call. The fixed 1,024-directive budget
 remains. Comptime has no control flow, recursion, Text/Bytes/Truth evaluation,
 resource/effect/host authority, macros, or configurable fuel. M23 source is
-bootstrap-materialized before seed emission as documented in
-[docs/AETHER_0.33.md](docs/AETHER_0.33.md).
+seed-native under its documented D2a subset with no bootstrap materialization
+bridge, as documented in [docs/AETHER_0.33.md](docs/AETHER_0.33.md).
 
 M6 adds author-visible layout for multi-field tables:
 

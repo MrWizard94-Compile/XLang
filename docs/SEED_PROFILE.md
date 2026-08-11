@@ -31,11 +31,12 @@ multi-file natively). LSP diagnostics are product-primary (ADR-058); hover/defin
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
 project format, LSP format, product structural weave/statement/record ops, and seed
 rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
-oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103:** seed
+oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106:** seed
 SPEAKs structured `AETHER_SEED_ERROR` for empty source, missing world, missing main,
 raw multi-module import, and bounded lexical ASCII-tab / top-level `fn ` conditions
-plus canonical reserved-task prefixes (origin `seed-speak`); full SPEAK conformance
-matrix remains residual.
+plus canonical reserved-task prefixes and canonical top-level task bodies without
+an exact indented `checkpoint` statement (origin `seed-speak`); full SPEAK
+conformance matrix remains residual.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,
@@ -123,6 +124,12 @@ Package 0.36's M19e task support is inside this profile. The checked-in seed
 artifact remains a v11 compiler program, but it emits v12 when it parses valid
 task source. Its v12 byte identity with the Rust bootstrap is required just as
 for the prior seed surface.
+
+ADR-106 adds only a bounded direct-forge diagnostic pilot: before normal
+compilation, the seed recognizes canonical top-level task headers and requires
+an exact indented `checkpoint` statement before the next top-level line or end
+of source. This changes no accepted valid source, AETH bytes, task runtime
+semantics, forge authority, or full diagnostic-parity claim.
 
 ## Required shape
 

@@ -3030,6 +3030,7 @@ fn format_seed_product_error_with_seed_stdout(
             | "AE-SEED-012"
             | "AE-SEED-013"
             | "AE-SEED-014"
+            | "AE-SEED-015"
     ) {
         "host-preflight"
     } else {
@@ -3106,7 +3107,8 @@ fn seed_reject_empty_source(source: &str) -> Option<String> {
     None
 }
 
-/// ADR-101: each `task weave` body must contain at least one `checkpoint` line.
+/// ADR-101/106: each canonical top-level `task weave` body must contain an
+/// exact `checkpoint` statement.
 ///
 /// Does not implement handles/timeouts/parallel — enforces M19e cooperative cancel
 /// surface so empty task frames do not forge into opaque pack16 failures.
@@ -3119,8 +3121,8 @@ fn seed_reject_task_weave_without_checkpoint(source: &str) -> Option<String> {
     let mut index = 0usize;
     while index < lines.len() {
         let trimmed = lines[index].trim_start();
-        if trimmed.starts_with("task weave ") {
-            let header_indent = lines[index].chars().take_while(|c| *c == ' ').count();
+        let header_indent = lines[index].chars().take_while(|c| *c == ' ').count();
+        if header_indent == 0 && trimmed.starts_with("task weave ") {
             let name = trimmed
                 .strip_prefix("task weave ")
                 .unwrap_or("")
@@ -3139,7 +3141,7 @@ fn seed_reject_task_weave_without_checkpoint(source: &str) -> Option<String> {
                 if indent <= header_indent {
                     break;
                 }
-                if body.trim_start().starts_with("checkpoint") {
+                if body.trim_start() == "checkpoint" {
                     body_has_checkpoint = true;
                     break;
                 }
@@ -3733,7 +3735,7 @@ pub const fn forge_verify_merges_seed_speak() -> bool {
     true
 }
 
-/// ADR-098 / ADR-102 / ADR-103: seed.ae SPEAK pilot codes (subset of the
+/// ADR-098 / ADR-102 / ADR-103 / ADR-106: seed.ae SPEAK pilot codes (subset of the
 /// conformance matrix).
 #[must_use]
 pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
@@ -3745,6 +3747,7 @@ pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
         "AE-SEED-007",
         "AE-SEED-012",
         "AE-SEED-014",
+        "AE-SEED-015",
     ]
 }
 
@@ -3767,6 +3770,14 @@ pub const fn seed_speak_emit_lexical_edge_pilot() -> bool {
 /// This remains a bounded diagnostic pilot, not full task-syntax parity.
 #[must_use]
 pub const fn seed_speak_emit_reserved_task_pilot() -> bool {
+    true
+}
+
+/// ADR-106: the checked-in seed line-scans canonical top-level task weaves and
+/// requires an exact nested `checkpoint` statement before forge. This remains a
+/// bounded diagnostic pilot, not task-parser parity.
+#[must_use]
+pub const fn seed_speak_emit_task_checkpoint_pilot() -> bool {
     true
 }
 
@@ -3970,10 +3981,11 @@ mod product_task_frame_surface_tests {
     }
 
     #[test]
-    fn seed_speak_pilot_covers_lexical_structural_and_reserved_task_preflights() {
+    fn seed_speak_pilot_covers_lexical_structural_and_task_preflights() {
         assert!(seed_speak_emit_multi_code_pilot());
         assert!(seed_speak_emit_lexical_edge_pilot());
         assert!(seed_speak_emit_reserved_task_pilot());
+        assert!(seed_speak_emit_task_checkpoint_pilot());
         let pilots = seed_speak_emit_pilot_codes();
         assert!(pilots.contains(&"AE-SEED-003"));
         assert!(pilots.contains(&"AE-SEED-004"));
@@ -3982,6 +3994,7 @@ mod product_task_frame_surface_tests {
         assert!(pilots.contains(&"AE-SEED-007"));
         assert!(pilots.contains(&"AE-SEED-012"));
         assert!(pilots.contains(&"AE-SEED-014"));
+        assert!(pilots.contains(&"AE-SEED-015"));
         let assert_seed_packet = |source: &str, expected_code: &str| {
             let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).expect("forge");
             let packet = try_parse_seed_speak_error_packet(&forged.stdout)
@@ -4036,6 +4049,49 @@ mod product_task_frame_surface_tests {
             assert_seed_packet(reserved_source, "AE-SEED-014");
         }
         assert_seed_packet(
+            "world t\n\n\
+task weave worker [] -> Whole:\n\
+  yield 1\n\n\
+weave main [] -> Whole:\n\
+  yield 0\n",
+            "AE-SEED-015",
+        );
+        assert_seed_packet(
+            "world t\n\n\
+weave main [] -> Whole:\n\
+  yield 0\n\n\
+task weave worker [] -> Whole:\n\
+  yield 1\n",
+            "AE-SEED-015",
+        );
+        assert_seed_packet(
+            "world t\n\n\
+task weave worker [] -> Whole:\n\
+  checkpointed\n\
+  yield 1\n\n\
+weave main [] -> Whole:\n\
+  yield 0\n",
+            "AE-SEED-015",
+        );
+        assert_seed_packet(
+            "world t\n\n\
+task weave worker [] -> Whole:\n\
+  checkpoint later\n\
+  yield 1\n\n\
+weave main [] -> Whole:\n\
+  yield 0\n",
+            "AE-SEED-015",
+        );
+        assert_seed_packet(
+            "world t\n\n\
+task weave worker [] -> Whole:\n\
+  speak \"checkpoint\"\n\
+  yield 1\n\n\
+weave main [] -> Whole:\n\
+  yield 0\n",
+            "AE-SEED-015",
+        );
+        assert_seed_packet(
             "weave main [] -> Whole:\n  timeout 1\n  yield 0\n",
             "AE-SEED-006",
         );
@@ -4069,6 +4125,21 @@ mod product_task_frame_surface_tests {
             panic!("reserved literal must forge to bytecode")
         };
         verify_bytecode(&bytecode).expect("reserved literal artifact verifies");
+
+        let nested_checkpoint = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\ntask weave worker [] -> Whole:\n  bind mutable current <- 0\n  while less current 1:\n    checkpoint\n    revise current <- sum current 1\n  yield current\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call worker into result\n  yield result\n",
+        )
+        .expect("nested checkpoint source must forge");
+        assert!(
+            try_parse_seed_speak_error_packet(&nested_checkpoint.stdout).is_none(),
+            "a nested exact checkpoint must satisfy the pilot: {}",
+            nested_checkpoint.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = nested_checkpoint.value else {
+            panic!("nested checkpoint source must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("nested checkpoint artifact verifies");
     }
 
     #[test]
@@ -4105,6 +4176,39 @@ weave main [] -> Whole:
         assert!(error.to_string().contains("AE-SEED-015"), "got {error}");
         let packets = product_error_packets(source);
         assert_eq!(packets[0].code, "AE-SEED-015");
+        assert_eq!(packets[0].origin, "host-preflight");
+
+        let typo = "\
+world t
+
+task weave worker [] -> Whole:
+  checkpointed
+  yield 1
+
+weave main [] -> Whole:
+  yield 0
+";
+        let error = compile_product_bytecode(typo).expect_err("checkpoint typo");
+        assert!(error.to_string().contains("AE-SEED-015"), "got {error}");
+        let packets = product_error_packets(typo);
+        assert_eq!(packets[0].code, "AE-SEED-015");
+        assert_eq!(packets[0].origin, "host-preflight");
+
+        let trailing = "\
+world t
+
+task weave worker [] -> Whole:
+  checkpoint later
+  yield 1
+
+weave main [] -> Whole:
+  yield 0
+";
+        let error = compile_product_bytecode(trailing).expect_err("checkpoint trailing token");
+        assert!(error.to_string().contains("AE-SEED-015"), "got {error}");
+        let packets = product_error_packets(trailing);
+        assert_eq!(packets[0].code, "AE-SEED-015");
+        assert_eq!(packets[0].origin, "host-preflight");
     }
 }
 

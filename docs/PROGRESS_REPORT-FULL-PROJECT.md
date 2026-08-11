@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.36.0** (language **0.11** + M19e AETH v12 + post-0.36 maturity program)  
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-105 M32b profile-bound benchmark comparisons — **GATE PASS mode=full**
+**Current delivery verification:** ADR-106 seed-SPEAK task-checkpoint pilot — **GATE PASS mode=full**
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -34,7 +34,7 @@ comparison surface.
 
 ### 2.2 Product toolchain (BARP)
 
-Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–102):
+Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–106):
 
 | Capability | Authority |
 | --- | --- |
@@ -43,7 +43,7 @@ Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTR
 | LSP diagnostics / symbols / hover / definition / format | Product-primary |
 | Structural edits | Product weave/body/record paths |
 | Multi-module / multi-source | Host elaborate + seed emit + unit digests |
-| Diagnostics | `AE-SEED-*` preflights + SPEAK packets; bounded seed pilot 003/004/005/006/007/012/014 |
+| Diagnostics | `AE-SEED-*` preflights + SPEAK packets; bounded seed pilot 003/004/005/006/007/012/014/015 |
 | Bootstrap residual | Dual-compare oracle, recovery flags, full `aether.ast/v8` |
 
 ### 2.3 Law forks (human-authorized)
@@ -60,7 +60,7 @@ Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTR
 | M19e active-frame cancel | **Proven** (v12, checkpoints) |
 | Task frame surface / checkpoint density / inventory | **Proven** tooling (ADR-085/093/097) |
 | Reserved future surface | Fail-closed **AE-SEED-014** (ADR-089) |
-| Task weave requires checkpoint | Fail-closed **AE-SEED-015** (ADR-101) |
+| Task weave requires checkpoint | Fail-closed **AE-SEED-015** (ADR-101/106; exact direct seed pilot) |
 | Handles / timeouts / parallel runtime | **Not implemented** (ADR-081 design only) |
 
 ---
@@ -105,8 +105,8 @@ Verified AETH
 | Matrices | M* / M19E / M23 / M35A / M24A validation matrices |
 | Constitution | Project Level-4 pointer → pack AGENTS.md Section 0 |
 
-**Latest full-gate stamp:** 2026-08-11 ADR-103 delivery — **GATE PASS mode=full**
-**Seed identity:** `A692BEEA7BEB9891E5D64028A8537126AF2C52929754CA89399A8783C74BC76B`
+**Latest full-gate stamp:** 2026-08-11 ADR-106 delivery — **GATE PASS mode=full**
+**Seed identity:** `86391C07D31069526D5FC33ADDC287FF1F79D4C35C663D388E3B6E2108F5ADCB`
 
 ---
 
@@ -115,12 +115,12 @@ Verified AETH
 The 0.36 package contract (M19e) is the executable language baseline. Since then,
 work has been **independence and infrastructure maturity** without a package bump:
 
-### 5.1 BARP highlights (ADR-043 → 103)
+### 5.1 BARP highlights (ADR-043 → 106)
 
 - Product-default CLI toolchain; bootstrap recovery only  
 - Multi-source envelope + multi-file host forge + unit digests  
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
-- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/012/014**; 003/007 are bounded lexical checks and 014 scans canonical reserved-task prefixes (dual-compare rebuild)
+- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/012/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, and 015 requires an exact checkpoint in a canonical task body (dual-compare rebuild)
 - Forge SPEAK capture on failure and verify merge  
 - Yield-in-truth-choose fail-closed (AE-SEED-013)  
 - Task checkpoint required (AE-SEED-015)  
@@ -162,13 +162,13 @@ X.509-lite → **CA store + chain verify + cache-gate validation**
 | `b5305cf` | ADR-090–093 forge SPEAK capture, native exe, multi-level certs, checkpoints |
 | `f03e310` | ADR-086–089 SPEAK matrix, LLVM object, root certs, task reserve |
 
-**Current verified delivery:** ADR-105 adds M32b's profile-bound strict
-comparison method on top of M32a's bounded verified-execution benchmark suite.
-The full gate passed with parser, v1/v2 runner, bounded strict-reader,
-comparison, arithmetic, and explicit-output tests; it retains all prior
-seed/self-host, example, verifier, VM, and project evidence. M32a/M32b supply
-local methodology and raw evidence, not a claimed performance improvement. The
-full seed SPEAK conformance matrix and seed-native multi-file remain residual.
+**Current verified delivery:** ADR-106 adds a direct, literal-safe
+AE-SEED-015 seed-SPEAK pilot. The full gate passed with exact-token,
+boundary/EOF, nested-checkpoint, literal-negative, host-origin, self-host,
+example, verifier, VM, and project evidence; bootstrap, product, forge, and
+the checked-in seed artifact are byte-identical. It leaves M32a/M32b as local
+methodology only, not a performance claim. The full seed SPEAK conformance
+matrix and seed-native multi-file remain residual.
 
 ---
 
@@ -205,7 +205,7 @@ full seed SPEAK conformance matrix and seed-native multi-file remain residual.
 
 Ordered for dependency honesty (`CONST-DEP-001`):
 
-1. **BARP:** expand seed SPEAK to remaining conformance codes (010/011/013/015); design seed-native multi-file forge ABI
+1. **BARP:** expand seed SPEAK to remaining conformance codes (010/011/013); design seed-native multi-file forge ABI
 2. **M32 evidence operation:** collect a human-declared pinned local baseline and candidate report under one M32b profile before any scoped performance-improvement claim
 3. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility
 4. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite
