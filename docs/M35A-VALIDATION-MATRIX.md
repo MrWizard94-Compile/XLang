@@ -18,6 +18,8 @@
 | M35E-002 | native object emit with cc | object file produced |
 | M35F-001 | pure multi-weave+speak lowers to LLVM IR text | IR has main, mul, puts |
 | M35F-002 | unverified AETH rejected before IR lower | AE-NATIVE-001 |
+| M35G-001 | LLVM object without clang/llc | FAIL closed AE-NATIVE-004 |
+| M35G-002 | LLVM object with clang/llc | object file produced |
 
 ---
 

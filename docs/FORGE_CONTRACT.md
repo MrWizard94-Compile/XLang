@@ -66,3 +66,25 @@ expose I/O-bearing host services to the guest seed compiler.
 Product compilation embeds the checked-in seed artifact and uses this forge ABI
 through `compile_with_seed`. Seed self-host proofs require multi-generation
 byte identity under forge. See [SEED_PROFILE.md](SEED_PROFILE.md).
+
+## Multi-source product path (ADR-075/078/082/086)
+
+Product multi-file compilation uses the host multi-unit path:
+
+1. Detect `aether.multi-source/v1` envelope (or project/workspace elaborate).  
+2. Host-elaborate import graph into one single-world program.  
+3. Seed-forge that single Text via the standard `compile` weave above.  
+
+Seed does **not** natively parse multi-source envelopes
+(`seed_native_multi_module_elaboration() == false`). A future seed-native
+multi-file ABI would require a new forge weave signature and Seed Profile claim.
+
+## Seed SPEAK diagnostic contract (ADR-082/086)
+
+When the seed compiler fails, SPEAK lines of the form:
+
+    AETHER_SEED_ERROR:{"schema":"aether.seed-error/v1",...}
+
+are the preferred structured diagnostic channel. Host product preflights already
+emit the same line format. Systematic seed.ae SPEAK emit for all conformance
+codes is residual (`seed_speak_emit_conformance_complete() == false`).

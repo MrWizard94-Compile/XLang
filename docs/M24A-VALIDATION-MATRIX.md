@@ -20,6 +20,8 @@
 | M24D-003 | set-key-validity out of window | FAIL closed AE-REG-009 |
 | M24E-001 | require_signature policy rejects unsigned | AE-REG-010 |
 | M24E-002 | signed pins pass under require_signature | PASS |
+| M24F-001 | install root + certified signer + signed pin | PASS |
+| M24F-002 | bad certification | FAIL closed AE-REG-011 |
 
 ---
 

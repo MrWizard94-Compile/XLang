@@ -86,8 +86,9 @@ authority under Constitution.
 31. **ADR-078 (done):** product compile auto-accepts multi-source envelopes;
     seed SPEAK diagnostic merge.  
 32. **ADR-082 (done):** stable SPEAK packet protocol; product multi-file host path.  
-33. Residual bootstrap: dual-compare oracle, recovery flags, full `aether.ast/v8`.  
-34. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+33. **ADR-086 (done):** SPEAK emit conformance matrix + multi-file forge contract.  
+34. Residual bootstrap: dual-compare oracle, recovery flags, full `aether.ast/v8`.  
+35. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 

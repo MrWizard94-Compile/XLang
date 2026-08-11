@@ -93,6 +93,114 @@ pub fn lower_verified_aeth_to_llvm_ir(bytecode: &[u8]) -> Result<String, NativeE
     emit_llvm_ir_for_artifact(&artifact)
 }
 
+/// M35g: product path can emit a native object from LLVM IR via host `llc`/`clang`.
+#[must_use]
+pub const fn native_llvm_object_emit_product() -> bool {
+    true
+}
+
+/// Lower verified AETH → LLVM IR → host `llc` or `clang -c` object file (M35g).
+///
+/// Fails closed without a host LLVM/clang toolchain (`AE-NATIVE-004`). Does not
+/// embed libLLVM. Prefer `clang -c` when available (handles IR more portably);
+/// fall back to `llc -filetype=obj`.
+pub fn lower_verified_aeth_to_llvm_object(
+    bytecode: &[u8],
+    object_path: &std::path::Path,
+) -> Result<String, NativeError> {
+    debug_assert!(
+        f_native_authorized() && native_llvm_object_emit_product(),
+        "ADR-087: F-NATIVE LLVM object product path"
+    );
+    let ir = lower_verified_aeth_to_llvm_ir(bytecode)?;
+    let Some(tool) = find_host_llvm_object_tool() else {
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            "M35g LLVM object emit requires host clang or llc (none found)",
+        ));
+    };
+    if let Some(parent) = object_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|error| {
+                NativeError::new(
+                    "AE-NATIVE-004",
+                    format!("could not create object parent dir: {error}"),
+                )
+            })?;
+        }
+    }
+    let temp_root = std::env::temp_dir().join(format!(
+        "aether-m35g-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(&temp_root).map_err(|error| {
+        NativeError::new("AE-NATIVE-004", format!("temp dir create failed: {error}"))
+    })?;
+    let ir_path = temp_root.join("program.ll");
+    std::fs::write(&ir_path, &ir).map_err(|error| {
+        NativeError::new("AE-NATIVE-004", format!("could not write LLVM IR: {error}"))
+    })?;
+    let output = if tool == "clang" || tool == "clang.exe" {
+        std::process::Command::new(&tool)
+            .arg("-c")
+            .arg(&ir_path)
+            .arg("-o")
+            .arg(object_path)
+            .arg("-Wno-override-module")
+            .output()
+    } else {
+        // llc
+        std::process::Command::new(&tool)
+            .arg("-filetype=obj")
+            .arg(&ir_path)
+            .arg("-o")
+            .arg(object_path)
+            .output()
+    }
+    .map_err(|error| {
+        NativeError::new(
+            "AE-NATIVE-004",
+            format!("host LLVM tool invoke failed ({tool}): {error}"),
+        )
+    })?;
+    let _ = std::fs::remove_dir_all(&temp_root);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            format!("host LLVM object emit failed ({tool}): {stderr}"),
+        ));
+    }
+    if !object_path.is_file() {
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            format!(
+                "host LLVM object emit did not produce {}",
+                object_path.display()
+            ),
+        ));
+    }
+    Ok(tool)
+}
+
+fn find_host_llvm_object_tool() -> Option<String> {
+    for candidate in ["clang", "clang.exe", "llc", "llc.exe"] {
+        if std::process::Command::new(candidate)
+            .arg("--version")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+        {
+            return Some(candidate.to_owned());
+        }
+    }
+    None
+}
+
 fn validate_pure_pilot_artifact(artifact: &Artifact) -> Result<(), NativeError> {
     if artifact.functions.is_empty() {
         return Err(NativeError::new(
@@ -1081,5 +1189,36 @@ weave main [] -> Whole:
         assert!(ir.contains("mul i64"));
         assert!(ir.contains("@puts"));
         assert!(ir.contains("ret i64"));
+    }
+
+    #[test]
+    fn llvm_object_emit_fail_closed_without_toolchain_or_succeeds() {
+        assert!(native_llvm_object_emit_product());
+        let source = "world pure\n\nweave main [] -> Whole:\n  yield 5\n";
+        let bytecode = compile_product_bytecode(source).expect("product");
+        let dir = std::env::temp_dir().join(format!(
+            "aether-m35g-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("temp");
+        let obj = dir.join(if cfg!(windows) { "out.obj" } else { "out.o" });
+        match lower_verified_aeth_to_llvm_object(&bytecode, &obj) {
+            Ok(tool) => {
+                assert!(obj.is_file(), "object via {tool}");
+            }
+            Err(error) => {
+                assert_eq!(error.code, "AE-NATIVE-004");
+                assert!(
+                    error.message.contains("clang")
+                        || error.message.contains("llc")
+                        || error.message.contains("LLVM")
+                );
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

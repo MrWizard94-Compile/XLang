@@ -12,17 +12,18 @@ use aether_core::{
     compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
     compile_workspace_package, fetch_signed_package, forge_bytecode, format_project, format_source,
     format_source_product, install_trust_key, lower_verified_aeth_to_c,
-    lower_verified_aeth_to_llvm_ir, lower_verified_aeth_to_native_object,
-    multi_module_authority_note, parse_project_document, parse_workspace_document,
-    pin_local_package, pin_local_package_signed, product_cli_check_without_bootstrap,
-    product_default_cli_toolchain, product_format_without_bootstrap,
-    product_project_format_without_bootstrap, product_seed_rebuild_without_bootstrap,
-    product_structure_json, product_structure_without_bootstrap, refresh_project_lock,
-    refresh_workspace_lock, revoke_trust_key, rotate_trust_key, run_bytecode,
-    run_bytecode_with_grants, run_project_tests_with_grants, serialize_project_document,
-    serialize_workspace_document, set_trust_key_validity, structural_document_json,
-    unit_artifact_file_name, verify_bytecode, verify_project, verify_registry_cache,
-    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    lower_verified_aeth_to_llvm_ir, lower_verified_aeth_to_llvm_object,
+    lower_verified_aeth_to_native_object, multi_module_authority_note, parse_project_document,
+    parse_workspace_document, pin_local_package, pin_local_package_signed,
+    product_cli_check_without_bootstrap, product_default_cli_toolchain,
+    product_format_without_bootstrap, product_project_format_without_bootstrap,
+    product_seed_rebuild_without_bootstrap, product_structure_json,
+    product_structure_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
+    revoke_trust_key, rotate_trust_key, run_bytecode, run_bytecode_with_grants,
+    run_project_tests_with_grants, serialize_project_document, serialize_workspace_document,
+    set_trust_key_validity, structural_document_json, unit_artifact_file_name, verify_bytecode,
+    verify_project, verify_registry_cache, verify_workspace, HostGrantConfig, InvocationValue,
+    LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
@@ -74,12 +75,13 @@ fn compile(
     native_c: bool,
     native_object: bool,
     native_llvm_ir: bool,
+    native_llvm_object: bool,
 ) -> Result<(), String> {
     let source = read_source(source_path)?;
     // BARP Phase 2 (ADR-044): default product compile forges seed bytecode without
     // a bootstrap validate precondition. --bootstrap remains rebuild/oracle path.
-    // ADR-059/079/083: --native-c / --native-object / --native-llvm-ir lower verified AETH.
-    let native_modes = [native_c, native_object, native_llvm_ir]
+    // ADR-059/079/083/087: native lower flags for verified AETH.
+    let native_modes = [native_c, native_object, native_llvm_ir, native_llvm_object]
         .into_iter()
         .filter(|v| *v)
         .count();
@@ -90,7 +92,7 @@ fn compile(
     }
     if native_modes > 1 {
         return Err(
-            "compile accepts only one of --native-c, --native-object, or --native-llvm-ir"
+            "compile accepts only one native lower flag (--native-c, --native-object, --native-llvm-ir, --native-llvm-object)"
                 .to_owned(),
         );
     }
@@ -131,6 +133,15 @@ fn compile(
         write_source(output_path, &ir)?;
         println!(
             "{LANGUAGE_NAME} {LANGUAGE_VERSION} lowered verified AETH to LLVM IR {} (F-NATIVE M35f)",
+            output_path.display()
+        );
+        return Ok(());
+    }
+    if native_llvm_object {
+        let tool = lower_verified_aeth_to_llvm_object(&bytecode, output_path)
+            .map_err(|error| error.to_string())?;
+        println!(
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} lowered verified AETH to LLVM object {} via {tool} (F-NATIVE M35g)",
             output_path.display()
         );
         return Ok(());
@@ -872,6 +883,7 @@ fn run() -> Result<(), String> {
             let mut native_c = false;
             let mut native_object = false;
             let mut native_llvm_ir = false;
+            let mut native_llvm_object = false;
             for extra in arguments.by_ref() {
                 if extra == "--bootstrap" {
                     use_bootstrap = true;
@@ -881,9 +893,11 @@ fn run() -> Result<(), String> {
                     native_object = true;
                 } else if extra == "--native-llvm-ir" {
                     native_llvm_ir = true;
+                } else if extra == "--native-llvm-object" {
+                    native_llvm_object = true;
                 } else {
                     return Err(
-                        "compile accepts --output <file> and optional --bootstrap, --native-c, --native-object, or --native-llvm-ir"
+                        "compile accepts --output <file> and optional --bootstrap or one native lower flag"
                             .to_owned(),
                     );
                 }
@@ -895,6 +909,7 @@ fn run() -> Result<(), String> {
                 native_c,
                 native_object,
                 native_llvm_ir,
+                native_llvm_object,
             )
         }
         "registry" => {

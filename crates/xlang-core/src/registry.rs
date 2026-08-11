@@ -98,6 +98,15 @@ pub struct RegistryTrustKey {
     /// Prior key id this key rotated from (M24d).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rotated_from: Option<String>,
+    /// When true, this key is a trust root that may certify signing keys (M24f).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_root: bool,
+    /// Root/intermediate key id that certified this signing key (M24f).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub certified_by: Option<String>,
+    /// Hex certification signature over binding (M24f).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub certification: Option<String>,
 }
 
 fn default_trust_algorithm() -> String {
@@ -135,6 +144,12 @@ pub const fn registry_key_rotation_policy() -> bool {
 /// M24e: multi-root trust policy document is product.
 #[must_use]
 pub const fn registry_multi_root_trust_policy() -> bool {
+    true
+}
+
+/// M24f: root-certified signing keys (lightweight certification chain) is product.
+#[must_use]
+pub const fn registry_root_certified_signing_keys() -> bool {
     true
 }
 
@@ -552,6 +567,9 @@ pub fn install_trust_key_with_algorithm(
         not_after: None,
         revoked: false,
         rotated_from: None,
+        is_root: false,
+        certified_by: None,
+        certification: None,
     };
     let mut trust = load_or_empty_trust(cache_root)?;
     trust.keys.retain(|existing| existing.key_id != key.key_id);
@@ -559,6 +577,148 @@ pub fn install_trust_key_with_algorithm(
     trust.keys.sort_by(|a, b| a.key_id.cmp(&b.key_id));
     write_trust_index(cache_root, &trust)?;
     Ok(key)
+}
+
+/// M24f: install an Ed25519 trust root (may certify signing keys).
+pub fn install_trust_root(
+    cache_root: &Path,
+    key_id: &str,
+    seed_bytes: &[u8],
+) -> Result<RegistryTrustKey, RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_root_certified_signing_keys(),
+        "ADR-088: root-certified signing keys"
+    );
+    let mut key =
+        install_trust_key_with_algorithm(cache_root, key_id, seed_bytes, REGISTRY_ALG_ED25519)?;
+    let mut trust = load_or_empty_trust(cache_root)?;
+    if let Some(entry) = trust
+        .keys
+        .iter_mut()
+        .find(|candidate| candidate.key_id == key_id)
+    {
+        entry.is_root = true;
+        entry.certified_by = None;
+        entry.certification = None;
+        key = entry.clone();
+    }
+    write_trust_index(cache_root, &trust)?;
+    Ok(key)
+}
+
+/// M24f: install a signing key certified by an active root (Ed25519 only).
+///
+/// Certification message: `certify\\n{key_id}\\n{algorithm}\\n{sha256(key_material)}`
+/// signed by the root key.
+pub fn install_certified_signing_key(
+    cache_root: &Path,
+    key_id: &str,
+    seed_bytes: &[u8],
+    root_key_id: &str,
+) -> Result<RegistryTrustKey, RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_root_certified_signing_keys(),
+        "ADR-088: root-certified signing keys"
+    );
+    let root = load_trust_key_meta(cache_root, root_key_id)?;
+    if !root.is_root {
+        return Err(RegistryError::new(
+            "AE-REG-011",
+            format!("key {root_key_id} is not a trust root"),
+        ));
+    }
+    if root.algorithm != REGISTRY_ALG_ED25519 {
+        return Err(RegistryError::new(
+            "AE-REG-011",
+            "M24f certification requires an Ed25519 trust root",
+        ));
+    }
+    let mut key =
+        install_trust_key_with_algorithm(cache_root, key_id, seed_bytes, REGISTRY_ALG_ED25519)?;
+    let material = load_trust_key_bytes(cache_root, key_id)?;
+    let digest = crate::sha256_hex(&material);
+    let message = format!("certify\n{key_id}\ned25519\n{digest}");
+    let root_material = load_trust_key_bytes(cache_root, root_key_id)?;
+    if root_material.len() < 32 {
+        return Err(RegistryError::new(
+            "AE-REG-006",
+            "root key material is truncated",
+        ));
+    }
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&root_material[..32]);
+    let signing = SigningKey::from_bytes(&seed);
+    let certification = hex_encode(signing.sign(message.as_bytes()).to_bytes().as_ref());
+    let mut trust = load_or_empty_trust(cache_root)?;
+    if let Some(entry) = trust
+        .keys
+        .iter_mut()
+        .find(|candidate| candidate.key_id == key_id)
+    {
+        entry.is_root = false;
+        entry.certified_by = Some(root_key_id.to_owned());
+        entry.certification = Some(certification);
+        key = entry.clone();
+    }
+    write_trust_index(cache_root, &trust)?;
+    Ok(key)
+}
+
+fn verify_key_certification_chain(
+    cache_root: &Path,
+    key: &RegistryTrustKey,
+) -> Result<(), RegistryError> {
+    if key.is_root {
+        return Ok(());
+    }
+    // Uncertified keys remain allowed unless policy requires roots-only later.
+    let (Some(root_id), Some(cert_hex)) = (&key.certified_by, &key.certification) else {
+        return Ok(());
+    };
+    let root = load_or_empty_trust(cache_root)?
+        .keys
+        .into_iter()
+        .find(|candidate| candidate.key_id == *root_id)
+        .ok_or_else(|| {
+            RegistryError::new(
+                "AE-REG-011",
+                format!("certifying root {root_id} is missing"),
+            )
+        })?;
+    if root.revoked || !root.is_root {
+        return Err(RegistryError::new(
+            "AE-REG-011",
+            format!("certifying root {root_id} is revoked or not a root"),
+        ));
+    }
+    let material = load_trust_key_bytes(cache_root, &key.key_id)?;
+    let digest = crate::sha256_hex(&material);
+    let message = format!("certify\n{}\ned25519\n{digest}", key.key_id);
+    let root_material = load_trust_key_bytes(cache_root, root_id)?;
+    let verifying = ed25519_verifying_key_from_material(&root_material)?;
+    let sig_bytes = hex_decode(cert_hex)
+        .map_err(|_| RegistryError::new("AE-REG-011", "certification is not valid hex"))?;
+    if sig_bytes.len() != 64 {
+        return Err(RegistryError::new(
+            "AE-REG-011",
+            "certification must be 64 bytes (128 hex chars)",
+        ));
+    }
+    let mut sig_arr = [0u8; 64];
+    sig_arr.copy_from_slice(&sig_bytes);
+    let signature = Signature::from_bytes(&sig_arr);
+    verifying
+        .verify(message.as_bytes(), &signature)
+        .map_err(|_| {
+            RegistryError::new(
+                "AE-REG-011",
+                format!(
+                    "signing key {} certification by {root_id} failed verification",
+                    key.key_id
+                ),
+            )
+        })?;
+    Ok(())
 }
 
 /// M24d: revoke a trust key (fails closed on subsequent verify/sign).
@@ -703,6 +863,17 @@ fn trust_key_is_active(key: &RegistryTrustKey) -> Result<(), RegistryError> {
                 ),
             ));
         }
+    }
+    Ok(())
+}
+
+fn trust_key_is_active_in_cache(
+    cache_root: &Path,
+    key: &RegistryTrustKey,
+) -> Result<(), RegistryError> {
+    trust_key_is_active(key)?;
+    if registry_root_certified_signing_keys() {
+        verify_key_certification_chain(cache_root, key)?;
     }
     Ok(())
 }
@@ -1191,12 +1362,24 @@ fn load_trust_key_meta(cache_root: &Path, key_id: &str) -> Result<RegistryTrustK
                 format!("unknown trust key_id {key_id}; install with registry trust-key"),
             )
         })?;
-    trust_key_is_active(&key)?;
+    trust_key_is_active_in_cache(cache_root, &key)?;
     Ok(key)
 }
 
 fn load_trust_key_bytes(cache_root: &Path, key_id: &str) -> Result<Vec<u8>, RegistryError> {
-    let key = load_trust_key_meta(cache_root, key_id)?;
+    // Load path from trust index without re-entering active/certification checks
+    // (those call this function to verify bindings).
+    let trust = load_or_empty_trust(cache_root)?;
+    let key = trust
+        .keys
+        .iter()
+        .find(|candidate| candidate.key_id == key_id)
+        .ok_or_else(|| {
+            RegistryError::new(
+                "AE-REG-006",
+                format!("unknown trust key_id {key_id}; install with registry trust-key"),
+            )
+        })?;
     let path = resolve_cache_path(cache_root, &key.key_path)?;
     fs::read(&path).map_err(|error| {
         RegistryError::new(
@@ -1530,6 +1713,35 @@ mod tests {
         assert_eq!(err.code, "AE-REG-010");
         pin_local_package_signed(&root, "demo", "1.0.0", &artifact, "ops").expect("signed");
         verify_registry_cache(&root).expect("signed under policy");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn root_certified_signing_key_chain() {
+        assert!(registry_root_certified_signing_keys());
+        let root = temp_dir();
+        let mut root_seed = [0u8; 32];
+        root_seed[0] = 7;
+        install_trust_root(&root, "ca-root", &root_seed).expect("root");
+        let mut leaf_seed = [0u8; 32];
+        leaf_seed[0] = 9;
+        let leaf =
+            install_certified_signing_key(&root, "signer", &leaf_seed, "ca-root").expect("leaf");
+        assert_eq!(leaf.certified_by.as_deref(), Some("ca-root"));
+        assert!(leaf.certification.as_ref().is_some_and(|c| c.len() == 128));
+        let artifact = root.join("payload.bin");
+        fs::write(&artifact, b"AETH\x0bcertified").expect("write");
+        pin_local_package_signed(&root, "demo", "1.0.0", &artifact, "signer").expect("signed");
+        verify_registry_cache(&root).expect("verify certified chain");
+        // Bad certification fails closed.
+        let mut trust = load_or_empty_trust(&root).expect("trust");
+        if let Some(entry) = trust.keys.iter_mut().find(|k| k.key_id == "signer") {
+            entry.certification = Some("00".repeat(64));
+        }
+        write_trust_index(&root, &trust).expect("write");
+        let err = pin_local_package_signed(&root, "demo", "1.0.1", &artifact, "signer")
+            .expect_err("bad cert");
+        assert_eq!(err.code, "AE-REG-011");
         let _ = fs::remove_dir_all(&root);
     }
 }

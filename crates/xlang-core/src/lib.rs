@@ -57,9 +57,10 @@ pub use modules::{
 };
 pub use native::{
     f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
-    lower_verified_aeth_to_native_object, native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot,
-    native_aeth_to_c_speak_multiweave_pilot, native_dual_run_vm_exit, native_host_cc_dual_exec,
-    native_host_cc_dual_exec_pilot, native_llvm_ir_emit_product, native_object_emit_product,
+    lower_verified_aeth_to_llvm_object, lower_verified_aeth_to_native_object,
+    native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot, native_aeth_to_c_speak_multiweave_pilot,
+    native_dual_run_vm_exit, native_host_cc_dual_exec, native_host_cc_dual_exec_pilot,
+    native_llvm_ir_emit_product, native_llvm_object_emit_product, native_object_emit_product,
     NativeDualExecReport, NativeError,
 };
 pub use project::{
@@ -71,16 +72,18 @@ pub use project::{
 };
 pub use registry::{
     default_registry_trust_policy, empty_registry_cache, empty_registry_trust,
-    f_registry_authorized, fetch_signed_package, generate_ed25519_trust_key, install_trust_key,
-    install_trust_key_with_algorithm, load_or_default_trust_policy, parse_registry_cache,
-    parse_registry_trust, parse_registry_trust_policy, pin_local_package, pin_local_package_signed,
+    f_registry_authorized, fetch_signed_package, generate_ed25519_trust_key,
+    install_certified_signing_key, install_trust_key, install_trust_key_with_algorithm,
+    install_trust_root, load_or_default_trust_policy, parse_registry_cache, parse_registry_trust,
+    parse_registry_trust_policy, pin_local_package, pin_local_package_signed,
     registry_ed25519_https_pilot, registry_key_rotation_policy, registry_multi_root_trust_policy,
-    registry_offline_cache_verify, registry_signed_fetch_pilot, revoke_trust_key, rotate_trust_key,
-    serialize_registry_cache, serialize_registry_trust, serialize_registry_trust_policy,
-    set_trust_key_validity, sign_package_binding, verify_registry_cache, write_trust_policy,
-    RegistryCacheDocument, RegistryError, RegistryPackagePin, RegistryTrustDocument,
-    RegistryTrustKey, RegistryTrustPolicy, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256,
-    REGISTRY_CACHE_SCHEMA, REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_POLICY_FILE,
+    registry_offline_cache_verify, registry_root_certified_signing_keys,
+    registry_signed_fetch_pilot, revoke_trust_key, rotate_trust_key, serialize_registry_cache,
+    serialize_registry_trust, serialize_registry_trust_policy, set_trust_key_validity,
+    sign_package_binding, verify_registry_cache, write_trust_policy, RegistryCacheDocument,
+    RegistryError, RegistryPackagePin, RegistryTrustDocument, RegistryTrustKey,
+    RegistryTrustPolicy, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256, REGISTRY_CACHE_SCHEMA,
+    REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_POLICY_FILE,
     REGISTRY_TRUST_POLICY_SCHEMA, REGISTRY_TRUST_SCHEMA,
 };
 pub use workspace::{
@@ -265,6 +268,8 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-seed-014") {
+        "AE-SEED-014"
     } else if normalized.contains("ae-seed-012") {
         "AE-SEED-012"
     } else if normalized.contains("ae-seed-011") {
@@ -2798,6 +2803,12 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
                 return Err(CompilerError::new(Span::synthetic(), message));
             }
         }
+        // ADR-089: reserved future task surface (handles/timeouts/parallel).
+        if product_rejects_reserved_task_future_surface() {
+            if let Some(message) = seed_reject_reserved_task_future_surface(source) {
+                return Err(CompilerError::new(Span::synthetic(), message));
+            }
+        }
     }
     let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
         let detail = error.to_string();
@@ -2915,6 +2926,7 @@ fn diagnostic_to_seed_error_packet(diagnostic: &Diagnostic) -> SeedErrorPacket {
             | "AE-SEED-007"
             | "AE-SEED-012"
             | "AE-SEED-013"
+            | "AE-SEED-014"
     ) {
         "host-preflight"
     } else {
@@ -2986,6 +2998,7 @@ fn format_seed_product_error_with_seed_stdout(
             | "AE-SEED-007"
             | "AE-SEED-012"
             | "AE-SEED-013"
+            | "AE-SEED-014"
     ) {
         "host-preflight"
     } else {
@@ -3058,6 +3071,32 @@ fn classify_seed_verify_error(detail: &str) -> &'static str {
 fn seed_reject_empty_source(source: &str) -> Option<String> {
     if source.trim().is_empty() {
         return Some(format_seed_product_error("AE-SEED-005", "source is empty"));
+    }
+    None
+}
+
+/// ADR-089: reject reserved future task surface keywords (handles/timeouts/parallel).
+///
+/// Does not implement handles, timeouts, or parallelism — only fail-closed product
+/// preflight so reserved forms do not fall into opaque seed forge failures.
+fn seed_reject_reserved_task_future_surface(source: &str) -> Option<String> {
+    for (line_index, line) in source.lines().enumerate() {
+        let trimmed = line.trim_start();
+        let lower = trimmed.to_ascii_lowercase();
+        let hit = lower.starts_with("timeout ")
+            || lower.starts_with("task handle ")
+            || lower.starts_with("handle task ")
+            || lower.starts_with("parallel together")
+            || lower.starts_with("together parallel");
+        if hit {
+            return Some(format_seed_product_error(
+                "AE-SEED-014",
+                &format!(
+                    "line {}: reserved future task surface ({trimmed:?}) — not implemented (see ADR-081/089; use M19e task weave + checkpoint only)",
+                    line_index + 1
+                ),
+            ));
+        }
     }
     None
 }
@@ -3531,6 +3570,44 @@ pub const fn product_task_frame_surface_api() -> bool {
     true
 }
 
+/// ADR-089: product rejects reserved future task-surface keywords with AE-SEED-014.
+#[must_use]
+pub const fn product_rejects_reserved_task_future_surface() -> bool {
+    true
+}
+
+/// ADR-086: multi-file forge ABI contract is product-documented; host path is
+/// the product multi-file authority. Seed-native multi-file remains false.
+#[must_use]
+pub const fn forge_multi_source_abi_contract() -> bool {
+    true
+}
+
+/// ADR-086: seed SPEAK emit **conformance matrix** (codes product preflights cover
+/// and seed is required to eventually SPEAK). Host already emits SPEAK-format
+/// packets for these codes; seed.ae systematic emit remains residual.
+#[must_use]
+pub fn seed_speak_emit_conformance_codes() -> &'static [&'static str] {
+    &[
+        "AE-SEED-003",
+        "AE-SEED-004",
+        "AE-SEED-005",
+        "AE-SEED-006",
+        "AE-SEED-007",
+        "AE-SEED-010",
+        "AE-SEED-011",
+        "AE-SEED-012",
+        "AE-SEED-013",
+        "AE-SEED-014",
+    ]
+}
+
+/// ADR-086 honesty: seed binary does not yet systematically SPEAK all conformance codes.
+#[must_use]
+pub const fn seed_speak_emit_conformance_complete() -> bool {
+    false
+}
+
 #[cfg(test)]
 mod product_task_frame_surface_tests {
     use super::*;
@@ -3571,6 +3648,19 @@ mod product_task_frame_surface_tests {
         let parsed = try_parse_seed_speak_error_packet(&line).expect("parse");
         assert_eq!(parsed.code, "AE-SEED-005");
         assert_eq!(parsed.origin, "seed-speak");
+    }
+
+    #[test]
+    fn product_rejects_reserved_task_future_surface_with_ae_seed_014() {
+        assert!(product_rejects_reserved_task_future_surface());
+        assert!(!seed_speak_emit_conformance_complete());
+        assert!(seed_speak_emit_conformance_codes().contains(&"AE-SEED-014"));
+        let source = "world t\n\nweave main [] -> Whole:\n  timeout 10\n  yield 0\n";
+        let error = compile_product_bytecode(source).expect_err("reserved");
+        assert!(error.to_string().contains("AE-SEED-014"), "got {error}");
+        let packets = product_error_packets(source);
+        assert_eq!(packets[0].code, "AE-SEED-014");
+        assert_eq!(packets[0].origin, "host-preflight");
     }
 }
 
