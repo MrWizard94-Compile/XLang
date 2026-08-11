@@ -11,7 +11,7 @@ flowchart LR
     Artifact --> VM["Aether VM"]
     VM --> Result["stdout and exit value"]
     Check["aether check"] --> Bootstrap["Rust bootstrap AST"]
-    SeedSrc["seed/aether_seed.ae"] -->|"compile --bootstrap"| SeedArtFile["seed/aether_seed.aeth"]
+    SeedSrc["seed/aether_seed.ae"] -->|"compile (product ADR-067)"| SeedArtFile["seed/aether_seed.aeth"]
     Forge["aether forge"] -->|"verify + invoke"| SeedArt
     SeedArt --> Candidate["candidate AETH Bytes"]
     Candidate -->|"verify before write"| Forge
@@ -133,14 +133,13 @@ without granting an artifact host capabilities.
 ## Seed-Hosted Product Compile Boundary
 
 The Aether-written seed is the **default product compiler** for its documented
-Seed Profile. The bootstrap validates the source first; this retains complete
-diagnostics and is also the deliberate M23 enforcement point:
+Seed Profile (ADR-064–067). Product path forges first without bootstrap
+pre-validate; dual-compare remains the proof oracle:
 
-- `compile_with_seed` embeds `SEED_COMPILER_ARTIFACT` and forges validated user
-  source.
-- CLI `aether compile` uses that path.
-- CLI `compile --bootstrap` and `check` still use the Rust bootstrap for seed
-  rebuild and AST diagnostics.
+- `compile_with_seed` / `compile_product_bytecode` embed `SEED_COMPILER_ARTIFACT`
+  and forge user source (including seed rebuild).
+- CLI `aether compile` uses that path by default (no `--bootstrap`).
+- CLI `compile --bootstrap` and `check --bootstrap` are recovery/oracle only.
 
 The Seed Profile directly emits the documented canonical 0.11 source surface
 and later covered product forms into AETH v11 or v12 as task-frame metadata

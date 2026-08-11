@@ -64,9 +64,15 @@ authority under Constitution.
 21. **ADR-064 (done):** product is **default** CLI check/format/structure/project
     format and LSP format; bootstrap is recovery/oracle only
     (`product_default_cli_toolchain()`, `bootstrap_is_recovery_oracle_only()`).  
-22. Residual bootstrap: seed rebuild, dual-compare oracle, structural-edit base
-    AST, LSP hover/definition AST.  
-23. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+22. **ADR-065 (done):** product structural weave-replace without bootstrap base
+    AST; `structural_edit_product_weave_replace()`.  
+23. **ADR-066 (done):** LSP product-surface hover/definition;
+    `lsp_product_surface_hover_definition()`.  
+24. **ADR-067 (done):** product seed rebuild without `--bootstrap`;
+    `product_seed_rebuild_without_bootstrap()`.  
+25. Residual bootstrap: dual-compare oracle, recovery flags, structural-edit
+    ops outside product weave-replace, full `aether.ast/v8`.  
+26. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 

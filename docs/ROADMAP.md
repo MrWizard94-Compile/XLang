@@ -5,7 +5,7 @@ M20/M20b, M17b–d, M21, M22, and M23 pure comptime calls; RTP-001 runtime
 performance increment; PKG-001 offline workspace locks; package **0.36**
 current. M19e is implemented as the verifier-checked v12 task-frame slice
 (ADR-042); TP-1/TP-2 delivered; portfolio ADR-014
-**Date:** 2026-08-10 (BARP through ADR-058; product authority reduction active)
+**Date:** 2026-08-10 (BARP through ADR-067; product authority reduction active)
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
 constitution gate.
@@ -344,14 +344,15 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` live-stamped 2026-08-08).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-064:** product is the
-**default** CLI/LSP toolchain for check/format/structure/project format; bootstrap
-is recovery/oracle only. Product diagnostics, surface symbols, multi-module
-host-elaborate+seed-emit, gate product seed self-rebuild.
-**Next:** structural-edit base without bootstrap AST; seed-internal error packets;
-multi-file forge (ADR-061). Residual bootstrap: `compile --bootstrap` seed rebuild,
-dual-compare oracle, structural-edit base AST, LSP hover/definition, recovery
-`--bootstrap` flags.
+reduce Rust bootstrap product-path authority. **Through ADR-067:** product is the
+**default** CLI/LSP toolchain (check/format/structure/project format, product
+weave-replace, product-surface hover/definition, seed rebuild without
+`--bootstrap`); bootstrap is recovery/oracle only. Product diagnostics, surface
+symbols, multi-module host-elaborate+seed-emit, gate dual-compare seed identity.
+**Next:** expand product structural ops (insert/delete/statement); seed-internal
+error packets; multi-file forge (ADR-061). Residual bootstrap: dual-compare oracle
+emit, recovery `--bootstrap` flags, structural AST outside product weave-replace,
+full `aether.ast/v8`.
 
 **Law forks (authorized 2026-08-10):** F-NATIVE (M35a/b AETH→C pure pilot with
 Whole locals, ADR-059/062); F-REGISTRY (M24a offline cache pin/verify, ADR-060 —

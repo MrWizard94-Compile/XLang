@@ -3,9 +3,13 @@
 //! This module deliberately sits above parsing and below no host capability.
 //! It serializes Aether source from an edited in-memory program, accepts a small
 //! allow-listed edit protocol, renders canonical source, and **accepts** that
-//! source via the product seed path (ADR-048). Base parse still uses bootstrap
-//! AST. Callers that persist an edit should still product-seed-compile before
-//! writing (CLI does).
+//! source via the product seed path (ADR-048).
+//!
+//! **ADR-065:** top-level **weave replace** ops on product-accepted base source
+//! take a product text-splice path (no bootstrap `Program` base parse). Other
+//! ops (insert/delete/statement edits, record targets) still use bootstrap AST.
+//! Callers that persist an edit should still product-seed-compile before writing
+//! (CLI trusts core product accept per ADR-053).
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -29,6 +33,8 @@ pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v8";
 pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v8";
 /// Product-only structure envelope (ADR-054) — not full AST.
 pub const PRODUCT_STRUCTURE_SCHEMA_VERSION: &str = "aether.product-structure/v1";
+/// Product weave-replace edit result (ADR-065) — not full `aether.ast/v8`.
+pub const PRODUCT_EDIT_SCHEMA_VERSION: &str = "aether.product-edit/v1";
 
 const MAX_STRUCTURAL_EDIT_BYTES: usize = 4_000_000;
 const MAX_STRUCTURAL_EDIT_OPERATIONS: usize = 32;
@@ -36,8 +42,9 @@ const MAX_STRUCTURAL_EDIT_NODES: usize = 100_000;
 const MAX_STRUCTURAL_EDIT_DEPTH: usize = 256;
 const MAX_SOURCE_BYTES: usize = 1_000_000;
 
-/// A successful pure structural edit. The returned source is canonical and has
-/// passed the **product seed** accept gate (ADR-048); base parse used bootstrap AST.
+/// A successful pure structural edit. The returned source is product-accepted
+/// (ADR-048). Weave-only replace may omit bootstrap AST (ADR-065); other ops
+/// still base-parse via bootstrap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuralEditResult {
     pub source: String,
@@ -128,7 +135,10 @@ pub fn diagnostic_json(diagnostic: &Diagnostic) -> String {
 ///
 /// The function does not write files, invoke a model, execute code, or compile
 /// an artifact. It is intentionally pure apart from memory allocation. The CLI
-/// seed-compiles returned source before writing it to its requested output path.
+/// trusts product accept on returned source (ADR-053).
+///
+/// **ADR-065:** when the base product-accepts and every operation is a top-level
+/// weave `replace`, the edit runs without bootstrap `Program` base parse.
 pub fn apply_structural_edit(
     source: &str,
     edit_json: &str,
@@ -138,6 +148,13 @@ pub fn apply_structural_edit(
             "AE-EDIT-006",
             format!("structural edit exceeds the {MAX_STRUCTURAL_EDIT_BYTES}-byte safety limit"),
         ));
+    }
+
+    // ADR-065: product weave-replace path (no bootstrap base AST) when eligible.
+    if crate::structural_edit_product_weave_replace() {
+        if let Some(result) = try_product_weave_replace(source, edit_json)? {
+            return Ok(result);
+        }
     }
 
     let (mut program, canonical_source) =
@@ -170,6 +187,213 @@ pub fn apply_structural_edit(
         document_json,
         operation_count: request.operations.len(),
     })
+}
+
+/// ADR-065: product-accepted weave-only replace without bootstrap base parse.
+///
+/// Returns `Ok(None)` when the edit is outside the product subset (caller falls
+/// back to bootstrap AST). Returns `Err` for protocol/product failures that
+/// should not fall back (e.g. unknown weave target after product accepted).
+fn try_product_weave_replace(
+    source: &str,
+    edit_json: &str,
+) -> Result<Option<StructuralEditResult>, StructuralEditError> {
+    debug_assert!(
+        crate::structural_edit_product_weave_replace(),
+        "ADR-065: product weave replace without bootstrap base AST"
+    );
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    // Only take the product path when product accepts the base unit.
+    if compile_product_bytecode(&normalized).is_err() {
+        return Ok(None);
+    }
+    let request = parse_request(edit_json)?;
+    if request.base_source != normalized {
+        // Bootstrap path uses format_program canonical; product base is LF source.
+        return Ok(None);
+    }
+    if request.operations.is_empty() {
+        return Ok(None);
+    }
+    for operation in &request.operations {
+        match (&operation.kind, &operation.target) {
+            (EditOperationKind::Replace, Some(EditTarget::Weave(_))) => {}
+            _ => return Ok(None),
+        }
+    }
+
+    let mut candidate = normalized;
+    let mut node_budget = NodeBudget::default();
+    for operation in &request.operations {
+        let Some(EditTarget::Weave(target_name)) = operation.target.as_ref() else {
+            return Ok(None);
+        };
+        // Empty records: product weave-replace subset is primitive-typed weaves.
+        // Record/Buffer/shape-typed payloads fall back to bootstrap AST.
+        let declaration = match parse_operation_declaration(
+            &Program {
+                world: "product".to_owned(),
+                records: Vec::new(),
+                shapes: Vec::new(),
+                host_weaves: Vec::new(),
+                weaves: Vec::new(),
+            },
+            operation,
+            &mut node_budget,
+        ) {
+            Ok(declaration) => declaration,
+            Err(_) => return Ok(None),
+        };
+        let EditableDeclaration::Weave(weave) = declaration else {
+            return Ok(None);
+        };
+        if weave.name != *target_name {
+            return Err(protocol_error(
+                "AE-EDIT-005",
+                "replacement Weave name must match its weave target",
+            ));
+        }
+        let weave_source = format_weave_text(&weave);
+        candidate = replace_top_level_weave_text(&candidate, target_name, &weave_source)?;
+    }
+
+    compile_product_bytecode(&candidate).map_err(StructuralEditError::from)?;
+    let document_json = serialize_product_edit_document(&candidate, request.operations.len())
+        .map_err(|error| protocol_error("AE-EDIT-001", error.to_string()))?;
+    Ok(Some(StructuralEditResult {
+        source: candidate,
+        document_json,
+        operation_count: request.operations.len(),
+    }))
+}
+
+fn format_weave_text(weave: &Weave) -> String {
+    let program = Program {
+        world: "product".to_owned(),
+        records: Vec::new(),
+        shapes: Vec::new(),
+        host_weaves: Vec::new(),
+        weaves: vec![weave.clone()],
+    };
+    let formatted = format_program(&program);
+    let mut lines = formatted.lines().peekable();
+    // Drop world line and leading blanks; keep weave declaration + body.
+    while let Some(line) = lines.peek() {
+        if line.starts_with("world ") || line.is_empty() {
+            lines.next();
+            continue;
+        }
+        break;
+    }
+    let body: Vec<&str> = lines.collect();
+    if body.is_empty() {
+        return String::new();
+    }
+    let mut out = body.join("\n");
+    out.push('\n');
+    out
+}
+
+/// Byte-range splice: replace the top-level weave named `name` with `new_weave`.
+fn replace_top_level_weave_text(
+    source: &str,
+    name: &str,
+    new_weave: &str,
+) -> Result<String, StructuralEditError> {
+    let (start, end) = find_top_level_weave_range(source, name)?;
+    let mut out = String::with_capacity(source.len() + new_weave.len());
+    out.push_str(&source[..start]);
+    out.push_str(new_weave.trim_end_matches('\n'));
+    // Preserve a single trailing newline after the weave; inter-weave blanks live in source[end..].
+    if end < source.len() || source.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&source[end..]);
+    Ok(out)
+}
+
+/// Inclusive start / exclusive end byte range of a top-level weave declaration body.
+/// Trailing blank lines between weaves are **not** part of the range (identity-preserving).
+fn find_top_level_weave_range(
+    source: &str,
+    name: &str,
+) -> Result<(usize, usize), StructuralEditError> {
+    let mut offset = 0usize;
+    let mut start: Option<usize> = None;
+    let lines: Vec<&str> = source.split_inclusive('\n').collect();
+    for (index, line_with_nl) in lines.iter().enumerate() {
+        let line = line_with_nl.trim_end_matches(['\n', '\r']);
+        let is_top = !line.is_empty()
+            && !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && !line.trim_start().starts_with('#');
+        if let Some(range_start) = start {
+            if is_top {
+                // Next top-level declaration ends the previous weave; drop inter-weave blanks.
+                let end = trim_trailing_blank_lines(source, range_start, offset);
+                return Ok((range_start, end));
+            }
+            if index + 1 == lines.len() {
+                let end = trim_trailing_blank_lines(source, range_start, source.len());
+                return Ok((range_start, end));
+            }
+            offset += line_with_nl.len();
+            continue;
+        }
+        if is_top && line_declares_weave(line, name) {
+            start = Some(offset);
+        }
+        offset += line_with_nl.len();
+    }
+    if let Some(range_start) = start {
+        let end = trim_trailing_blank_lines(source, range_start, source.len());
+        return Ok((range_start, end));
+    }
+    Err(protocol_error(
+        "AE-EDIT-004",
+        format!("weave target {name:?} does not exist"),
+    ))
+}
+
+/// Drop trailing blank lines from `[start, end)` so inter-weave spacing stays in the suffix.
+fn trim_trailing_blank_lines(source: &str, start: usize, mut end: usize) -> usize {
+    while end > start {
+        let region = &source[start..end];
+        if region.ends_with("\n\n") {
+            end -= 1;
+            continue;
+        }
+        break;
+    }
+    end
+}
+
+fn line_declares_weave(line: &str, name: &str) -> bool {
+    let trimmed = line.trim_start();
+    let after_export = trimmed.strip_prefix("export ").unwrap_or(trimmed);
+    let after_task = after_export.strip_prefix("task ").unwrap_or(after_export);
+    let Some(rest) = after_task.strip_prefix("weave ") else {
+        return false;
+    };
+    let decl_name = rest.split([' ', '[']).next().unwrap_or("");
+    decl_name == name
+}
+
+fn serialize_product_edit_document(
+    source: &str,
+    operation_count: usize,
+) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(&json!({
+        "schema": PRODUCT_EDIT_SCHEMA_VERSION,
+        "language": {
+            "name": LANGUAGE_NAME,
+            "version": LANGUAGE_VERSION,
+        },
+        "canonicalSource": source,
+        "productAccepted": true,
+        "path": "product-weave-replace",
+        "operationCount": operation_count,
+    }))
 }
 
 fn canonicalize_source(source: &str) -> Result<(Program, String), CompilerError> {
@@ -3073,6 +3297,25 @@ mod tests {
         let document: Value =
             serde_json::from_str(&result.document_json).expect("document must be JSON");
         assert_eq!(document["canonicalSource"], result.source);
+        // ADR-065: product weave-replace path (no bootstrap aether.ast/v8).
+        assert_eq!(document["schema"], PRODUCT_EDIT_SCHEMA_VERSION);
+        assert_eq!(document["path"], "product-weave-replace");
+        assert_eq!(document["productAccepted"], true);
+    }
+
+    #[test]
+    fn product_weave_replace_does_not_require_bootstrap_ast_document() {
+        assert!(crate::structural_edit_product_weave_replace());
+        let result = apply_structural_edit(BASE_SOURCE, &replacement_edit(BASE_SOURCE, 42))
+            .expect("product weave replace");
+        assert_eq!(
+            result.source,
+            "world authoring\n\nweave main [] -> Whole:\n  yield 42\n"
+        );
+        let document: Value =
+            serde_json::from_str(&result.document_json).expect("product-edit JSON");
+        assert_eq!(document["schema"], PRODUCT_EDIT_SCHEMA_VERSION);
+        assert!(document.get("program").is_none());
     }
 
     #[test]

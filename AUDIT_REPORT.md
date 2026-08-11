@@ -110,11 +110,12 @@ Tauri bundle, installer, or model-status requirement.
 
 ## Stage 7 Seed-Hosted Compile
 
-Default CLI compilation uses the Aether-written seed artifact. Bootstrap
-remains for seed rebuild, `check` AST, invalid-source diagnostics, and
-dual-compare proofs. All shipped examples and the complete canonical-surface
-corpus, including the record, M2, M4, and M5 surfaces, match bootstrap
-byte-for-byte under seed compile.
+Default CLI compilation and seed rebuild use the Aether-written seed artifact
+(ADR-067). Bootstrap remains for dual-compare proofs, recovery `--bootstrap`
+AST diagnostics, and residual structural AST outside product weave-replace
+(ADR-065). All shipped examples and the complete canonical-surface corpus,
+including the record, M2, M4, and M5 surfaces, match bootstrap byte-for-byte
+under seed compile where claimed.
 
 ## M3 Structural Authoring Contract
 

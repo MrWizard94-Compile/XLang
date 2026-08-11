@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064); residual recovery bootstrap  
-**Date:** 2026-08-08 (Phase 1–2 / ADR-044–064 2026-08-10)  
-**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-064](ADR-064-product-default-toolchain-bootstrap-recovery.md)  
+**Status:** Active program — product-default toolchain (ADR-064–067); residual recovery bootstrap  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044–067 2026-08-10)  
+**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-067](ADR-067-barp-product-seed-rebuild.md)  
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -17,14 +17,13 @@ weakening:
 - dual-compare proofs for documented corpora  
 - honest Seed Profile claims  
 
-Bootstrap remains **required** only for:
+Bootstrap remains **required** only for residual roles (ADR-065–067 reduced further):
 
 | Role | Why kept |
 | --- | --- |
-| Seed rebuild (`compile --bootstrap`) | Emit new `seed/*.aeth` |
-| Dual-compare tests / gate oracle | Proof authority |
-| Structural-edit base parse AST | Authoring ops need `Program` |
-| LSP hover / definition AST | Authoring navigation |
+| Dual-compare tests / gate oracle (`compile --bootstrap`) | Proof authority (product rebuild is default) |
+| Structural-edit non–weave-replace ops | Insert/delete/statement/record still need `Program` |
+| Full `aether.ast/v8` structure | Recovery / authoring tree |
 | Recovery flags (`check|format|structure --bootstrap`) | Full AST diagnostics / rewrite |
 
 ---
@@ -42,18 +41,19 @@ Bootstrap remains **required** only for:
 | CLI `check` | **Product default** (ADR-064); `--bootstrap` recovery AST diagnostics |
 | CLI `format` | **Product default** LF+accept (ADR-064); `--bootstrap` AST rewrite |
 | CLI `project format` | **Product default** (ADR-064); `--bootstrap` AST format |
-| CLI `apply-edit` | Bootstrap base parse residual; product accept in core (ADR-048/053) |
+| CLI `apply-edit` | **ADR-065:** product weave-replace without base AST; other ops bootstrap AST; product accept (ADR-048/053) |
 | CLI `structure` | **Product default** envelope (ADR-064); `--bootstrap` aether.ast/v8 |
+| CLI `compile` (incl. seed) | **Product default** (ADR-067); `--bootstrap` dual-compare oracle |
 | LSP diagnostics | **Product primary** AE-SEED (ADR-058) |
 | LSP symbols | Product-surface when product accepts (ADR-063) |
 | LSP format | **Product** LF+accept (ADR-064) |
-| LSP hover/definition | Bootstrap AST residual |
+| LSP hover/definition | **Product-surface** local (ADR-066); import path text scan |
 | Product diagnostics API | [`product_diagnostics`] (ADR-055) |
 | Multi-module | Host elaborate + seed emit; seed-native multi-file **false** (ADR-056) |
 
 **Primary product emission** is seed forge without bootstrap pre-gate or
-product dual-compare gate. Bootstrap remains rebuild, default `check`/AST
-format/structure, LSP symbols, and dual-compare **oracle** (tests + aether-gate).
+product dual-compare gate. Bootstrap remains dual-compare **oracle**, recovery
+flags, and non–weave-replace structural AST (tests + aether-gate).
 
 ---
 
@@ -199,9 +199,11 @@ Product project/workspace compile returns seed bytes via
 | Product structure | **`structure --product`** envelope (ADR-054) |
 | Product diagnostics API | **`product_diagnostics`** (ADR-055) |
 | Multi-module | Host elaborate + seed emit (ADR-056); seed-native = false |
-| LSP diagnostics | **Product primary** (ADR-058) |
+| LSP diagnostics / hover / def | **Product primary** (ADR-058/066) |
+| Structural weave replace | **Product path** (ADR-065); residual bootstrap for other ops |
+| Seed rebuild | **Product compile** (ADR-067); `--bootstrap` oracle only |
 | Lib unit project verify | **Product seed probe** (ADR-052) |
-| Bootstrap roles | Rebuild seed, default check/AST format/structure, LSP symbols, dual-compare oracle |
+| Bootstrap residual | Dual-compare oracle, recovery flags, non-replace structural AST, full ast/v8 |
 | Gate | `aether-gate -Mode release` PASS |
 
 ---

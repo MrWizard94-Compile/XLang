@@ -1,9 +1,9 @@
 //! Bounded offline Language Server Protocol (M13a + M13b / ADR-017 / ADR-058).
 //!
-//! Stdio JSON-RPC only. **Product-path diagnostics are primary** (ADR-058 /
-//! AE-SEED codes via seed product path). Symbols/format/hover/definition still
-//! use bootstrap AST. No product AETH emission; no server-side disk writes of
-//! source or artifacts.
+//! Stdio JSON-RPC only. **Product-path diagnostics are primary** (ADR-058).
+//! Product-surface symbols (ADR-063) and hover/definition (ADR-066) avoid
+//! bootstrap AST for local navigation. Format is product LF+accept (ADR-064).
+//! No product AETH emission; no server-side disk writes of source or artifacts.
 //!
 //! M13b: optional project file enables cross-file definition/hover for
 //! `import unit "…" as alias` → `call alias.weave`.
@@ -14,10 +14,10 @@ use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use aether_core::{
-    compile_source, format_source_product, lsp_product_diagnostics_primary, parse_project_document,
-    product_default_cli_toolchain, product_diagnostics, product_surface_symbols,
-    product_surface_symbols_without_bootstrap, structural_document_json, validate_unit_path,
-    Diagnostic, LANGUAGE_NAME, LANGUAGE_VERSION,
+    compile_source, format_source_product, lsp_product_diagnostics_primary,
+    lsp_product_surface_hover_definition, parse_project_document, product_default_cli_toolchain,
+    product_diagnostics, product_surface_symbols, product_surface_symbols_without_bootstrap,
+    structural_document_json, validate_unit_path, Diagnostic, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 use serde_json::{json, Value};
 
@@ -735,7 +735,27 @@ pub fn hover_at(
             })
         }
         CursorSymbol::Plain(word) => {
-            if let Ok(program) = compile_source(text) {
+            // ADR-066: product-surface hover without bootstrap AST.
+            if product_surface_symbols_without_bootstrap() && lsp_product_surface_hover_definition()
+            {
+                if let Ok(surface) = product_surface_symbols(text) {
+                    if let Some(item) = surface.iter().find(|item| item.name == word) {
+                        let value = match item.kind {
+                            "weave" => format!("**weave `{word}`** (product surface)"),
+                            "record" => format!("**record `{word}`** (product surface)"),
+                            "world" => format!("**world `{word}`** (product surface)"),
+                            other => format!("**{other} `{word}`** (product surface)"),
+                        };
+                        return json!({
+                            "contents": {
+                                "kind": "markdown",
+                                "value": value,
+                            }
+                        });
+                    }
+                }
+            } else if let Ok(program) = compile_source(text) {
+                // Recovery: bootstrap AST when product-surface trackers are off.
                 if let Some(weave) = program.weaves.iter().find(|weave| weave.name == word) {
                     return json!({
                         "contents": {
@@ -847,6 +867,29 @@ pub fn definition_at(
                     });
                 }
             }
+            // ADR-066: product-surface definition without bootstrap AST.
+            if product_surface_symbols_without_bootstrap() && lsp_product_surface_hover_definition()
+            {
+                if let Ok(surface) = product_surface_symbols(text) {
+                    if let Some(item) = surface.iter().find(|item| item.name == word) {
+                        return json!({
+                            "uri": uri,
+                            "range": {
+                                "start": {
+                                    "line": u64::from(item.line),
+                                    "character": u64::from(item.column),
+                                },
+                                "end": {
+                                    "line": u64::from(item.line),
+                                    "character": u64::from(item.column) + word.len() as u64,
+                                },
+                            }
+                        });
+                    }
+                }
+                return Value::Null;
+            }
+            // Recovery: bootstrap structural document when product-surface trackers are off.
             let Ok(document) = structural_document_json(text) else {
                 return Value::Null;
             };

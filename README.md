@@ -29,8 +29,9 @@ materialization bridge.
 - `aether compile` invokes the **Aether-written seed compiler**
   (`seed/aether_seed.aeth`, embedded as `SEED_COMPILER_ARTIFACT`) through the
   forge ABI.
-- The Rust core remains the **bootstrap**: rebuild the seed (`compile --bootstrap`),
-  produce the AST for `check`, and verify seed output against bootstrap in tests.
+- The Rust core remains the **bootstrap recovery/oracle**: dual-compare proofs,
+  `--bootstrap` AST diagnostics, and residual structural AST. **Product** seed
+  rebuild is `compile` without `--bootstrap` (ADR-067).
 - The seed self-hosts, and the documented dual-compare corpus (shipped examples
   on the seed path, M2–M8 fixtures, M15 chaining, M19a release, M19b
   nursery+resource, M19d multi-weave arenas, M21 foreign-pilot, M23 pure
@@ -190,12 +191,13 @@ cargo run -p aether-cli -- project lock .\examples\workspace\app\aether.project.
 cargo run -p aether-cli -- workspace lock .\examples\workspace\aether.workspace.json --write
 cargo run -p aether-cli -- workspace verify .\examples\workspace\aether.workspace.json
 
-# Rebuild the seed safely after editing seed/aether_seed.ae.
-# Promote it only after the bootstrap and self-forged hashes are identical.
+# Rebuild the seed safely after editing seed/aether_seed.ae (product path, ADR-067).
+# Dual-compare oracle still uses --bootstrap; promote only when hashes match.
+cargo run -p aether-cli -- compile .\seed\aether_seed.ae --output .\target\aether_seed.product.aeth
 cargo run -p aether-cli -- compile .\seed\aether_seed.ae --output .\target\aether_seed.bootstrap.aeth --bootstrap
 cargo run -p aether-cli -- forge .\target\aether_seed.bootstrap.aeth .\seed\aether_seed.ae --output .\target\aether_seed.forged.aeth
-Get-FileHash .\target\aether_seed.bootstrap.aeth, .\target\aether_seed.forged.aeth
-cargo run -p aether-cli -- compile .\seed\aether_seed.ae --output .\seed\aether_seed.aeth --bootstrap
+Get-FileHash .\target\aether_seed.product.aeth, .\target\aether_seed.bootstrap.aeth, .\target\aether_seed.forged.aeth
+cargo run -p aether-cli -- compile .\seed\aether_seed.ae --output .\seed\aether_seed.aeth
 cargo build -p aether-cli
 ```
 

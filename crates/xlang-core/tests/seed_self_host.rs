@@ -3,17 +3,18 @@ use aether_core::{
     check_product_base_gate, compile_product_bytecode, compile_to_bytecode, compile_with_seed,
     compile_with_seed_invokes_bootstrap, compile_with_seed_product_authoritative, forge_bytecode,
     host_elaborates_modules_seed_emits, lib_module_validates_via_product_seed,
-    lsp_product_diagnostics_primary, product_cli_check_without_bootstrap,
-    product_default_cli_toolchain, product_diagnostic_abi, product_diagnostics,
-    product_format_without_bootstrap, product_multi_module_invokes_bootstrap,
+    lsp_product_diagnostics_primary, lsp_product_surface_hover_definition,
+    product_cli_check_without_bootstrap, product_default_cli_toolchain, product_diagnostic_abi,
+    product_diagnostics, product_format_without_bootstrap, product_multi_module_invokes_bootstrap,
     product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
-    product_project_format_without_bootstrap, product_structure_without_bootstrap,
-    product_surface_symbols, product_surface_symbols_without_bootstrap, run_bytecode,
+    product_project_format_without_bootstrap, product_seed_rebuild_without_bootstrap,
+    product_structure_without_bootstrap, product_surface_symbols,
+    product_surface_symbols_without_bootstrap, run_bytecode,
     seed_interprets_m23_comptime_calls_natively, seed_native_multi_module_elaboration,
     seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
     seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
-    structural_edit_product_base_gate, verify_bytecode, InvocationOutput, InvocationValue,
-    SEED_COMPILER_ARTIFACT,
+    structural_edit_product_base_gate, structural_edit_product_weave_replace, verify_bytecode,
+    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -441,6 +442,18 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
     assert!(
         bootstrap_is_recovery_oracle_only(),
         "ADR-064: bootstrap is recovery/oracle only"
+    );
+    assert!(
+        structural_edit_product_weave_replace(),
+        "ADR-065: product weave replace without bootstrap base AST"
+    );
+    assert!(
+        lsp_product_surface_hover_definition(),
+        "ADR-066: LSP product-surface hover/definition"
+    );
+    assert!(
+        product_seed_rebuild_without_bootstrap(),
+        "ADR-067: product seed rebuild without --bootstrap"
     );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")

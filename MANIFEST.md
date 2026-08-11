@@ -285,10 +285,11 @@ operation vocabulary, and compatibility policy are in
 
 | Path | Role |
 |------|------|
-| **Seed (default)** | Default CLI `compile` / `check` / `format` / `structure` / `project format` + LSP diagnostics/format/symbols — product seed path (ADR-064) |
+| **Seed (default)** | Default CLI `compile` (incl. seed rebuild ADR-067) / `check` / `format` / `structure` / `project format` + LSP diagnostics/format/symbols/hover/definition — product seed path (ADR-064–066) |
 | **Seed product API** | `compile_with_seed` / `product_diagnostics` / `product_surface_symbols` — never bootstrap |
+| **Structural weave replace** | Product text-splice path without bootstrap base AST (ADR-065); other edit ops residual bootstrap AST |
 | **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
-| **Bootstrap (recovery/oracle)** | `compile --bootstrap` seed rebuild; `check|format|structure --bootstrap` AST recovery; structural-edit base AST; LSP hover/definition; dual-compare tests/gate |
+| **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; structural-edit ops outside product weave-replace; dual-compare tests/gate |
 | **F-NATIVE M35a/b** | `compile --native-c` — verified AETH → ISO C pure Whole + locals/arithmetic (ADR-059/062); VM remains default |
 | **F-REGISTRY M24a** | `registry pin-local` / `verify-cache` — offline digest pins only (ADR-060); no network |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |

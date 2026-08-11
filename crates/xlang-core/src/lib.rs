@@ -41,7 +41,7 @@ fn decode_foreign_function_name(name: &str) -> Option<(&str, &str, &str)> {
 pub use authoring::{
     apply_structural_edit, diagnostic_json, product_structure_json, structural_document_json,
     StructuralEditError, StructuralEditResult, DIAGNOSTIC_SCHEMA_VERSION,
-    PRODUCT_STRUCTURE_SCHEMA_VERSION, STRUCTURAL_AST_SCHEMA_VERSION,
+    PRODUCT_EDIT_SCHEMA_VERSION, PRODUCT_STRUCTURE_SCHEMA_VERSION, STRUCTURAL_AST_SCHEMA_VERSION,
     STRUCTURAL_EDIT_PROTOCOL_VERSION,
 };
 pub use modules::{
@@ -3181,10 +3181,35 @@ pub const fn product_default_cli_toolchain() -> bool {
     true
 }
 
-/// BARP ADR-064 honesty: bootstrap remains recovery rebuild, dual-compare oracle,
-/// structural-edit base AST, and LSP hover/definition AST — not the default CLI product path.
+/// BARP ADR-064/065–067 honesty: bootstrap is recovery/oracle only — not the
+/// default product toolchain. Residual bootstrap roles after ADR-065–067:
+/// dual-compare oracle, recovery flags (`--bootstrap`), structural-edit ops
+/// outside product weave-replace (insert/delete/statement/record), and full
+/// `aether.ast/v8` structure. Product owns seed rebuild, weave replace, and
+/// LSP product-surface hover/definition.
 #[must_use]
 pub const fn bootstrap_is_recovery_oracle_only() -> bool {
+    true
+}
+
+/// BARP ADR-065: top-level weave `replace` on product-accepted base source does
+/// not require bootstrap `Program` base parse (text splice + product accept).
+#[must_use]
+pub const fn structural_edit_product_weave_replace() -> bool {
+    true
+}
+
+/// BARP ADR-066: LSP hover/definition use product-surface symbols for local
+/// weaves/records/world (no bootstrap AST for Plain navigation).
+#[must_use]
+pub const fn lsp_product_surface_hover_definition() -> bool {
+    true
+}
+
+/// BARP ADR-067: product seed rebuild is `compile` without `--bootstrap`
+/// (`compile_product_bytecode`); dual-compare oracle may still use `--bootstrap`.
+#[must_use]
+pub const fn product_seed_rebuild_without_bootstrap() -> bool {
     true
 }
 
