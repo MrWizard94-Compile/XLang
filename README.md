@@ -194,6 +194,11 @@ cargo run -p aether-cli -- structure (Resolve-Path .\examples\comptime-calls.ae)
 cargo run -p aether-cli -- compile (Resolve-Path .\examples\comptime-calls.ae) --output .\target\comptime-calls.aeth
 cargo run -p aether-cli -- run .\target\comptime-calls.aeth
 
+# M32a: local verified-execution evidence over a fixed, embedded pure corpus.
+# Compilation is excluded; each sample includes AETH verification, decode, and VM execution.
+cargo run -p aether-cli -- bench --list
+cargo run -p aether-cli -- bench all --warmup 3 --iterations 11 --report .\target\aether-bench.json
+
 # Refresh local package integrity locks explicitly; without --write each command
 # prints the candidate JSON and leaves disk unchanged.
 cargo run -p aether-cli -- project lock .\examples\workspace\util\aether.project.json --write
@@ -216,7 +221,13 @@ cargo build -p aether-cli
 The CLI is the shipped Aether product interface. It exposes canonical structure
 and validated structural edits locally without introducing an application, model,
 or network authority. No Studio workbench or app is part of the current Aether
-product surface.
+product surface. M32a adds `aether bench`: an offline measurement command for
+only the embedded `welcome`, `arena-buffer`, and `task-loop` workloads. It
+seed-compiles each selected source once, explicitly verifies its AETH artifact,
+then samples `verify + decode + execute` with empty grants. It accepts no
+caller-supplied source or artifact; `--report` writes raw local samples only to
+the explicit path after every workload succeeds. See
+[ADR-104](docs/ADR-104-m32a-verified-execution-benchmarks.md).
 
 ## Local technical-preview package
 

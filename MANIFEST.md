@@ -38,8 +38,9 @@ parallel execution. See [docs/AETHER_0.36.md](docs/AETHER_0.36.md).
 Authoring uses `aether.ast/v8`, `aether.edit/v8`, and
 `aether.diagnostic/v8`. The CLI provides offline
 project/workspace verify, `aether test` / `aether project test` (optional
-grants/reports), `aether lsp`, and `aether run` with optional `--grant-*`
-including M21 `--grant-lib KEY=PATH`. Stdlib layer 1 is under `stdlib/`.
+grants/reports), `aether lsp`, M32a `aether bench`, and `aether run` with
+optional `--grant-*` including M21 `--grant-lib KEY=PATH`. Stdlib layer 1 is
+under `stdlib/`.
 Verified AETH v4–v11 remain compatibility inputs. M21 foreign pilot is Whole-only
 under explicit library grant; native code is **not** sandboxed. Cooperative
 Policy B (unstarted cancel / return-end owners) remains the v11 compatibility
@@ -51,8 +52,10 @@ strictly checkpointed v12 successor.
 
 This manifest is the executable Aether 0.36 product contract (0.11 core language,
 M9–M23/M19a–M19e/M20/M20b/M17b–M17d/M21 pilot/M22 tooling plus RTP-001 and
-PKG-001 with bounded task-frame semantics and honest seed limits). It intentionally does not promote long-range research directions to
-implemented behavior. The
+PKG-001 with bounded task-frame semantics and honest seed limits), plus the
+post-0.36 M32a verified-execution benchmark tool. M32a has no language or
+artifact effect. This manifest intentionally does not promote long-range
+research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
 are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
 [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -218,6 +221,17 @@ on `aether test` and `aether project test` (default empty = pure).
 
 M17d (package 0.30) adds optional `--report` (JSON `aether.test-report/v1`) and
 `--report-junit` (offline JUnit-compatible XML) on both test runners.
+
+M32a adds the post-0.36 `aether bench` verified-execution baseline tool. Its
+closed `welcome`, `arena-buffer`, and `task-loop` corpus is embedded in the CLI;
+the command product-seed-compiles each selection once, explicitly verifies it,
+and measures repeated `verify + decode + execute` calls with no grants.
+Compilation is excluded. `--report` emits `aether.benchmark-report/v1` only to
+an explicit file under an existing parent directory after all workloads pass.
+The command does not accept caller source/artifact input, make a performance
+guarantee, change Aether/AETH semantics, or widen host authority. See
+[ADR-104](docs/ADR-104-m32a-verified-execution-benchmarks.md) and
+[M32a matrix](docs/M32A-VALIDATION-MATRIX.md).
 
 M21 (package 0.31) adds `foreign weave` (Whole-only pilot) with host-side
 libloading after `--grant-lib KEY=PATH`. Human residual-risk acceptance recorded;

@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.36.0** (language **0.11** + M19e AETH v12 + post-0.36 maturity program)  
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-103 reserved-task seed-SPEAK pilot — **GATE PASS mode=full**
+**Current delivery verification:** ADR-104 M32a verified-execution benchmark suite — **GATE PASS mode=full**
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -14,7 +14,8 @@
 Aether is a **local-first, seed-hosted product compiler** with verified AETH
 execution, dual-compare self-host proofs, and human-authorized **F-NATIVE** /
 **F-REGISTRY** pilots — still **0.36.0** package contract, with BARP having moved
-product authority off the Rust bootstrap for default toolchain paths.
+product authority off the Rust bootstrap for default toolchain paths and M32a
+now providing a closed local verified-execution evidence surface.
 
 ---
 
@@ -83,6 +84,7 @@ Aether source (.ae)
 
 Verified AETH
     ├─ aether run  (VM; pure or grants)
+    ├─ aether bench (embedded pure corpus; verify + decode + execute; no grants)
     ├─ aether forge (compiler ABI only)
     └─ dual-compare tests (product ≡ bootstrap where claimed)
 ```
@@ -122,19 +124,29 @@ work has been **independence and infrastructure maturity** without a package bum
 - Yield-in-truth-choose fail-closed (AE-SEED-013)  
 - Task checkpoint required (AE-SEED-015)  
 
-### 5.2 F-NATIVE (M35a → M35j)
+### 5.2 M32a verified-execution evidence (ADR-104)
+
+`aether bench` selects only the embedded `welcome`, `arena-buffer`, and
+`task-loop` workload sources. It product-seed-compiles each selected workload
+once, explicitly verifies its AETH, and records bounded raw local samples of
+`verify + decode + execute` with empty grants. Optional reports carry only
+schema/version, source and artifact SHA-256 identities, exits, samples, and
+summary statistics. There is no caller-supplied program, native/JIT path,
+network/process/model authority, performance threshold, or broad speed claim.
+
+### 5.3 F-NATIVE (M35a → M35j)
 
 C pilot → locals → SPEAK/multi-weave → host-cc dual-exec → object → LLVM IR →
 LLVM object → native exe → toolchain probe/hermetic → **operator `--target`
 matrix (host dual-run; cross link-only)**
 
-### 5.3 F-REGISTRY (M24a → M24i)
+### 5.4 F-REGISTRY (M24a → M24i)
 
 Offline pin → HMAC signed → Ed25519/HTTPS → rotation → multi-root policy →
 root certs → multi-level chains → **explicit CLI root/certified-key setup** →
 X.509-lite → **CA store + chain verify + cache-gate validation**
 
-### 5.4 Recent tip commits (illustrative)
+### 5.5 Recent tip commits (illustrative)
 
 | Commit | Slice |
 | --- | --- |
@@ -145,10 +157,12 @@ X.509-lite → **CA store + chain verify + cache-gate validation**
 | `b5305cf` | ADR-090–093 forge SPEAK capture, native exe, multi-level certs, checkpoints |
 | `f03e310` | ADR-086–089 SPEAK matrix, LLVM object, root certs, task reserve |
 
-**Current verified delivery:** ADR-103 extends the seed-SPEAK pilot with
-canonical lowercase line-prefix detection for the reserved task surface
-(`AE-SEED-014`), including `timeout`, task-handle, and parallel proposals. The
-full conformance matrix and seed-native multi-file remain residual.
+**Current verified delivery:** ADR-104 adds M32a's bounded
+verified-execution benchmark suite. The full gate passed with the three new
+workload/option/report test groups; it retains all prior seed/self-host,
+example, verifier, VM, and project evidence. M32a supplies local raw evidence,
+not a claimed performance improvement. The full seed SPEAK conformance matrix
+and seed-native multi-file remain residual.
 
 ---
 
@@ -164,6 +178,7 @@ full conformance matrix and seed-native multi-file remain residual.
 | Registry | **Medium** | Offline + signed + lite CA; not full PKI |
 | Task concurrency | **Medium** | M19e solid; no handles/timeouts/parallel |
 | Foreign ABI | **Low–Medium** | Bounded pilot only |
+| Verified-execution performance evidence | **Low–Medium** | M32a fixed-corpus local reports; no pinned multi-host baseline or comparative speed claim |
 | Package versioning | **Stable** | Still 0.36.0 contract |
 
 ---
@@ -185,10 +200,11 @@ full conformance matrix and seed-native multi-file remain residual.
 Ordered for dependency honesty (`CONST-DEP-001`):
 
 1. **BARP:** expand seed SPEAK to remaining conformance codes (010/011/013/015); design seed-native multi-file forge ABI
-2. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility  
-3. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite  
-4. **Task runtime:** implementable ADRs for handles and/or timeouts under ADR-081 invariants  
-5. **Optional package 0.37** when language surface or AETH version actually expands  
+2. **M32b:** establish a pinned host/toolchain workload baseline and comparison method before any scoped performance-improvement claim
+3. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility
+4. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite
+5. **Task runtime:** implementable ADRs for handles and/or timeouts under ADR-081 invariants
+6. **Optional package 0.37** when language surface or AETH version actually expands
 
 ---
 

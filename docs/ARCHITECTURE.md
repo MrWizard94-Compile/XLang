@@ -204,6 +204,19 @@ and `apply-edit` seed-compiles before writing canonical source. No active
 desktop, WebView, model, or network integration exists. The retired workbench
 is recorded in [ADR-006](ADR-006-retire-aether-studio.md).
 
+### M32a verified-execution benchmark boundary
+
+`aether bench` is a deliberately narrower execution entrypoint. It contains the
+reviewed `welcome`, `arena-buffer`, and `task-loop` Aether sources at build time;
+the operator selects only one of those names or `all`. The CLI uses the product
+seed compiler once per selected workload, explicitly verifies the generated
+AETH, and then times repeated calls to the normal verify-before-run VM path.
+It installs no grants and has no source path, artifact path, host service,
+native, process, or network input. The optional JSON report is written only to
+an explicit path after all selected workloads complete. This gives local
+baseline evidence without turning the CLI into an arbitrary-program timing
+surface; see [ADR-104](ADR-104-m32a-verified-execution-benchmarks.md).
+
 ## Bootstrap Boundary
 
 The Rust core remains the Aether 0.36 bootstrap implementation and VM, required

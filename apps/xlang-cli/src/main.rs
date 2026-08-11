@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod bench_runner;
 mod lsp;
 mod test_runner;
 
@@ -30,6 +31,9 @@ use aether_core::{
 };
 
 fn usage() {
+    eprintln!(
+        "M32a verified-execution benchmarks:\n  aether bench <all|welcome|arena-buffer|task-loop> [--warmup <0..=100>] [--iterations <1..=1000>] [--report <file.json>]\n  aether bench --list\nBenchmark workloads are embedded, pure, and bounded; no caller source/artifact input or grants are accepted."
+    );
     eprintln!(
         "M24f/g key setup:\n  aether registry trust-root <cache-root> --key-id <id> --seed-file <32-byte-path>\n  aether registry certify-ed25519-key <cache-root> --key-id <id> --seed-file <32-byte-path> --parent-key-id <id>\nThe supplied Ed25519 seed files remain local and must be exactly 32 bytes."
     );
@@ -1825,6 +1829,7 @@ fn run() -> Result<(), String> {
             println!("{LANGUAGE_NAME} {LANGUAGE_VERSION}");
             Ok(())
         }
+        "bench" => bench_runner::execute(&mut arguments),
         "lsp" => {
             let mut project = None;
             if let Some(flag) = arguments.next() {
