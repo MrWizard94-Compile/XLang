@@ -1,12 +1,13 @@
 use aether_core::{
-    apply_edit_cli_trusts_product_accept, compile_product_bytecode, compile_to_bytecode,
-    compile_with_seed, compile_with_seed_invokes_bootstrap,
+    apply_edit_cli_trusts_product_accept, check_product_base_gate, compile_product_bytecode,
+    compile_to_bytecode, compile_with_seed, compile_with_seed_invokes_bootstrap,
     compile_with_seed_product_authoritative, forge_bytecode, host_elaborates_modules_seed_emits,
     lib_module_validates_via_product_seed, lsp_product_diagnostics_primary,
     product_cli_check_without_bootstrap, product_diagnostic_abi, product_diagnostics,
     product_format_without_bootstrap, product_multi_module_invokes_bootstrap,
     product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
-    product_project_format_without_bootstrap, product_structure_without_bootstrap, run_bytecode,
+    product_project_format_without_bootstrap, product_structure_without_bootstrap,
+    product_surface_symbols, product_surface_symbols_without_bootstrap, run_bytecode,
     seed_interprets_m23_comptime_calls_natively, seed_native_multi_module_elaboration,
     seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
     seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
@@ -424,6 +425,14 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
         lsp_product_diagnostics_primary(),
         "ADR-058: LSP product diagnostics primary"
     );
+    assert!(
+        check_product_base_gate(),
+        "ADR-063: check product base gate"
+    );
+    assert!(
+        product_surface_symbols_without_bootstrap(),
+        "ADR-063: product surface symbols without bootstrap"
+    );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")
         .bytecode;
@@ -487,6 +496,22 @@ fn barp_phase4_product_diagnostic_abi_and_import_unit() {
     );
     assert_eq!(import_diags.len(), 1);
     assert_eq!(import_diags[0].code, "AE-SEED-012");
+}
+
+#[test]
+fn barp_phase5_product_surface_symbols_without_bootstrap() {
+    assert!(product_surface_symbols_without_bootstrap());
+    let symbols = product_surface_symbols(
+        "world demo\n\nweave helper [] -> Whole:\n  yield 1\n\nweave main [] -> Whole:\n  yield 2\n",
+    )
+    .expect("product symbols");
+    let names: Vec<_> = symbols.iter().map(|s| s.name.as_str()).collect();
+    assert!(names.contains(&"demo"));
+    assert!(names.contains(&"helper"));
+    assert!(names.contains(&"main"));
+    assert!(symbols
+        .iter()
+        .any(|s| s.kind == "weave" && s.name == "main"));
 }
 
 #[test]

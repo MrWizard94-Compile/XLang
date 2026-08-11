@@ -285,7 +285,7 @@ operation vocabulary, and compatibility policy are in
 
 | Path | Role |
 |------|------|
-| **Seed (default)** | `compile_product_bytecode` / `product_diagnostics` / CLI `compile` / project+workspace build / lib project-verify / apply-edit accept / product CLI + LSP diagnostics — forge-first (ADR-047–058) |
+| **Seed (default)** | `compile_product_bytecode` / `product_diagnostics` / `product_surface_symbols` / CLI `compile` / project+workspace build / product CLI + LSP diagnostics/symbols — forge-first (ADR-047–063) |
 | **Seed product API** | `compile_with_seed` — product bytes only; empty placeholder `Program` (ADR-051; never bootstrap) |
 | **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
 | **Bootstrap** | `compile_to_bytecode` / CLI `compile --bootstrap` / default `check` AST / format / structure AST / LSP symbols — rebuild seed, full diagnostics, dual-compare oracle |

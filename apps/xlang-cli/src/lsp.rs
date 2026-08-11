@@ -15,8 +15,8 @@ use std::path::{Path, PathBuf};
 
 use aether_core::{
     compile_source, format_source, lsp_product_diagnostics_primary, parse_project_document,
-    product_diagnostics, structural_document_json, validate_unit_path, Diagnostic, LANGUAGE_NAME,
-    LANGUAGE_VERSION,
+    product_diagnostics, product_surface_symbols, product_surface_symbols_without_bootstrap,
+    structural_document_json, validate_unit_path, Diagnostic, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 use serde_json::{json, Value};
 
@@ -362,6 +362,40 @@ fn lsp_bootstrap_diagnostic(diagnostic: &Diagnostic) -> Value {
 }
 
 pub fn document_symbols(text: &str) -> Value {
+    // ADR-063: product-surface symbols without bootstrap AST when product accepts.
+    if product_surface_symbols_without_bootstrap() {
+        if let Ok(surface) = product_surface_symbols(text) {
+            let mut symbols = Vec::new();
+            for item in surface {
+                let kind = match item.kind {
+                    "world" | "record" => 5u64,
+                    "weave" => 12,
+                    _ => 13,
+                };
+                let detail = item.kind;
+                symbols.push(symbol(
+                    &item.name,
+                    detail,
+                    kind,
+                    u64::from(item.line),
+                    u64::from(item.column),
+                ));
+            }
+            for (alias, path) in parse_imports(text) {
+                symbols.push(symbol(&alias, &format!("import {path}"), 9, 0, 0));
+            }
+            return Value::Array(symbols);
+        }
+        // Product reject (e.g. raw import unit): still expose import aliases without AST.
+        let imports = parse_imports(text);
+        if !imports.is_empty() {
+            let mut symbols = Vec::new();
+            for (alias, path) in imports {
+                symbols.push(symbol(&alias, &format!("import {path}"), 9, 0, 0));
+            }
+            return Value::Array(symbols);
+        }
+    }
     let Ok(document) = structural_document_json(text) else {
         return Value::Array(Vec::new());
     };

@@ -9,8 +9,8 @@ mod test_runner;
 
 use aether_core::{
     apply_edit_cli_trusts_product_accept, apply_structural_edit, canonical_ast,
-    compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
-    compile_workspace_package, forge_bytecode, format_project, format_source,
+    check_product_base_gate, compile_product_bytecode, compile_project_modules, compile_source,
+    compile_to_bytecode, compile_workspace_package, forge_bytecode, format_project, format_source,
     format_source_product, lower_verified_aeth_to_c, multi_module_authority_note,
     parse_project_document, parse_workspace_document, pin_local_package,
     product_cli_check_without_bootstrap, product_format_without_bootstrap,
@@ -51,7 +51,21 @@ fn check(source_path: &Path, product: bool) -> Result<(), String> {
         );
         return Ok(());
     }
-    let program = compile_source(&source).map_err(|error| error.to_string())?;
+    // ADR-063: when both product and bootstrap reject, prefer product AE-SEED codes.
+    debug_assert!(
+        check_product_base_gate(),
+        "ADR-063: check product base gate"
+    );
+    let product_result = compile_product_bytecode(&source);
+    let program = match compile_source(&source) {
+        Ok(program) => program,
+        Err(bootstrap_error) => {
+            if let Err(product_error) = product_result {
+                return Err(product_error.to_string());
+            }
+            return Err(bootstrap_error.to_string());
+        }
+    };
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} check passed: {} significant token(s) in {} (bootstrap diagnostics)",
         program.significant_token_count(),

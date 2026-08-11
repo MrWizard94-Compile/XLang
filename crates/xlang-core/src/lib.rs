@@ -3163,6 +3163,92 @@ pub const fn format_source_product_base_gate() -> bool {
     true
 }
 
+/// BARP ADR-063: default `check` prefers product AE-SEED when both reject.
+#[must_use]
+pub const fn check_product_base_gate() -> bool {
+    true
+}
+
+/// BARP ADR-063: product-surface symbols available without bootstrap AST.
+#[must_use]
+pub const fn product_surface_symbols_without_bootstrap() -> bool {
+    true
+}
+
+/// One top-level name discovered from product-accepted source without bootstrap AST.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProductSurfaceSymbol {
+    pub name: String,
+    pub kind: &'static str,
+    /// 0-based line for LSP.
+    pub line: u32,
+    /// 0-based UTF-16-ish column (byte index of name start on the line for ASCII).
+    pub column: u32,
+}
+
+/// Product-path symbol scan (ADR-063): require product accept, then scan for
+/// top-level `world`, `weave`/`task weave`/`export weave`, and `record` names.
+///
+/// Not a full AST; no nested body symbols. Prefer bootstrap `structure` for
+/// complete authoring trees.
+pub fn product_surface_symbols(source: &str) -> Result<Vec<ProductSurfaceSymbol>, CompilerError> {
+    debug_assert!(
+        product_surface_symbols_without_bootstrap(),
+        "ADR-063: product surface symbols without bootstrap"
+    );
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    compile_product_bytecode(&normalized)?;
+    let mut symbols = Vec::new();
+    for (line_index, line) in normalized.lines().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let line_u32 = line_index as u32;
+        if let Some(rest) = trimmed.strip_prefix("world ") {
+            let name = rest.split_whitespace().next().unwrap_or("").to_owned();
+            if !name.is_empty() {
+                let column = (line.find("world ").unwrap_or(0) + 6) as u32;
+                symbols.push(ProductSurfaceSymbol {
+                    name,
+                    kind: "world",
+                    line: line_u32,
+                    column,
+                });
+            }
+            continue;
+        }
+        let after_task = trimmed.strip_prefix("task ").unwrap_or(trimmed);
+        let after_export = after_task.strip_prefix("export ").unwrap_or(after_task);
+        if let Some(rest) = after_export.strip_prefix("weave ") {
+            let name = rest.split([' ', '[']).next().unwrap_or("").to_owned();
+            if !name.is_empty() {
+                let column = (line.find(&name).unwrap_or(0)) as u32;
+                symbols.push(ProductSurfaceSymbol {
+                    name,
+                    kind: "weave",
+                    line: line_u32,
+                    column,
+                });
+            }
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("record ") {
+            let name = rest.split([' ', '[']).next().unwrap_or("").to_owned();
+            if !name.is_empty() {
+                let column = (line.find(&name).unwrap_or(0)) as u32;
+                symbols.push(ProductSurfaceSymbol {
+                    name,
+                    kind: "record",
+                    line: line_u32,
+                    column,
+                });
+            }
+        }
+    }
+    Ok(symbols)
+}
+
 #[must_use]
 pub fn format_program(program: &Program) -> String {
     let mut formatted = format!("world {}\n", program.world);
