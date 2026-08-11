@@ -1,10 +1,12 @@
-//! M35a verified AETH → C pure pilot (F-NATIVE, ADR-059).
+//! M35 verified AETH → C pure pilot (F-NATIVE, ADR-059 / ADR-062 M35b).
 //!
-//! Lowers only a restricted pure Total main subset. Input must already verify.
+//! Lowers a restricted pure Total main subset including Whole locals and
+//! arithmetic. Input must already verify.
 
 use crate::{
     parse_artifact, verify_bytecode, ArtifactFunction, BytecodeError, ValueType, OP_DIFFERENCE,
-    OP_PRODUCT, OP_PUSH_TEXT, OP_PUSH_WHOLE, OP_QUOTIENT, OP_REMAINDER, OP_SPEAK, OP_SUM, OP_YIELD,
+    OP_LOAD, OP_PRODUCT, OP_PUSH_TEXT, OP_PUSH_WHOLE, OP_QUOTIENT, OP_REMAINDER, OP_SPEAK,
+    OP_STORE, OP_SUM, OP_YIELD,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +48,12 @@ pub const fn native_aeth_to_c_pilot() -> bool {
     true
 }
 
+/// M35b: Whole locals + arithmetic ops are supported in the pure pilot.
+#[must_use]
+pub const fn native_aeth_to_c_locals_pilot() -> bool {
+    true
+}
+
 /// Lower **verified** AETH to ISO C for the pure Whole pilot subset.
 pub fn lower_verified_aeth_to_c(bytecode: &[u8]) -> Result<String, NativeError> {
     debug_assert!(
@@ -57,35 +65,44 @@ pub fn lower_verified_aeth_to_c(bytecode: &[u8]) -> Result<String, NativeError> 
     if artifact.functions.len() != 1 {
         return Err(NativeError::new(
             "AE-NATIVE-002",
-            "M35a pilot accepts a single total main weave only",
+            "M35 pilot accepts a single total main weave only",
         ));
     }
     let main = &artifact.functions[0];
     if main.name != "main" || main.is_host() || main.is_task() {
         return Err(NativeError::new(
             "AE-NATIVE-002",
-            "M35a pilot requires a single guest total main weave",
+            "M35 pilot requires a single guest total main weave",
         ));
     }
     if !main.parameters.is_empty() || main.result != ValueType::Whole {
         return Err(NativeError::new(
             "AE-NATIVE-002",
-            "M35a pilot main must be [] -> Whole",
+            "M35 pilot main must be [] -> Whole",
         ));
     }
-    if !main.locals.is_empty() {
-        return Err(NativeError::new(
-            "AE-NATIVE-002",
-            "M35a pilot does not lower locals yet",
-        ));
+    for local in &main.locals {
+        if local.value_type != ValueType::Whole {
+            return Err(NativeError::new(
+                "AE-NATIVE-002",
+                "M35b pilot lowers Whole locals only",
+            ));
+        }
     }
     emit_c_for_pure_main(main)
 }
 
 fn emit_c_for_pure_main(main: &ArtifactFunction) -> Result<String, NativeError> {
+    let local_count = main.locals.len();
     let mut body = String::new();
     body.push_str("  long long stack[64];\n");
     body.push_str("  int sp = 0;\n");
+    if local_count > 0 {
+        body.push_str(&format!("  long long locals[{local_count}];\n"));
+        body.push_str(&format!(
+            "  for (int i = 0; i < {local_count}; ++i) locals[i] = 0;\n"
+        ));
+    }
     let mut i = 0;
     let code = &main.code;
     while i < code.len() {
@@ -123,6 +140,41 @@ fn emit_c_for_pure_main(main: &ArtifactFunction) -> Result<String, NativeError> 
                 let escaped = c_escape(&text);
                 body.push_str(&format!("  fputs(\"{escaped}\", stdout);\n"));
             }
+            OP_STORE => {
+                if i + 2 > code.len() {
+                    return Err(NativeError::new(
+                        "AE-NATIVE-003",
+                        "truncated STORE local index",
+                    ));
+                }
+                let slot = u16::from_le_bytes(code[i..i + 2].try_into().unwrap()) as usize;
+                i += 2;
+                if slot >= local_count {
+                    return Err(NativeError::new(
+                        "AE-NATIVE-003",
+                        format!("STORE local {slot} out of range"),
+                    ));
+                }
+                body.push_str("  if (sp < 1) return 1;\n");
+                body.push_str(&format!("  locals[{slot}] = stack[--sp];\n"));
+            }
+            OP_LOAD => {
+                if i + 2 > code.len() {
+                    return Err(NativeError::new(
+                        "AE-NATIVE-003",
+                        "truncated LOAD local index",
+                    ));
+                }
+                let slot = u16::from_le_bytes(code[i..i + 2].try_into().unwrap()) as usize;
+                i += 2;
+                if slot >= local_count {
+                    return Err(NativeError::new(
+                        "AE-NATIVE-003",
+                        format!("LOAD local {slot} out of range"),
+                    ));
+                }
+                body.push_str(&format!("  stack[sp++] = locals[{slot}];\n"));
+            }
             OP_SUM | OP_DIFFERENCE | OP_PRODUCT | OP_QUOTIENT | OP_REMAINDER => {
                 let op_c = match op {
                     OP_SUM => "+",
@@ -140,10 +192,9 @@ fn emit_c_for_pure_main(main: &ArtifactFunction) -> Result<String, NativeError> 
                 body.push_str(&format!("    stack[sp++] = a {op_c} b; }}\n"));
             }
             OP_SPEAK => {
-                // M35a: SPEAK of Whole is not lowered; PUSH_TEXT is emitted as fputs above.
                 return Err(NativeError::new(
                     "AE-NATIVE-002",
-                    "M35a pilot rejects SPEAK (use pure yield Whole only)",
+                    "M35 pilot rejects SPEAK (use pure yield Whole only)",
                 ));
             }
             OP_YIELD => {
@@ -153,7 +204,7 @@ fn emit_c_for_pure_main(main: &ArtifactFunction) -> Result<String, NativeError> 
             other => {
                 return Err(NativeError::new(
                     "AE-NATIVE-002",
-                    format!("M35a pilot rejects opcode {other}"),
+                    format!("M35 pilot rejects opcode {other}"),
                 ));
             }
         }
@@ -161,11 +212,11 @@ fn emit_c_for_pure_main(main: &ArtifactFunction) -> Result<String, NativeError> 
     if !body.contains("return (int)stack") {
         return Err(NativeError::new(
             "AE-NATIVE-002",
-            "M35a pilot requires a terminal yield",
+            "M35 pilot requires a terminal yield",
         ));
     }
     Ok(format!(
-        "/* Generated by Aether M35a from verified AETH only (F-NATIVE). */\n\
+        "/* Generated by Aether M35 from verified AETH only (F-NATIVE). */\n\
 #include <stdio.h>\n\
 int main(void) {{\n\
 {body}\
@@ -206,6 +257,18 @@ mod tests {
         assert!(c.contains("return (int)stack[--sp];"));
         assert!(c.contains("42LL"));
         assert!(c.contains("int main(void)"));
+    }
+
+    #[test]
+    fn lowers_bind_sum_local_to_c() {
+        assert!(native_aeth_to_c_locals_pilot());
+        let source = "world pure\n\nweave main [] -> Whole:\n  bind x <- sum 20 22\n  yield x\n";
+        let bytecode = compile_product_bytecode(source).expect("product");
+        assert_eq!(run_bytecode(&bytecode).expect("run").exit_code, 42);
+        let c = lower_verified_aeth_to_c(&bytecode).expect("lower with locals");
+        assert!(c.contains("locals["));
+        assert!(c.contains("20LL") && c.contains("22LL"));
+        assert!(c.contains("a + b") || c.contains("a + b;"));
     }
 
     #[test]

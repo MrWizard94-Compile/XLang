@@ -7,6 +7,8 @@
 | M35A-003 | product source path seed compile then lower | dual product bytes verify |
 | M35A-004 | foreign/host/nursery rejected for pilot | FAIL closed |
 | M35A-005 | no Aether-source→C without AETH | only verified AETH input |
+| M35B-001 | bind + sum + yield lowers with locals | C has locals[] and + |
+| M35B-002 | VM exit matches for bind sum fixture | exit 42 |
 
 ---
 

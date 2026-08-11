@@ -598,8 +598,23 @@ pub fn format_project(
 }
 
 /// Canonical-format Aether source using the bootstrap formatter.
+///
+/// ADR-062: when both product and bootstrap reject the source, prefer product
+/// `AE-SEED-*` diagnostics (bootstrap AST authority only on success or when
+/// bootstrap alone can accept — e.g. some lib surfaces).
 pub fn format_source(source: &str) -> Result<String, CompilerError> {
-    let program = crate::compile_source(source)?;
+    debug_assert!(
+        crate::format_source_product_base_gate(),
+        "ADR-062: format_source product base gate"
+    );
+    let product_result = crate::compile_product_bytecode(source);
+    let program = match crate::compile_source(source) {
+        Ok(program) => program,
+        Err(bootstrap_error) => {
+            product_result?;
+            return Err(bootstrap_error);
+        }
+    };
     Ok(crate::format_program(&program))
 }
 
@@ -742,6 +757,17 @@ mod tests {
         let legacy = format_source_product("world w\n\nfn main() -> Int { return 0; }\n")
             .expect_err("legacy must fail product format");
         assert!(legacy.to_string().contains("AE-SEED-007"), "got {legacy}");
+    }
+
+    #[test]
+    fn format_source_prefers_product_ae_seed_when_both_reject() {
+        assert!(crate::format_source_product_base_gate(), "ADR-062 tracker");
+        let legacy = format_source("world w\n\nfn main() -> Int { return 0; }\n")
+            .expect_err("legacy must fail");
+        assert!(
+            legacy.to_string().contains("AE-SEED-007"),
+            "expected product AE-SEED-007, got {legacy}"
+        );
     }
 
     #[test]

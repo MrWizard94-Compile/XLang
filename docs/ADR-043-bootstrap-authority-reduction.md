@@ -1,7 +1,7 @@
 # ADR-043: Bootstrap Authority Reduction Program (BARP)
 
-**Status:** Accepted (program) — through ADR-058  
-**Date:** 2026-08-08 (Phase 1–2 / ADR-044–058 2026-08-10)  
+**Status:** Accepted (program) — through ADR-062  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044–062 2026-08-10)  
 **Related Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`  
 **Design:** [DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 
@@ -56,9 +56,11 @@ authority under Constitution.
     `structural_edit_product_base_gate()`.  
 18. **ADR-058 (done):** LSP product diagnostics primary;
     `lsp_product_diagnostics_primary()`.  
-19. Bootstrap remains seed recovery rebuild + default `check`/AST format +
+19. **ADR-062 (done):** format product base gate; M35b AETH→C Whole locals;
+    `format_source_product_base_gate()`, `native_aeth_to_c_locals_pilot()`.  
+20. Bootstrap remains seed recovery rebuild + default `check`/format success AST +
     structure AST + LSP symbols/format/hover + dual-compare oracle.  
-20. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+21. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 
@@ -82,7 +84,7 @@ authority under Constitution.
 
 ## Links
 
-- DESIGN-BARP-001, ADR-039, ADR-044–058, SEED_PROFILE  
+- DESIGN-BARP-001, ADR-039, ADR-044–062, SEED_PROFILE  
 
 ---
 

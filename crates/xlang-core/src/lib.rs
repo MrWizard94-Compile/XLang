@@ -53,7 +53,8 @@ pub use modules::{
     validate_lib_module_source, ProjectTestReport, ProjectTestResult,
 };
 pub use native::{
-    f_native_authorized, lower_verified_aeth_to_c, native_aeth_to_c_pilot, NativeError,
+    f_native_authorized, lower_verified_aeth_to_c, native_aeth_to_c_locals_pilot,
+    native_aeth_to_c_pilot, NativeError,
 };
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
@@ -117,8 +118,8 @@ const MAX_NURSERY_SPAWNS: usize = 8;
 pub(crate) const OP_PUSH_TEXT: u8 = 1;
 pub(crate) const OP_PUSH_WHOLE: u8 = 2;
 const OP_PUSH_TRUTH: u8 = 3;
-const OP_STORE: u8 = 4;
-const OP_LOAD: u8 = 5;
+pub(crate) const OP_STORE: u8 = 4;
+pub(crate) const OP_LOAD: u8 = 5;
 const OP_MOVE: u8 = 6;
 const OP_REVISE: u8 = 7;
 pub(crate) const OP_SPEAK: u8 = 8;
@@ -3154,6 +3155,12 @@ pub const fn lsp_product_diagnostics_primary() -> bool {
 #[must_use]
 pub const fn seed_internal_error_packets() -> bool {
     false
+}
+
+/// BARP ADR-062: default `format_source` prefers product AE-SEED when both reject.
+#[must_use]
+pub const fn format_source_product_base_gate() -> bool {
+    true
 }
 
 #[must_use]

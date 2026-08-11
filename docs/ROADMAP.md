@@ -344,20 +344,18 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` live-stamped 2026-08-08).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-058:** seed-native
-M23, product diagnostic ABI (`product_diagnostics`, `AE-SEED-001`–`012`), product
-CLI surfaces, LSP product diagnostics primary, host-elaborate/seed-emit multi-module
-contract (seed-native multi-file = **false**), structural-edit product base gate,
-gate product seed self-rebuild.
-**Next:** seed-internal structured error packets (requires seed rebuild design);
-multi-file forge ABI for seed-native multi-module (large ADR + threat model).
-Residual bootstrap: default `check`/format/structure AST, LSP symbols/format/hover,
-`--bootstrap` seed rebuild, dual-compare oracle, host multi-module elaboration,
-structural-edit base AST.
+reduce Rust bootstrap product-path authority. **Through ADR-062:** product
+diagnostic ABI, product CLI/LSP surfaces, structural-edit + **format** product
+base gates when both reject, host-elaborate/seed-emit multi-module (seed-native
+multi-file = **false**), gate product seed self-rebuild.
+**Next:** seed-internal structured error packets; multi-file forge ABI (ADR-061).
+Residual bootstrap: default `check`/format success AST, structure AST, LSP
+symbols/format/hover, `--bootstrap` rebuild, dual-compare oracle, host multi-module
+elaboration, structural-edit base AST.
 
-**Law forks (authorized 2026-08-10):** F-NATIVE (M35a AETH→C pure pilot, ADR-059);
-F-REGISTRY (M24a offline cache pin/verify, ADR-060 — **no network yet**).
-M21 FFI pilot remains product (reaffirmed).
+**Law forks (authorized 2026-08-10):** F-NATIVE (M35a/b AETH→C pure pilot with
+Whole locals, ADR-059/062); F-REGISTRY (M24a offline cache pin/verify, ADR-060 —
+**no network yet**). M21 FFI pilot remains product (reaffirmed).
 
 **Still needing new ADR / matrix:** expanded FFI signatures, LLVM/object native,
 registry network fetch/publish, task handles/timeouts/parallelism, broader cancel,
@@ -365,6 +363,6 @@ seed-internal error packets, multi-file forge ABI (ADR-061 direction).
 
 **Human backlog (updated 2026-08-10):**
 1. **BARP** — seed-internal error packets / multi-file forge (ADR-061 direction).
-2. F-NATIVE M35b+ (expand pure subset / dual-run with host cc when available).
+2. F-NATIVE M35c+ (SPEAK/Text, multi-weave, dual-run with host cc when available).
 3. F-REGISTRY M24b signed fetch (explicit network only).
 4. Broader task cancellation / handles only through a new ADR.
