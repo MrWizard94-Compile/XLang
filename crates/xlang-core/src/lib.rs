@@ -1,8 +1,9 @@
 //! Aether bootstrap compiler, AETH verifier, VM, and seed-hosted compile path.
 //!
-//! The Rust core remains the diagnostic bootstrap and the only way to rebuild
-//! the checked-in seed compiler artifact. Default program compilation uses that
-//! Aether-written seed artifact through the forge ABI (`compile_with_seed`).
+//! Default product compilation and seed rebuild use the Aether-written seed
+//! artifact through the forge ABI (`compile_product_bytecode` / ADR-067). The
+//! Rust core remains recovery diagnostics, dual-compare oracle emit, and residual
+//! structural AST (statement/record edits; full `aether.ast/v8`).
 
 // Workspace default is deny. M21 human-authorized foreign ABI load path lives
 // in `ffi` with a scoped allow; the rest of the crate must not use unsafe.
@@ -3181,12 +3182,12 @@ pub const fn product_default_cli_toolchain() -> bool {
     true
 }
 
-/// BARP ADR-064/065–067 honesty: bootstrap is recovery/oracle only — not the
-/// default product toolchain. Residual bootstrap roles after ADR-065–067:
-/// dual-compare oracle, recovery flags (`--bootstrap`), structural-edit ops
-/// outside product weave-replace (insert/delete/statement/record), and full
-/// `aether.ast/v8` structure. Product owns seed rebuild, weave replace, and
-/// LSP product-surface hover/definition.
+/// BARP ADR-064–068 honesty: bootstrap is recovery/oracle only — not the
+/// default product toolchain. Residual bootstrap roles after ADR-068:
+/// dual-compare oracle, recovery flags (`--bootstrap`), statement-level and
+/// record structural edits, and full `aether.ast/v8` structure. Product owns
+/// seed rebuild, top-level weave replace/insert/delete, and LSP product-surface
+/// hover/definition.
 #[must_use]
 pub const fn bootstrap_is_recovery_oracle_only() -> bool {
     true
@@ -3196,6 +3197,13 @@ pub const fn bootstrap_is_recovery_oracle_only() -> bool {
 /// not require bootstrap `Program` base parse (text splice + product accept).
 #[must_use]
 pub const fn structural_edit_product_weave_replace() -> bool {
+    true
+}
+
+/// BARP ADR-068: top-level weave `replace` / `insertAfter` / `delete` on
+/// product-accepted base source without bootstrap `Program` base parse.
+#[must_use]
+pub const fn structural_edit_product_top_level_weave_ops() -> bool {
     true
 }
 

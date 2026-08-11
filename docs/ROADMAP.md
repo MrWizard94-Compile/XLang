@@ -344,15 +344,15 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` live-stamped 2026-08-08).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-067:** product is the
+reduce Rust bootstrap product-path authority. **Through ADR-068:** product is the
 **default** CLI/LSP toolchain (check/format/structure/project format, product
-weave-replace, product-surface hover/definition, seed rebuild without
-`--bootstrap`); bootstrap is recovery/oracle only. Product diagnostics, surface
-symbols, multi-module host-elaborate+seed-emit, gate dual-compare seed identity.
-**Next:** expand product structural ops (insert/delete/statement); seed-internal
-error packets; multi-file forge (ADR-061). Residual bootstrap: dual-compare oracle
-emit, recovery `--bootstrap` flags, structural AST outside product weave-replace,
-full `aether.ast/v8`.
+top-level weave replace/insert/delete, product-surface hover/definition, seed
+rebuild without `--bootstrap`); bootstrap is recovery/oracle only. Product
+diagnostics, surface symbols, multi-module host-elaborate+seed-emit, gate
+dual-compare seed identity.
+**Next:** product statement/record structural ops; seed-internal error packets;
+multi-file forge (ADR-061). Residual bootstrap: dual-compare oracle emit,
+recovery `--bootstrap` flags, statement/record structural AST, full `aether.ast/v8`.
 
 **Law forks (authorized 2026-08-10):** F-NATIVE (M35a/b AETH→C pure pilot with
 Whole locals, ADR-059/062); F-REGISTRY (M24a offline cache pin/verify, ADR-060 —

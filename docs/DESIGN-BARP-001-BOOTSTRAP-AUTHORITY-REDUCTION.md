@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064–067); residual recovery bootstrap  
-**Date:** 2026-08-08 (Phase 1–2 / ADR-044–067 2026-08-10)  
-**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-067](ADR-067-barp-product-seed-rebuild.md)  
+**Status:** Active program — product-default toolchain (ADR-064–068); residual recovery bootstrap  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044–068 2026-08-10)  
+**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-068](ADR-068-barp-product-top-level-weave-ops.md)  
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -17,12 +17,12 @@ weakening:
 - dual-compare proofs for documented corpora  
 - honest Seed Profile claims  
 
-Bootstrap remains **required** only for residual roles (ADR-065–067 reduced further):
+Bootstrap remains **required** only for residual roles (ADR-065–068 reduced further):
 
 | Role | Why kept |
 | --- | --- |
 | Dual-compare tests / gate oracle (`compile --bootstrap`) | Proof authority (product rebuild is default) |
-| Structural-edit non–weave-replace ops | Insert/delete/statement/record still need `Program` |
+| Structural-edit statement/record ops | Body paths and record reindex still need `Program` |
 | Full `aether.ast/v8` structure | Recovery / authoring tree |
 | Recovery flags (`check|format|structure --bootstrap`) | Full AST diagnostics / rewrite |
 
@@ -41,7 +41,7 @@ Bootstrap remains **required** only for residual roles (ADR-065–067 reduced fu
 | CLI `check` | **Product default** (ADR-064); `--bootstrap` recovery AST diagnostics |
 | CLI `format` | **Product default** LF+accept (ADR-064); `--bootstrap` AST rewrite |
 | CLI `project format` | **Product default** (ADR-064); `--bootstrap` AST format |
-| CLI `apply-edit` | **ADR-065:** product weave-replace without base AST; other ops bootstrap AST; product accept (ADR-048/053) |
+| CLI `apply-edit` | **ADR-065/068:** product top-level weave replace/insert/delete without base AST; statement/record bootstrap AST; product accept (ADR-048/053) |
 | CLI `structure` | **Product default** envelope (ADR-064); `--bootstrap` aether.ast/v8 |
 | CLI `compile` (incl. seed) | **Product default** (ADR-067); `--bootstrap` dual-compare oracle |
 | LSP diagnostics | **Product primary** AE-SEED (ADR-058) |
@@ -200,10 +200,10 @@ Product project/workspace compile returns seed bytes via
 | Product diagnostics API | **`product_diagnostics`** (ADR-055) |
 | Multi-module | Host elaborate + seed emit (ADR-056); seed-native = false |
 | LSP diagnostics / hover / def | **Product primary** (ADR-058/066) |
-| Structural weave replace | **Product path** (ADR-065); residual bootstrap for other ops |
+| Structural top-level weaves | **Product path** (ADR-065/068 replace/insert/delete); residual statement/record AST |
 | Seed rebuild | **Product compile** (ADR-067); `--bootstrap` oracle only |
 | Lib unit project verify | **Product seed probe** (ADR-052) |
-| Bootstrap residual | Dual-compare oracle, recovery flags, non-replace structural AST, full ast/v8 |
+| Bootstrap residual | Dual-compare oracle, recovery flags, statement/record structural AST, full ast/v8 |
 | Gate | `aether-gate -Mode release` PASS |
 
 ---

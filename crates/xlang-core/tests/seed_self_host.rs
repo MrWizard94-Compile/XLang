@@ -13,8 +13,9 @@ use aether_core::{
     seed_interprets_m23_comptime_calls_natively, seed_native_multi_module_elaboration,
     seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
     seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
-    structural_edit_product_base_gate, structural_edit_product_weave_replace, verify_bytecode,
-    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
+    structural_edit_product_base_gate, structural_edit_product_top_level_weave_ops,
+    structural_edit_product_weave_replace, verify_bytecode, InvocationOutput, InvocationValue,
+    SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -454,6 +455,10 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
     assert!(
         product_seed_rebuild_without_bootstrap(),
         "ADR-067: product seed rebuild without --bootstrap"
+    );
+    assert!(
+        structural_edit_product_top_level_weave_ops(),
+        "ADR-068: product top-level weave replace/insertAfter/delete"
     );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")
