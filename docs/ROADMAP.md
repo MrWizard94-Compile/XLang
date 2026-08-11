@@ -344,24 +344,24 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-072:** product is the
-**default** CLI/LSP toolchain; nested body-list structural ops (ADR-071); product
-seed-error **packet** ABI (ADR-072). Bootstrap is recovery/oracle only.
-**Next:** seed-binary SPEAK packet emit; multi-file forge (ADR-061 residual).
+reduce Rust bootstrap product-path authority. **Through ADR-075:** product is the
+**default** CLI/LSP toolchain; SPEAK-format seed-error packets (host); multi-source
+forge envelope + in-memory multi-unit product forge (host elaborate + seed emit).
+Bootstrap is recovery/oracle only.
+**Next:** seed-binary SPEAK packet emit; seed-native multi-file elaboration.
 Residual bootstrap: dual-compare oracle emit, recovery `--bootstrap` flags, full
 `aether.ast/v8`.
 
-**Law forks (reaffirmed 2026-08-10):** F-NATIVE through **M35c** (SPEAK/Text +
-multi-weave pure helpers, ADR-059/062/073); F-REGISTRY through **M24b** signed
-HMAC pins + explicit `fetch-signed` (ADR-060/074; `http://`/`file://`, no TLS).
-M21 FFI pilot remains product.
+**Law forks (reaffirmed 2026-08-10):** F-NATIVE through **M35d** (host `cc`
+dual-exec + object pilot, ADR-059/062/073/076); F-REGISTRY through **M24c**
+Ed25519 + HTTPS fetch-signed (ADR-060/074/077). M21 FFI pilot remains product.
 
-**Still needing new ADR / matrix:** expanded FFI signatures, LLVM/object native,
-HTTPS/PKI registry, task handles/timeouts/parallelism, broader cancel,
-seed-binary error packet emit, multi-file forge ABI.
+**Still needing new ADR / matrix:** expanded FFI signatures, full LLVM/object
+product path, CA hierarchy / key rotation, task handles/timeouts/parallelism,
+broader cancel, seed-binary error packet emit, seed-native multi-file forge.
 
 **Human backlog (updated 2026-08-10):**
-1. **BARP** — seed SPEAK packets + multi-file forge (ADR-061 residual).
-2. F-NATIVE M35d+ (object/LLVM, dual-exec with host cc when available).
-3. F-REGISTRY M24c HTTPS/PKI signed packages.
+1. **BARP** — seed-binary SPEAK packets + seed-native multi-file forge.
+2. F-NATIVE M35e+ (LLVM/object product path when authorized).
+3. F-REGISTRY M24d key rotation / trust policy polish.
 4. Broader task cancellation / handles only through a new ADR.

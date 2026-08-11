@@ -10,8 +10,11 @@
 | M24B-001 | trust-key + pin-local-signed + verify signature | PASS |
 | M24B-002 | fetch-signed file:// with valid HMAC | PASS install |
 | M24B-003 | fetch-signed bad signature | FAIL closed AE-REG-007 |
-| M24B-004 | https:// fetch | FAIL closed (no TLS pilot) |
+| M24B-004 | https:// fetch (M24c) | TLS via ureq when network/path available |
 | M24B-005 | compile/run never call fetch | by construction |
+| M24C-001 | generate ed25519 trust key + signed pin | PASS |
+| M24C-002 | ed25519 verify-cache | PASS |
+| M24C-003 | bad ed25519 signature | FAIL closed AE-REG-007 |
 
 ---
 

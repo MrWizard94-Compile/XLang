@@ -1,10 +1,10 @@
 # ADR-061: BARP — seed error packets + multi-file forge (accepted direction)
 
-**Status:** Partially implemented — host packet ABI **done** (ADR-072); seed emit + multi-file forge **open**  
+**Status:** Partially implemented — host packet ABI + SPEAK format + multi-source host forge **done** (ADR-072/075); seed-binary SPEAK emit + seed-native multi-file **open**  
 **Date:** 2026-08-10  
 **Related Rule IDs:** `DOC-ADR-001`, `CONST-DEP-001`, `RND-INVAR-001`  
 **Depends on:** ADR-055, ADR-056  
-**Follow-on:** [ADR-072](ADR-072-barp-product-seed-error-packet-abi.md)
+**Follow-on:** [ADR-072](ADR-072-barp-product-seed-error-packet-abi.md), [ADR-075](ADR-075-barp-multi-source-forge-and-seed-error-speak-format.md)
 
 ## Context
 

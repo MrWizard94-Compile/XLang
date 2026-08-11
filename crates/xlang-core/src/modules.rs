@@ -755,6 +755,187 @@ pub fn elaborate_project_entry_with_packages(
     allowed_packages: &BTreeSet<String>,
 ) -> Result<String, ProjectError> {
     let modules = load_graph(project_root, document, package_roots, allowed_packages)?;
+    elaborate_modules_map(&modules, entry_path)
+}
+
+/// ADR-075: multi-source forge envelope schema (host multi-file product path).
+pub const MULTI_SOURCE_ENVELOPE_SCHEMA: &str = "aether.multi-source/v1";
+
+/// Encode units as a multi-source forge envelope (JSON Text).
+pub fn encode_multi_source_envelope(units: &[(String, String)]) -> Result<String, ProjectError> {
+    debug_assert!(
+        crate::product_multi_source_forge_envelope(),
+        "ADR-075: multi-source envelope tracker"
+    );
+    if units.is_empty() {
+        return Err(module_error(
+            "AE-MOD-006",
+            "multi-source envelope requires at least one unit",
+        ));
+    }
+    let payload = serde_json::json!({
+        "schema": MULTI_SOURCE_ENVELOPE_SCHEMA,
+        "units": units.iter().map(|(path, source)| {
+            serde_json::json!({ "path": path, "source": source })
+        }).collect::<Vec<_>>(),
+    });
+    serde_json::to_string_pretty(&payload).map_err(|error| {
+        module_error(
+            "AE-MOD-001",
+            format!("could not encode multi-source envelope: {error}"),
+        )
+    })
+}
+
+/// Decode a multi-source forge envelope into (path, source) units.
+pub fn decode_multi_source_envelope(text: &str) -> Result<Vec<(String, String)>, ProjectError> {
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|error| {
+        module_error(
+            "AE-MOD-001",
+            format!("multi-source envelope is not JSON: {error}"),
+        )
+    })?;
+    let schema = value.get("schema").and_then(|v| v.as_str()).unwrap_or("");
+    if schema != MULTI_SOURCE_ENVELOPE_SCHEMA {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!("unsupported multi-source schema {schema:?}"),
+        ));
+    }
+    let units = value
+        .get("units")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| module_error("AE-MOD-001", "multi-source envelope missing units"))?;
+    let mut out = Vec::new();
+    for unit in units {
+        let path = unit
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| module_error("AE-MOD-001", "unit missing path"))?
+            .to_owned();
+        let source = unit
+            .get("source")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| module_error("AE-MOD-001", "unit missing source"))?
+            .to_owned();
+        if path.is_empty() {
+            return Err(module_error("AE-MOD-001", "unit path must be non-empty"));
+        }
+        out.push((path, source));
+    }
+    if out.is_empty() {
+        return Err(module_error(
+            "AE-MOD-006",
+            "multi-source envelope requires at least one unit",
+        ));
+    }
+    Ok(out)
+}
+
+/// ADR-075 host multi-file product forge: in-memory units (no project file), host
+/// elaborate + seed emit. Cross-package imports are not supported on this path.
+pub fn compile_product_multi_unit(
+    units: &[(String, String, ProjectUnitRole)],
+    entry_path: &str,
+) -> Result<Vec<u8>, ProjectError> {
+    debug_assert!(
+        crate::product_multi_source_forge_envelope(),
+        "ADR-075: multi-unit product forge"
+    );
+    let elaborated = elaborate_in_memory_units(units, entry_path)?;
+    crate::compile_product_bytecode(&elaborated).map_err(|error| {
+        module_error(
+            "AE-SEED-001",
+            format!("product multi-unit seed emit failed: {error}"),
+        )
+    })
+}
+
+/// Elaborate in-memory units (path, source, role) into one single-world program.
+pub fn elaborate_in_memory_units(
+    units: &[(String, String, ProjectUnitRole)],
+    entry_path: &str,
+) -> Result<String, ProjectError> {
+    if units.is_empty() {
+        return Err(module_error(
+            "AE-MOD-006",
+            "in-memory multi-unit graph is empty",
+        ));
+    }
+    let mut modules = BTreeMap::new();
+    for (path, source, role) in units {
+        if modules.contains_key(path) {
+            return Err(module_error(
+                "AE-MOD-005",
+                format!("duplicate in-memory unit path {path}"),
+            ));
+        }
+        let parsed = parse_module_source(path, source, *role)?;
+        if parsed.imports.iter().any(|import| import.package.is_some()) {
+            return Err(module_error(
+                "AE-MOD-002",
+                "in-memory multi-unit pilot rejects cross-package imports",
+            ));
+        }
+        modules.insert(path.clone(), parsed);
+    }
+    // Ensure imported same-package paths exist in the provided unit set.
+    for module in modules.values() {
+        for import in &module.imports {
+            if !modules.contains_key(&import.path) {
+                return Err(module_error(
+                    "AE-MOD-002",
+                    format!(
+                        "import path {} is not a provided in-memory unit",
+                        import.path
+                    ),
+                ));
+            }
+        }
+    }
+    elaborate_modules_map(&modules, entry_path)
+}
+
+/// Host multi-file product forge from a multi-source envelope Text.
+///
+/// Role heuristic: unit whose path ends with `main.ae` or is named `main.ae` is
+/// main; others are lib. Exactly one main is required.
+pub fn compile_product_multi_source_envelope(envelope: &str) -> Result<Vec<u8>, ProjectError> {
+    let decoded = decode_multi_source_envelope(envelope)?;
+    let mut units = Vec::new();
+    let mut entry = None;
+    for (path, source) in decoded {
+        let role = if path == "main.ae"
+            || path.ends_with("/main.ae")
+            || path.ends_with("\\main.ae")
+            || path.ends_with("/src/main.ae")
+        {
+            if entry.is_some() {
+                return Err(module_error(
+                    "AE-MOD-006",
+                    "multi-source envelope has multiple main units",
+                ));
+            }
+            entry = Some(path.clone());
+            ProjectUnitRole::Main
+        } else {
+            ProjectUnitRole::Lib
+        };
+        units.push((path, source, role));
+    }
+    let entry_path = entry.ok_or_else(|| {
+        module_error(
+            "AE-MOD-006",
+            "multi-source envelope requires a main.ae entry unit",
+        )
+    })?;
+    compile_product_multi_unit(&units, &entry_path)
+}
+
+fn elaborate_modules_map(
+    modules: &BTreeMap<String, ParsedModule>,
+    entry_path: &str,
+) -> Result<String, ProjectError> {
     if !modules.contains_key(entry_path) {
         return Err(module_error(
             "AE-MOD-002",
@@ -768,7 +949,7 @@ pub fn elaborate_project_entry_with_packages(
             format!("entry unit {entry_path} must have role main or test"),
         ));
     }
-    let order = closed_cone(entry_path, &modules)?;
+    let order = closed_cone(entry_path, modules)?;
 
     // World uniqueness
     let mut worlds = BTreeSet::new();

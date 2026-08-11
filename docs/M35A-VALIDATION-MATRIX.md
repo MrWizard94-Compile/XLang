@@ -12,6 +12,8 @@
 | M35C-001 | speak Text + multi-weave call lowers | C has fputs + aether_fn_ CALL |
 | M35C-002 | VM exit + stdout for multi-weave speak fixture | exit 42, stdout `ok` |
 | M35C-003 | dual-run helper: VM exit + successful C lower | `native_dual_run_vm_exit` |
+| M35D-001 | host cc dual-exec best-effort without cc | `cc_available=false` OK |
+| M35D-002 | when cc present, native exit matches VM | FAIL closed on diverge |
 
 ---
 

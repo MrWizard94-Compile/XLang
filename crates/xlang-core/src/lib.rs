@@ -46,17 +46,19 @@ pub use authoring::{
     STRUCTURAL_EDIT_PROTOCOL_VERSION,
 };
 pub use modules::{
-    compile_project_entry, compile_project_entry_with_packages, compile_project_modules,
-    compile_project_modules_with_packages, elaborate_project_entry,
-    elaborate_project_entry_with_packages, elaborate_project_modules,
-    elaborate_project_modules_with_packages, mangle_weave, multi_module_authority_note,
-    run_project_tests, run_project_tests_with_grants, source_requires_project_modules,
-    validate_lib_module_source, ProjectTestReport, ProjectTestResult,
+    compile_product_multi_source_envelope, compile_product_multi_unit, compile_project_entry,
+    compile_project_entry_with_packages, compile_project_modules,
+    compile_project_modules_with_packages, decode_multi_source_envelope, elaborate_in_memory_units,
+    elaborate_project_entry, elaborate_project_entry_with_packages, elaborate_project_modules,
+    elaborate_project_modules_with_packages, encode_multi_source_envelope, mangle_weave,
+    multi_module_authority_note, run_project_tests, run_project_tests_with_grants,
+    source_requires_project_modules, validate_lib_module_source, ProjectTestReport,
+    ProjectTestResult, MULTI_SOURCE_ENVELOPE_SCHEMA,
 };
 pub use native::{
     f_native_authorized, lower_verified_aeth_to_c, native_aeth_to_c_locals_pilot,
     native_aeth_to_c_pilot, native_aeth_to_c_speak_multiweave_pilot, native_dual_run_vm_exit,
-    NativeError,
+    native_host_cc_dual_exec, native_host_cc_dual_exec_pilot, NativeDualExecReport, NativeError,
 };
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
@@ -67,12 +69,13 @@ pub use project::{
 };
 pub use registry::{
     empty_registry_cache, empty_registry_trust, f_registry_authorized, fetch_signed_package,
-    install_trust_key, parse_registry_cache, parse_registry_trust, pin_local_package,
-    pin_local_package_signed, registry_offline_cache_verify, registry_signed_fetch_pilot,
+    generate_ed25519_trust_key, install_trust_key, install_trust_key_with_algorithm,
+    parse_registry_cache, parse_registry_trust, pin_local_package, pin_local_package_signed,
+    registry_ed25519_https_pilot, registry_offline_cache_verify, registry_signed_fetch_pilot,
     serialize_registry_cache, serialize_registry_trust, sign_package_binding,
     verify_registry_cache, RegistryCacheDocument, RegistryError, RegistryPackagePin,
-    RegistryTrustDocument, RegistryTrustKey, REGISTRY_CACHE_SCHEMA, REGISTRY_INDEX_FILE,
-    REGISTRY_TRUST_FILE, REGISTRY_TRUST_SCHEMA,
+    RegistryTrustDocument, RegistryTrustKey, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256,
+    REGISTRY_CACHE_SCHEMA, REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_SCHEMA,
 };
 pub use workspace::{
     compile_workspace_package, parse_workspace_document, refresh_workspace_lock,
@@ -2877,7 +2880,9 @@ fn diagnostic_to_seed_error_packet(diagnostic: &Diagnostic) -> SeedErrorPacket {
     }
 }
 
-/// Decode optional seed-emitted packet lines: `AETHER_SEED_ERROR:{json}`.
+/// Decode optional SPEAK-compatible packet lines: `AETHER_SEED_ERROR:{json}`.
+/// Origin is taken from the packet JSON when present (host-preflight / host-classify /
+/// seed-speak). Missing origin defaults to `seed-speak` for future seed emit.
 fn try_parse_seed_speak_error_packet(message: &str) -> Option<SeedErrorPacket> {
     const PREFIX: &str = "AETHER_SEED_ERROR:";
     for line in message.lines() {
@@ -2889,7 +2894,9 @@ fn try_parse_seed_speak_error_packet(message: &str) -> Option<SeedErrorPacket> {
             if packet.schema != SEED_ERROR_PACKET_SCHEMA {
                 continue;
             }
-            packet.origin = "seed-speak".to_owned();
+            if packet.origin.is_empty() {
+                packet.origin = "seed-speak".to_owned();
+            }
             return Some(packet);
         }
     }
@@ -2897,7 +2904,38 @@ fn try_parse_seed_speak_error_packet(message: &str) -> Option<SeedErrorPacket> {
 }
 
 fn format_seed_product_error(code: &str, detail: &str) -> String {
-    format!("{code}: product seed path failed ({detail}). Full diagnostics: aether check <source>")
+    // ADR-075: host emits SPEAK-compatible packet lines so tools can parse one
+    // stable envelope. Seed binary SPEAK emit remains residual
+    // (`seed_internal_error_packets == false`).
+    let human = format!(
+        "{code}: product seed path failed ({detail}). Full diagnostics: aether check <source>"
+    );
+    let origin = if matches!(
+        code,
+        "AE-SEED-003"
+            | "AE-SEED-004"
+            | "AE-SEED-005"
+            | "AE-SEED-006"
+            | "AE-SEED-007"
+            | "AE-SEED-012"
+            | "AE-SEED-013"
+    ) {
+        "host-preflight"
+    } else {
+        "host-classify"
+    };
+    let packet = SeedErrorPacket {
+        schema: SEED_ERROR_PACKET_SCHEMA.to_owned(),
+        code: code.to_owned(),
+        message: human.clone(),
+        line: 1,
+        column: 1,
+        origin: origin.to_owned(),
+    };
+    match serde_json::to_string(&packet) {
+        Ok(json) => format!("{human}\nAETHER_SEED_ERROR:{json}"),
+        Err(_) => human,
+    }
 }
 
 /// BARP Phase 3c (ADR-052): map forge/VM detail strings to stable product codes
@@ -3321,6 +3359,20 @@ pub const fn seed_internal_error_packets() -> bool {
 /// BARP ADR-072: host product seed-error packet ABI ([`product_error_packets`]).
 #[must_use]
 pub const fn product_seed_error_packet_abi() -> bool {
+    true
+}
+
+/// BARP ADR-075: product error messages include SPEAK-compatible
+/// `AETHER_SEED_ERROR:{json}` lines (host emit). Seed binary SPEAK still residual.
+#[must_use]
+pub const fn product_seed_error_speak_format() -> bool {
+    true
+}
+
+/// BARP ADR-075: multi-source forge envelope + in-memory multi-unit product forge
+/// (host elaborate + seed emit). Seed-native multi-file elaboration remains false.
+#[must_use]
+pub const fn product_multi_source_forge_envelope() -> bool {
     true
 }
 

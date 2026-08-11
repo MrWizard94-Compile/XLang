@@ -398,6 +398,157 @@ pub fn native_dual_run_vm_exit(source: &str) -> Result<i64, NativeError> {
     Ok(exit)
 }
 
+/// M35d: optional host C toolchain dual-exec pilot is product (best-effort).
+#[must_use]
+pub const fn native_host_cc_dual_exec_pilot() -> bool {
+    true
+}
+
+/// Report from optional host `cc`/`clang`/`gcc` dual-exec (ADR-076 / M35d).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeDualExecReport {
+    pub vm_exit: i64,
+    pub c_source: String,
+    /// True when a host C compiler was found and invoked.
+    pub cc_available: bool,
+    /// Compiler command used when available.
+    pub cc_command: Option<String>,
+    /// Native process exit code when dual-exec ran.
+    pub native_exit: Option<i64>,
+    /// True when native_exit matched vm_exit.
+    pub exits_match: Option<bool>,
+    /// Object file path when `cc -c` succeeded (temp path; may not persist).
+    pub object_emitted: bool,
+}
+
+/// M35d: product-compile + VM run + AETH→C, then optionally compile/run with host
+/// `cc`/`clang`/`gcc` when present. **Never fails** solely because no C toolchain
+/// exists (`cc_available = false`). When cc runs, native exit must match VM exit.
+pub fn native_host_cc_dual_exec(source: &str) -> Result<NativeDualExecReport, NativeError> {
+    debug_assert!(
+        f_native_authorized() && native_host_cc_dual_exec_pilot(),
+        "ADR-076: F-NATIVE host cc dual-exec pilot"
+    );
+    let bytecode = crate::compile_product_bytecode(source)
+        .map_err(|error| NativeError::new("AE-NATIVE-001", error.to_string()))?;
+    let vm_exit = crate::run_bytecode(&bytecode)
+        .map_err(|error| NativeError::new("AE-NATIVE-001", error.to_string()))?
+        .exit_code;
+    let c_source = lower_verified_aeth_to_c(&bytecode)?;
+
+    let Some(cc) = find_host_c_compiler() else {
+        return Ok(NativeDualExecReport {
+            vm_exit,
+            c_source,
+            cc_available: false,
+            cc_command: None,
+            native_exit: None,
+            exits_match: None,
+            object_emitted: false,
+        });
+    };
+
+    let temp_root = std::env::temp_dir().join(format!(
+        "aether-m35d-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(&temp_root).map_err(|error| {
+        NativeError::new("AE-NATIVE-004", format!("temp dir create failed: {error}"))
+    })?;
+    let c_path = temp_root.join("program.c");
+    let exe_path = temp_root.join(if cfg!(windows) {
+        "program.exe"
+    } else {
+        "program"
+    });
+    let obj_path = temp_root.join(if cfg!(windows) {
+        "program.obj"
+    } else {
+        "program.o"
+    });
+    std::fs::write(&c_path, &c_source).map_err(|error| {
+        NativeError::new(
+            "AE-NATIVE-004",
+            format!("could not write C source: {error}"),
+        )
+    })?;
+
+    // Object emit pilot: `cc -c`
+    let object_emitted = std::process::Command::new(&cc)
+        .arg("-c")
+        .arg(&c_path)
+        .arg("-o")
+        .arg(&obj_path)
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+
+    let link = std::process::Command::new(&cc)
+        .arg(&c_path)
+        .arg("-o")
+        .arg(&exe_path)
+        .output()
+        .map_err(|error| {
+            NativeError::new(
+                "AE-NATIVE-004",
+                format!("host C compiler invoke failed ({cc}): {error}"),
+            )
+        })?;
+    if !link.status.success() {
+        let stderr = String::from_utf8_lossy(&link.stderr);
+        let _ = std::fs::remove_dir_all(&temp_root);
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            format!("host C compile failed ({cc}): {stderr}"),
+        ));
+    }
+
+    let run = std::process::Command::new(&exe_path)
+        .output()
+        .map_err(|error| {
+            NativeError::new(
+                "AE-NATIVE-004",
+                format!("native binary run failed: {error}"),
+            )
+        })?;
+    let native_exit = i64::from(run.status.code().unwrap_or(1));
+    let exits_match = native_exit == vm_exit;
+    let _ = std::fs::remove_dir_all(&temp_root);
+    if !exits_match {
+        return Err(NativeError::new(
+            "AE-NATIVE-005",
+            format!("native exit {native_exit} diverged from VM exit {vm_exit}"),
+        ));
+    }
+    Ok(NativeDualExecReport {
+        vm_exit,
+        c_source,
+        cc_available: true,
+        cc_command: Some(cc),
+        native_exit: Some(native_exit),
+        exits_match: Some(true),
+        object_emitted,
+    })
+}
+
+fn find_host_c_compiler() -> Option<String> {
+    for candidate in ["cc", "clang", "gcc", "clang.exe", "gcc.exe"] {
+        if std::process::Command::new(candidate)
+            .arg("--version")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+        {
+            return Some(candidate.to_owned());
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -458,5 +609,18 @@ weave main [] -> Whole:
     fn rejects_unverified_or_foreign_surface() {
         let error = lower_verified_aeth_to_c(b"not-aeth").expect_err("bad");
         assert_eq!(error.code, "AE-NATIVE-001");
+    }
+
+    #[test]
+    fn host_cc_dual_exec_pilot_is_best_effort() {
+        assert!(native_host_cc_dual_exec_pilot());
+        let source = "world pure\n\nweave main [] -> Whole:\n  yield 7\n";
+        let report = native_host_cc_dual_exec(source).expect("dual-exec report");
+        assert_eq!(report.vm_exit, 7);
+        assert!(report.c_source.contains("int main(void)"));
+        if report.cc_available {
+            assert_eq!(report.native_exit, Some(7));
+            assert_eq!(report.exits_match, Some(true));
+        }
     }
 }

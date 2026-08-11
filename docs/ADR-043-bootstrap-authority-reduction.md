@@ -81,8 +81,10 @@ authority under Constitution.
     `structural_edit_product_nested_body_list_ops()`.  
 29. **ADR-072 (done):** product seed-error packet ABI (`product_error_packets`);
     seed-binary emit still false.  
-30. Residual bootstrap: dual-compare oracle, recovery flags, full `aether.ast/v8`.  
-31. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+30. **ADR-075 (done):** SPEAK-format product errors; multi-source envelope +
+    in-memory multi-unit product forge (host elaborate + seed emit).  
+31. Residual bootstrap: dual-compare oracle, recovery flags, full `aether.ast/v8`.  
+32. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 

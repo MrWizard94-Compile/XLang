@@ -1,7 +1,8 @@
-//! M24 registry cache (F-REGISTRY pilot, ADR-060 offline + ADR-074 M24b signed fetch).
+//! M24 registry cache (F-REGISTRY pilot: ADR-060 offline, ADR-074 HMAC signed
+//! fetch, ADR-077 Ed25519 + HTTPS).
 //!
 //! Guest AETH remains network-free. Host CLI may fetch only via explicit
-//! `registry fetch-signed` after HMAC trust-root verify. Compile never requires network.
+//! `registry fetch-signed` after trust-root verify. Compile never requires network.
 
 use std::fs;
 use std::io::{Read, Write};
@@ -9,10 +10,15 @@ use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::sha256_hex;
+
+pub const REGISTRY_ALG_HMAC_SHA256: &str = "hmac-sha256";
+pub const REGISTRY_ALG_ED25519: &str = "ed25519";
 
 pub const REGISTRY_CACHE_SCHEMA: &str = "aether.registry-cache/v1";
 pub const REGISTRY_INDEX_FILE: &str = "aether.registry-cache.json";
@@ -55,12 +61,15 @@ pub struct RegistryPackagePin {
     /// Relative path under cache root (POSIX-style, no `..`).
     pub artifact: String,
     pub sha256: String,
-    /// Optional HMAC-SHA256 signature hex over the pin binding (M24b).
+    /// Optional signature hex over the pin binding (M24b/M24c).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
-    /// Trust key id used for `signature` (M24b).
+    /// Trust key id used for `signature` (M24b/M24c).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_id: Option<String>,
+    /// Signature algorithm: `hmac-sha256` (default) or `ed25519` (M24c).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub algorithm: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,8 +81,15 @@ pub struct RegistryTrustDocument {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegistryTrustKey {
     pub key_id: String,
-    /// Relative path under cache root to raw HMAC key bytes.
+    /// Relative path under cache root to key material.
     pub key_path: String,
+    /// `hmac-sha256` (default) or `ed25519` (M24c).
+    #[serde(default = "default_trust_algorithm")]
+    pub algorithm: String,
+}
+
+fn default_trust_algorithm() -> String {
+    REGISTRY_ALG_HMAC_SHA256.to_owned()
 }
 
 #[must_use]
@@ -89,6 +105,12 @@ pub const fn registry_offline_cache_verify() -> bool {
 /// M24b: signed pin verify + explicit fetch-signed are product (HMAC pilot).
 #[must_use]
 pub const fn registry_signed_fetch_pilot() -> bool {
+    true
+}
+
+/// M24c: Ed25519 PKI trust keys + HTTPS fetch-signed are product.
+#[must_use]
+pub const fn registry_ed25519_https_pilot() -> bool {
     true
 }
 
@@ -192,11 +214,13 @@ fn validate_pin_fields(package: &RegistryPackagePin) -> Result<(), RegistryError
     }
     validate_relative_artifact_path(&package.artifact)?;
     if let Some(signature) = &package.signature {
-        if signature.len() != 64 || !signature.chars().all(|c| c.is_ascii_hexdigit()) {
+        if !signature.chars().all(|c| c.is_ascii_hexdigit())
+            || !(signature.len() == 64 || signature.len() == 128)
+        {
             return Err(RegistryError::new(
                 "AE-REG-007",
                 format!(
-                    "package {}@{} signature must be 64 hex characters (HMAC-SHA256)",
+                    "package {}@{} signature must be 64 (HMAC) or 128 (Ed25519) hex characters",
                     package.name, package.version
                 ),
             ));
@@ -257,7 +281,7 @@ pub fn pin_local_package(
             ),
         )
     })?;
-    install_pin(cache_root, name, version, &bytes, None, None)
+    install_pin(cache_root, name, version, &bytes, None, None, None)
 }
 
 /// Install HMAC trust key material under the cache root (offline).
@@ -266,9 +290,19 @@ pub fn install_trust_key(
     key_id: &str,
     key_bytes: &[u8],
 ) -> Result<RegistryTrustKey, RegistryError> {
+    install_trust_key_with_algorithm(cache_root, key_id, key_bytes, REGISTRY_ALG_HMAC_SHA256)
+}
+
+/// Install trust key material with explicit algorithm (`hmac-sha256` or `ed25519`).
+pub fn install_trust_key_with_algorithm(
+    cache_root: &Path,
+    key_id: &str,
+    key_bytes: &[u8],
+    algorithm: &str,
+) -> Result<RegistryTrustKey, RegistryError> {
     debug_assert!(
         f_registry_authorized() && registry_signed_fetch_pilot(),
-        "ADR-074: registry signed fetch pilot"
+        "ADR-074/077: registry signed fetch pilot"
     );
     if key_id.is_empty() {
         return Err(RegistryError::new(
@@ -282,7 +316,13 @@ pub fn install_trust_key(
             "trust key material must be non-empty",
         ));
     }
-    let relative = format!("trust/keys/{key_id}.hmac");
+    let algorithm = normalize_algorithm(algorithm)?;
+    let ext = if algorithm == REGISTRY_ALG_ED25519 {
+        "ed25519"
+    } else {
+        "hmac"
+    };
+    let relative = format!("trust/keys/{key_id}.{ext}");
     validate_relative_artifact_path(&relative)?;
     let destination = resolve_cache_path(cache_root, &relative)?;
     if let Some(parent) = destination.parent() {
@@ -293,12 +333,31 @@ pub fn install_trust_key(
             )
         })?;
     }
-    fs::write(&destination, key_bytes).map_err(|error| {
-        RegistryError::new("AE-REG-005", format!("could not write trust key: {error}"))
-    })?;
+    if algorithm == REGISTRY_ALG_ED25519 {
+        if key_bytes.len() != 32 {
+            return Err(RegistryError::new(
+                "AE-REG-006",
+                "ed25519 trust key seed must be exactly 32 bytes",
+            ));
+        }
+        let mut seed = [0u8; 32];
+        seed.copy_from_slice(key_bytes);
+        let signing = SigningKey::from_bytes(&seed);
+        let mut material = Vec::with_capacity(64);
+        material.extend_from_slice(signing.to_bytes().as_ref());
+        material.extend_from_slice(signing.verifying_key().as_bytes());
+        fs::write(&destination, &material).map_err(|error| {
+            RegistryError::new("AE-REG-005", format!("could not write trust key: {error}"))
+        })?;
+    } else {
+        fs::write(&destination, key_bytes).map_err(|error| {
+            RegistryError::new("AE-REG-005", format!("could not write trust key: {error}"))
+        })?;
+    }
     let key = RegistryTrustKey {
         key_id: key_id.to_owned(),
         key_path: relative,
+        algorithm,
     };
     let mut trust = load_or_empty_trust(cache_root)?;
     trust.keys.retain(|existing| existing.key_id != key.key_id);
@@ -308,6 +367,24 @@ pub fn install_trust_key(
     Ok(key)
 }
 
+/// Generate a fresh Ed25519 trust key under the cache root (M24c).
+pub fn generate_ed25519_trust_key(
+    cache_root: &Path,
+    key_id: &str,
+) -> Result<RegistryTrustKey, RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_ed25519_https_pilot(),
+        "ADR-077: Ed25519 registry pilot"
+    );
+    let signing = SigningKey::generate(&mut OsRng);
+    install_trust_key_with_algorithm(
+        cache_root,
+        key_id,
+        signing.to_bytes().as_ref(),
+        REGISTRY_ALG_ED25519,
+    )
+}
+
 /// Compute HMAC-SHA256 pin signature: HMAC(key, name || "\\n" || version || "\\n" || sha256).
 #[must_use]
 pub fn sign_package_binding(key: &[u8], name: &str, version: &str, sha256: &str) -> String {
@@ -315,7 +392,82 @@ pub fn sign_package_binding(key: &[u8], name: &str, version: &str, sha256: &str)
     hex_encode(&hmac_sha256(key, message.as_bytes()))
 }
 
-/// Pin a local artifact and attach an HMAC signature under `key_id`.
+fn sign_package_binding_with_algorithm(
+    cache_root: &Path,
+    key_id: &str,
+    name: &str,
+    version: &str,
+    sha256: &str,
+) -> Result<(String, String), RegistryError> {
+    let meta = load_trust_key_meta(cache_root, key_id)?;
+    let material = load_trust_key_bytes(cache_root, key_id)?;
+    let message = format!("{name}\n{version}\n{sha256}");
+    if meta.algorithm == REGISTRY_ALG_ED25519 {
+        if material.len() < 32 {
+            return Err(RegistryError::new(
+                "AE-REG-006",
+                "ed25519 trust key material is truncated",
+            ));
+        }
+        let mut seed = [0u8; 32];
+        seed.copy_from_slice(&material[..32]);
+        let signing = SigningKey::from_bytes(&seed);
+        let signature = signing.sign(message.as_bytes());
+        Ok((hex_encode(signature.to_bytes().as_ref()), meta.algorithm))
+    } else {
+        Ok((
+            hex_encode(&hmac_sha256(&material, message.as_bytes())),
+            meta.algorithm,
+        ))
+    }
+}
+
+fn verify_package_binding(
+    cache_root: &Path,
+    key_id: &str,
+    name: &str,
+    version: &str,
+    sha256: &str,
+    signature_hex: &str,
+) -> Result<(), RegistryError> {
+    let meta = load_trust_key_meta(cache_root, key_id)?;
+    let material = load_trust_key_bytes(cache_root, key_id)?;
+    let message = format!("{name}\n{version}\n{sha256}");
+    if meta.algorithm == REGISTRY_ALG_ED25519 {
+        let verifying = ed25519_verifying_key_from_material(&material)?;
+        let sig_bytes = hex_decode(signature_hex)
+            .map_err(|_| RegistryError::new("AE-REG-007", "ed25519 signature is not valid hex"))?;
+        if sig_bytes.len() != 64 {
+            return Err(RegistryError::new(
+                "AE-REG-007",
+                "ed25519 signature must be 64 bytes (128 hex chars)",
+            ));
+        }
+        let mut sig_arr = [0u8; 64];
+        sig_arr.copy_from_slice(&sig_bytes);
+        let signature = Signature::from_bytes(&sig_arr);
+        verifying
+            .verify(message.as_bytes(), &signature)
+            .map_err(|_| {
+                RegistryError::new(
+                    "AE-REG-007",
+                    format!("package {name}@{version} ed25519 signature verification failed"),
+                )
+            })?;
+        Ok(())
+    } else {
+        let expected = sign_package_binding(&material, name, version, sha256);
+        if !hex_eq_ct(&expected, signature_hex) {
+            return Err(RegistryError::new(
+                "AE-REG-007",
+                format!("package {name}@{version} signature verification failed"),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Pin a local artifact and attach a signature under `key_id` (HMAC or Ed25519).
 pub fn pin_local_package_signed(
     cache_root: &Path,
     name: &str,
@@ -325,9 +477,8 @@ pub fn pin_local_package_signed(
 ) -> Result<RegistryPackagePin, RegistryError> {
     debug_assert!(
         f_registry_authorized() && registry_signed_fetch_pilot(),
-        "ADR-074: registry signed fetch pilot"
+        "ADR-074/077: registry signed fetch pilot"
     );
-    let key = load_trust_key_bytes(cache_root, key_id)?;
     let bytes = fs::read(artifact_path).map_err(|error| {
         RegistryError::new(
             "AE-REG-005",
@@ -338,7 +489,8 @@ pub fn pin_local_package_signed(
         )
     })?;
     let digest = sha256_hex(&bytes);
-    let signature = sign_package_binding(&key, name, version, &digest);
+    let (signature, algorithm) =
+        sign_package_binding_with_algorithm(cache_root, key_id, name, version, &digest)?;
     install_pin(
         cache_root,
         name,
@@ -346,12 +498,11 @@ pub fn pin_local_package_signed(
         &bytes,
         Some(signature),
         Some(key_id.to_owned()),
+        Some(algorithm),
     )
 }
 
-/// Explicit signed fetch (M24b). Source may be `file://` or `http://`/`https://`
-/// (HTTPS is accepted only as a URL form; pilot performs plain HTTP GET to host:port
-/// and does **not** implement TLS — use file:// or http:// for this pilot).
+/// Explicit signed fetch (M24b/M24c). `file://`, local path, `http://`, or `https://`.
 ///
 /// Never called by `compile` / `run` / `project build`.
 pub fn fetch_signed_package(
@@ -364,7 +515,7 @@ pub fn fetch_signed_package(
 ) -> Result<RegistryPackagePin, RegistryError> {
     debug_assert!(
         f_registry_authorized() && registry_signed_fetch_pilot(),
-        "ADR-074: registry signed fetch pilot"
+        "ADR-074/077: registry signed fetch pilot"
     );
     if name.is_empty() || version.is_empty() {
         return Err(RegistryError::new(
@@ -372,22 +523,18 @@ pub fn fetch_signed_package(
             "package name and version must be non-empty",
         ));
     }
-    if signature_hex.len() != 64 || !signature_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+    if !signature_hex.chars().all(|c| c.is_ascii_hexdigit())
+        || !(signature_hex.len() == 64 || signature_hex.len() == 128)
+    {
         return Err(RegistryError::new(
             "AE-REG-007",
-            "signature must be 64 hex characters (HMAC-SHA256)",
+            "signature must be 64 (HMAC) or 128 (Ed25519) hex characters",
         ));
     }
-    let key = load_trust_key_bytes(cache_root, key_id)?;
     let bytes = fetch_bytes(source_url)?;
     let digest = sha256_hex(&bytes);
-    let expected = sign_package_binding(&key, name, version, &digest);
-    if !hex_eq_ct(&expected, signature_hex) {
-        return Err(RegistryError::new(
-            "AE-REG-007",
-            format!("package {name}@{version} signature verification failed"),
-        ));
-    }
+    verify_package_binding(cache_root, key_id, name, version, &digest, signature_hex)?;
+    let algorithm = load_trust_key_meta(cache_root, key_id)?.algorithm;
     install_pin(
         cache_root,
         name,
@@ -395,6 +542,7 @@ pub fn fetch_signed_package(
         &bytes,
         Some(signature_hex.to_ascii_lowercase()),
         Some(key_id.to_owned()),
+        Some(algorithm),
     )
 }
 
@@ -427,17 +575,14 @@ pub fn verify_registry_cache(cache_root: &Path) -> Result<RegistryCacheDocument,
             ));
         }
         if let (Some(signature), Some(key_id)) = (&package.signature, &package.key_id) {
-            let key = load_trust_key_bytes(cache_root, key_id)?;
-            let expected = sign_package_binding(&key, &package.name, &package.version, &actual);
-            if !hex_eq_ct(&expected, signature) {
-                return Err(RegistryError::new(
-                    "AE-REG-007",
-                    format!(
-                        "package {}@{} signature verification failed",
-                        package.name, package.version
-                    ),
-                ));
-            }
+            verify_package_binding(
+                cache_root,
+                key_id,
+                &package.name,
+                &package.version,
+                &actual,
+                signature,
+            )?;
         }
     }
     Ok(document)
@@ -450,6 +595,7 @@ fn install_pin(
     bytes: &[u8],
     signature: Option<String>,
     key_id: Option<String>,
+    algorithm: Option<String>,
 ) -> Result<RegistryPackagePin, RegistryError> {
     let digest = sha256_hex(bytes);
     let relative = format!("packages/{name}/{version}/artifact.bin");
@@ -477,6 +623,7 @@ fn install_pin(
         sha256: digest,
         signature,
         key_id,
+        algorithm,
     };
     validate_pin_fields(&pin)?;
     let mut document = load_or_empty_cache(cache_root)?;
@@ -514,10 +661,11 @@ fn fetch_bytes(source_url: &str) -> Result<Vec<u8>, RegistryError> {
         return http_get_bytes(source_url);
     }
     if source_url.starts_with("https://") {
-        return Err(RegistryError::new(
-            "AE-REG-008",
-            "M24b pilot does not implement TLS; use http:// or file:// for fetch-signed",
-        ));
+        debug_assert!(
+            registry_ed25519_https_pilot(),
+            "ADR-077: HTTPS fetch requires M24c pilot"
+        );
+        return https_get_bytes(source_url);
     }
     // Bare local path convenience (still offline).
     if Path::new(source_url).is_file() {
@@ -662,18 +810,23 @@ fn write_trust_index(
     })
 }
 
-fn load_trust_key_bytes(cache_root: &Path, key_id: &str) -> Result<Vec<u8>, RegistryError> {
+fn load_trust_key_meta(cache_root: &Path, key_id: &str) -> Result<RegistryTrustKey, RegistryError> {
     let trust = load_or_empty_trust(cache_root)?;
-    let key = trust
+    trust
         .keys
         .iter()
         .find(|candidate| candidate.key_id == key_id)
+        .cloned()
         .ok_or_else(|| {
             RegistryError::new(
                 "AE-REG-006",
                 format!("unknown trust key_id {key_id}; install with registry trust-key"),
             )
-        })?;
+        })
+}
+
+fn load_trust_key_bytes(cache_root: &Path, key_id: &str) -> Result<Vec<u8>, RegistryError> {
+    let key = load_trust_key_meta(cache_root, key_id)?;
     let path = resolve_cache_path(cache_root, &key.key_path)?;
     fs::read(&path).map_err(|error| {
         RegistryError::new(
@@ -681,6 +834,80 @@ fn load_trust_key_bytes(cache_root: &Path, key_id: &str) -> Result<Vec<u8>, Regi
             format!("could not read trust key {}: {error}", key.key_path),
         )
     })
+}
+
+fn normalize_algorithm(algorithm: &str) -> Result<String, RegistryError> {
+    match algorithm {
+        REGISTRY_ALG_HMAC_SHA256 | "hmac" => Ok(REGISTRY_ALG_HMAC_SHA256.to_owned()),
+        REGISTRY_ALG_ED25519 => Ok(REGISTRY_ALG_ED25519.to_owned()),
+        other => Err(RegistryError::new(
+            "AE-REG-006",
+            format!("unsupported trust algorithm {other:?}"),
+        )),
+    }
+}
+
+fn ed25519_verifying_key_from_material(material: &[u8]) -> Result<VerifyingKey, RegistryError> {
+    if material.len() >= 64 {
+        let mut public = [0u8; 32];
+        public.copy_from_slice(&material[32..64]);
+        VerifyingKey::from_bytes(&public)
+            .map_err(|_| RegistryError::new("AE-REG-006", "ed25519 public key material is invalid"))
+    } else if material.len() == 32 {
+        let mut seed = [0u8; 32];
+        seed.copy_from_slice(material);
+        Ok(SigningKey::from_bytes(&seed).verifying_key())
+    } else {
+        Err(RegistryError::new(
+            "AE-REG-006",
+            "ed25519 trust key material has invalid length",
+        ))
+    }
+}
+
+fn https_get_bytes(url: &str) -> Result<Vec<u8>, RegistryError> {
+    let response = ureq::get(url).call().map_err(|error| {
+        RegistryError::new(
+            "AE-REG-008",
+            format!("HTTPS fetch failed for {url}: {error}"),
+        )
+    })?;
+    let mut bytes = Vec::new();
+    response
+        .into_reader()
+        .read_to_end(&mut bytes)
+        .map_err(|error| {
+            RegistryError::new(
+                "AE-REG-008",
+                format!("HTTPS body read failed for {url}: {error}"),
+            )
+        })?;
+    Ok(bytes)
+}
+
+fn hex_decode(input: &str) -> Result<Vec<u8>, ()> {
+    if !input.len().is_multiple_of(2) {
+        return Err(());
+    }
+    let mut out = Vec::with_capacity(input.len() / 2);
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let hi = hex_nibble(bytes[i])?;
+        let lo = hex_nibble(bytes[i + 1])?;
+        out.push((hi << 4) | lo);
+        i += 2;
+    }
+    Ok(out)
+}
+
+fn hex_nibble(byte: u8) -> Result<u8, ()> {
+    match byte {
+        b'0'..=b'9' => Ok(byte - b'0'),
+        b'a'..=b'f' => Ok(byte - b'a' + 10),
+        b'A'..=b'F' => Ok(byte - b'A' + 10),
+        _ => Err(()),
+    }
 }
 
 fn resolve_cache_path(cache_root: &Path, relative: &str) -> Result<PathBuf, RegistryError> {
@@ -868,5 +1095,20 @@ mod tests {
 
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_dir_all(&other);
+    }
+
+    #[test]
+    fn ed25519_signed_pin_round_trip() {
+        assert!(registry_ed25519_https_pilot());
+        let root = temp_dir();
+        generate_ed25519_trust_key(&root, "release").expect("ed25519 key");
+        let artifact = root.join("payload.bin");
+        fs::write(&artifact, b"AETH\x0bed25519-payload").expect("write");
+        let signed = pin_local_package_signed(&root, "demo", "3.0.0", &artifact, "release")
+            .expect("ed25519 pin");
+        assert_eq!(signed.algorithm.as_deref(), Some(REGISTRY_ALG_ED25519));
+        assert_eq!(signed.signature.as_ref().map(|s| s.len()), Some(128));
+        verify_registry_cache(&root).expect("ed25519 verify");
+        let _ = fs::remove_dir_all(&root);
     }
 }

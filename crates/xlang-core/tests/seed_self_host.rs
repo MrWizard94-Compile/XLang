@@ -1,15 +1,17 @@
 use aether_core::{
     apply_edit_cli_trusts_product_accept, bootstrap_is_recovery_oracle_only,
-    check_product_base_gate, compile_product_bytecode, compile_to_bytecode, compile_with_seed,
-    compile_with_seed_invokes_bootstrap, compile_with_seed_product_authoritative, forge_bytecode,
+    check_product_base_gate, compile_product_bytecode, compile_product_multi_source_envelope,
+    compile_to_bytecode, compile_with_seed, compile_with_seed_invokes_bootstrap,
+    compile_with_seed_product_authoritative, encode_multi_source_envelope, forge_bytecode,
     host_elaborates_modules_seed_emits, lib_module_validates_via_product_seed,
     lsp_product_diagnostics_primary, lsp_product_surface_hover_definition,
     multi_module_product_choose_revise_supported, product_cli_check_without_bootstrap,
     product_default_cli_toolchain, product_diagnostic_abi, product_diagnostics,
     product_error_packets, product_format_without_bootstrap,
-    product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
-    product_path_requires_bootstrap_dual_compare, product_project_format_without_bootstrap,
-    product_rejects_yield_in_truth_choose, product_seed_error_packet_abi,
+    product_multi_module_invokes_bootstrap, product_multi_source_forge_envelope,
+    product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
+    product_project_format_without_bootstrap, product_rejects_yield_in_truth_choose,
+    product_seed_error_packet_abi, product_seed_error_speak_format,
     product_seed_rebuild_without_bootstrap, product_structure_without_bootstrap,
     product_surface_symbols, product_surface_symbols_without_bootstrap, run_bytecode,
     seed_internal_error_packets, seed_interprets_m23_comptime_calls_natively,
@@ -564,6 +566,7 @@ fn barp_phase4_product_diagnostic_abi_and_import_unit() {
 #[test]
 fn barp_adr072_product_seed_error_packet_abi() {
     assert!(product_seed_error_packet_abi());
+    assert!(product_seed_error_speak_format());
     assert!(
         !seed_internal_error_packets(),
         "seed binary packet emit still residual"
@@ -575,10 +578,33 @@ fn barp_adr072_product_seed_error_packet_abi() {
     assert_eq!(packets[0].schema, SEED_ERROR_PACKET_SCHEMA);
     assert_eq!(packets[0].code, "AE-SEED-005");
     assert_eq!(packets[0].origin, "host-preflight");
+    // ADR-075: raw product diagnostic embeds AETHER_SEED_ERROR; packet decode prefers it.
+    let raw = product_diagnostics("");
+    assert!(
+        raw[0].message.contains("AETHER_SEED_ERROR:"),
+        "ADR-075 SPEAK-compatible packet line in product diagnostic"
+    );
     let typed = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield \"x\"\n");
     assert_eq!(typed.len(), 1);
     assert_eq!(typed[0].code, "AE-SEED-010");
     assert_eq!(typed[0].origin, "host-classify");
+}
+
+#[test]
+fn barp_adr075_multi_source_envelope_product_forge() {
+    assert!(product_multi_source_forge_envelope());
+    assert!(!seed_native_multi_module_elaboration());
+    let lib = "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n";
+    let main = "world app\n\nimport unit \"lib/math.ae\" as m\n\nweave main [] -> Whole:\n  yield call m.double 21\n";
+    let envelope = encode_multi_source_envelope(&[
+        ("lib/math.ae".to_owned(), lib.to_owned()),
+        ("src/main.ae".to_owned(), main.to_owned()),
+    ])
+    .expect("encode envelope");
+    assert!(envelope.contains("aether.multi-source/v1"));
+    let bytecode = compile_product_multi_source_envelope(&envelope).expect("multi forge");
+    verify_bytecode(&bytecode).expect("verify multi");
+    assert_eq!(run_bytecode(&bytecode).expect("run").exit_code, 42);
 }
 
 #[test]
