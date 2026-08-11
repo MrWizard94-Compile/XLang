@@ -239,6 +239,8 @@ fn diagnostic_code(message: &str) -> &'static str {
     let normalized = message.to_ascii_lowercase();
     if normalized.starts_with("source is empty") || normalized.contains("source exceeds") {
         "AE-SOURCE-001"
+    } else if normalized.contains("ae-seed-012") {
+        "AE-SEED-012"
     } else if normalized.contains("ae-seed-011") {
         "AE-SEED-011"
     } else if normalized.contains("ae-seed-010") {
@@ -2711,8 +2713,9 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 ///
 /// Does **not** bootstrap-parse or bootstrap-validate. Invalid Seed Profile
 /// inputs fail at seed forge or [`verify_bytecode`]. Full diagnostics remain
-/// bootstrap authority via CLI `check` / LSP. Product-path errors use bounded
-/// `AE-SEED-*` codes (ADR-046 Phase 3a).
+/// bootstrap authority via CLI `check` (default). Product-path errors use bounded
+/// `AE-SEED-*` codes (ADR-046–055). Prefer [`product_diagnostics`] for structured
+/// product diagnostic collection without bytecode.
 pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> {
     debug_assert!(
         seed_interprets_m23_comptime_calls_natively(),
@@ -2724,6 +2727,9 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
     );
     if seed_product_diagnostics_subset() {
         if let Some(message) = seed_reject_empty_source(source) {
+            return Err(CompilerError::new(Span::synthetic(), message));
+        }
+        if let Some(message) = seed_reject_raw_import_unit(source) {
             return Err(CompilerError::new(Span::synthetic(), message));
         }
         if let Some(message) = seed_reject_missing_world(source) {
@@ -2760,6 +2766,25 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         )
     })?;
     Ok(bytecode)
+}
+
+/// BARP ADR-055: structured **product** diagnostic collection (seed path).
+///
+/// Returns zero diagnostics when product accept succeeds. Failures yield stable
+/// `AE-SEED-*` codes. This is the host-facing product diagnostic ABI — not a
+/// claim that the seed binary emits structured error packets on every path
+/// (opaque VM failures are classified into AE-SEED-008/001). Bootstrap full
+/// diagnostics remain CLI `check` / optional LSP bootstrap mode.
+#[must_use]
+pub fn product_diagnostics(source: &str) -> Vec<Diagnostic> {
+    debug_assert!(
+        product_diagnostic_abi(),
+        "ADR-055: product diagnostic ABI tracker"
+    );
+    match compile_product_bytecode(source) {
+        Ok(_) => Vec::new(),
+        Err(error) => vec![error.diagnostic()],
+    }
 }
 
 fn format_seed_product_error(code: &str, detail: &str) -> String {
@@ -2814,6 +2839,24 @@ fn classify_seed_verify_error(detail: &str) -> &'static str {
 fn seed_reject_empty_source(source: &str) -> Option<String> {
     if source.trim().is_empty() {
         return Some(format_seed_product_error("AE-SEED-005", "source is empty"));
+    }
+    None
+}
+
+/// BARP ADR-055/056: single-file product path rejects raw multi-module surface.
+/// Multi-module product path is host elaborate + seed emit (`aether project build`).
+fn seed_reject_raw_import_unit(source: &str) -> Option<String> {
+    for (line_index, line) in source.lines().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("import unit ") {
+            return Some(format_seed_product_error(
+                "AE-SEED-012",
+                &format!(
+                    "line {}: raw import unit is multi-module surface — use `aether project build` (host elaborate + seed emit; seed does not elaborate multi-file natively)",
+                    line_index + 1
+                ),
+            ));
+        }
     }
     None
 }
@@ -3062,6 +3105,37 @@ pub const fn product_project_format_without_bootstrap() -> bool {
 /// BARP ADR-054: `structure --product` / [`product_structure_json`] is seed-only.
 #[must_use]
 pub const fn product_structure_without_bootstrap() -> bool {
+    true
+}
+
+/// BARP ADR-055: structured product diagnostic ABI ([`product_diagnostics`]).
+#[must_use]
+pub const fn product_diagnostic_abi() -> bool {
+    true
+}
+
+/// BARP ADR-056: multi-module product path is host elaborate + seed emit.
+/// Seed-native multi-file elaboration is **not** available (no multi-file forge ABI).
+#[must_use]
+pub const fn host_elaborates_modules_seed_emits() -> bool {
+    true
+}
+
+/// BARP ADR-056 honesty: seed does **not** natively elaborate multi-module graphs.
+#[must_use]
+pub const fn seed_native_multi_module_elaboration() -> bool {
+    false
+}
+
+/// BARP ADR-057: structural-edit prefers product diagnostics when base fails both paths.
+#[must_use]
+pub const fn structural_edit_product_base_gate() -> bool {
+    true
+}
+
+/// BARP ADR-058: LSP product-path diagnostics are primary (seed AE-SEED codes).
+#[must_use]
+pub const fn lsp_product_diagnostics_primary() -> bool {
     true
 }
 

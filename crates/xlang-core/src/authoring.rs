@@ -173,7 +173,23 @@ pub fn apply_structural_edit(
 }
 
 fn canonicalize_source(source: &str) -> Result<(Program, String), CompilerError> {
-    let parsed = compile_source(source)?;
+    // ADR-057: when both product and bootstrap reject, prefer product AE-SEED codes.
+    // When product rejects but bootstrap accepts (e.g. export-only lib units), keep
+    // bootstrap base parse for authoring AST. When product accepts, still need
+    // bootstrap for Program AST.
+    debug_assert!(
+        crate::structural_edit_product_base_gate(),
+        "ADR-057: structural edit product base gate"
+    );
+    let product_result = compile_product_bytecode(source);
+    let parsed = match compile_source(source) {
+        Ok(program) => program,
+        Err(bootstrap_error) => {
+            // Prefer product AE-SEED when product also rejects; else bootstrap error.
+            product_result?;
+            return Err(bootstrap_error);
+        }
+    };
     let canonical_source = format_program(&parsed);
     // ADR-050: skip a second bootstrap compile when already canonical (LF form).
     let normalized_input = source.replace("\r\n", "\n").replace('\r', "\n");

@@ -1,14 +1,17 @@
 use aether_core::{
     apply_edit_cli_trusts_product_accept, compile_product_bytecode, compile_to_bytecode,
     compile_with_seed, compile_with_seed_invokes_bootstrap,
-    compile_with_seed_product_authoritative, forge_bytecode, lib_module_validates_via_product_seed,
-    product_cli_check_without_bootstrap, product_format_without_bootstrap,
-    product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
-    product_path_requires_bootstrap_dual_compare, product_project_format_without_bootstrap,
-    product_structure_without_bootstrap, run_bytecode, seed_interprets_m23_comptime_calls_natively,
+    compile_with_seed_product_authoritative, forge_bytecode, host_elaborates_modules_seed_emits,
+    lib_module_validates_via_product_seed, lsp_product_diagnostics_primary,
+    product_cli_check_without_bootstrap, product_diagnostic_abi, product_diagnostics,
+    product_format_without_bootstrap, product_multi_module_invokes_bootstrap,
+    product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
+    product_project_format_without_bootstrap, product_structure_without_bootstrap, run_bytecode,
+    seed_interprets_m23_comptime_calls_natively, seed_native_multi_module_elaboration,
     seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
-    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed, verify_bytecode,
-    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
+    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
+    structural_edit_product_base_gate, verify_bytecode, InvocationOutput, InvocationValue,
+    SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -404,6 +407,23 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
         product_structure_without_bootstrap(),
         "ADR-054: product structure without bootstrap"
     );
+    assert!(product_diagnostic_abi(), "ADR-055: product diagnostic ABI");
+    assert!(
+        host_elaborates_modules_seed_emits(),
+        "ADR-056: host elaborates modules; seed emits"
+    );
+    assert!(
+        !seed_native_multi_module_elaboration(),
+        "ADR-056 honesty: no seed-native multi-module elaboration"
+    );
+    assert!(
+        structural_edit_product_base_gate(),
+        "ADR-057: structural edit product base gate"
+    );
+    assert!(
+        lsp_product_diagnostics_primary(),
+        "ADR-058: LSP product diagnostics primary"
+    );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")
         .bytecode;
@@ -452,6 +472,21 @@ fn barp_phase3a_product_path_maps_seed_forge_failure_to_ae_seed_code() {
         message.contains("aether check"),
         "expected check hint, got {message}"
     );
+}
+
+#[test]
+fn barp_phase4_product_diagnostic_abi_and_import_unit() {
+    assert!(product_diagnostic_abi());
+    let good = product_diagnostics("world w\n\nweave main [] -> Whole:\n  yield 1\n");
+    assert!(good.is_empty(), "valid product source has no diagnostics");
+    let type_diags = product_diagnostics("world w\n\nweave main [] -> Whole:\n  yield \"x\"\n");
+    assert_eq!(type_diags.len(), 1);
+    assert_eq!(type_diags[0].code, "AE-SEED-010");
+    let import_diags = product_diagnostics(
+        "world w\n\nimport unit \"lib.ae\" as lib\n\nweave main [] -> Whole:\n  yield 1\n",
+    );
+    assert_eq!(import_diags.len(), 1);
+    assert_eq!(import_diags[0].code, "AE-SEED-012");
 }
 
 #[test]
@@ -514,19 +549,22 @@ fn barp_phase3b_product_path_rejects_empty_missing_world_and_legacy() {
         .expect_err("legacy syntax must fail");
     assert!(legacy.to_string().contains("AE-SEED-007"), "got {}", legacy);
 
-    // Valid Aether import must not be rejected by AE-SEED-007.
-    let import_ok = concat!(
+    // ADR-055/056: raw import unit fails closed with AE-SEED-012 (not AE-SEED-007).
+    let import_unit = concat!(
         "world demo\n\n",
         "import unit \"lib.ae\" as lib\n\n",
         "weave main [] -> Whole:\n  yield 1\n"
     );
-    // May fail product for missing file / elaborate — but not AE-SEED-007.
-    if let Err(error) = compile_product_bytecode(import_ok) {
-        assert!(
-            !error.to_string().contains("AE-SEED-007"),
-            "import unit must not trip legacy preflight: {error}"
-        );
-    }
+    let import_err =
+        compile_product_bytecode(import_unit).expect_err("raw import unit must fail product");
+    assert!(
+        import_err.to_string().contains("AE-SEED-012"),
+        "expected AE-SEED-012, got {import_err}"
+    );
+    assert!(
+        !import_err.to_string().contains("AE-SEED-007"),
+        "import unit must not trip legacy preflight: {import_err}"
+    );
 }
 
 #[test]

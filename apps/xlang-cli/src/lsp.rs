@@ -1,7 +1,9 @@
-//! Bounded offline Language Server Protocol (M13a + M13b / ADR-017).
+//! Bounded offline Language Server Protocol (M13a + M13b / ADR-017 / ADR-058).
 //!
-//! Stdio JSON-RPC only. Bootstrap diagnostics; no product AETH emission; no
-//! server-side disk writes of source or artifacts.
+//! Stdio JSON-RPC only. **Product-path diagnostics are primary** (ADR-058 /
+//! AE-SEED codes via seed product path). Symbols/format/hover/definition still
+//! use bootstrap AST. No product AETH emission; no server-side disk writes of
+//! source or artifacts.
 //!
 //! M13b: optional project file enables cross-file definition/hover for
 //! `import unit "…" as alias` → `call alias.weave`.
@@ -12,8 +14,9 @@ use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use aether_core::{
-    compile_source, format_source, parse_project_document, structural_document_json,
-    validate_unit_path, Diagnostic, LANGUAGE_NAME, LANGUAGE_VERSION,
+    compile_source, format_source, lsp_product_diagnostics_primary, parse_project_document,
+    product_diagnostics, structural_document_json, validate_unit_path, Diagnostic, LANGUAGE_NAME,
+    LANGUAGE_VERSION,
 };
 use serde_json::{json, Value};
 
@@ -307,20 +310,28 @@ pub fn collect_diagnostics(text: &str) -> Vec<Value> {
             },
             "severity": 3,
             "source": "aether",
-            "code": "AE-MOD-007",
-            "message": "import unit: multi-module product path is `aether project build` (seed after elaboration). Editor bootstrap single-file check is limited; use project-aware definition/hover when a project is configured.",
+            "code": "AE-SEED-012",
+            "message": "import unit: multi-module product path is `aether project build` (host elaborate + seed emit; ADR-056). Single-file product/LSP cannot elaborate imports.",
         })];
+    }
+    // ADR-058: product diagnostics primary (seed path AE-SEED codes).
+    if lsp_product_diagnostics_primary() {
+        let product = product_diagnostics(text);
+        if product.is_empty() {
+            return Vec::new();
+        }
+        return product.iter().map(lsp_product_diagnostic).collect();
     }
     match compile_source(text) {
         Ok(_) => Vec::new(),
         Err(error) => {
             let diagnostic = error.diagnostic();
-            vec![lsp_diagnostic(&diagnostic)]
+            vec![lsp_bootstrap_diagnostic(&diagnostic)]
         }
     }
 }
 
-fn lsp_diagnostic(diagnostic: &Diagnostic) -> Value {
+fn lsp_product_diagnostic(diagnostic: &Diagnostic) -> Value {
     let line = diagnostic.span.line.saturating_sub(1);
     let character = diagnostic.span.column.saturating_sub(1);
     json!({
@@ -331,7 +342,22 @@ fn lsp_diagnostic(diagnostic: &Diagnostic) -> Value {
         "severity": 1,
         "source": "aether",
         "code": diagnostic.code,
-        "message": format!("{} (bootstrap diagnostics; product compile is seed-hosted)", diagnostic.message),
+        "message": format!("{} (product seed diagnostics; bootstrap: aether check)", diagnostic.message),
+    })
+}
+
+fn lsp_bootstrap_diagnostic(diagnostic: &Diagnostic) -> Value {
+    let line = diagnostic.span.line.saturating_sub(1);
+    let character = diagnostic.span.column.saturating_sub(1);
+    json!({
+        "range": {
+            "start": { "line": line, "character": character },
+            "end": { "line": line, "character": character.saturating_add(1) },
+        },
+        "severity": 1,
+        "source": "aether",
+        "code": diagnostic.code,
+        "message": format!("{} (bootstrap diagnostics)", diagnostic.message),
     })
 }
 
@@ -845,17 +871,26 @@ mod tests {
 
     #[test]
     fn diagnostics_report_type_error_and_clear_on_valid() {
+        assert!(
+            lsp_product_diagnostics_primary(),
+            "ADR-058: product diagnostics primary"
+        );
         let bad = "world x\n\nweave main [] -> Whole:\n  yield \"nope\"\n";
         let diags = collect_diagnostics(bad);
         assert_eq!(diags.len(), 1);
-        assert_eq!(diags[0]["code"], "AE-TYPE-001");
+        // Product-primary: type/stack mismatch maps to AE-SEED-010 (not bootstrap AE-TYPE-001).
+        assert_eq!(diags[0]["code"], "AE-SEED-010");
+        assert!(diags[0]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("product seed diagnostics"));
 
         let good = "world x\n\nweave main [] -> Whole:\n  yield 0\n";
         assert!(collect_diagnostics(good).is_empty());
 
         let modules = "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield 0\n";
         let diags = collect_diagnostics(modules);
-        assert_eq!(diags[0]["code"], "AE-MOD-007");
+        assert_eq!(diags[0]["code"], "AE-SEED-012");
         assert_eq!(diags[0]["severity"], 3);
     }
 

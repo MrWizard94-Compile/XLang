@@ -285,9 +285,10 @@ operation vocabulary, and compatibility policy are in
 
 | Path | Role |
 |------|------|
-| **Seed (default)** | `compile_product_bytecode` / CLI `compile` / project+workspace build / lib project-verify / apply-edit accept / `check|format|structure|project format --product` — forge-first; multi-module no bootstrap (ADR-047/048/051–054) |
+| **Seed (default)** | `compile_product_bytecode` / `product_diagnostics` / CLI `compile` / project+workspace build / lib project-verify / apply-edit accept / product CLI + LSP diagnostics — forge-first (ADR-047–058) |
 | **Seed product API** | `compile_with_seed` — product bytes only; empty placeholder `Program` (ADR-051; never bootstrap) |
-| **Bootstrap** | `compile_to_bytecode` / CLI `compile --bootstrap` / default `check` AST / format / structure / LSP — rebuild seed, full diagnostics, dual-compare oracle |
+| **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
+| **Bootstrap** | `compile_to_bytecode` / CLI `compile --bootstrap` / default `check` AST / format / structure AST / LSP symbols — rebuild seed, full diagnostics, dual-compare oracle |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |
 
 The seed artifact is checked in at `seed/aether_seed.aeth` and embedded as

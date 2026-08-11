@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — Phase 0–3c complete; ADR-045–054 product authority reductions  
-**Date:** 2026-08-08 (Phase 1–2 / ADR-044–054 2026-08-10)  
-**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-054](ADR-054-barp-product-project-format-structure.md)  
+**Status:** Active program — Phase 0–3c + product diagnostic/LSP slices; ADR-045–058  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044–058 2026-08-10)  
+**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-058](ADR-058-barp-lsp-product-diagnostics.md)  
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -43,11 +43,14 @@ Bootstrap remains **required** for:
 | CLI `project format` | Bootstrap (default); **`--product`** role-aware seed format (ADR-054) |
 | CLI `apply-edit` | Bootstrap base parse; product accept in core; **CLI does not re-forge** (ADR-053) |
 | CLI `structure` | Bootstrap `aether.ast/v8` (default); **`--product`** envelope (ADR-054) |
-| LSP | Bootstrap AST (authoring) |
+| LSP diagnostics | **Product primary** AE-SEED (ADR-058) |
+| LSP symbols/format/hover | Bootstrap AST (authoring) |
+| Product diagnostics API | [`product_diagnostics`] (ADR-055) |
+| Multi-module | Host elaborate + seed emit; seed-native multi-file **false** (ADR-056) |
 
 **Primary product emission** is seed forge without bootstrap pre-gate or
 product dual-compare gate. Bootstrap remains rebuild, default `check`/AST
-diagnostics, format/structure/LSP, and dual-compare **oracle** (tests + aether-gate).
+format/structure, LSP symbols, and dual-compare **oracle** (tests + aether-gate).
 
 ---
 
@@ -141,6 +144,23 @@ CLI apply-edit trusts core product accept (no second forge).
 `project format --product` role-aware seed format; `structure --product` emits
 `aether.product-structure/v1` without bootstrap AST.
 
+### ADR-055 — Product diagnostic ABI (**complete** 2026-08-10)
+
+`product_diagnostics` + `AE-SEED-012` raw import unit (host-facing structured
+product diagnostics; not full seed-internal error packets).
+
+### ADR-056 — Host elaborate + seed emit multi-module (**complete** 2026-08-10)
+
+Contract + honesty trackers; seed-native multi-file elaboration remains false.
+
+### ADR-057 — Structural-edit product base gate (**complete** 2026-08-10)
+
+When both product and bootstrap reject base source, prefer product AE-SEED.
+
+### ADR-058 — LSP product diagnostics primary (**complete** 2026-08-10)
+
+LSP diagnostics use product seed path; symbols/format still bootstrap AST.
+
 ### ADR-045 — Product dual-compare oracle-only (**complete** 2026-08-10)
 
 Project/workspace product build no longer bootstrap dual-compares on every
@@ -174,8 +194,11 @@ Product project/workspace compile returns seed bytes via
 | Product CLI format | **`format --product`** LF+accept (ADR-053) |
 | Product project format | **`project format --product`** (ADR-054) |
 | Product structure | **`structure --product`** envelope (ADR-054) |
+| Product diagnostics API | **`product_diagnostics`** (ADR-055) |
+| Multi-module | Host elaborate + seed emit (ADR-056); seed-native = false |
+| LSP diagnostics | **Product primary** (ADR-058) |
 | Lib unit project verify | **Product seed probe** (ADR-052) |
-| Bootstrap roles | Rebuild seed, default check/AST format/structure, LSP, dual-compare oracle |
+| Bootstrap roles | Rebuild seed, default check/AST format/structure, LSP symbols, dual-compare oracle |
 | Gate | `aether-gate -Mode release` PASS |
 
 ---

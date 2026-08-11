@@ -24,7 +24,10 @@ path without bootstrap AST (default `check` remains full diagnostics).
 without bootstrap AST rewrite (default format remains full bootstrap canonical;
 ADR-053/054). `structure --product` emits `aether.product-structure/v1` without
 bootstrap AST (ADR-054). Project verify validates lib units via product seed
-probes (ADR-052).
+probes (ADR-052). Host-facing product diagnostics are [`product_diagnostics`]
+with `AE-SEED-001`–`012` (ADR-055); raw `import unit` is `AE-SEED-012` — multi-module
+product path is host elaborate + seed emit (ADR-056; seed does not elaborate
+multi-file natively). LSP diagnostics are product-primary (ADR-058).
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,

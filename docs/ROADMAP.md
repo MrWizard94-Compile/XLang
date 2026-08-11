@@ -5,7 +5,7 @@ M20/M20b, M17b–d, M21, M22, and M23 pure comptime calls; RTP-001 runtime
 performance increment; PKG-001 offline workspace locks; package **0.36**
 current. M19e is implemented as the verifier-checked v12 task-frame slice
 (ADR-042); TP-1/TP-2 delivered; portfolio ADR-014
-**Date:** 2026-08-10 (BARP through ADR-054; product authority reduction active)
+**Date:** 2026-08-10 (BARP through ADR-058; product authority reduction active)
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
 constitution gate.
@@ -343,22 +343,23 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` live-stamped 2026-08-08).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-054:** seed-native
-M23, bootstrap-free `compile_with_seed`, product CLI `check`/`format`/`structure`
-/`project format --product`, product lib project-verify, Phase 3a–3c
-`AE-SEED-001`–`011` product codes, multi-module/edit product gates, gate product
-seed self-rebuild.
-**Next:** structured seed error ABI (optional large ADR); optional seed
-elaboration (large ADR). Residual bootstrap: default `check`/format/structure/LSP
-AST, `--bootstrap` seed rebuild, dual-compare oracle, host multi-module
-elaboration, structural-edit base parse.
+reduce Rust bootstrap product-path authority. **Through ADR-058:** seed-native
+M23, product diagnostic ABI (`product_diagnostics`, `AE-SEED-001`–`012`), product
+CLI surfaces, LSP product diagnostics primary, host-elaborate/seed-emit multi-module
+contract (seed-native multi-file = **false**), structural-edit product base gate,
+gate product seed self-rebuild.
+**Next:** seed-internal structured error packets (requires seed rebuild design);
+multi-file forge ABI for seed-native multi-module (large ADR + threat model).
+Residual bootstrap: default `check`/format/structure AST, LSP symbols/format/hover,
+`--bootstrap` seed rebuild, dual-compare oracle, host multi-module elaboration,
+structural-edit base AST.
 
 **Still blocked without a new ADR / law:** expanded FFI signatures,
 native/LLVM, network registry, task handles/timeouts/parallelism, and any
 broader resource/effect cancellation surface.
 
 **Human backlog (updated 2026-08-10):**
-1. **BARP** — structured seed error ABI / seed multi-module elaboration (optional large ADRs).
+1. **BARP** — seed-internal error packets / multi-file forge ABI (optional large ADRs).
 2. Further offline package/stdlib polish only through a new scoped design and matrix.
 3. Broader task cancellation, task handles/timeouts/parallelism only through a new ADR.
 4. Law forks F-NATIVE / F-REGISTRY — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) /

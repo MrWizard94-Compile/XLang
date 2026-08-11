@@ -1,7 +1,7 @@
 # ADR-043: Bootstrap Authority Reduction Program (BARP)
 
-**Status:** Accepted (program) — through ADR-054  
-**Date:** 2026-08-08 (Phase 1–2 / ADR-044–054 2026-08-10)  
+**Status:** Accepted (program) — through ADR-058  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044–058 2026-08-10)  
 **Related Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`  
 **Design:** [DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 
@@ -48,9 +48,17 @@ authority under Constitution.
 14. **ADR-054 (done):** `project format --product` + `structure --product`
     (`aether.product-structure/v1`); `product_project_format_without_bootstrap()`,
     `product_structure_without_bootstrap()`.  
-15. Bootstrap remains seed recovery rebuild + default `check`/AST format +
-    default structure/LSP + dual-compare oracle.  
-16. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+15. **ADR-055 (done):** `product_diagnostics` host-facing product diagnostic ABI;
+    `AE-SEED-012` raw import unit; `product_diagnostic_abi()`.  
+16. **ADR-056 (done):** host elaborate + seed emit multi-module contract;
+    `host_elaborates_modules_seed_emits()`; `seed_native_multi_module_elaboration() == false`.  
+17. **ADR-057 (done):** structural-edit product base gate when both reject;
+    `structural_edit_product_base_gate()`.  
+18. **ADR-058 (done):** LSP product diagnostics primary;
+    `lsp_product_diagnostics_primary()`.  
+19. Bootstrap remains seed recovery rebuild + default `check`/AST format +
+    structure AST + LSP symbols/format/hover + dual-compare oracle.  
+20. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 
@@ -74,7 +82,7 @@ authority under Constitution.
 
 ## Links
 
-- DESIGN-BARP-001, ADR-039, ADR-044–054, SEED_PROFILE  
+- DESIGN-BARP-001, ADR-039, ADR-044–058, SEED_PROFILE  
 
 ---
 

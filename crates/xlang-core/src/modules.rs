@@ -1,8 +1,9 @@
 //! M11a language modules: import unit / export weave / project build.
 //!
 //! Multi-module programs are **host-elaborated** into one single-world Aether
-//! program (ADR-015 / M11a), then **seed-emitted** on the product path (M11b).
-//! Bootstrap dual-compare is test/oracle only (ADR-045).
+//! program (ADR-015 / M11a), then **seed-emitted** on the product path (M11b /
+//! ADR-056). Seed does **not** natively elaborate multi-file graphs (no multi-file
+//! forge ABI). Bootstrap dual-compare is test/oracle only (ADR-045).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -685,11 +686,22 @@ fn rename_weaves_in_body(body: &str, renames: &BTreeMap<String, String>) -> Stri
     result
 }
 
-/// Elaborate the main unit's import cone into one bootstrap-compilable source.
+/// Elaborate the main unit's import cone into one single-file Aether source.
+///
+/// Host authority (ADR-056). Product emission of the result uses seed only
+/// ([`crate::compile_product_bytecode`]); dual-compare remains test/oracle.
 pub fn elaborate_project_modules(
     project_root: &Path,
     document: &ProjectDocument,
 ) -> Result<String, ProjectError> {
+    debug_assert!(
+        crate::host_elaborates_modules_seed_emits(),
+        "ADR-056: host elaborates; seed emits"
+    );
+    debug_assert!(
+        !crate::seed_native_multi_module_elaboration(),
+        "ADR-056 honesty: seed does not elaborate multi-module natively"
+    );
     elaborate_project_modules_with_packages(
         project_root,
         document,
