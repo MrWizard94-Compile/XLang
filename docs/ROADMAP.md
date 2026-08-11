@@ -341,7 +341,7 @@ and implementation records are
 
 The 0.36 local-preview release/stabilization increment is complete: the release
 gate builds, stages, consumer-verifies, and integrity-probes the package
-(`GATE PASS mode=release` live-stamped 2026-08-08).
+(`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
 reduce Rust bootstrap product-path authority. **Through ADR-069:** product is the

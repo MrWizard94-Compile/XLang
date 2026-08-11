@@ -6,9 +6,11 @@ Aether **0.36.0** (base language **0.11** plus M11–M18, M19a–M19e, M20/M20b,
 M17b–M17d, M21 pilot, M22 tooling and semantics, and M23 pure comptime calls;
 AETH **v11** for source without task frames and AETH **v12** for M19e task
 frames with `RELEASE` 66 and `TASK_CHECKPOINT` 67)
-accepts Aether source, returns a canonical AST from the Rust bootstrap for
-tooling, and **emits deterministic AETH bytecode primarily through the
-Aether-written seed compiler** (forge ABI) for the documented seed surface,
+accepts Aether source, uses the **product seed path as default toolchain**
+(compile/check/format/structure/LSP; BARP ADR-064–069), and **emits deterministic
+AETH bytecode primarily through the Aether-written seed compiler** (forge ABI)
+for the documented seed surface. Rust bootstrap remains recovery/oracle AST
+(`--bootstrap`, dual-compare, nested body-list edits, full `aether.ast/v8`) for
 including multi-weave arenas / resourceful total spawn callees
 (`examples/spawn-arena.ae`), M19e task frames, and the M21 foreign weave pilot.
 Multi-module and workspace build elaborate then seed-compile.
@@ -289,7 +291,7 @@ operation vocabulary, and compatibility policy are in
 | **Seed product API** | `compile_with_seed` / `product_diagnostics` / `product_surface_symbols` — never bootstrap |
 | **Structural product edits** | Top-level weave + weave-body statements + primitive records without bootstrap base AST (ADR-065/068/069); nested body lists residual bootstrap AST |
 | **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
-| **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; structural-edit ops outside product weave-replace; dual-compare tests/gate |
+| **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; nested body-list structural AST; dual-compare tests/gate |
 | **F-NATIVE M35a/b** | `compile --native-c` — verified AETH → ISO C pure Whole + locals/arithmetic (ADR-059/062); VM remains default |
 | **F-REGISTRY M24a** | `registry pin-local` / `verify-cache` — offline digest pins only (ADR-060); no network |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |

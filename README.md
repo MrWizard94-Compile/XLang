@@ -158,7 +158,8 @@ set in this order:
    — current package-integrity, runtime, and language-surface boundaries.
 4. [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) — exact seed-emitted product
    path and bootstrap responsibilities.
-5. [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/PROGRESS_REPORT-FULL-PROJECT.md)
+5. [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/PROGRESS_REPORT-FULL-PROJECT.md) — current progress (2026-08-10)
+6. [docs/AUDIT_REPORT-2026-08-10-FULL-PROJECT.md](docs/AUDIT_REPORT-2026-08-10-FULL-PROJECT.md) — latest full audit
    — maturity, evidence, and residuals.
 6. [docs/ROADMAP.md](docs/ROADMAP.md) — implemented scope and approved
    dependency order for future work.
