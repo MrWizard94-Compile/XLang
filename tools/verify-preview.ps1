@@ -302,9 +302,10 @@ try {
     Write-Host "  active cancellation, frame capacity, and checkpoint loop outputs OK"
 
     Write-Host "=== v8 structural authoring ===" -ForegroundColor Cyan
-    $structureOutput = & $Executable structure (Get-ConfinedPackagePath $Package "examples/active-cancel.ae" "authoring example path") 2>&1 | Out-String
+    # ADR-064: default structure is product envelope; recovery AST needs --bootstrap.
+    $structureOutput = & $Executable structure --bootstrap (Get-ConfinedPackagePath $Package "examples/active-cancel.ae" "authoring example path") 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) {
-        Fail "structure command failed for active-cancel.ae"
+        Fail "structure --bootstrap command failed for active-cancel.ae"
     }
     try {
         $structure = $structureOutput | ConvertFrom-Json

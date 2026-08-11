@@ -646,6 +646,20 @@ fn format_unit_product(
 ) -> Result<String, ProjectError> {
     let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
     if role == ProjectUnitRole::Lib {
+        // M10 multi-unit libs may still ship `weave main` as independent units;
+        // M11 export-only libs use the product lib probe (no main).
+        let has_main = normalized.lines().any(|line| {
+            let t = line.trim_start();
+            t.starts_with("weave main ") || t.starts_with("task weave main ")
+        });
+        if has_main {
+            return format_source_product(source).map_err(|error| {
+                ProjectError::new(
+                    "AE-PROJECT-004",
+                    format!("unit {unit_path} failed product format: {error}"),
+                )
+            });
+        }
         validate_lib_module_source(unit_path, &normalized)?;
         return Ok(normalized);
     }

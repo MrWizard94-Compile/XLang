@@ -3175,6 +3175,19 @@ pub const fn product_surface_symbols_without_bootstrap() -> bool {
     true
 }
 
+/// BARP ADR-064: user-facing CLI defaults to product seed path (check/format/structure/project format).
+#[must_use]
+pub const fn product_default_cli_toolchain() -> bool {
+    true
+}
+
+/// BARP ADR-064 honesty: bootstrap remains recovery rebuild, dual-compare oracle,
+/// structural-edit base AST, and LSP hover/definition AST — not the default CLI product path.
+#[must_use]
+pub const fn bootstrap_is_recovery_oracle_only() -> bool {
+    true
+}
+
 /// One top-level name discovered from product-accepted source without bootstrap AST.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductSurfaceSymbol {

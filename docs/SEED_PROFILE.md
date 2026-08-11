@@ -27,7 +27,9 @@ bootstrap AST (ADR-054). Project verify validates lib units via product seed
 probes (ADR-052). Host-facing product diagnostics are [`product_diagnostics`]
 with `AE-SEED-001`–`012` (ADR-055); raw `import unit` is `AE-SEED-012` — multi-module
 product path is host elaborate + seed emit (ADR-056; seed does not elaborate
-multi-file natively). LSP diagnostics are product-primary (ADR-058).
+multi-file natively). LSP diagnostics are product-primary (ADR-058). **ADR-064:**
+default CLI check/format/structure/project format and LSP format use the product
+seed path; bootstrap is recovery (`--bootstrap`) and dual-compare oracle only.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,

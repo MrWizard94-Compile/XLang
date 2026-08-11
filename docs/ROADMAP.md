@@ -344,14 +344,14 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` live-stamped 2026-08-08).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-063:** product
-diagnostic ABI, product CLI/LSP diagnostics, product-surface symbols, check/format/
-structural-edit product base gates when both reject, host-elaborate/seed-emit
-multi-module (seed-native multi-file = **false**), gate product seed self-rebuild.
-**Next:** seed-internal structured error packets; multi-file forge ABI (ADR-061).
-Residual bootstrap: default check/format **success** AST dump, structure AST
-fallback, LSP hover/definition, `--bootstrap` rebuild, dual-compare oracle, host
-multi-module elaboration, structural-edit base AST.
+reduce Rust bootstrap product-path authority. **Through ADR-064:** product is the
+**default** CLI/LSP toolchain for check/format/structure/project format; bootstrap
+is recovery/oracle only. Product diagnostics, surface symbols, multi-module
+host-elaborate+seed-emit, gate product seed self-rebuild.
+**Next:** structural-edit base without bootstrap AST; seed-internal error packets;
+multi-file forge (ADR-061). Residual bootstrap: `compile --bootstrap` seed rebuild,
+dual-compare oracle, structural-edit base AST, LSP hover/definition, recovery
+`--bootstrap` flags.
 
 **Law forks (authorized 2026-08-10):** F-NATIVE (M35a/b AETH→C pure pilot with
 Whole locals, ADR-059/062); F-REGISTRY (M24a offline cache pin/verify, ADR-060 —

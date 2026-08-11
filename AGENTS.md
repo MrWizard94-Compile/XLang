@@ -60,9 +60,9 @@ seed-hosted product compile path in Aether 0.11 / AETH v11. Toolchain package
 Default CLI compilation uses the Aether-written seed compiler. Rust
 bootstrap remains for seed rebuild (`compile --bootstrap`), default `check`
 AST / format / structure / LSP, and proof dual-compare. Product acceptance
-without bootstrap AST is product CLI/LSP diagnostics surfaces (ADR-051–058);
-`compile_with_seed` is seed-only; multi-module is host elaborate + seed emit
-(seed-native multi-file = false, ADR-056). Seed Profile self-host, all shipped seed-path examples,
+Default CLI check/format/structure and product compile are seed path (ADR-064);
+bootstrap is recovery/oracle (`--bootstrap`, dual-compare, structural-edit base AST,
+LSP hover/definition). Multi-module is host elaborate + seed emit (ADR-056). Seed Profile self-host, all shipped seed-path examples,
 the complete prior canonical surface (including records), the documented M2–M8
 corpora, the M19a release corpus, the M19b nursery-resource corpus, the M19d
 spawn-arena corpus, the M21 foreign-pilot corpus, and the M23/M19e documented

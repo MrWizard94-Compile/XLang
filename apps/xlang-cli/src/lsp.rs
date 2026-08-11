@@ -14,9 +14,10 @@ use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use aether_core::{
-    compile_source, format_source, lsp_product_diagnostics_primary, parse_project_document,
-    product_diagnostics, product_surface_symbols, product_surface_symbols_without_bootstrap,
-    structural_document_json, validate_unit_path, Diagnostic, LANGUAGE_NAME, LANGUAGE_VERSION,
+    compile_source, format_source_product, lsp_product_diagnostics_primary, parse_project_document,
+    product_default_cli_toolchain, product_diagnostics, product_surface_symbols,
+    product_surface_symbols_without_bootstrap, structural_document_json, validate_unit_path,
+    Diagnostic, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 use serde_json::{json, Value};
 
@@ -461,7 +462,12 @@ fn symbol(name: &str, detail: &str, kind: u64, line: u64, character: u64) -> Val
 }
 
 pub fn formatting_edits(text: &str) -> Value {
-    match format_source(text) {
+    // ADR-064: LSP format uses product LF+accept (no bootstrap AST rewrite).
+    debug_assert!(
+        product_default_cli_toolchain(),
+        "ADR-064: product default toolchain"
+    );
+    match format_source_product(text) {
         Ok(formatted) if formatted != text => {
             let end_line = text.lines().count().saturating_sub(1) as u64;
             let end_character = text.lines().last().map(str::len).unwrap_or(0) as u64;

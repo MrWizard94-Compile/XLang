@@ -9,14 +9,14 @@ mod test_runner;
 
 use aether_core::{
     apply_edit_cli_trusts_product_accept, apply_structural_edit, canonical_ast,
-    check_product_base_gate, compile_product_bytecode, compile_project_modules, compile_source,
-    compile_to_bytecode, compile_workspace_package, forge_bytecode, format_project, format_source,
+    compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
+    compile_workspace_package, forge_bytecode, format_project, format_source,
     format_source_product, lower_verified_aeth_to_c, multi_module_authority_note,
     parse_project_document, parse_workspace_document, pin_local_package,
-    product_cli_check_without_bootstrap, product_format_without_bootstrap,
-    product_project_format_without_bootstrap, product_structure_json,
-    product_structure_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
-    run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
+    product_cli_check_without_bootstrap, product_default_cli_toolchain,
+    product_format_without_bootstrap, product_project_format_without_bootstrap,
+    product_structure_json, product_structure_without_bootstrap, refresh_project_lock,
+    refresh_workspace_lock, run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
     serialize_project_document, serialize_workspace_document, structural_document_json,
     unit_artifact_file_name, verify_bytecode, verify_project, verify_registry_cache,
     verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
@@ -24,7 +24,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether check --product <source-file>\n  aether structure <source-file>\n  aether structure --product <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --product <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--product]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c]\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncheck uses bootstrap full diagnostics + canonical AST by default.\ncheck --product validates via the seed product path only (forge + verify + AE-SEED preflights; no bootstrap AST).\nformat uses bootstrap AST-canonical rewrite by default.\nformat --product LF-normalizes and product-accepts only (no bootstrap AST rewrite).\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nstructure emits aether.ast/v8 JSON (bootstrap). structure --product emits aether.product-structure/v1 (seed accept + LF source; no AST).\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only; --product uses seed product format per unit (no bootstrap AST rewrite).\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; bootstrap AST for symbols/format/hover; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics / dual-compare proofs).\nPass --native-c to lower verified AETH to ISO C (F-NATIVE M35a pure Whole pilot; not default).\nregistry pin-local/verify-cache are offline-only F-REGISTRY M24a (no network)."
+        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c]\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; bootstrap AST for symbols/format/hover; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics / dual-compare proofs).\nPass --native-c to lower verified AETH to ISO C (F-NATIVE M35a pure Whole pilot; not default).\nregistry pin-local/verify-cache are offline-only F-REGISTRY M24a (no network)."
     );
 }
 
@@ -36,38 +36,27 @@ fn read_artifact(path: &Path) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|error| format!("could not read {}: {error}", path.display()))
 }
 
-fn check(source_path: &Path, product: bool) -> Result<(), String> {
+/// ADR-064: default is product seed path. Pass `bootstrap = true` for recovery
+/// AST diagnostics (`aether check --bootstrap`).
+fn check(source_path: &Path, bootstrap: bool) -> Result<(), String> {
     let source = read_source(source_path)?;
-    if product {
+    if !bootstrap {
         debug_assert!(
-            product_cli_check_without_bootstrap(),
-            "ADR-051: product check must not require bootstrap"
+            product_cli_check_without_bootstrap() && product_default_cli_toolchain(),
+            "ADR-064: default check is product seed path"
         );
         let bytecode = compile_product_bytecode(&source).map_err(|error| error.to_string())?;
         println!(
-            "{LANGUAGE_NAME} {LANGUAGE_VERSION} product check passed: {} byte(s) via seed path in {}",
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} check passed: {} byte(s) via seed path in {}",
             bytecode.len(),
             source_path.display()
         );
         return Ok(());
     }
-    // ADR-063: when both product and bootstrap reject, prefer product AE-SEED codes.
-    debug_assert!(
-        check_product_base_gate(),
-        "ADR-063: check product base gate"
-    );
-    let product_result = compile_product_bytecode(&source);
-    let program = match compile_source(&source) {
-        Ok(program) => program,
-        Err(bootstrap_error) => {
-            if let Err(product_error) = product_result {
-                return Err(product_error.to_string());
-            }
-            return Err(bootstrap_error.to_string());
-        }
-    };
+    // Recovery: full bootstrap diagnostics + canonical AST dump.
+    let program = compile_source(&source).map_err(|error| error.to_string())?;
     println!(
-        "{LANGUAGE_NAME} {LANGUAGE_VERSION} check passed: {} significant token(s) in {} (bootstrap diagnostics)",
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} check passed: {} significant token(s) in {} (bootstrap recovery diagnostics)",
         program.significant_token_count(),
         source_path.display()
     );
@@ -145,12 +134,13 @@ fn registry_pin_local(
     Ok(())
 }
 
-fn structure(source_path: &Path, product: bool) -> Result<(), String> {
+/// ADR-064: default product envelope; `bootstrap = true` for aether.ast/v8 recovery.
+fn structure(source_path: &Path, bootstrap: bool) -> Result<(), String> {
     let source = read_source(source_path)?;
-    let document = if product {
+    let document = if !bootstrap {
         debug_assert!(
-            product_structure_without_bootstrap(),
-            "ADR-054: product structure must not require bootstrap"
+            product_structure_without_bootstrap() && product_default_cli_toolchain(),
+            "ADR-064: default structure is product envelope"
         );
         product_structure_json(&source).map_err(|error| error.to_string())?
     } else {
@@ -436,16 +426,17 @@ fn parse_project_test_tail(
     Ok((grants, report_json, report_junit))
 }
 
+/// ADR-064: default product LF+accept; `bootstrap = true` for AST-canonical recovery format.
 fn format_file(
     source_path: &Path,
     output_path: Option<&Path>,
-    product: bool,
+    bootstrap: bool,
 ) -> Result<(), String> {
     let source = read_source(source_path)?;
-    let formatted = if product {
+    let formatted = if !bootstrap {
         debug_assert!(
-            product_format_without_bootstrap(),
-            "ADR-053: product format must not require bootstrap"
+            product_format_without_bootstrap() && product_default_cli_toolchain(),
+            "ADR-064: default format is product seed path"
         );
         format_source_product(&source).map_err(|error| error.to_string())?
     } else {
@@ -453,7 +444,7 @@ fn format_file(
     };
     if let Some(output) = output_path {
         write_source(output, &formatted)?;
-        let mode = if product { "product " } else { "" };
+        let mode = if bootstrap { "bootstrap " } else { "" };
         println!(
             "{LANGUAGE_NAME} {LANGUAGE_VERSION} {mode}formatted {} to {}",
             source_path.display(),
@@ -651,18 +642,20 @@ fn project_build(project_path: &Path, output_path: &Path) -> Result<(), String> 
     Ok(())
 }
 
-fn project_format(project_path: &Path, write: bool, product: bool) -> Result<(), String> {
+/// ADR-064: default product project format; `bootstrap = true` for AST-canonical recovery.
+fn project_format(project_path: &Path, write: bool, bootstrap: bool) -> Result<(), String> {
     let json = read_source(project_path)?;
     let document = parse_project_document(&json).map_err(|error| error.to_string())?;
     let root = project_root_for(project_path);
+    let product = !bootstrap;
     if product {
         debug_assert!(
-            product_project_format_without_bootstrap(),
-            "ADR-054: product project format must not require bootstrap"
+            product_project_format_without_bootstrap() && product_default_cli_toolchain(),
+            "ADR-064: default project format is product seed path"
         );
     }
     let report = format_project(root, &document, product).map_err(|error| error.to_string())?;
-    let mode = if product { "product " } else { "" };
+    let mode = if bootstrap { "bootstrap " } else { "" };
     if write {
         for unit in &report.units {
             let path = aether_core::resolve_unit_path(root, &unit.path)
@@ -711,56 +704,50 @@ fn parse_optional_write_flag(
     Ok(true)
 }
 
+/// ADR-064: product is default. Optional `--bootstrap` enables recovery AST path.
+/// Legacy `--product` is accepted as an explicit no-op synonym for the default.
+fn parse_product_default_source_flag(
+    arguments: &mut impl Iterator<Item = OsString>,
+    command: &str,
+) -> Result<(bool, OsString), String> {
+    let first = next_argument(arguments, "source file or flag")?;
+    let (mut bootstrap, source) = if first == "--bootstrap" {
+        let source = next_argument(arguments, "source file")?;
+        (true, source)
+    } else if first == "--product" {
+        // Legacy flag: product is already default.
+        let source = next_argument(arguments, "source file")?;
+        (false, source)
+    } else {
+        (false, first)
+    };
+    for extra in arguments.by_ref() {
+        if extra == "--bootstrap" {
+            bootstrap = true;
+        } else if extra == "--product" {
+            // ignore; product default
+        } else {
+            return Err(format!(
+                "{command} accepts <source-file> and optional --bootstrap (or legacy --product)"
+            ));
+        }
+    }
+    Ok((bootstrap, source))
+}
+
 fn run() -> Result<(), String> {
     let mut arguments = env::args_os();
     let _program = arguments.next();
     let command = next_argument(&mut arguments, "command")?;
     match command.to_string_lossy().as_ref() {
         "check" => {
-            let first = next_argument(&mut arguments, "source file or --product")?;
-            let (product, source) = if first == "--product" {
-                let source = next_argument(&mut arguments, "source file")?;
-                (true, source)
-            } else {
-                let mut product = false;
-                if let Some(extra) = arguments.next() {
-                    if extra == "--product" {
-                        product = true;
-                    } else {
-                        return Err(
-                            "check accepts <source-file> or --product <source-file>".to_owned()
-                        );
-                    }
-                }
-                (product, first)
-            };
-            if arguments.next().is_some() {
-                return Err("check accepts <source-file> or --product <source-file>".to_owned());
-            }
-            check(Path::new(&source), product)
+            let (bootstrap, source) = parse_product_default_source_flag(&mut arguments, "check")?;
+            check(Path::new(&source), bootstrap)
         }
         "structure" => {
-            let first = next_argument(&mut arguments, "source file or --product")?;
-            let (product, source) = if first == "--product" {
-                let source = next_argument(&mut arguments, "source file")?;
-                (true, source)
-            } else {
-                let mut product = false;
-                if let Some(extra) = arguments.next() {
-                    if extra == "--product" {
-                        product = true;
-                    } else {
-                        return Err(
-                            "structure accepts <source-file> or --product <source-file>".to_owned()
-                        );
-                    }
-                }
-                (product, first)
-            };
-            if arguments.next().is_some() {
-                return Err("structure accepts <source-file> or --product <source-file>".to_owned());
-            }
-            structure(Path::new(&source), product)
+            let (bootstrap, source) =
+                parse_product_default_source_flag(&mut arguments, "structure")?;
+            structure(Path::new(&source), bootstrap)
         }
         "apply-edit" => {
             let source = next_argument(&mut arguments, "source file")?;
@@ -896,29 +883,37 @@ fn run() -> Result<(), String> {
             }
         }
         "format" => {
-            let first = next_argument(&mut arguments, "source file or --product")?;
-            let mut product = false;
-            let source = if first == "--product" {
-                product = true;
+            let first = next_argument(&mut arguments, "source file or flag")?;
+            let mut bootstrap = false;
+            let source = if first == "--bootstrap" {
+                bootstrap = true;
+                next_argument(&mut arguments, "source file")?
+            } else if first == "--product" {
                 next_argument(&mut arguments, "source file")?
             } else {
                 first
             };
             let mut output = None;
             while let Some(flag) = arguments.next() {
-                if flag == "--product" {
-                    product = true;
+                if flag == "--bootstrap" {
+                    bootstrap = true;
+                } else if flag == "--product" {
+                    // legacy synonym for default product path
                 } else if flag == "--output" {
                     let path = next_argument(&mut arguments, "source output file")?;
                     output = Some(path);
                 } else {
                     return Err(
-                        "format accepts <source-file> [--product] [--output <source-file>] or --product <source-file> [--output <source-file>]"
+                        "format accepts <source-file> [--bootstrap] [--output <file>] (product is default; --product is legacy)"
                             .to_owned(),
                     );
                 }
             }
-            format_file(Path::new(&source), output.as_ref().map(Path::new), product)
+            format_file(
+                Path::new(&source),
+                output.as_ref().map(Path::new),
+                bootstrap,
+            )
         }
         "project" => {
             let subcommand = next_argument(&mut arguments, "project subcommand")?;
@@ -946,19 +941,22 @@ fn run() -> Result<(), String> {
                 "format" => {
                     let project = next_argument(&mut arguments, "project file")?;
                     let mut write = false;
-                    let mut product = false;
+                    let mut bootstrap = false;
                     for flag in arguments.by_ref() {
                         if flag == "--write" {
                             write = true;
+                        } else if flag == "--bootstrap" {
+                            bootstrap = true;
                         } else if flag == "--product" {
-                            product = true;
+                            // legacy synonym for default product path
                         } else {
                             return Err(
-                                "project format accepts optional --write and --product".to_owned()
+                                "project format accepts optional --write and --bootstrap (product is default)"
+                                    .to_owned()
                             );
                         }
                     }
-                    project_format(Path::new(&project), write, product)
+                    project_format(Path::new(&project), write, bootstrap)
                 }
                 "lock" => {
                     let project = next_argument(&mut arguments, "project file")?;
@@ -1157,8 +1155,8 @@ mod tests {
     #[test]
     fn product_check_accepts_seed_valid_source_without_bootstrap_ast() {
         assert!(
-            product_cli_check_without_bootstrap(),
-            "ADR-051 tracker must be true"
+            product_cli_check_without_bootstrap() && product_default_cli_toolchain(),
+            "ADR-064: product is default check path"
         );
         let temporary = TemporaryDirectory::create();
         let source_path = temporary.path.join("ok.ae");
@@ -1167,14 +1165,15 @@ mod tests {
             "world cli\n\nweave main [] -> Whole:\n  yield 0\n",
         )
         .expect("source should write");
-        check(&source_path, true).expect("product check must accept valid seed surface");
+        // bootstrap=false → product default (ADR-064)
+        check(&source_path, false).expect("product check must accept valid seed surface");
     }
 
     #[test]
     fn product_format_normalizes_crlf_without_bootstrap() {
         assert!(
-            product_format_without_bootstrap(),
-            "ADR-053 tracker must be true"
+            product_format_without_bootstrap() && product_default_cli_toolchain(),
+            "ADR-064: product is default format path"
         );
         let temporary = TemporaryDirectory::create();
         let source_path = temporary.path.join("crlf.ae");
@@ -1184,7 +1183,8 @@ mod tests {
             "world cli\r\n\r\nweave main [] -> Whole:\r\n  yield 0\r\n",
         )
         .expect("source should write");
-        format_file(&source_path, Some(&output_path), true).expect("product format");
+        // bootstrap=false → product default
+        format_file(&source_path, Some(&output_path), false).expect("product format");
         let written = fs::read_to_string(&output_path).expect("read");
         assert_eq!(written, "world cli\n\nweave main [] -> Whole:\n  yield 0\n");
     }
@@ -1216,7 +1216,7 @@ mod tests {
         let source_path = temporary.path.join("legacy.ae");
         fs::write(&source_path, "world w\n\nfn main() -> Int { return 0; }\n")
             .expect("legacy source should write");
-        let error = check(&source_path, true).expect_err("legacy must fail product check");
+        let error = check(&source_path, false).expect_err("legacy must fail product check");
         assert!(
             error.contains("AE-SEED-007"),
             "expected AE-SEED-007, got {error}"
