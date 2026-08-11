@@ -194,10 +194,14 @@ cargo run -p aether-cli -- structure (Resolve-Path .\examples\comptime-calls.ae)
 cargo run -p aether-cli -- compile (Resolve-Path .\examples\comptime-calls.ae) --output .\target\comptime-calls.aeth
 cargo run -p aether-cli -- run .\target\comptime-calls.aeth
 
-# M32a: local verified-execution evidence over a fixed, embedded pure corpus.
+# M32a/M32b: local verified-execution evidence over a fixed, embedded pure corpus.
 # Compilation is excluded; each sample includes AETH verification, decode, and VM execution.
 cargo run -p aether-cli -- bench --list
-cargo run -p aether-cli -- bench all --warmup 3 --iterations 11 --report .\target\aether-bench.json
+# --profile is a non-secret, lowercase local context label. It emits report v2.
+cargo run -p aether-cli -- bench all --warmup 3 --iterations 11 --profile win11-rust-1.88-release-fixed --report .\target\aether-bench-baseline.json
+# After a separately verified candidate build under the same declared profile:
+cargo run -p aether-cli -- bench all --warmup 3 --iterations 11 --profile win11-rust-1.88-release-fixed --report .\target\aether-bench-candidate.json
+cargo run -p aether-cli -- bench compare .\target\aether-bench-baseline.json .\target\aether-bench-candidate.json --report .\target\aether-bench-comparison.json
 
 # Refresh local package integrity locks explicitly; without --write each command
 # prints the candidate JSON and leaves disk unchanged.
@@ -225,9 +229,15 @@ product surface. M32a adds `aether bench`: an offline measurement command for
 only the embedded `welcome`, `arena-buffer`, and `task-loop` workloads. It
 seed-compiles each selected source once, explicitly verifies its AETH artifact,
 then samples `verify + decode + execute` with empty grants. It accepts no
-caller-supplied source or artifact; `--report` writes raw local samples only to
-the explicit path after every workload succeeds. See
-[ADR-104](docs/ADR-104-m32a-verified-execution-benchmarks.md).
+caller-supplied source or artifact. M32b preserves the unprofiled v1 report and
+adds opt-in `--profile` v2 reports with a safe environment fingerprint and
+hashed observable stdout. `aether bench compare` reads only two explicit,
+bounded v2 JSON reports, rejects differing profile, environment, workload, or
+observable behavior, and never executes report data. The comparison is a local
+methodology record—not a timing threshold, optimization claim, toolchain
+attestation, or cross-machine result. Reports write only to explicit paths after
+success. See [ADR-104](docs/ADR-104-m32a-verified-execution-benchmarks.md) and
+[ADR-105](docs/ADR-105-m32b-profile-bound-comparisons.md).
 
 ## Local technical-preview package
 

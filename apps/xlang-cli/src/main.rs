@@ -32,7 +32,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "M32a verified-execution benchmarks:\n  aether bench <all|welcome|arena-buffer|task-loop> [--warmup <0..=100>] [--iterations <1..=1000>] [--report <file.json>]\n  aether bench --list\nBenchmark workloads are embedded, pure, and bounded; no caller source/artifact input or grants are accepted."
+        "M32a/M32b verified-execution benchmarks:\n  aether bench <all|welcome|arena-buffer|task-loop> [--warmup <0..=100>] [--iterations <1..=1000>] [--profile <lowercase-ascii-id>] [--report <file.json>]\n  aether bench compare <baseline-report.json> <candidate-report.json> [--report <file.json>]\n  aether bench --list\nBenchmark workloads are embedded, pure, and bounded; no caller source/artifact input or grants are accepted. --profile emits a comparison-ready v2 report; use a non-secret label describing the pinned local context. compare reads bounded v2 data only and never executes it."
     );
     eprintln!(
         "M24f/g key setup:\n  aether registry trust-root <cache-root> --key-id <id> --seed-file <32-byte-path>\n  aether registry certify-ed25519-key <cache-root> --key-id <id> --seed-file <32-byte-path> --parent-key-id <id>\nThe supplied Ed25519 seed files remain local and must be exactly 32 bytes."

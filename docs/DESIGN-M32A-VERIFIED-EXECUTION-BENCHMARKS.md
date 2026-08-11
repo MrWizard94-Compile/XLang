@@ -101,7 +101,9 @@ The example uses illustrative numeric values to describe field shape, not a
 benchmark result. The report contains no timestamp, host inventory, secret,
 source text, stdout, grant, or ambient-path data. Its changing samples are
 intentionally raw local evidence; source and artifact digests let a later
-comparison confirm the workload identity.
+comparison confirm the workload identity. M32b retains this v1 shape and adds a
+separate opt-in v2 comparison contract with a profile, safe environment fields,
+and a stdout hash; see [ADR-105](ADR-105-m32b-profile-bound-comparisons.md).
 
 The report writer rejects a missing parent directory and writes only after all
 selected workloads have completed successfully. It creates or replaces only the
@@ -143,7 +145,9 @@ separate execution-limit and authority design can prove those boundaries.
 - No package version, source grammar, AETH opcode/version, verifier, VM, or
   capability change.
 - No release, publication, telemetry, benchmark upload, or automatic baseline
-  comparison.
+  comparison within M32a itself. M32b provides a separate strict local data-only
+  comparison method under [ADR-105](ADR-105-m32b-profile-bound-comparisons.md),
+  not a performance conclusion.
 
 ---
 

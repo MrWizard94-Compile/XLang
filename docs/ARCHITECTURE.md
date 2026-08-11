@@ -204,7 +204,7 @@ and `apply-edit` seed-compiles before writing canonical source. No active
 desktop, WebView, model, or network integration exists. The retired workbench
 is recorded in [ADR-006](ADR-006-retire-aether-studio.md).
 
-### M32a verified-execution benchmark boundary
+### M32a/M32b verified-execution benchmark boundary
 
 `aether bench` is a deliberately narrower execution entrypoint. It contains the
 reviewed `welcome`, `arena-buffer`, and `task-loop` Aether sources at build time;
@@ -215,7 +215,15 @@ It installs no grants and has no source path, artifact path, host service,
 native, process, or network input. The optional JSON report is written only to
 an explicit path after all selected workloads complete. This gives local
 baseline evidence without turning the CLI into an arbitrary-program timing
-surface; see [ADR-104](ADR-104-m32a-verified-execution-benchmarks.md).
+surface. M32b adds an opt-in profile-bound report v2 and a distinct `aether
+bench compare` data path. It opens only the two explicitly selected, bounded
+strict JSON reports; validates their profile/environment/workload/observable
+identity; never invokes the compiler or VM; and writes a comparison only to an
+explicit non-input path. Artifact identities may differ and are reported, while
+source and observable output identity must match. This gives an honest
+like-for-like local comparison mechanism, not a hardware/toolchain attestation
+or broad speed claim; see [ADR-104](ADR-104-m32a-verified-execution-benchmarks.md)
+and [ADR-105](ADR-105-m32b-profile-bound-comparisons.md).
 
 ## Bootstrap Boundary
 

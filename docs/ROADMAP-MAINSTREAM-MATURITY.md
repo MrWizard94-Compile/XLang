@@ -580,6 +580,14 @@ Order inside E5 is flexible after E1; prefer after modules.
 | Work | Hot path ops, allocation, dispatch; benchmarks vs baseline Aether versions |
 | Method | Pinned hardware, medians, workloads in repo |
 
+**Delivered evidence foundation:** M32a (ADR-104) fixes a bounded,
+product-facing verified-execution corpus and raw samples. M32b (ADR-105) adds
+opt-in profile-bound v2 reports and strict local data-only comparison of matching
+profile, environment, workload source, and observed behavior. This is the
+methodology prerequisite for a future scoped performance claim; it is not a
+measurement result, full hardware/toolchain attestation, or cross-machine
+benchmark conclusion.
+
 ### 11.2 Milestone M33 — Optional JIT (still AETH)
 
 | Effort | **XL** |

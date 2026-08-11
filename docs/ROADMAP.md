@@ -2,8 +2,8 @@
 
 **Status:** M0–M23 product: M19a–e (M19e bounded active-frame cancellation),
 M20/M20b, M17b–d, M21, M22, and M23 pure comptime calls; RTP-001 runtime
-performance increment; PKG-001 offline workspace locks; and M32a
-verified-execution benchmark tooling. Package **0.36** remains current. M19e
+performance increment; PKG-001 offline workspace locks; and M32a/M32b
+verified-execution evidence tooling. Package **0.36** remains current. M19e
 is implemented as the verifier-checked v12 task-frame slice
 (ADR-042); TP-1/TP-2 delivered; portfolio ADR-014
 **Date:** 2026-08-11 (BARP through ADR-103; product authority reduction active)
@@ -110,6 +110,7 @@ invalid-source diagnostic parity.
 | RTP-001 | Runtime Text ASCII fast path | Current VM | Private cached ASCII provenance for scalar-equivalent Text operations; no source or AETH change. | Unicode boundary tests, full debug/release suites, and scoped local self-host measurement. | **Implemented in package 0.34 (ADR-040)** |
 | PKG-001 | Offline workspace locks | M9, M18, M22 | Explicit project/workspace lock refresh; complete local package identity pins; locked build preflight. | Matrix green; project-manifest + nested unit lock checks; no-registry boundary preserved. | **Implemented in package 0.35 (ADR-041)** |
 | M32a | Verified-execution benchmark suite | Current seed compile + verified VM | Closed embedded `welcome`/`arena-buffer`/`task-loop` corpus; `aether bench`; explicit local JSON report. | Product-seed compile once, explicit verify before samples, empty grants, bounded warmup/iteration counts, behavior-stability checks, no broad performance claim. | **Implemented post-0.36; full gate PASS (ADR-104)** |
+| M32b | Profile-bound benchmark comparison | M32a | Opt-in v2 profile/environment/checked-output report plus strict `aether bench compare` data-only comparison. | v1 compatibility; 256 KiB strict inputs; equal profile/environment/workload/source/behavior required; artifact change explicit; no performance claim. | **Implemented post-0.36; full gate PASS (ADR-105)** |
 
 ## Milestone detail
 
@@ -332,9 +333,10 @@ Every implementation increment must provide, as applicable:
 
 Package **0.36** is the current executable contract: v11 compatibility, M19e
 v12 task frames and explicit checkpoints, RTP-001's internal ASCII Text fast
-path, and PKG-001's optional fully local workspace locks. M32a is a post-0.36
-tooling increment that adds no source, AETH, verifier, VM, or capability change:
-it provides `aether bench` local evidence for a closed pure corpus. The M19e
+path, and PKG-001's optional fully local workspace locks. M32a/M32b are
+post-0.36 tooling increments that add no source, AETH, verifier, VM, or
+capability change: they provide a closed pure corpus, optional profiled v2
+reports, and strict local data-only comparison. The M19e
 vertical slice is complete across parser/semantic model, verifier/VM, seed,
 authoring, hostile artifacts, compatibility, and its documented quality gate.
 Its design and implementation records are
@@ -359,10 +361,12 @@ Residual bootstrap: dual-compare oracle emit, recovery `--bootstrap` flags, full
 `aether.ast/v8`.
 
 **Parallel maturity evidence:** [ADR-104](ADR-104-m32a-verified-execution-benchmarks.md)
-defines M32a's bounded `aether bench` interface. It measures only verified AETH
-execution (`verify + decode + execute`) across an embedded pure workload corpus;
-the implementation passed the full gate and does not change BARP priority, the
-0.36 package contract, or law-fork authority.
+and [ADR-105](ADR-105-m32b-profile-bound-comparisons.md) define M32a/M32b's
+bounded `aether bench` interface. It measures only verified AETH execution
+(`verify + decode + execute`) across an embedded pure workload corpus; profiled
+v2 reports can be compared only when strict local data identities match. The
+implementation passed the full gate and does not change BARP priority, the 0.36
+package contract, or law-fork authority.
 
 **Law forks (reaffirmed 2026-08-11):** F-NATIVE through **M35j** (cross-compile
 target matrix, ADR-059–099); F-REGISTRY through **M24i** X.509-lite CA store
