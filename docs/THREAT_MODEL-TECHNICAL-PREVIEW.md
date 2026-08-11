@@ -1,10 +1,10 @@
 # Threat Model — Aether Technical Preview (0.12)
 
-> **Historical 0.12 threat-model freeze.** The current 0.36 local-preview
-> boundary is [THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md](THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md).
+> **Historical 0.12 threat-model freeze.** The current 0.37 local-package
+> boundary is [THREAT_MODEL-0.37-LOCAL-PACKAGES.md](THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 > This document remains the dated pure-surface baseline and must not be read as
-> the current authority for grant I/O, foreign pilot, workspace locks, or v12
-> task frames.
+> the current authority for grant I/O, foreign pilot, workspace locks, local
+> package publication, or v12 task frames.
 
 **Status:** Frozen for technical preview (P2 / TP-2)  
 **Date:** 2026-08-04  

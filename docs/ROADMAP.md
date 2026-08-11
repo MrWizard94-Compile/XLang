@@ -2,8 +2,9 @@
 
 **Status:** M0–M23 product: M19a–e (M19e bounded active-frame cancellation),
 M20/M20b, M17b–d, M21, M22, and M23 pure comptime calls; RTP-001 runtime
-performance increment; PKG-001 offline workspace locks; and M32a/M32b
-verified-execution evidence tooling. Package **0.36** remains current. M19e
+performance increment; PKG-001 offline workspace locks; M32a/M32b
+verified-execution evidence tooling; and M25 local source-package publication.
+Package **0.37** remains current. M19e
 is implemented as the verifier-checked v12 task-frame slice
 (ADR-042); TP-1/TP-2 delivered; portfolio ADR-014
 **Date:** 2026-08-11 (BARP through ADR-106; product authority reduction active)
@@ -24,10 +25,10 @@ Human-approved under AGENTS Constitution + SOP:
 | Target | Definition | Delivery |
 | --- | --- | --- |
 | **TP-1** Integrity Complete | Claim/docs sync, formal audit, automated offline gate, clean product tree | Done (audit report) |
-| **TP-2** Technical Preview | TP-1 + threat model + local `dist/` package + SHA-256SUMS + consumer verify | Current 0.36 local-only package; no public release or license grant |
+| **TP-2** Technical Preview | TP-1 + threat model + local `dist/` package + SHA-256SUMS + consumer verify | Current 0.37 local-only package; no public release or license grant |
 | **P4.1** Multi-unit offline projects | Extend M9 after TP-2; full SOP design → ADR → matrix before code | Feature track (not 1.0) |
 
-Current preview threat model: [THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md](THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md).
+Current local-package threat model: [THREAT_MODEL-0.37-LOCAL-PACKAGES.md](THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 
 Historical pure-surface freeze: [THREAT_MODEL-TECHNICAL-PREVIEW.md](THREAT_MODEL-TECHNICAL-PREVIEW.md).
 Package helpers: `tools/package-preview.ps1`, `tools/verify-preview.ps1`, and
@@ -109,6 +110,7 @@ invalid-source diagnostic parity.
 | M23 | Pure comptime weave calls (T-CT) | M15 | `comptime bind <- call` pure total Whole helpers; COMPTIME_WHOLE fold. | Matrix green; seed-native D2a eval (BARP Phase 1); product dual-compare ≡ bootstrap; no host/effect/resource callees. | **Implemented in package 0.33 (ADR-039); BARP Phase 1 seed-native (ADR-043)** |
 | RTP-001 | Runtime Text ASCII fast path | Current VM | Private cached ASCII provenance for scalar-equivalent Text operations; no source or AETH change. | Unicode boundary tests, full debug/release suites, and scoped local self-host measurement. | **Implemented in package 0.34 (ADR-040)** |
 | PKG-001 | Offline workspace locks | M9, M18, M22 | Explicit project/workspace lock refresh; complete local package identity pins; locked build preflight. | Matrix green; project-manifest + nested unit lock checks; no-registry boundary preserved. | **Implemented in package 0.35 (ADR-041)** |
+| M25 | Local package publication | PKG-001, M18, M22 | Transparent locked source bundle, explicit local cache, verify/publish/install commands. | Deterministic bundle identity; hostile metadata/tree/path/cache negatives; two independent M22 consumers; no resolver/network/guest authority. | **Implemented in package 0.37 (ADR-107)** |
 | M32a | Verified-execution benchmark suite | Current seed compile + verified VM | Closed embedded `welcome`/`arena-buffer`/`task-loop` corpus; `aether bench`; explicit local JSON report. | Product-seed compile once, explicit verify before samples, empty grants, bounded warmup/iteration counts, behavior-stability checks, no broad performance claim. | **Implemented post-0.36; full gate PASS (ADR-104)** |
 | M32b | Profile-bound benchmark comparison | M32a | Opt-in v2 profile/environment/checked-output report plus strict `aether bench compare` data-only comparison. | v1 compatibility; 256 KiB strict inputs; equal profile/environment/workload/source/behavior required; artifact change explicit; no performance claim. | **Implemented post-0.36; full gate PASS (ADR-105)** |
 
@@ -272,12 +274,13 @@ Post-M10 growth is governed by [ADR-014](ADR-014-post-m10-track-portfolio.md).
 Mainstream multi-epoch plan:
 [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md).
 
-**Default next:** 0.36 release/stabilization evidence is complete for the local
-preview channel; select one new scoped, ADR-backed design. Further stdlib depth
-remains a separate scoped design; FFI only after its existing human-authorized
-residual boundary.
+**Default next:** the 0.37 M25 local-publication increment is the current
+package contract and passed full/release delivery gates. Select one new scoped,
+ADR-backed design. Further stdlib depth remains a separate scoped design; FFI
+only after its existing human-authorized residual boundary.
 
-Native/LLVM and network registries remain blocked without law change.
+Expansion beyond the currently authorized F-NATIVE and F-REGISTRY ADR tracks
+remains blocked without a new human decision.
 
 Each track begins with the falsifiable spike discipline in
 [research/03-synthesis-and-evidence.md](research/03-synthesis-and-evidence.md).
@@ -295,7 +298,7 @@ No milestone advances merely because its happy path works.
 | Generic shape and layout semantics | It affects ABI, correctness, performance claims, and debuggability. | M6 |
 | Task model and cancellation semantics | M7/v11 retains unstarted-only cancellation; M19e implements the bounded active-frame v12 model. Broader task semantics still require a new ADR. | M7 / M19e |
 | Foreign interface scope, including any C-header strategy | It affects ownership, hostile input handling, portability, and host capability boundaries. | M8 / **T-FFI** (after pure host; ADR-014) |
-| Any native/LLVM backend | It conflicts with current AETH-only project law and therefore requires explicit law/ADR change before design work. | Outside this roadmap unless approved (**T-NATIVE**) |
+| Any expansion beyond authorized F-NATIVE | It can alter portability, toolchain trust, and verifier/VM boundaries; existing F-NATIVE M35a–j is bounded, while new scope needs an ADR. | After M35j / **T-NATIVE** |
 | Language modules / cross-file weave resolution | Changes seed surface and ownership/diagnostics; cannot be implied by multi-unit project files alone. | **M11 / T-MOD** — designed ([ADR-015](ADR-015-m11-language-modules.md)); implement M11a then M11b |
 | Lib units without standalone `main` | Requires language + seed definition of non-entry units. | With **T-MOD** |
 | Host I/O beyond pure fixtures | Expands guest-visible host authority; TP threat model must be revised first. | **T-HOST** (ADR-014; not default next) |
@@ -331,10 +334,11 @@ Every implementation increment must provide, as applicable:
 
 ## Immediate next action
 
-Package **0.36** is the current executable contract: v11 compatibility, M19e
+Package **0.37** is the current executable contract: v11 compatibility, M19e
 v12 task frames and explicit checkpoints, RTP-001's internal ASCII Text fast
-path, and PKG-001's optional fully local workspace locks. M32a/M32b are
-post-0.36 tooling increments that add no source, AETH, verifier, VM, or
+path, PKG-001's optional fully local workspace locks, and M25 transparent
+locked source-package publication. M32a/M32b are post-0.36 tooling increments
+that add no source, AETH, verifier, VM, or
 capability change: they provide a closed pure corpus, optional profiled v2
 reports, and strict local data-only comparison. The M19e
 vertical slice is complete across parser/semantic model, verifier/VM, seed,
@@ -366,7 +370,7 @@ bounded `aether bench` interface. It measures only verified AETH execution
 (`verify + decode + execute`) across an embedded pure workload corpus; profiled
 v2 reports can be compared only when strict local data identities match. The
 implementation passed the full gate and does not change BARP priority, the 0.36
-package contract, or law-fork authority.
+historical M19e semantics, or law-fork authority.
 
 **Law forks (reaffirmed 2026-08-11):** F-NATIVE through **M35j** (cross-compile
 target matrix, ADR-059–099); F-REGISTRY through **M24i** X.509-lite CA store

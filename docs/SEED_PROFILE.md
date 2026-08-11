@@ -1,6 +1,6 @@
 # Aether Seed Profile
 
-Status: normative seed-emission profile for package **0.36.0** (canonical 0.11
+Status: normative seed-emission profile for package **0.37.0** (canonical 0.11
 surface plus documented later bounded semantics), 2026-08-08.
 
 This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
@@ -124,6 +124,9 @@ Package 0.36's M19e task support is inside this profile. The checked-in seed
 artifact remains a v11 compiler program, but it emits v12 when it parses valid
 task source. Its v12 byte identity with the Rust bootstrap is required just as
 for the prior seed surface.
+
+M25 in package 0.37 is host-only local package tooling. It changes no source
+form, AETH byte, seed input, seed artifact, or seed-emission proof obligation.
 
 ADR-106 adds only a bounded direct-forge diagnostic pilot: before normal
 compilation, the seed recognizes canonical top-level task headers and requires
@@ -265,7 +268,7 @@ emitter.
 
 ## Explicit non-goals
 
-Seed parity does not silently expand Aether 0.36 language rules. In particular, nested
+Seed parity does not silently expand Aether 0.37 language rules. In particular, nested
 expression trees, nested binding introduction, nested record fields, record
 mutation, host record invocation, first-class resource outcomes, Buffer weave
 results, resource-owner `revise`, OS-thread parallelism, automatic layout
@@ -328,7 +331,7 @@ All three SHA-256 digests must match. The regression tests also forge:
 
 ## Authority
 
-- Current toolchain delta: [AETHER_0.36.md](AETHER_0.36.md)
+- Current toolchain delta: [AETHER_0.37.md](AETHER_0.37.md)
 - Historical base language: [AETHER_0.11.md](AETHER_0.11.md)
 - Host forge ABI: [FORGE_CONTRACT.md](FORGE_CONTRACT.md)
 - Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)

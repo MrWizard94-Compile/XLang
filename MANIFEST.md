@@ -2,7 +2,7 @@
 
 ## Contract
 
-Aether **0.36.0** (base language **0.11** plus M11–M18, M19a–M19e, M20/M20b,
+Aether **0.37.0** (base language **0.11** plus M11–M18, M19a–M19e, M20/M20b,
 M17b–M17d, M21 pilot, M22 tooling and semantics, and M23 pure comptime calls;
 AETH **v11** for source without task frames and AETH **v12** for M19e task
 frames with `RELEASE` 66 and `TASK_CHECKPOINT` 67)
@@ -41,6 +41,18 @@ AE-SEED-003/004/005/006/007/012/014/015, including a canonical task-body scan
 that requires an exact indented `checkpoint` statement. It changes no accepted
 valid source, AETH schema, VM behavior, host authority, or full-diagnostic
 parity claim. See [docs/ADR-106-barp-seed-speak-checkpoint-pilot.md](docs/ADR-106-barp-seed-speak-checkpoint-pilot.md).
+Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
+packs only a complete locked `aether.project/v1` manifest and its declared
+units; verifies the raw project digest, every file digest, a domain-separated
+content digest, exact bundle tree, and nested project; publishes a verified
+bundle only to an explicit local `packages/<name>/<version>` cache identity; and
+installs the verified `project/` tree only to an explicit absent directory. It
+is a toolchain-only package: no Aether source form, AETH byte/version, seed,
+verifier, VM, project/workspace schema, resolver, URL/network operation,
+signature/publisher identity, automatic workspace mutation, or guest authority
+is added. See [docs/AETHER_0.37.md](docs/AETHER_0.37.md),
+[docs/ADR-107-m25-local-package-publication.md](docs/ADR-107-m25-local-package-publication.md),
+and [docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md](docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 Authoring uses `aether.ast/v8`, `aether.edit/v8`, and
 `aether.diagnostic/v8`. The CLI provides offline
 project/workspace verify, `aether test` / `aether project test` (optional
@@ -56,10 +68,11 @@ strictly checkpointed v12 successor.
 
 ## Scope Boundary
 
-This manifest is the executable Aether 0.36 product contract (0.11 core language,
-M9–M23/M19a–M19e/M20/M20b/M17b–M17d/M21 pilot/M22 tooling plus RTP-001 and
-PKG-001 with bounded task-frame semantics and honest seed limits), plus the
-post-0.36 M32a/M32b verified-execution evidence tooling. M32a/M32b has no language or
+This manifest is the executable Aether 0.37 product contract (0.11 core language,
+M9–M23/M19a–M19e/M20/M20b/M17b–M17d/M21 pilot/M22 tooling plus RTP-001,
+PKG-001, and M25 local source packages with bounded task-frame semantics and
+honest seed limits), plus the post-0.36 M32a/M32b verified-execution evidence
+tooling. M32a/M32b has no language or
 artifact effect. This manifest intentionally does not promote long-range
 research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
@@ -212,7 +225,21 @@ unit lock; verification therefore binds both project metadata and every locked
 unit byte. `aether project lock` and `aether workspace lock` print refreshed
 local JSON unless explicit `--write` is supplied. Locked workspace builds
 verify before artifact output. No registry, URLs, version solver, remote cache,
-or package publication path is implied.
+or remote package publication path is implied. M25 separately provides a
+transparent local source-bundle/cache/install lifecycle without changing this
+workspace schema or adding dependency resolution.
+
+M25 (package 0.37) creates a deterministic, transparent
+`aether.package/v1` directory bundle from a complete locked project. The bundle
+contains generated metadata, the raw project manifest, and exactly the declared
+unit files. `pkg verify` checks strict metadata/path grammar, non-symlink
+regular files, individual SHA-256 values, a domain-separated content SHA-256,
+no unlisted bundle tree entries, and nested project integrity. `pkg publish`
+accepts only that verified source and writes an explicit local cache entry at
+`packages/<name>/<version>`; content mismatch for the same identity fails closed.
+`pkg install` verifies and materializes a normal locked project directory only
+at an explicit absent output. It does not resolve, fetch, sign, authenticate,
+auto-install, or mutate workspaces. See [AETHER_0.37.md](docs/AETHER_0.37.md).
 
 M20 (package 0.24) ships stdlib layer 0 under `stdlib/` (pure Whole helpers).
 M20b (package 0.27) expands layer 1: more Whole helpers plus pure `truth.ae` and
@@ -324,6 +351,7 @@ operation vocabulary, and compatibility policy are in
 | **Multi-source forge** | Product multi-file host path + unit digests (ADR-075–086/094/098); seed-native residual |
 | **F-NATIVE M35c–j** | AETH→C/object/LLVM/exe + probe + `--native-exe --target` closed target matrix; host dual-run, cross link-only (ADR-073–099) |
 | **F-REGISTRY M24b–i** | HMAC/Ed25519/HTTPS/rotation/policy/certs + date-checked X.509-lite CA store; `verify-cache` validates the store; no auto-fetch (ADR-074–100) |
+| **M25 local packages** | `pkg pack|verify|publish|install|verify-cache` — explicit local locked-source bundle/cache lifecycle; no resolver, network, or guest authority (ADR-107) |
 | **Task model** | ADR-081 design; surface/inventory (ADR-085/093/097); reserved 014; checkpoint required 015 (ADR-101) |
 | **F-NATIVE M35a/b** | `compile --native-c` — verified AETH → ISO C pure Whole + locals/arithmetic (ADR-059/062); VM remains default |
 | **F-REGISTRY M24a** | `registry pin-local` / `verify-cache` — offline digest pins only (ADR-060); no network |
@@ -431,10 +459,10 @@ Local technical preview helpers derive the package version from the CLI manifest
 pwsh -NoProfile -File .\tools\aether-gate.ps1 -Mode release
 # Or stage and verify explicitly:
 pwsh -NoProfile -File .\tools\package-preview.ps1
-pwsh -NoProfile -File .\dist\aether-0.36.0-tp\verify-preview.ps1
+pwsh -NoProfile -File .\dist\aether-0.37.0-tp\verify-preview.ps1
 ```
 
-Current preview threat model: [docs/THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md).
+Current local-package threat model: [docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md](docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 
 Historical 0.12 pure-surface freeze: [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md).
 Capable host I/O threat model (M14): [docs/THREAT_MODEL-v2-CAPABLE-HOST.md](docs/THREAT_MODEL-v2-CAPABLE-HOST.md).  

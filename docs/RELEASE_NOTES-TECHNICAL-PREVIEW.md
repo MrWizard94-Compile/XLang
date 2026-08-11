@@ -1,9 +1,9 @@
 # Aether 0.12.0 — Technical Preview Release Notes
 
 > **Historical 0.12 preview record.** The current local preview contract and
-> package procedure are [AETHER_0.36.md](AETHER_0.36.md),
-> [RELEASE_NOTES-0.36-TECHNICAL-PREVIEW.md](RELEASE_NOTES-0.36-TECHNICAL-PREVIEW.md),
-> and [THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md](THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md).
+> package procedure are [AETHER_0.37.md](AETHER_0.37.md),
+> [RELEASE_NOTES-0.37-LOCAL-PACKAGES.md](RELEASE_NOTES-0.37-LOCAL-PACKAGES.md),
+> and [THREAT_MODEL-0.37-LOCAL-PACKAGES.md](THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 > This document is retained as a dated distribution record, not current
 > package instructions.
 

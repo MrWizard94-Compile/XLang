@@ -1,0 +1,4 @@
+world local_math_library
+
+export weave double [n: Whole] -> Whole:
+  yield product n 2

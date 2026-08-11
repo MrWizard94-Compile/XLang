@@ -1,0 +1,4 @@
+world local_math
+
+weave main [] -> Whole:
+  yield 0

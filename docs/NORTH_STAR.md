@@ -1,9 +1,9 @@
 # Aether North Star
 
 **Status:** Human-approved product direction; not a language-version contract  
-**Date:** 2026-08-08 (pins refreshed for package 0.36; M19e bounded implementation is product)
+**Date:** 2026-08-11 (pins refreshed for package 0.37; M25 local package publication is product)
 **Current executable contract:** [MANIFEST.md](../MANIFEST.md) and
-[AETHER_0.36.md](AETHER_0.36.md) (language keyword surface remains **0.11** forms plus bounded M19e task syntax)
+[AETHER_0.37.md](AETHER_0.37.md) (language keyword surface remains **0.11** forms plus bounded M19e task syntax)
 
 ## Vision
 
@@ -21,7 +21,7 @@ execution, and capability-constrained integration.
 
 | Level | What it means | Authoritative documents |
 | --- | --- | --- |
-| **Implemented Aether (package 0.36)** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.36.md](AETHER_0.36.md), [AETHER_0.11.md](AETHER_0.11.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md), [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md) |
+| **Implemented Aether (package 0.37)** | The language/compiler/VM users can run and the seed-hosted proof covers. | [MANIFEST.md](../MANIFEST.md), [AETHER_0.37.md](AETHER_0.37.md), [AETHER_0.11.md](AETHER_0.11.md), [SEED_PROFILE.md](SEED_PROFILE.md), [ARCHITECTURE.md](ARCHITECTURE.md), [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md) |
 | **North-star direction** | A planned design hypothesis and ordered research program. It is not an implementation claim or syntax promise. | This document, [CORE_CLAIMS.md](CORE_CLAIMS.md), [ROADMAP.md](ROADMAP.md), [ROADMAP-MAINSTREAM-MATURITY.md](ROADMAP-MAINSTREAM-MATURITY.md), and [research/](research/) |
 
 No future-facing paragraph in this document changes the executable contract. A
@@ -79,7 +79,7 @@ flowchart LR
     Semantic -. future, separately approved .-> Interop["Narrow foreign/host interfaces"]
 ~~~
 
-The **implemented product (package 0.36)** covers a much larger portion of the
+The **implemented product (package 0.37)** covers a much larger portion of the
 stack than early pilots, while remaining deliberately bounded:
 
 - Seed-hosted product compile + dual-compare for the documented corpus  
@@ -92,13 +92,14 @@ stack than early pilots, while remaining deliberately bounded:
 - Pure host pilot, grant-backed host I/O (M14), Whole-only foreign pilot (M21)  
 - Authoring `aether.ast/edit/diagnostic` **v8**; offline project/workspace/test/LSP
 - Stdlib layer 1; offline cross-package import  
+- Transparent locked-project local package pack/verify/publish/install/cache flow
 
-See [AETHER_0.36.md](AETHER_0.36.md), [AETHER_AUTHORING_PROTOCOL_v8.md](AETHER_AUTHORING_PROTOCOL_v8.md),
+See [AETHER_0.37.md](AETHER_0.37.md), [AETHER_AUTHORING_PROTOCOL_v8.md](AETHER_AUTHORING_PROTOCOL_v8.md),
 and [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md).
 
 It does **not** yet provide general typed effects/resumptions, OS-thread
 parallelism, generic type parameters, automatic AoS→SoA rewriting, C-header
-ingestion, a native backend, first-class resource outcomes, Buffer weave
+ingestion, a general or bundled native backend, first-class resource outcomes, Buffer weave
 results, general mid-frame cancellation beyond the M19e closed subset, network
 registries, or ambient guest I/O.
 

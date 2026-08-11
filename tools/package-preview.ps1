@@ -134,7 +134,7 @@ Copy-Item -LiteralPath $ExecutableSource -Destination (Join-Path $PackageRoot "a
 
 # The package root README is purpose-built for a portable local preview. The
 # repository README contains checkout-specific engineering directions instead.
-Copy-FileToPackage "RELEASE-README-0.36-TECHNICAL-PREVIEW.md" "README.md"
+Copy-FileToPackage "RELEASE-README-0.37-LOCAL-PACKAGES.md" "README.md"
 Copy-FileToPackage "MANIFEST.md"
 Copy-DirectoryToPackage "docs"
 Copy-DirectoryToPackage "seed"

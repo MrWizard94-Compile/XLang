@@ -1,7 +1,7 @@
 # Aether in XLang
 
 This repository hosts Aether, a local-first language and CLI toolchain for
-deterministic, AI-primary authorship. Aether toolchain package **0.36.0**
+deterministic, AI-primary authorship. Aether toolchain package **0.37.0**
 (language surface **0.11** plus bounded M19e task semantics) parses only Aether
 source, emits deterministic AETH bytecode, verifies every artifact,
 and runs it in the Aether VM. **Default product path** is seed→AETH→VM; it does
@@ -14,7 +14,7 @@ Source without task frames emits v11; valid M19e task source emits v12.
 
 **Executable contract:** [MANIFEST.md](MANIFEST.md) · **Claims:**
 [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) · **Current delta:**
-[docs/AETHER_0.36.md](docs/AETHER_0.36.md)
+[docs/AETHER_0.37.md](docs/AETHER_0.37.md)
 
 **Current bounded task-frame behavior:**
 [M19e active-frame cancellation](docs/DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md) /
@@ -43,7 +43,7 @@ raw-source evaluator (with no bootstrap materialization bridge).
 
 Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
 M6 layout, M7 nurseries, and M8 pure host weaves. Toolchain packages through
-**0.36** add offline projects/modules/LSP, grant-backed host I/O, a **bounded
+**0.37** add offline projects/modules/LSP, grant-backed host I/O, a **bounded
 foreign weave pilot** (Whole-only, explicit library grant; not sandboxed),
 comptime name chaining, resource+handle, `aether test` / `aether project test`
 (optional grants and reports), workspaces, stdlib layer 1, cross-package
@@ -51,11 +51,14 @@ imports, product-path `release`, nursery×resource Policy A+, multi-weave arenas
 cooperative Policy B bounds, pure bounded comptime helper calls, and M19e's
 restricted active-frame cancellation. Package 0.34 adds only the internal
 RTP-001 ASCII Text runtime fast path; 0.35 adds PKG-001 optional local workspace
-locks; and 0.36 adds `task weave`, `checkpoint`, AETH v12, and authoring v8.
+locks; 0.36 adds `task weave`, `checkpoint`, AETH v12, and authoring v8; and
+0.37 adds M25 transparent local source-package pack, verify, publish, cache
+install, and cache verification without changing source, AETH, seed, VM, or
+guest authority.
 M19e adds no registry, network authority, guest cancellation API, or host
 capability. See
 [docs/AETHER_0.11.md](docs/AETHER_0.11.md),
-[docs/AETHER_0.36.md](docs/AETHER_0.36.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+[docs/AETHER_0.37.md](docs/AETHER_0.37.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
 
 BARP's bounded direct-seed diagnostic pilot now SPEAKs
 AE-SEED-003/004/005/006/007/012/014/015. Its task-checkpoint portion recognizes
@@ -150,7 +153,7 @@ and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-auth
 
 ## North star and evidence-led roadmap
 
-Aether 0.36 is the current executable contract, not the full long-range language
+Aether 0.37 is the current executable contract, not the full long-range language
 vision. The project is deliberately designing for AI-primary authorship while
 keeping deterministic, locally verifiable compiler authority. Read the design
 set in this order:
@@ -159,7 +162,7 @@ set in this order:
    current-law constraints.
 2. [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) — proven facts, accepted
    directions, research hypotheses, and prohibited claims.
-3. [docs/AETHER_0.36.md](docs/AETHER_0.36.md),
+3. [docs/AETHER_0.37.md](docs/AETHER_0.37.md),
    [docs/ADR-041-pkg-001-offline-workspace-locks.md](docs/ADR-041-pkg-001-offline-workspace-locks.md),
    [docs/ADR-040-runtime-text-ascii-fast-path.md](docs/ADR-040-runtime-text-ascii-fast-path.md),
    [docs/ADR-039-m23-comptime-pure-calls.md](docs/ADR-039-m23-comptime-pure-calls.md),
@@ -226,6 +229,26 @@ cargo run -p aether-cli -- compile .\seed\aether_seed.ae --output .\seed\aether_
 cargo build -p aether-cli
 ```
 
+### M25 local source packages
+
+M25 packages only a complete locked project manifest and its declared Aether
+units. It is an explicit local workflow, not a dependency resolver or remote
+registry:
+
+```powershell
+cargo run -p aether-cli -- pkg pack .\examples\package-publish\source\aether.project.json --output .\target\local-math.bundle
+cargo run -p aether-cli -- pkg verify .\target\local-math.bundle
+cargo run -p aether-cli -- pkg publish .\target\local-math.bundle --cache .\target\aether-package-cache
+cargo run -p aether-cli -- pkg install --cache .\target\aether-package-cache --name local_math --version 1.0.0 --output .\target\workspace\local_math
+cargo run -p aether-cli -- project verify .\target\workspace\local_math\aether.project.json
+```
+
+The installed directory is a normal locked project. Add it deliberately to an
+`aether.workspace/v1` file and declare existing M22 `depends_on` authorization
+before other packages import it. Bundle/cache inputs are hostile-file checked;
+they are not signed or remotely authenticated. See [the 0.37 contract](docs/AETHER_0.37.md)
+and [its threat model](docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
+
 ## Product interface
 
 The CLI is the shipped Aether product interface. It exposes canonical structure
@@ -255,14 +278,14 @@ pwsh -NoProfile -File .\tools\aether-gate.ps1 -Mode release
 ```
 
 This runs the full source/seed gate, builds `aether.exe`, stages the
-version-derived `dist\aether-0.36.0-tp` package, verifies its exact hashes and
+version-derived `dist\aether-0.37.0-tp` package, verifies its exact hashes and
 behavior as a consumer, and proves the verifier rejects an unlisted package
 file. It does not commit, tag, push, or publish anything. The package is
 `UNLICENSED`; public distribution requires a separate human licensing and
-release decision. See [the 0.36 preview notes](docs/RELEASE_NOTES-0.36-TECHNICAL-PREVIEW.md)
-and [current threat model](docs/THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md).
+release decision. See [the 0.37 local-package notes](docs/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md)
+and [current local-package threat model](docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 
 ## Governance
 
-Product contract: [MANIFEST.md](MANIFEST.md), [docs/AETHER_0.36.md](docs/AETHER_0.36.md),
+Product contract: [MANIFEST.md](MANIFEST.md), [docs/AETHER_0.37.md](docs/AETHER_0.37.md),
 and the linked ADR/matrix evidence.

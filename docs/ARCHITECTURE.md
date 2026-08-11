@@ -19,7 +19,7 @@ flowchart LR
 
 ## Scope and product boundary
 
-This document describes the implemented **Aether 0.36.0** architecture: the
+This document describes the implemented **Aether 0.37.0** architecture: the
 canonical 0.11 source forms plus the later bounded product semantics recorded
 in [MANIFEST.md](../MANIFEST.md). The current M19e task-frame increment is
 specified in [AETHER_0.36.md](AETHER_0.36.md),
@@ -34,14 +34,23 @@ remains specified in [AETHER_0.33.md](AETHER_0.33.md) and
 systems-language direction remains separate in [NORTH_STAR.md](NORTH_STAR.md),
 [CORE_CLAIMS.md](CORE_CLAIMS.md), and [ROADMAP.md](ROADMAP.md).
 
+The current M25 local package increment is specified in
+[AETHER_0.37.md](AETHER_0.37.md),
+[DESIGN-M25-LOCAL-PACKAGE-PUBLICATION.md](DESIGN-M25-LOCAL-PACKAGE-PUBLICATION.md),
+and [ADR-107](ADR-107-m25-local-package-publication.md). It is a host CLI
+filesystem protocol only; it has no source, AETH, seed, VM, or guest-authority
+effect.
+
 Current product capabilities include verifier-first AETH v11/v12 emission,
 seed-hosted compilation, bounded resources/effects/nurseries, grant-mediated
 host I/O, the narrow foreign pilot, offline project/workspace tooling with
-optional local workspace locks, deterministic checkpointed task frames, and
+optional local workspace locks, transparent local source-package publication,
+deterministic checkpointed task frames, and
 versioned structural authoring v8. M23 adds
 a deliberately narrow pure-Whole helper-call form at comptime; it does not add
 an AETH instruction or runtime authority. General effects, OS-thread parallelism, generic type parameters,
-C-header ingestion, arbitrary-node structural edits, native code generation,
+C-header ingestion, arbitrary-node structural edits, a general or bundled
+native backend,
 and general metaprogramming remain outside the current contract.
 
 M19e implements deterministic active-frame cancellation through a separate v12
@@ -111,7 +120,7 @@ traversal. Non-ASCII values retain scalar traversal. The cache is not serialized
 and cannot change verifier or guest-visible AETH behavior.
 
 AETH v4 remains valid for historical record-free programs and v5 for historical
-record-bearing programs. Package 0.36 emits v11 for non-task source and v12 for
+record-bearing programs. Package 0.37 emits v11 for non-task source and v12 for
 valid task source. Versions prior to v4 and unknown future versions are
 intentionally rejected.
 
@@ -143,13 +152,11 @@ pre-validate; dual-compare remains the proof oracle:
 
 The Seed Profile directly emits the documented canonical 0.11 source surface
 and later covered product forms into AETH v11 or v12 as task-frame metadata
-requires. It directly accepts M5/M15
-literal/name-chain comptime arithmetic. For an accepted M23 call directive,
-the bootstrap evaluates the restricted pure helper and materializes only that
-directive into equivalent literal M5 source before it reaches the seed. The
-seed therefore emits the product artifact, but the checked-in seed does not
-claim to independently parse raw M23 calls. Byte identity with direct bootstrap
-emission is required. See [SEED_PROFILE.md](SEED_PROFILE.md) and
+requires. It directly accepts M5/M15 literal/name-chain comptime arithmetic and
+the documented M23 D2a raw-source pure-call subset. The seed evaluates the
+eligible restricted pure helper itself; no bootstrap materialization bridge is
+used on that product path. Byte identity with direct bootstrap emission is
+required. See [SEED_PROFILE.md](SEED_PROFILE.md) and
 [AETHER_0.33.md](AETHER_0.33.md).
 
 Bootstrap is not gone: it rebuilds the seed, supplies the full invalid-source
@@ -195,6 +202,18 @@ uses that whole-workspace preflight before it elaborates or writes an artifact.
 write only when the caller gives explicit `--write`; a workspace refresh does
 not silently mutate all nested project manifests.
 
+M25 adds a parallel, explicit source-package lifecycle rather than changing the
+workspace lock protocol. `pkg pack` snapshots one complete locked project and
+writes an `aether.package/v1` directory bundle containing only generated
+metadata plus the project manifest and declared source units. `pkg verify`
+checks strict path/tree/regular-file rules, per-file and domain-separated
+content digests, and nested project integrity. `pkg publish` permits only a
+verified bundle into an explicit local `packages/<name>/<version>` cache,
+preserving a conflicting identity; `pkg install` writes only a verified
+`project/` tree to an explicit absent output and rechecks it. No resolver,
+fetch, automatic workspace edit, package scripts, signatures, or guest
+capability is introduced.
+
 ## CLI Authority Boundary
 
 The CLI owns caller-selected local file I/O. `structure` writes only the
@@ -227,7 +246,7 @@ and [ADR-105](ADR-105-m32b-profile-bound-comparisons.md).
 
 ## Bootstrap Boundary
 
-The Rust core remains the Aether 0.36 bootstrap implementation and VM, required
+The Rust core remains the Aether 0.37 bootstrap implementation and VM, required
 to rebuild the seed artifact and diagnose invalid source. Product compilation is
 seed-hosted after the narrow M23 materialization bridge where applicable. Future
 language extensions must keep self-host, example, canonical-surface, and

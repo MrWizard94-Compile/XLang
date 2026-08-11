@@ -16,6 +16,7 @@ mod authoring;
 mod ffi;
 mod modules;
 mod native;
+mod package;
 mod project;
 mod registry;
 mod workspace;
@@ -69,6 +70,13 @@ pub use native::{
     native_toolchain_probe_product, probe_native_toolchain, require_hermetic_native_toolchain,
     NativeDualExecReport, NativeError, NativeExeReport, NativeToolchainProbe,
 };
+pub use package::{
+    install_package_bundle, install_package_from_cache, pack_project, parse_package_document,
+    publish_package_bundle, serialize_package_document, verify_package_bundle,
+    verify_package_cache, PackageDocument, PackageError, PackageFile, PackageVerifyReport,
+    PACKAGE_CACHE_DIRECTORY, PACKAGE_MANIFEST_FILE, PACKAGE_PROJECT_DIRECTORY,
+    PACKAGE_PROJECT_PATH, PACKAGE_SCHEMA_VERSION,
+};
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
     refresh_project_lock, resolve_unit_path, serialize_project_document, sha256_hex,
@@ -108,7 +116,7 @@ pub use workspace::{
 };
 
 pub const LANGUAGE_NAME: &str = "Aether";
-pub const LANGUAGE_VERSION: &str = "0.36.0";
+pub const LANGUAGE_VERSION: &str = "0.37.0";
 
 /// Checked-in Aether-written seed compiler artifact (AETH v11).
 pub const SEED_COMPILER_ARTIFACT: &[u8] = include_bytes!(concat!(

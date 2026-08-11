@@ -13,19 +13,21 @@ use aether_core::{
     compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
     compile_workspace_package, encode_x509_lite_pem, fetch_signed_package, forge_bytecode,
     format_project, format_source, format_source_product, install_certified_signing_key,
-    install_trust_key, install_trust_root, issue_x509_lite_certificate, lower_verified_aeth_to_c,
-    lower_verified_aeth_to_llvm_ir, lower_verified_aeth_to_llvm_object,
-    lower_verified_aeth_to_native_exe, lower_verified_aeth_to_native_exe_for_target,
-    lower_verified_aeth_to_native_object, multi_module_authority_note, native_target_is_host,
-    parse_project_document, parse_workspace_document, pin_local_package, pin_local_package_signed,
-    probe_native_toolchain, product_cli_check_without_bootstrap, product_default_cli_toolchain,
+    install_package_bundle, install_package_from_cache, install_trust_key, install_trust_root,
+    issue_x509_lite_certificate, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
+    lower_verified_aeth_to_llvm_object, lower_verified_aeth_to_native_exe,
+    lower_verified_aeth_to_native_exe_for_target, lower_verified_aeth_to_native_object,
+    multi_module_authority_note, native_target_is_host, pack_project, parse_project_document,
+    parse_workspace_document, pin_local_package, pin_local_package_signed, probe_native_toolchain,
+    product_cli_check_without_bootstrap, product_default_cli_toolchain,
     product_format_without_bootstrap, product_project_format_without_bootstrap,
     product_seed_rebuild_without_bootstrap, product_structure_json,
-    product_structure_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
-    require_hermetic_native_toolchain, revoke_trust_key, rotate_trust_key, run_bytecode,
-    run_bytecode_with_grants, run_project_tests_with_grants, serialize_project_document,
-    serialize_workspace_document, set_trust_key_validity, store_x509_lite_certificate,
-    structural_document_json, unit_artifact_file_name, verify_bytecode, verify_project,
+    product_structure_without_bootstrap, publish_package_bundle, refresh_project_lock,
+    refresh_workspace_lock, require_hermetic_native_toolchain, revoke_trust_key, rotate_trust_key,
+    run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
+    serialize_project_document, serialize_workspace_document, set_trust_key_validity,
+    store_x509_lite_certificate, structural_document_json, unit_artifact_file_name,
+    verify_bytecode, verify_package_bundle, verify_package_cache, verify_project,
     verify_registry_cache, verify_workspace, verify_x509_lite_store, HostGrantConfig,
     InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
@@ -36,6 +38,9 @@ fn usage() {
     );
     eprintln!(
         "M24f/g key setup:\n  aether registry trust-root <cache-root> --key-id <id> --seed-file <32-byte-path>\n  aether registry certify-ed25519-key <cache-root> --key-id <id> --seed-file <32-byte-path> --parent-key-id <id>\nThe supplied Ed25519 seed files remain local and must be exactly 32 bytes."
+    );
+    eprintln!(
+        "M25 offline local packages:\n  aether pkg pack <aether.project.json> --output <bundle-dir>\n  aether pkg verify <bundle-dir>\n  aether pkg publish <bundle-dir> --cache <cache-dir>\n  aether pkg install <bundle-dir> --output <package-dir>\n  aether pkg install --cache <cache-dir> --name <name> --version <version> --output <package-dir>\n  aether pkg verify-cache <cache-dir>\nBundles contain verified Aether source only; cache and install paths stay local and are never network-resolved."
     );
     eprintln!(
         "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c|--native-exe [--target <triple>]]\n  aether native probe\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether registry issue-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry store-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry verify-x509-lite-store <cache-root>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-exe --target <triple> for the closed F-NATIVE M35j matrix; host targets retain dual-run and cross targets are link-only.\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b+; issue-x509-lite is M24h; store-x509-lite / verify-x509-lite-store are M24i (not full RFC 5280)."
@@ -342,6 +347,108 @@ fn registry_fetch_signed(
         pin.sha256,
         pin.key_id.as_deref().unwrap_or("")
     );
+    Ok(())
+}
+
+fn package_pack(project_manifest: &Path, output_bundle: &Path) -> Result<(), String> {
+    let report =
+        pack_project(project_manifest, output_bundle).map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} package packed {}@{} -> {} (files={} bytes={} sha256={})",
+        report.name,
+        report.version,
+        output_bundle.display(),
+        report.file_count,
+        report.total_bytes,
+        report.content_sha256
+    );
+    Ok(())
+}
+
+fn package_verify(bundle_root: &Path) -> Result<(), String> {
+    let report = verify_package_bundle(bundle_root).map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} package verified {}@{} at {} (files={} bytes={} sha256={})",
+        report.name,
+        report.version,
+        bundle_root.display(),
+        report.file_count,
+        report.total_bytes,
+        report.content_sha256
+    );
+    Ok(())
+}
+
+fn package_publish(bundle_root: &Path, cache_root: &Path) -> Result<(), String> {
+    let report =
+        publish_package_bundle(bundle_root, cache_root).map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} package published {}@{} from {} into {} (files={} bytes={} sha256={})",
+        report.name,
+        report.version,
+        bundle_root.display(),
+        cache_root.display(),
+        report.file_count,
+        report.total_bytes,
+        report.content_sha256
+    );
+    Ok(())
+}
+
+fn package_install_bundle(bundle_root: &Path, output_directory: &Path) -> Result<(), String> {
+    let report =
+        install_package_bundle(bundle_root, output_directory).map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} package installed {}@{} from {} to {} (files={} bytes={} sha256={})",
+        report.name,
+        report.version,
+        bundle_root.display(),
+        output_directory.display(),
+        report.file_count,
+        report.total_bytes,
+        report.content_sha256
+    );
+    Ok(())
+}
+
+fn package_install_cache(
+    cache_root: &Path,
+    name: &str,
+    version: &str,
+    output_directory: &Path,
+) -> Result<(), String> {
+    let report = install_package_from_cache(cache_root, name, version, output_directory)
+        .map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} package installed {}@{} from cache {} to {} (files={} bytes={} sha256={})",
+        report.name,
+        report.version,
+        cache_root.display(),
+        output_directory.display(),
+        report.file_count,
+        report.total_bytes,
+        report.content_sha256
+    );
+    Ok(())
+}
+
+fn package_verify_cache(cache_root: &Path) -> Result<(), String> {
+    let reports = verify_package_cache(cache_root).map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} package cache verified {} package(s) at {}",
+        reports.len(),
+        cache_root.display()
+    );
+    for report in reports {
+        println!(
+            "  {}@{} files={} bytes={} sha256={}",
+            report.name,
+            report.version,
+            report.file_count,
+            report.total_bytes,
+            report.content_sha256
+        );
+    }
     Ok(())
 }
 
@@ -985,6 +1092,88 @@ struct RegistryEd25519KeyRequest {
     parent_key_id: Option<String>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum PackageInstallSource {
+    Bundle(PathBuf),
+    Cache {
+        cache_root: PathBuf,
+        name: String,
+        version: String,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct PackageInstallArguments {
+    source: PackageInstallSource,
+    output_directory: PathBuf,
+}
+
+fn parse_package_install_arguments(
+    arguments: &mut impl Iterator<Item = OsString>,
+) -> Result<PackageInstallArguments, String> {
+    let source = next_argument(arguments, "bundle directory or --cache")?;
+    if source != "--cache" {
+        let output_flag = next_argument(arguments, "--output flag")?;
+        if output_flag != "--output" {
+            return Err("pkg install <bundle-dir> requires --output <package-dir>".to_owned());
+        }
+        let output_directory = PathBuf::from(next_argument(arguments, "package output directory")?);
+        if arguments.next().is_some() {
+            return Err("pkg install <bundle-dir> accepts only --output <package-dir>".to_owned());
+        }
+        return Ok(PackageInstallArguments {
+            source: PackageInstallSource::Bundle(PathBuf::from(source)),
+            output_directory,
+        });
+    }
+
+    let cache_root = PathBuf::from(next_argument(arguments, "package cache directory")?);
+    let mut name = None;
+    let mut version = None;
+    let mut output_directory = None;
+    while let Some(flag) = arguments.next() {
+        if flag == "--name" {
+            if name
+                .replace(next_string_argument(arguments, "package name")?)
+                .is_some()
+            {
+                return Err("pkg install --cache accepts --name once".to_owned());
+            }
+        } else if flag == "--version" {
+            if version
+                .replace(next_string_argument(arguments, "package version")?)
+                .is_some()
+            {
+                return Err("pkg install --cache accepts --version once".to_owned());
+            }
+        } else if flag == "--output" {
+            if output_directory
+                .replace(PathBuf::from(next_argument(
+                    arguments,
+                    "package output directory",
+                )?))
+                .is_some()
+            {
+                return Err("pkg install --cache accepts --output once".to_owned());
+            }
+        } else {
+            return Err(
+                "pkg install --cache accepts --name <name> --version <version> --output <package-dir>"
+                    .to_owned(),
+            );
+        }
+    }
+    Ok(PackageInstallArguments {
+        source: PackageInstallSource::Cache {
+            cache_root,
+            name: name.ok_or_else(|| "pkg install --cache requires --name".to_owned())?,
+            version: version.ok_or_else(|| "pkg install --cache requires --version".to_owned())?,
+        },
+        output_directory: output_directory
+            .ok_or_else(|| "pkg install --cache requires --output".to_owned())?,
+    })
+}
+
 fn parse_registry_ed25519_key_request(
     arguments: &mut impl Iterator<Item = OsString>,
     command: &str,
@@ -1265,6 +1454,74 @@ fn run() -> Result<(), String> {
                     native_probe()
                 }
                 other => Err(format!("unknown native subcommand {other}")),
+            }
+        }
+        "pkg" => {
+            let subcommand = next_argument(&mut arguments, "package subcommand")?;
+            match subcommand.to_string_lossy().as_ref() {
+                "pack" => {
+                    let project_manifest = next_argument(&mut arguments, "project manifest")?;
+                    let output_flag = next_argument(&mut arguments, "--output flag")?;
+                    if output_flag != "--output" {
+                        return Err("pkg pack requires --output <bundle-dir>".to_owned());
+                    }
+                    let output_bundle = next_argument(&mut arguments, "bundle output directory")?;
+                    if arguments.next().is_some() {
+                        return Err(
+                            "pkg pack accepts one project manifest and --output <bundle-dir>"
+                                .to_owned(),
+                        );
+                    }
+                    package_pack(Path::new(&project_manifest), Path::new(&output_bundle))
+                }
+                "verify" => {
+                    let bundle_root = next_argument(&mut arguments, "bundle directory")?;
+                    if arguments.next().is_some() {
+                        return Err("pkg verify accepts one bundle directory".to_owned());
+                    }
+                    package_verify(Path::new(&bundle_root))
+                }
+                "publish" => {
+                    let bundle_root = next_argument(&mut arguments, "bundle directory")?;
+                    let cache_flag = next_argument(&mut arguments, "--cache flag")?;
+                    if cache_flag != "--cache" {
+                        return Err("pkg publish requires --cache <cache-dir>".to_owned());
+                    }
+                    let cache_root = next_argument(&mut arguments, "package cache directory")?;
+                    if arguments.next().is_some() {
+                        return Err(
+                            "pkg publish accepts one bundle directory and --cache <cache-dir>"
+                                .to_owned(),
+                        );
+                    }
+                    package_publish(Path::new(&bundle_root), Path::new(&cache_root))
+                }
+                "install" => {
+                    let request = parse_package_install_arguments(&mut arguments)?;
+                    match request.source {
+                        PackageInstallSource::Bundle(bundle_root) => {
+                            package_install_bundle(&bundle_root, &request.output_directory)
+                        }
+                        PackageInstallSource::Cache {
+                            cache_root,
+                            name,
+                            version,
+                        } => package_install_cache(
+                            &cache_root,
+                            &name,
+                            &version,
+                            &request.output_directory,
+                        ),
+                    }
+                }
+                "verify-cache" => {
+                    let cache_root = next_argument(&mut arguments, "package cache directory")?;
+                    if arguments.next().is_some() {
+                        return Err("pkg verify-cache accepts one cache directory".to_owned());
+                    }
+                    package_verify_cache(Path::new(&cache_root))
+                }
+                other => Err(format!("unknown pkg subcommand {other}")),
             }
         }
         "registry" => {
@@ -1901,6 +2158,64 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn package_install_arguments_are_closed_and_complete() {
+        let mut direct = ["bundle", "--output", "installed"]
+            .into_iter()
+            .map(OsString::from);
+        let direct = parse_package_install_arguments(&mut direct).expect("direct install parse");
+        assert_eq!(
+            direct,
+            PackageInstallArguments {
+                source: PackageInstallSource::Bundle(PathBuf::from("bundle")),
+                output_directory: PathBuf::from("installed"),
+            }
+        );
+
+        let mut cache = [
+            "--cache",
+            "cache",
+            "--version",
+            "1.2.3",
+            "--output",
+            "installed",
+            "--name",
+            "math",
+        ]
+        .into_iter()
+        .map(OsString::from);
+        let cache = parse_package_install_arguments(&mut cache).expect("cache install parse");
+        assert_eq!(
+            cache,
+            PackageInstallArguments {
+                source: PackageInstallSource::Cache {
+                    cache_root: PathBuf::from("cache"),
+                    name: "math".to_owned(),
+                    version: "1.2.3".to_owned(),
+                },
+                output_directory: PathBuf::from("installed"),
+            }
+        );
+
+        let mut duplicate = [
+            "--cache",
+            "cache",
+            "--name",
+            "math",
+            "--name",
+            "other",
+            "--version",
+            "1.2.3",
+            "--output",
+            "installed",
+        ]
+        .into_iter()
+        .map(OsString::from);
+        let error = parse_package_install_arguments(&mut duplicate)
+            .expect_err("duplicate cache package name must fail");
+        assert!(error.contains("--name once"), "unexpected error: {error}");
     }
 
     #[test]

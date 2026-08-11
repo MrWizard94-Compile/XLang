@@ -5,9 +5,9 @@
 product contract, schedule promise, or superiority claim
 **Historical baseline:** package **0.32.0** / language surface **0.11** forms /
 AETH **v11**
-**Current product contract:** package **0.36.0** is governed by
+**Current product contract:** package **0.37.0** is governed by
 [MANIFEST.md](../MANIFEST.md), [ROADMAP.md](ROADMAP.md),
-[AETHER_0.36.md](AETHER_0.36.md), and
+[AETHER_0.37.md](AETHER_0.37.md), and
 [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md)
 **Governance:** AGENTS Constitution + current manifest and ADRs
 **Process law:** SOP phases 1–10 per increment (`SOP-PHASE-001`, `SOP-GATE-001`)  
@@ -16,12 +16,13 @@ AETH **v11**
 **North star:** [NORTH_STAR.md](NORTH_STAR.md) (direction ≠ current behavior)
 
 > **Historical numbering warning.** This document predates the current package
-> 0.36 package ledger. Its references to “M23” as a multi-package graph are
+> 0.37 package ledger. Its references to “M23” as a multi-package graph are
 > historical planning nomenclature only. In the authoritative current roadmap,
 > **M23 is pure comptime weave calls (T-CT), implemented in 0.33**; package 0.34
 > is the separate RTP-001 runtime-only increment, package 0.35 is PKG-001
-> offline workspace-lock tooling, and package 0.36 is M19e bounded v12
-> active-frame cancellation. Do not use
+> offline workspace-lock tooling, package 0.36 is M19e bounded v12
+> active-frame cancellation, and package 0.37 is M25 local source-package
+> publication. Do not use
 > this document to authorize, rename, or infer the status of current work.
 
 ---
@@ -122,7 +123,7 @@ Scores below are **honest 0.32 self-assessment** (not peer marketing). Historica
 | Comptime/meta | 4 | 5 | 2 | 2 | 2 | 3 | **2** (literal + name chain) | **3** |
 | Host I/O | 5 | 5 | 5 | 5 | 5 | 5 | **3** (grant-mediated) | **4** |
 | FFI / interop | 5 | 5 | 4 | 4 | 4 | 3 | **2** (Whole-only pilot) | **3–4** |
-| Package ecosystem | 5 | 4 | 5 | 5 | 5 | 5 | **2** (offline stdlib + xpkg) | **3–4** offline-first |
+| Package ecosystem | 5 | 4 | 5 | 5 | 5 | 5 | **3** (offline stdlib, workspace locks, cross-package imports, and M25 pack/verify/publish/install) | **3–4** offline-first |
 | LSP / IDE | 5 | 4 | 5 | 5 | 5 | 5 | **3** (bounded offline LSP) | **4** |
 | Test tooling | 5 | 3 | 5 | 5 | 5 | 5 | **3** (`aether test` / project test) | **4** |
 | Build/package graph | 5 | 4 | 5 | 5 | 5 | 5 | **3** (project + workspace offline) | **4** |
@@ -511,12 +512,13 @@ logging optional, residual risk table.
 
 | Effort | **M** |
 | Work | Pack source+metadata+lock; verify; install from path/cache |
+| Current implementation | **Implemented in package 0.37 / ADR-107:** transparent `aether.package/v1`, explicit local cache, exact content digests, and two-consumer workspace evidence. |
 
 ### 9.5 E4 maturity gate
 
 | Criterion | Evidence |
 | --- | --- |
-| Third-party style reuse | ≥1 internal package consumed by ≥2 projects |
+| Third-party style reuse | ≥1 internal package consumed by ≥2 projects — **met by M25 core evidence; retain it in the full gate** |
 | FFI | One maintained C library binding fixture |
 | Scorecard | Packages **≥ 3–4**, FFI **≥ 3** |
 

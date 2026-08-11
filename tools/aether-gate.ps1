@@ -4,7 +4,8 @@
 
 .DESCRIPTION
   Runs pack verify (when found), fmt, workspace Clippy with warnings denied,
-  tests, example dual-compare, host-pilot run, and project verification.
+  tests, example dual-compare, host-pilot run, project verification, and the
+  M25 local package pack/verify/publish/install lifecycle.
   -Mode full also rebuilds seed via bootstrap + forge and checks hash identity.
   -Mode release adds a release build, a version-derived local package, consumer
   verification, and a negative package-integrity check.
@@ -228,6 +229,50 @@ if (Test-Path -LiteralPath $modFile) {
 } else {
     Write-Host "  skip (no project-modules example)" -ForegroundColor Yellow
 }
+
+# --- M25 local package publication ---
+Write-Step "M25 local package pack + verify + publish + install"
+$m25Project = Join-Path $examplesDir "package-publish\source\aether.project.json"
+if (-not (Test-Path -LiteralPath $m25Project -PathType Leaf)) {
+    Fail "missing M25 source package fixture: $m25Project"
+}
+$m25Root = Assert-ChildPath $outDir (Join-Path $outDir "m25-package") "M25 gate workspace"
+if (Test-Path -LiteralPath $m25Root) {
+    Remove-Item -LiteralPath $m25Root -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $m25Root | Out-Null
+$m25Bundle = Join-Path $m25Root "local-math.bundle"
+$m25Cache = Join-Path $m25Root "cache"
+$m25DirectInstall = Join-Path $m25Root "direct-install"
+$m25CacheInstall = Join-Path $m25Root "cache-install"
+
+cargo run -q -p aether-cli -- pkg pack $m25Project --output $m25Bundle
+if ($LASTEXITCODE -ne 0) { Fail "M25 package pack failed" }
+cargo run -q -p aether-cli -- pkg verify $m25Bundle
+if ($LASTEXITCODE -ne 0) { Fail "M25 package verify failed" }
+cargo run -q -p aether-cli -- pkg publish $m25Bundle --cache $m25Cache
+if ($LASTEXITCODE -ne 0) { Fail "M25 package publish failed" }
+cargo run -q -p aether-cli -- pkg publish $m25Bundle --cache $m25Cache
+if ($LASTEXITCODE -ne 0) { Fail "M25 package idempotent publish failed" }
+cargo run -q -p aether-cli -- pkg verify-cache $m25Cache
+if ($LASTEXITCODE -ne 0) { Fail "M25 package cache verification failed" }
+cargo run -q -p aether-cli -- pkg install $m25Bundle --output $m25DirectInstall
+if ($LASTEXITCODE -ne 0) { Fail "M25 direct package install failed" }
+cargo run -q -p aether-cli -- pkg install --cache $m25Cache --name local_math --version 1.0.0 --output $m25CacheInstall
+if ($LASTEXITCODE -ne 0) { Fail "M25 cache package install failed" }
+foreach ($installedProject in @(
+        (Join-Path $m25DirectInstall "aether.project.json"),
+        (Join-Path $m25CacheInstall "aether.project.json")
+    )) {
+    cargo run -q -p aether-cli -- project verify $installedProject
+    if ($LASTEXITCODE -ne 0) { Fail "M25 installed package project verification failed: $installedProject" }
+    $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $m25Project).Hash
+    $installedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installedProject).Hash
+    if ($sourceHash -ne $installedHash) {
+        Fail "M25 install changed the locked project manifest: source=$sourceHash installed=$installedHash"
+    }
+}
+Write-Host "  M25 pack/verify/publish/install + locked-project identity OK"
 
 # --- Full: seed forge identity ---
 if ($Mode -ne "quick") {

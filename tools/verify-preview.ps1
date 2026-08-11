@@ -5,7 +5,8 @@
 .DESCRIPTION
   Validates exact package membership and SHA-256SUMS, the release metadata and
   CLI version, then exercises the shipped v11/v12, host, project, workspace,
-  authoring, and path-confinement surfaces without a source checkout.
+  authoring, M25 local-package, and path-confinement surfaces without a source
+  checkout.
 
 .PARAMETER PackageRoot
   Package directory containing aether.exe and RELEASE-METADATA.json. When
@@ -186,7 +187,7 @@ function Get-ReleaseMetadata([string]$Root) {
         $metadata.authoring.ast -ne "aether.ast/v8" -or
         $metadata.authoring.edit -ne "aether.edit/v8" -or
         $metadata.authoring.diagnostic -ne "aether.diagnostic/v8") {
-        Fail "release metadata does not match the supported 0.36 language/artifact/authoring contract"
+        Fail "release metadata does not match the supported 0.37 language/artifact/authoring contract"
     }
 
     Write-Host "  Aether $($metadata.packageVersion), AETH v11/v12, authoring v8"
@@ -212,11 +213,12 @@ function Assert-RequiredPackageFiles([string]$Root, [string]$Version) {
         "examples/task-loop.ae",
         "examples/project/aether.project.json",
         "examples/workspace/aether.workspace.json",
-        "docs/AETHER_0.36.md",
+        "examples/package-publish/source/aether.project.json",
+        "docs/AETHER_0.37.md",
         "docs/AETHER_AUTHORING_PROTOCOL_v8.md",
-        "docs/CHANGELOG-0.36.md",
-        "docs/RELEASE_NOTES-0.36-TECHNICAL-PREVIEW.md",
-        "docs/THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md"
+        "docs/CHANGELOG-0.37.md",
+        "docs/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md",
+        "docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md"
     )
     foreach ($relativePath in $requiredFiles) {
         $fullPath = Get-ConfinedPackagePath $Root $relativePath "required package path"
@@ -334,6 +336,40 @@ try {
         Fail "workspace verify failed"
     }
     Write-Host "  project and workspace verification OK"
+
+    Write-Host "=== M25 local package lifecycle ===" -ForegroundColor Cyan
+    $m25Project = Get-ConfinedPackagePath $Package "examples/package-publish/source/aether.project.json" "M25 project path"
+    $m25Bundle = Join-Path $workRoot "local-math.bundle"
+    $m25Cache = Join-Path $workRoot "local-package-cache"
+    $m25Direct = Join-Path $workRoot "local-math-direct"
+    $m25Cached = Join-Path $workRoot "local-math-cache"
+    & $Executable pkg pack $m25Project --output $m25Bundle
+    if ($LASTEXITCODE -ne 0) { Fail "M25 package pack failed" }
+    & $Executable pkg verify $m25Bundle
+    if ($LASTEXITCODE -ne 0) { Fail "M25 package verify failed" }
+    & $Executable pkg publish $m25Bundle --cache $m25Cache
+    if ($LASTEXITCODE -ne 0) { Fail "M25 package publish failed" }
+    & $Executable pkg publish $m25Bundle --cache $m25Cache
+    if ($LASTEXITCODE -ne 0) { Fail "M25 idempotent package publish failed" }
+    & $Executable pkg verify-cache $m25Cache
+    if ($LASTEXITCODE -ne 0) { Fail "M25 package cache verification failed" }
+    & $Executable pkg install $m25Bundle --output $m25Direct
+    if ($LASTEXITCODE -ne 0) { Fail "M25 direct package install failed" }
+    & $Executable pkg install --cache $m25Cache --name local_math --version 1.0.0 --output $m25Cached
+    if ($LASTEXITCODE -ne 0) { Fail "M25 cache package install failed" }
+    $m25SourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $m25Project).Hash
+    foreach ($installedProject in @(
+            (Join-Path $m25Direct "aether.project.json"),
+            (Join-Path $m25Cached "aether.project.json")
+        )) {
+        & $Executable project verify $installedProject
+        if ($LASTEXITCODE -ne 0) { Fail "M25 installed project verification failed: $installedProject" }
+        $installedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installedProject).Hash
+        if ($installedHash -ne $m25SourceHash) {
+            Fail "M25 installed project manifest differs from the package source"
+        }
+    }
+    Write-Host "  pack/verify/publish/install + locked project identity OK"
 
     Write-Host "=== negative project path escape ===" -ForegroundColor Cyan
     $negativeDirectory = Join-Path $workRoot "escape-project"

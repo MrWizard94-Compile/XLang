@@ -2,9 +2,9 @@
 
 **Date:** 2026-08-11  
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
-**Package contract:** **0.36.0** (language **0.11** + M19e AETH v12 + post-0.36 maturity program)  
+**Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-106 seed-SPEAK task-checkpoint pilot — **GATE PASS mode=full**
+**Current delivery verification:** M25 local package publication — **GATE PASS modes=full,release**; seed identity `86391C07D31069526D5FC33ADDC287FF1F79D4C35C663D388E3B6E2108F5ADCB`
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -13,7 +13,7 @@
 
 Aether is a **local-first, seed-hosted product compiler** with verified AETH
 execution, dual-compare self-host proofs, and human-authorized **F-NATIVE** /
-**F-REGISTRY** pilots — still **0.36.0** package contract, with BARP having moved
+**F-REGISTRY** pilots — now **0.37.0** package contract, with BARP having moved
 product authority off the Rust bootstrap for default toolchain paths and
 M32a/M32b now providing a closed local verified-execution evidence and strict
 comparison surface.
@@ -27,7 +27,7 @@ comparison surface.
 | Layer | Status |
 | --- | --- |
 | Core language surface | Canonical **0.11** (M2 resources, M4 Error[Whole], M5/M15/M23 comptime, M6 layout, M7 nurseries, M8 pure host) |
-| Toolchain packages | M9–M18 projects/modules/LSP/tests/workspaces/stdlib; M19a–e resource/task; M21 FFI pilot; M22 cross-package; M23 seed-native |
+| Toolchain packages | M9–M18 projects/modules/LSP/tests/workspaces/stdlib; M19a–e resource/task; M21 FFI pilot; M22 cross-package; M23 seed-native; M25 local source-package lifecycle |
 | AETH | **v11** default; **v12** for M19e `task weave` + `checkpoint` |
 | Default compile | **Seed forge** (`seed/aether_seed.aeth`) — not Rust bootstrap |
 | Execution | Verify-before-run VM; grant-empty pure fixtures; optional `--grant-*` / `--grant-lib` |
@@ -112,8 +112,9 @@ Verified AETH
 
 ## 5. Recent maturity program (post–0.36 release)
 
-The 0.36 package contract (M19e) is the executable language baseline. Since then,
-work has been **independence and infrastructure maturity** without a package bump:
+The 0.36 package contract (M19e) remains the executable language baseline. M25
+now advances the toolchain package to 0.37 with a local package ecosystem step;
+BARP and M32 work remain **independence and infrastructure maturity**:
 
 ### 5.1 BARP highlights (ADR-043 → 106)
 
@@ -151,6 +152,17 @@ Offline pin → HMAC signed → Ed25519/HTTPS → rotation → multi-root policy
 root certs → multi-level chains → **explicit CLI root/certified-key setup** →
 X.509-lite → **CA store + chain verify + cache-gate validation**
 
+### 5.5 M25 local source-package publication (ADR-107)
+
+`aether pkg pack|verify|publish|install|verify-cache` packages exactly one
+complete locked project into a transparent `aether.package/v1` directory bundle.
+It binds raw manifest/unit bytes, rejects hostile paths, symlinks, nonregular
+and unlisted bundle files, bounds input size, stages output, preserves existing
+targets, and gives an explicit local cache a deterministic collision-safe
+identity. Direct/cache installation creates a normal locked project; core
+evidence builds and runs two independent M22 workspace consumers of one
+installed package. M25 adds no network/resolver/signing/guest authority.
+
 ### 5.5 Recent tip commits (illustrative)
 
 | Commit | Slice |
@@ -185,7 +197,8 @@ matrix and seed-native multi-file remain residual.
 | Task concurrency | **Medium** | M19e solid; no handles/timeouts/parallel |
 | Foreign ABI | **Low–Medium** | Bounded pilot only |
 | Verified-execution performance evidence | **Medium** | M32a fixed-corpus reports plus M32b strict profile-bound local comparison; no collected pinned baseline, attestation, or comparative speed claim |
-| Package versioning | **Stable** | Still 0.36.0 contract |
+| Local package ecosystem | **Medium** | M25 transparent locked source bundles, collision-safe cache, explicit install, and two-consumer reuse; no resolver or publisher identity |
+| Package versioning | **Stable** | 0.37.0 toolchain contract; language/AETH surface unchanged |
 
 ---
 
@@ -210,7 +223,7 @@ Ordered for dependency honesty (`CONST-DEP-001`):
 3. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility
 4. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite
 5. **Task runtime:** implementable ADRs for handles and/or timeouts under ADR-081 invariants
-6. **Optional package 0.37** when language surface or AETH version actually expands
+6. **M25 follow-on only by ADR:** source-package signing/provenance, resolver/ranges, assets, or remote distribution must not be inferred from the local workflow
 
 ---
 
@@ -240,6 +253,7 @@ pwsh -File tools\aether-gate.ps1 -Mode release
 | [SEED_PROFILE.md](SEED_PROFILE.md) | Seed emission honesty |
 | [FORGE_CONTRACT.md](FORGE_CONTRACT.md) | Host forge ABI |
 | [DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md) | BARP program |
+| [DELIVERY_REPORT-2026-08-11-M25-LOCAL-PACKAGE-PUBLICATION.md](DELIVERY_REPORT-2026-08-11-M25-LOCAL-PACKAGE-PUBLICATION.md) | M25 0.37 delivery / full and release evidence |
 | [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) | This audit stamp |
 | ADRs 043–101 | Maturity decision trail |
 
