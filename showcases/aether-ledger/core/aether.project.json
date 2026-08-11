@@ -1,0 +1,35 @@
+{
+  "schema": "aether.project/v1",
+  "name": "ledger_core_pkg",
+  "version": "0.1.0",
+  "units": [
+    {
+      "path": "main.ae",
+      "role": "main"
+    },
+    {
+      "path": "digest.ae",
+      "role": "lib"
+    },
+    {
+      "path": "policy.ae",
+      "role": "lib"
+    }
+  ],
+  "lock": {
+    "units": [
+      {
+        "path": "main.ae",
+        "sha256": "945306accb9191de61ee68757c6b949a939d517ee305d718ab1f8042c6845c49"
+      },
+      {
+        "path": "digest.ae",
+        "sha256": "17e073934577f995bd62940680044980a7f971c9d6daaff1cbe59e28fe15351d"
+      },
+      {
+        "path": "policy.ae",
+        "sha256": "731ab3c62cf082da52cdfc9f7891e26524fe35ff4375abdf86976cac2eb58ac0"
+      }
+    ]
+  }
+}

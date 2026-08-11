@@ -1,0 +1,18 @@
+world ledger_concurrent
+
+import unit "digest.ae" from package core as dig
+
+weave hash_left [a: Whole, b: Whole] -> Whole:
+  yield call dig.fold2 a b
+
+weave hash_right [c: Whole] -> Whole:
+  bind s0 <- call dig.seed
+  yield call dig.mix s0 c
+
+export weave parallel_fold3 [a: Whole, b: Whole, c: Whole] -> Whole:
+  bind mutable left <- 0
+  bind mutable right <- 0
+  together:
+    spawn call hash_left a b into left
+    spawn call hash_right c into right
+  yield call dig.combine left right

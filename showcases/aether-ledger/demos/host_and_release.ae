@@ -1,0 +1,11 @@
+world ledger_host_demo
+
+host weave whole_inc [value: Whole] -> Whole
+host weave text_extent [borrow message: Text] -> Whole
+
+weave main [] -> Whole:
+  bind after <- call whole_inc 41
+  bind message <- "Aether"
+  bind len <- call text_extent borrow message
+  release message
+  yield sum after len

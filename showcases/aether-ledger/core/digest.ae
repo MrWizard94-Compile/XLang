@@ -1,0 +1,27 @@
+world ledger_digest
+
+export weave seed [] -> Whole:
+  yield 5381
+
+export weave mix [acc: Whole, value: Whole] -> Whole:
+  bind scaled <- product acc 33
+  yield sum scaled value
+
+export weave fold3 [a: Whole, b: Whole, c: Whole] -> Whole:
+  bind s0 <- call seed
+  bind s1 <- call mix s0 a
+  bind s2 <- call mix s1 b
+  bind s3 <- call mix s2 c
+  yield s3
+
+export weave fold2 [a: Whole, b: Whole] -> Whole:
+  bind s0 <- call seed
+  bind s1 <- call mix s0 a
+  bind s2 <- call mix s1 b
+  yield s2
+
+export weave combine [left: Whole, right: Whole] -> Whole:
+  bind s0 <- call seed
+  bind s1 <- call mix s0 left
+  bind s2 <- call mix s1 right
+  yield s2

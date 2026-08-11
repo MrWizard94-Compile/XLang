@@ -1,0 +1,35 @@
+world ledger_effects_demo
+
+record task_snapshot [label: Text, payload: Bytes]
+
+task weave staged [] -> Whole:
+  bind label <- "parked"
+  bind payload <- bytes "0a0b"
+  bind snapshot <- make task_snapshot move label move payload
+  bind memory <- arena 64
+  bind mutable values <- buffer Whole
+  choose allocate access memory move values 2 into values:
+    checkpoint
+    choose append move values 7 into values:
+      yield 7
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1
+
+weave fail [] -> Whole raises Whole:
+  raise 9
+
+weave run [] -> Whole raises Whole:
+  bind mutable worker <- 0
+  bind mutable failed <- 0
+  together:
+    spawn call staged into worker
+    spawn call fail into failed
+  yield worker
+
+weave main [] -> Whole:
+  bind mutable value <- 0
+  bind mutable fault <- 0
+  handle call run into value otherwise error into fault
+

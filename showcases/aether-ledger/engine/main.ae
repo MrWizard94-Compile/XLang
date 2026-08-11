@@ -1,0 +1,4 @@
+world ledger_engine_pkg
+
+weave main [] -> Whole:
+  yield 0

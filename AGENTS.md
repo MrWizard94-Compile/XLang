@@ -89,6 +89,7 @@ D2a body subset (`seed_interprets_m23_comptime_calls_natively`; ADR-043 Phase 1)
 | Studio retirement decision | [docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-studio.md) |
 | Migration audit | [AUDIT_REPORT.md](AUDIT_REPORT.md) |
 | Full project progress report | [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/PROGRESS_REPORT-FULL-PROJECT.md) (2026-08-10) |
+| Aether-only language showcase | [showcases/aether-ledger/](showcases/aether-ledger/) — multi-package integrity ledger + demos |
 | Full project audit (latest) | [docs/AUDIT_REPORT-2026-08-10-FULL-PROJECT.md](docs/AUDIT_REPORT-2026-08-10-FULL-PROJECT.md) |
 | Completion readiness audit | [docs/AUDIT_REPORT-2026-08-04-COMPLETION-READINESS.md](docs/AUDIT_REPORT-2026-08-04-COMPLETION-READINESS.md) |
 | Technical preview threat model | [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md) |

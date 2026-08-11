@@ -1,0 +1,5 @@
+world ledger_core_pkg
+
+# Package entry stub (libs are imported by path; main is not the workspace app).
+weave main [] -> Whole:
+  yield 0

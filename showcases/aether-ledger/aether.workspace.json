@@ -1,0 +1,52 @@
+{
+  "schema": "aether.workspace/v1",
+  "name": "aether_ledger",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "name": "core",
+      "path": "core",
+      "depends_on": []
+    },
+    {
+      "name": "engine",
+      "path": "engine",
+      "depends_on": [
+        "core"
+      ]
+    },
+    {
+      "name": "app",
+      "path": "app",
+      "depends_on": [
+        "engine",
+        "core"
+      ]
+    }
+  ],
+  "lock": {
+    "packages": [
+      {
+        "name": "core",
+        "path": "core",
+        "project_name": "ledger_core_pkg",
+        "project_version": "0.1.0",
+        "project_sha256": "2a932f82b0d6d36a7af63d09306256251aa75752f320e6fe2b5735bf197021b9"
+      },
+      {
+        "name": "engine",
+        "path": "engine",
+        "project_name": "ledger_engine_pkg",
+        "project_version": "0.1.0",
+        "project_sha256": "1aece138ca62ff85eaecb2b4c1a3040bb2bba5b64812c873fcaf8675536334f5"
+      },
+      {
+        "name": "app",
+        "path": "app",
+        "project_name": "ledger_app_pkg",
+        "project_version": "0.1.0",
+        "project_sha256": "2453da6a544317bc8b10c294291dbd04525c0fd667748ea228710680d3eeb69f"
+      }
+    ]
+  }
+}

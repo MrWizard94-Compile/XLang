@@ -1,0 +1,9 @@
+world ledger_pipeline
+
+import unit "digest.ae" from package core as dig
+
+export weave sealed3 [a: Whole, b: Whole, c: Whole, budget: Whole] -> Whole:
+  yield call dig.fold3 a b c
+
+export weave preview3 [a: Whole, b: Whole, c: Whole] -> Whole:
+  yield call dig.fold3 a b c

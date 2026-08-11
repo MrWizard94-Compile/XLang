@@ -1,0 +1,7 @@
+world ledger_policy
+
+export weave accept_event [value: Whole, budget: Whole] -> Whole:
+  bind under <- difference budget value
+  bind s0 <- sum value 1
+  bind s1 <- product s0 under
+  yield s1

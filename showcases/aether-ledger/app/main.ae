@@ -1,0 +1,52 @@
+world aether_ledger_app
+
+import unit "pipeline.ae" from package engine as pipe
+import unit "concurrent.ae" from package engine as conc
+import unit "digest.ae" from package core as dig
+
+weave scale [value: Whole] -> Whole:
+  bind mutable out <- product value 2
+  revise out <- sum out 0
+  yield out
+
+weave area [width: Whole, height: Whole] -> Whole:
+  bind product_value <- product width height
+  yield product_value
+
+weave pack_head [a: Whole, b: Whole, c: Whole] -> Whole:
+  bind memory <- arena 128
+  bind mutable values <- buffer Whole
+  bind mutable observed <- 0
+  choose allocate access memory move values 3 into values:
+    choose append move values a into values:
+      choose append move values b into values:
+        choose append move values c into values:
+          choose at borrow values 0 into observed:
+            yield observed
+          otherwise:
+            yield -3
+        otherwise:
+          yield -2
+      otherwise:
+        yield -2
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1
+
+weave main [] -> Whole:
+  comptime bind cell <- product 5 2
+  comptime bind wide <- call scale cell
+  comptime bind area_ct <- call area wide 3
+  bind e0 <- 10
+  bind e1 <- 20
+  bind e2 <- 30
+  bind sealed <- call pipe.sealed3 e0 e1 e2 area_ct
+  bind concurrent <- call conc.parallel_fold3 e0 e1 e2
+  bind head <- call pack_head e0 e1 e2
+  bind s0 <- call dig.seed
+  bind s1 <- call dig.mix s0 sealed
+  bind s2 <- call dig.mix s1 concurrent
+  bind s3 <- call dig.mix s2 head
+  bind s4 <- call dig.mix s3 area_ct
+  yield s4
