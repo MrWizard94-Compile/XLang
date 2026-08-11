@@ -289,6 +289,8 @@ operation vocabulary, and compatibility policy are in
 | **Seed product API** | `compile_with_seed` — product bytes only; empty placeholder `Program` (ADR-051; never bootstrap) |
 | **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
 | **Bootstrap** | `compile_to_bytecode` / CLI `compile --bootstrap` / default `check` AST / format / structure AST / LSP symbols — rebuild seed, full diagnostics, dual-compare oracle |
+| **F-NATIVE M35a** | `compile --native-c` — verified AETH → ISO C pure Whole pilot (ADR-059); VM remains default |
+| **F-REGISTRY M24a** | `registry pin-local` / `verify-cache` — offline digest pins only (ADR-060); no network |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |
 
 The seed artifact is checked in at `seed/aether_seed.aeth` and embedded as

@@ -1,6 +1,6 @@
 # Law fork F-NATIVE — optional native / machine-code backend
 
-**Status:** Design decision package — **not authorized for product code**  
+**Status:** Design decision package — **authorized** 2026-08-10; product pilot ADR-059  
 **Date:** 2026-08-05  
 **Decision records:** [ADR-037](ADR-037-f-native-law-fork.md), [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md)  
 **Threat draft:** [THREAT_MODEL-v4-NATIVE-BACKEND.md](THREAT_MODEL-v4-NATIVE-BACKEND.md)  

@@ -1,7 +1,7 @@
 # Threat Model v4 — optional native backend (F-NATIVE)
 
-**Status:** Draft for law-fork decision — **not binding product law** until F-NATIVE authorized  
-**Date:** 2026-08-05  
+**Status:** **Binding** for F-NATIVE product slices (authorized 2026-08-10)  
+**Date:** 2026-08-05 (binding 2026-08-10)  
 **Depends on:** [DESIGN-LAW-FORK-F-NATIVE.md](DESIGN-LAW-FORK-F-NATIVE.md), [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md)  
 **Related Rule IDs:** `SEC-INPUT-001`, `CONST-DEP-001`
 

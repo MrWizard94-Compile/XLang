@@ -11,19 +11,20 @@ use aether_core::{
     apply_edit_cli_trusts_product_accept, apply_structural_edit, canonical_ast,
     compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
     compile_workspace_package, forge_bytecode, format_project, format_source,
-    format_source_product, multi_module_authority_note, parse_project_document,
-    parse_workspace_document, product_cli_check_without_bootstrap,
-    product_format_without_bootstrap, product_project_format_without_bootstrap,
-    product_structure_json, product_structure_without_bootstrap, refresh_project_lock,
-    refresh_workspace_lock, run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
+    format_source_product, lower_verified_aeth_to_c, multi_module_authority_note,
+    parse_project_document, parse_workspace_document, pin_local_package,
+    product_cli_check_without_bootstrap, product_format_without_bootstrap,
+    product_project_format_without_bootstrap, product_structure_json,
+    product_structure_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
+    run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
     serialize_project_document, serialize_workspace_document, structural_document_json,
-    unit_artifact_file_name, verify_bytecode, verify_project, verify_workspace, HostGrantConfig,
-    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    unit_artifact_file_name, verify_bytecode, verify_project, verify_registry_cache,
+    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether check --product <source-file>\n  aether structure <source-file>\n  aether structure --product <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --product <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--product]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncheck uses bootstrap full diagnostics + canonical AST by default.\ncheck --product validates via the seed product path only (forge + verify + AE-SEED preflights; no bootstrap AST).\nformat uses bootstrap AST-canonical rewrite by default.\nformat --product LF-normalizes and product-accepts only (no bootstrap AST rewrite).\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nstructure emits aether.ast/v8 JSON (bootstrap). structure --product emits aether.product-structure/v1 (seed accept + LF source; no AST).\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only; --product uses seed product format per unit (no bootstrap AST rewrite).\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; bootstrap AST for symbols/format/hover; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics / dual-compare proofs)."
+        "Usage:\n  aether check <source-file>\n  aether check --product <source-file>\n  aether structure <source-file>\n  aether structure --product <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --product <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--product]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c]\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\ncheck uses bootstrap full diagnostics + canonical AST by default.\ncheck --product validates via the seed product path only (forge + verify + AE-SEED preflights; no bootstrap AST).\nformat uses bootstrap AST-canonical rewrite by default.\nformat --product LF-normalizes and product-accepts only (no bootstrap AST rewrite).\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nstructure emits aether.ast/v8 JSON (bootstrap). structure --product emits aether.product-structure/v1 (seed accept + LF source; no AST).\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format prints canonical source per unit; --write overwrites listed unit paths only; --product uses seed product format per unit (no bootstrap AST rewrite).\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; bootstrap AST for symbols/format/hover; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap to emit with the Rust bootstrap (seed rebuild / diagnostics / dual-compare proofs).\nPass --native-c to lower verified AETH to ISO C (F-NATIVE M35a pure Whole pilot; not default).\nregistry pin-local/verify-cache are offline-only F-REGISTRY M24a (no network)."
     );
 }
 
@@ -60,10 +61,19 @@ fn check(source_path: &Path, product: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn compile(source_path: &Path, output_path: &Path, use_bootstrap: bool) -> Result<(), String> {
+fn compile(
+    source_path: &Path,
+    output_path: &Path,
+    use_bootstrap: bool,
+    native_c: bool,
+) -> Result<(), String> {
     let source = read_source(source_path)?;
     // BARP Phase 2 (ADR-044): default product compile forges seed bytecode without
     // a bootstrap validate precondition. --bootstrap remains rebuild/oracle path.
+    // ADR-059: --native-c lowers verified AETH to ISO C (F-NATIVE pure pilot).
+    if native_c && use_bootstrap {
+        return Err("compile accepts either --bootstrap or --native-c, not both".to_owned());
+    }
     let bytecode = if use_bootstrap {
         compile_to_bytecode(&source)
             .map_err(|error| error.to_string())?
@@ -71,12 +81,52 @@ fn compile(source_path: &Path, output_path: &Path, use_bootstrap: bool) -> Resul
     } else {
         compile_product_bytecode(&source).map_err(|error| error.to_string())?
     };
+    if native_c {
+        let c_source = lower_verified_aeth_to_c(&bytecode).map_err(|error| error.to_string())?;
+        write_source(output_path, &c_source)?;
+        println!(
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} lowered verified AETH to C {} (F-NATIVE M35a)",
+            output_path.display()
+        );
+        return Ok(());
+    }
     write_artifact(output_path, bytecode)?;
     let engine = if use_bootstrap { "bootstrap" } else { "seed" };
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} compiled {} to {} ({engine})",
         source_path.display(),
         output_path.display()
+    );
+    Ok(())
+}
+
+fn registry_verify_cache(cache_root: &Path) -> Result<(), String> {
+    let document = verify_registry_cache(cache_root).map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry cache verified {} package pin(s) at {}",
+        document.packages.len(),
+        cache_root.display()
+    );
+    for package in &document.packages {
+        println!(
+            "  {}@{} sha256={} artifact={}",
+            package.name, package.version, package.sha256, package.artifact
+        );
+    }
+    Ok(())
+}
+
+fn registry_pin_local(
+    cache_root: &Path,
+    name: &str,
+    version: &str,
+    artifact: &Path,
+) -> Result<(), String> {
+    let pin = pin_local_package(cache_root, name, version, artifact)
+        .map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry pinned {}@{} -> {} (sha256={})",
+        pin.name, pin.version, pin.artifact, pin.sha256
     );
     Ok(())
 }
@@ -722,22 +772,74 @@ fn run() -> Result<(), String> {
             }
             let output = next_argument(&mut arguments, "artifact output file")?;
             let mut use_bootstrap = false;
-            if let Some(extra) = arguments.next() {
+            let mut native_c = false;
+            for extra in arguments.by_ref() {
                 if extra == "--bootstrap" {
                     use_bootstrap = true;
-                    if arguments.next().is_some() {
-                        return Err(
-                            "compile accepts optional --bootstrap after --output <file>".to_owned()
-                        );
-                    }
+                } else if extra == "--native-c" {
+                    native_c = true;
                 } else {
                     return Err(
-                        "compile accepts one source file, --output <file>, and optional --bootstrap"
+                        "compile accepts --output <file> and optional --bootstrap or --native-c"
                             .to_owned(),
                     );
                 }
             }
-            compile(Path::new(&source), Path::new(&output), use_bootstrap)
+            compile(
+                Path::new(&source),
+                Path::new(&output),
+                use_bootstrap,
+                native_c,
+            )
+        }
+        "registry" => {
+            let subcommand = next_argument(&mut arguments, "registry subcommand")?;
+            match subcommand.to_string_lossy().as_ref() {
+                "verify-cache" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    if arguments.next().is_some() {
+                        return Err(
+                            "registry verify-cache accepts one cache root directory".to_owned()
+                        );
+                    }
+                    registry_verify_cache(Path::new(&root))
+                }
+                "pin-local" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let mut name = None;
+                    let mut version = None;
+                    let mut artifact = None;
+                    let mut args = arguments;
+                    while let Some(flag) = args.next() {
+                        if flag == "--name" {
+                            name = Some(next_argument(&mut args, "package name")?);
+                        } else if flag == "--version" {
+                            version = Some(next_argument(&mut args, "package version")?);
+                        } else if flag == "--artifact" {
+                            artifact = Some(next_argument(&mut args, "artifact path")?);
+                        } else {
+                            return Err(
+                                "registry pin-local accepts --name --version --artifact".to_owned()
+                            );
+                        }
+                    }
+                    let name =
+                        name.ok_or_else(|| "registry pin-local requires --name".to_owned())?;
+                    let version = version
+                        .ok_or_else(|| "registry pin-local requires --version".to_owned())?;
+                    let artifact = artifact
+                        .ok_or_else(|| "registry pin-local requires --artifact".to_owned())?;
+                    registry_pin_local(
+                        Path::new(&root),
+                        &name.to_string_lossy(),
+                        &version.to_string_lossy(),
+                        Path::new(&artifact),
+                    )
+                }
+                other => Err(format!(
+                    "unknown registry subcommand {other} (use verify-cache or pin-local)"
+                )),
+            }
         }
         "forge" => {
             let compiler = next_argument(&mut arguments, "compiler artifact")?;

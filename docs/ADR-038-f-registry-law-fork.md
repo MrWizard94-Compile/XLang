@@ -1,7 +1,7 @@
 # ADR-038: law fork F-REGISTRY (optional package registry)
 
-**Status:** Proposed / awaiting human authorization — **no product code**  
-**Date:** 2026-08-05  
+**Status:** **Accepted** 2026-08-10 — fork open; first product slice ADR-060 (M24a)  
+**Date:** 2026-08-05 (authorized 2026-08-10)  
 **Related Rule IDs:** `CONST-DEP-001`, `DOC-ADR-001`, `SEC-INPUT-001`, `CONST-CONTRACT-001`  
 **Related:** CLM-003, CLM-004, CLM-027, ADR-014 T-PKG, DESIGN-LAW-FORK-F-REGISTRY, HUMAN-AUTHORIZE-REGISTRY  
 
@@ -13,13 +13,14 @@ ecosystems often need a registry. Default Aether law forbids product network.
 ## Decision (conditional)
 
 1. Adopt [DESIGN-LAW-FORK-F-REGISTRY.md](DESIGN-LAW-FORK-F-REGISTRY.md) as the fork shape.  
-2. **Do not implement** registry network until
-   [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md) §3 is signed.  
-3. If authorized: signed offline-first registry; explicit fetch only; guest AETH
+2. **Authorized** via [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md) §3
+   (2026-08-10).  
+3. Signed offline-first registry direction; explicit fetch only (later); guest AETH
    remains network-free; compile offline when cache complete.  
-4. Threat draft [THREAT_MODEL-v5-PACKAGE-REGISTRY.md](THREAT_MODEL-v5-PACKAGE-REGISTRY.md)
-   becomes binding when authorized.  
-5. First vertical slice still needs its own ADR + matrix after the fork is open.
+4. Threat [THREAT_MODEL-v5-PACKAGE-REGISTRY.md](THREAT_MODEL-v5-PACKAGE-REGISTRY.md)
+   is **binding** for registry slices.  
+5. First vertical slice: [ADR-060](ADR-060-f-registry-authorized-m24a-offline-cache.md)
+   M24a offline digest-bound cache (no network).
 
 ## Consequences
 

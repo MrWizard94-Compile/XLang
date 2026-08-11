@@ -1,7 +1,7 @@
 # Threat Model v5 — optional package registry (F-REGISTRY)
 
-**Status:** Draft for law-fork decision — **not binding product law** until F-REGISTRY authorized  
-**Date:** 2026-08-05  
+**Status:** **Binding** for F-REGISTRY product slices (authorized 2026-08-10)  
+**Date:** 2026-08-05 (binding 2026-08-10)  
 **Depends on:** [DESIGN-LAW-FORK-F-REGISTRY.md](DESIGN-LAW-FORK-F-REGISTRY.md), [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md)  
 **Related Rule IDs:** `SEC-INPUT-001`, `CONST-DEP-001`
 

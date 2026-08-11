@@ -1,7 +1,7 @@
 # ADR-037: law fork F-NATIVE (optional native backend)
 
-**Status:** Proposed / awaiting human authorization — **no product code**  
-**Date:** 2026-08-05  
+**Status:** **Accepted** 2026-08-10 — fork open; first product slice ADR-059 (M35a)  
+**Date:** 2026-08-05 (authorized 2026-08-10)  
 **Related Rule IDs:** `CONST-DEP-001`, `DOC-ADR-001`, `SEC-INPUT-001`, `CONST-CONTRACT-001`  
 **Related:** CLM-010, ADR-014 T-NATIVE, DESIGN-LAW-FORK-F-NATIVE, HUMAN-AUTHORIZE-NATIVE  
 
@@ -13,13 +13,14 @@ keeps AETH-VM-only execution and prohibits source transpile (CLM-010).
 ## Decision (conditional)
 
 1. Adopt [DESIGN-LAW-FORK-F-NATIVE.md](DESIGN-LAW-FORK-F-NATIVE.md) as the fork shape.  
-2. **Do not implement** native product paths until
-   [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) §3 is signed.  
-3. If authorized: only **verified AETH → native**; VM remains default + reference;
+2. **Authorized** via [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) §3
+   (2026-08-10).  
+3. Only **verified AETH → native**; VM remains default + reference;
    no Aether-source → C/Rust/JS product compiler.  
-4. Threat draft [THREAT_MODEL-v4-NATIVE-BACKEND.md](THREAT_MODEL-v4-NATIVE-BACKEND.md)
-   becomes binding when authorized.  
-5. First vertical slice still needs its own ADR + matrix after the fork is open.
+4. Threat [THREAT_MODEL-v4-NATIVE-BACKEND.md](THREAT_MODEL-v4-NATIVE-BACKEND.md)
+   is **binding** for native slices.  
+5. First vertical slice: [ADR-059](ADR-059-f-native-authorized-m35a-aeth-to-c.md) M35a
+   verified AETH → ISO C pure pilot.
 
 ## Consequences
 

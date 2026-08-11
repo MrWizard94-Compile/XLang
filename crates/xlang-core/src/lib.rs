@@ -14,7 +14,9 @@ use std::fmt;
 mod authoring;
 mod ffi;
 mod modules;
+mod native;
 mod project;
+mod registry;
 mod workspace;
 
 /// AETH-encoded marker for M21 foreign host function names.
@@ -50,12 +52,21 @@ pub use modules::{
     run_project_tests, run_project_tests_with_grants, source_requires_project_modules,
     validate_lib_module_source, ProjectTestReport, ProjectTestResult,
 };
+pub use native::{
+    f_native_authorized, lower_verified_aeth_to_c, native_aeth_to_c_pilot, NativeError,
+};
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
     refresh_project_lock, resolve_unit_path, serialize_project_document, sha256_hex,
     unit_artifact_file_name, validate_unit_path, verify_project, ProjectDocument, ProjectError,
     ProjectFormatReport, ProjectFormatUnit, ProjectLock, ProjectLockUnit, ProjectUnit,
     ProjectUnitReport, ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
+};
+pub use registry::{
+    empty_registry_cache, f_registry_authorized, parse_registry_cache, pin_local_package,
+    registry_offline_cache_verify, serialize_registry_cache, verify_registry_cache,
+    RegistryCacheDocument, RegistryError, RegistryPackagePin, REGISTRY_CACHE_SCHEMA,
+    REGISTRY_INDEX_FILE,
 };
 pub use workspace::{
     compile_workspace_package, parse_workspace_document, refresh_workspace_lock,
@@ -103,18 +114,18 @@ const TABLE_METADATA_BYTES: usize = 16;
 const MAX_COMPTIME_BINDINGS: usize = 1_024;
 const MAX_NURSERY_SPAWNS: usize = 8;
 
-const OP_PUSH_TEXT: u8 = 1;
-const OP_PUSH_WHOLE: u8 = 2;
+pub(crate) const OP_PUSH_TEXT: u8 = 1;
+pub(crate) const OP_PUSH_WHOLE: u8 = 2;
 const OP_PUSH_TRUTH: u8 = 3;
 const OP_STORE: u8 = 4;
 const OP_LOAD: u8 = 5;
 const OP_MOVE: u8 = 6;
 const OP_REVISE: u8 = 7;
-const OP_SPEAK: u8 = 8;
-const OP_YIELD: u8 = 9;
-const OP_SUM: u8 = 10;
-const OP_DIFFERENCE: u8 = 11;
-const OP_PRODUCT: u8 = 12;
+pub(crate) const OP_SPEAK: u8 = 8;
+pub(crate) const OP_YIELD: u8 = 9;
+pub(crate) const OP_SUM: u8 = 10;
+pub(crate) const OP_DIFFERENCE: u8 = 11;
+pub(crate) const OP_PRODUCT: u8 = 12;
 const OP_LESS: u8 = 13;
 const OP_SAME: u8 = 14;
 const OP_NOT: u8 = 15;
@@ -127,8 +138,8 @@ const OP_CALL: u8 = 21;
 const OP_JUMP_IF_DIM: u8 = 22;
 const OP_JUMP: u8 = 23;
 const OP_PUSH_BYTES: u8 = 24;
-const OP_QUOTIENT: u8 = 25;
-const OP_REMAINDER: u8 = 26;
+pub(crate) const OP_QUOTIENT: u8 = 25;
+pub(crate) const OP_REMAINDER: u8 = 26;
 const OP_FUSE: u8 = 27;
 const OP_APPEND: u8 = 28;
 const OP_EXTENT: u8 = 29;
@@ -1379,7 +1390,7 @@ struct LocalDescriptor {
 }
 
 #[derive(Clone)]
-struct ArtifactFunction {
+pub(crate) struct ArtifactFunction {
     name: String,
     parameters: Vec<(ValueType, ParameterMode)>,
     result: ValueType,
@@ -3137,6 +3148,12 @@ pub const fn structural_edit_product_base_gate() -> bool {
 #[must_use]
 pub const fn lsp_product_diagnostics_primary() -> bool {
     true
+}
+
+/// BARP ADR-061 honesty: seed-internal structured error packets not yet implemented.
+#[must_use]
+pub const fn seed_internal_error_packets() -> bool {
+    false
 }
 
 #[must_use]
@@ -10589,7 +10606,7 @@ fn emit_atom(
     Ok(())
 }
 
-fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
+pub(crate) fn parse_artifact(bytecode: &[u8]) -> Result<Artifact, BytecodeError> {
     if bytecode.len() < ARTIFACT_MAGIC.len() + 1 {
         return Err(BytecodeError::new(0, "artifact is shorter than its header"));
     }

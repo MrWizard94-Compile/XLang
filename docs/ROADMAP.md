@@ -32,9 +32,10 @@ Historical pure-surface freeze: [THREAT_MODEL-TECHNICAL-PREVIEW.md](THREAT_MODEL
 Package helpers: `tools/package-preview.ps1`, `tools/verify-preview.ps1`, and
 `tools/aether-gate.ps1 -Mode release`.
 
-**Out of scope unless new ADR / law fork:** expanded FFI beyond M21 Whole pilot,
-native/LLVM, network registry, ambient host I/O, mid-frame cancel destroy.
-(Bounded LSP, grant I/O, and Whole foreign pilot are already product.)
+**Out of scope unless new ADR:** expanded FFI beyond M21 Whole pilot, full
+LLVM/object native, registry network fetch, ambient guest I/O, mid-frame cancel
+destroy. (Bounded LSP, grant I/O, Whole foreign pilot, M35a AETH→C, M24a offline
+registry cache are product under authorized bounds.)
 
 ## Current baseline
 
@@ -354,13 +355,16 @@ Residual bootstrap: default `check`/format/structure AST, LSP symbols/format/hov
 `--bootstrap` seed rebuild, dual-compare oracle, host multi-module elaboration,
 structural-edit base AST.
 
-**Still blocked without a new ADR / law:** expanded FFI signatures,
-native/LLVM, network registry, task handles/timeouts/parallelism, and any
-broader resource/effect cancellation surface.
+**Law forks (authorized 2026-08-10):** F-NATIVE (M35a AETH→C pure pilot, ADR-059);
+F-REGISTRY (M24a offline cache pin/verify, ADR-060 — **no network yet**).
+M21 FFI pilot remains product (reaffirmed).
+
+**Still needing new ADR / matrix:** expanded FFI signatures, LLVM/object native,
+registry network fetch/publish, task handles/timeouts/parallelism, broader cancel,
+seed-internal error packets, multi-file forge ABI (ADR-061 direction).
 
 **Human backlog (updated 2026-08-10):**
-1. **BARP** — seed-internal error packets / multi-file forge ABI (optional large ADRs).
-2. Further offline package/stdlib polish only through a new scoped design and matrix.
-3. Broader task cancellation, task handles/timeouts/parallelism only through a new ADR.
-4. Law forks F-NATIVE / F-REGISTRY — [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md) /
-   [HUMAN-AUTHORIZE-REGISTRY.md](HUMAN-AUTHORIZE-REGISTRY.md) (§3 phrase required).
+1. **BARP** — seed-internal error packets / multi-file forge (ADR-061 direction).
+2. F-NATIVE M35b+ (expand pure subset / dual-run with host cc when available).
+3. F-REGISTRY M24b signed fetch (explicit network only).
+4. Broader task cancellation / handles only through a new ADR.
