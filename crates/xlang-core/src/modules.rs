@@ -902,16 +902,24 @@ pub const fn product_multi_source_unit_surface_api() -> bool {
     true
 }
 
-/// One unit in a multi-source envelope inventory (ADR-094).
+/// ADR-098: multi-source unit digests (sha256 of source text) without forge.
+#[must_use]
+pub const fn product_multi_source_unit_digests_api() -> bool {
+    true
+}
+
+/// One unit in a multi-source envelope inventory (ADR-094/098).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MultiSourceUnitSurface {
     pub path: String,
     pub role: ProjectUnitRole,
     pub source_byte_len: usize,
     pub has_world: bool,
+    /// SHA-256 hex of unit source bytes (ADR-098).
+    pub source_sha256: String,
 }
 
-/// Multi-source envelope inventory without forge (ADR-094 tooling surface).
+/// Multi-source envelope inventory without forge (ADR-094/098 tooling surface).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MultiSourceEnvelopeSurface {
     pub schema: String,
@@ -951,11 +959,13 @@ pub fn product_multi_source_unit_surface(
         let has_world = source
             .lines()
             .any(|line| line.trim_start().starts_with("world "));
+        let source_sha256 = crate::sha256_hex(source.as_bytes());
         units.push(MultiSourceUnitSurface {
             path,
             role,
             source_byte_len: source.len(),
             has_world,
+            source_sha256,
         });
     }
     let unit_count = units.len();

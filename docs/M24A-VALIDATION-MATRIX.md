@@ -27,6 +27,9 @@
 | M24H-001 | issue X.509-lite cert + verify | PASS |
 | M24H-002 | PEM encode/decode round-trip | PASS |
 | M24H-003 | tampered signature | FAIL closed AE-REG-012 |
+| M24I-001 | store mid+leaf certs | PASS |
+| M24I-002 | store chain verify to root | PASS |
+| M24I-003 | missing issuer cert in store | FAIL closed AE-REG-013 |
 
 ---
 

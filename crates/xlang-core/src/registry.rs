@@ -165,6 +165,15 @@ pub const fn registry_x509_lite_certificates() -> bool {
     true
 }
 
+/// M24i: X.509-lite CA store + multi-cert chain verify in the registry cache.
+#[must_use]
+pub const fn registry_x509_lite_ca_store() -> bool {
+    true
+}
+
+pub const REGISTRY_X509_LITE_STORE_FILE: &str = "aether.registry-x509-lite-store.json";
+pub const REGISTRY_X509_LITE_STORE_SCHEMA: &str = "aether.registry-x509-lite-store/v1";
+
 pub const REGISTRY_X509_LITE_SCHEMA: &str = "aether.registry-x509-lite/v1";
 pub const REGISTRY_X509_LITE_PEM_BEGIN: &str = "-----BEGIN AETHER CERT-----";
 pub const REGISTRY_X509_LITE_PEM_END: &str = "-----END AETHER CERT-----";
@@ -374,6 +383,164 @@ pub fn decode_x509_lite_pem(pem: &str) -> Result<RegistryX509LiteCert, RegistryE
     serde_json::from_str(&json).map_err(|error| {
         RegistryError::new("AE-REG-012", format!("invalid AETHER CERT JSON: {error}"))
     })
+}
+
+/// On-disk X.509-lite certificate store for a registry cache (M24i).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryX509LiteStore {
+    pub schema: String,
+    pub certificates: Vec<RegistryX509LiteCert>,
+}
+
+/// Empty certificate store document.
+#[must_use]
+pub fn empty_x509_lite_store() -> RegistryX509LiteStore {
+    RegistryX509LiteStore {
+        schema: REGISTRY_X509_LITE_STORE_SCHEMA.to_owned(),
+        certificates: Vec::new(),
+    }
+}
+
+fn x509_lite_store_path(cache_root: &Path) -> PathBuf {
+    cache_root.join(REGISTRY_X509_LITE_STORE_FILE)
+}
+
+/// Load or create the X.509-lite certificate store.
+pub fn load_or_empty_x509_lite_store(
+    cache_root: &Path,
+) -> Result<RegistryX509LiteStore, RegistryError> {
+    let path = x509_lite_store_path(cache_root);
+    if !path.is_file() {
+        return Ok(empty_x509_lite_store());
+    }
+    let text = fs::read_to_string(&path).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-013",
+            format!("could not read X.509-lite store: {error}"),
+        )
+    })?;
+    let store: RegistryX509LiteStore = serde_json::from_str(&text).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-013",
+            format!("invalid X.509-lite store JSON: {error}"),
+        )
+    })?;
+    if store.schema != REGISTRY_X509_LITE_STORE_SCHEMA {
+        return Err(RegistryError::new(
+            "AE-REG-013",
+            format!("unsupported X.509-lite store schema {}", store.schema),
+        ));
+    }
+    Ok(store)
+}
+
+/// Write the X.509-lite certificate store document.
+pub fn write_x509_lite_store(
+    cache_root: &Path,
+    store: &RegistryX509LiteStore,
+) -> Result<(), RegistryError> {
+    fs::create_dir_all(cache_root).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-013",
+            format!("could not create cache root: {error}"),
+        )
+    })?;
+    let text = serde_json::to_string_pretty(store).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-013",
+            format!("could not serialize X.509-lite store: {error}"),
+        )
+    })?;
+    fs::write(x509_lite_store_path(cache_root), text).map_err(|error| {
+        RegistryError::new(
+            "AE-REG-013",
+            format!("could not write X.509-lite store: {error}"),
+        )
+    })?;
+    Ok(())
+}
+
+/// Issue, verify signature, and store an X.509-lite certificate (M24i).
+pub fn store_x509_lite_certificate(
+    cache_root: &Path,
+    issuer_key_id: &str,
+    subject_key_id: &str,
+    serial: &str,
+    not_before: &str,
+    not_after: &str,
+) -> Result<RegistryX509LiteCert, RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_x509_lite_ca_store(),
+        "ADR-100: X.509-lite CA store"
+    );
+    let cert = issue_x509_lite_certificate(
+        cache_root,
+        issuer_key_id,
+        subject_key_id,
+        serial,
+        not_before,
+        not_after,
+    )?;
+    verify_x509_lite_certificate(cache_root, &cert)?;
+    let mut store = load_or_empty_x509_lite_store(cache_root)?;
+    // Replace same serial+subject if present.
+    store.certificates.retain(|existing| {
+        !(existing.tbs.serial == cert.tbs.serial && existing.tbs.subject == cert.tbs.subject)
+    });
+    store.certificates.push(cert.clone());
+    write_x509_lite_store(cache_root, &store)?;
+    Ok(cert)
+}
+
+/// Verify a leaf certificate by walking issuer links present in the CA store (M24i).
+///
+/// Bounded depth 8. Each hop must have a stored cert whose subject equals the
+/// current issuer, until a self-signed root (issuer == subject) or a trust-root
+/// key is reached.
+pub fn verify_x509_lite_store_chain(
+    cache_root: &Path,
+    leaf: &RegistryX509LiteCert,
+) -> Result<(), RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_x509_lite_ca_store(),
+        "ADR-100: X.509-lite CA store chain"
+    );
+    verify_x509_lite_certificate(cache_root, leaf)?;
+    let store = load_or_empty_x509_lite_store(cache_root)?;
+    let mut current = leaf.clone();
+    for _ in 0..8 {
+        if current.tbs.issuer == current.tbs.subject {
+            // Self-signed root cert — already signature-verified.
+            return Ok(());
+        }
+        let issuer_meta = load_trust_key_meta(cache_root, &current.tbs.issuer)?;
+        if issuer_meta.is_root {
+            return Ok(());
+        }
+        let parent = store
+            .certificates
+            .iter()
+            .find(|candidate| candidate.tbs.subject == current.tbs.issuer)
+            .ok_or_else(|| {
+                RegistryError::new(
+                    "AE-REG-013",
+                    format!(
+                        "X.509-lite store missing issuer certificate for {}",
+                        current.tbs.issuer
+                    ),
+                )
+            })?
+            .clone();
+        verify_x509_lite_certificate(cache_root, &parent)?;
+        current = parent;
+    }
+    Err(RegistryError::new(
+        "AE-REG-013",
+        format!(
+            "X.509-lite certificate chain for {} exceeds depth limit",
+            leaf.tbs.subject
+        ),
+    ))
 }
 
 pub const REGISTRY_TRUST_POLICY_FILE: &str = "aether.registry-trust-policy.json";
@@ -2068,6 +2235,45 @@ mod tests {
         bad.signature = "00".repeat(64);
         let err = verify_x509_lite_certificate(&root, &bad).expect_err("bad sig");
         assert_eq!(err.code, "AE-REG-012");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn x509_lite_ca_store_chain_verify() {
+        assert!(registry_x509_lite_ca_store());
+        let root = temp_dir();
+        let mut root_seed = [0u8; 32];
+        root_seed[0] = 31;
+        install_trust_root(&root, "ca-root", &root_seed).expect("root");
+        let mut mid_seed = [0u8; 32];
+        mid_seed[0] = 32;
+        install_trust_key_with_algorithm(&root, "ca-mid", &mid_seed, REGISTRY_ALG_ED25519)
+            .expect("mid");
+        let mut leaf_seed = [0u8; 32];
+        leaf_seed[0] = 33;
+        install_trust_key_with_algorithm(&root, "leaf", &leaf_seed, REGISTRY_ALG_ED25519)
+            .expect("leaf");
+        let mid_cert = store_x509_lite_certificate(
+            &root,
+            "ca-root",
+            "ca-mid",
+            "10",
+            "2026-01-01",
+            "2028-01-01",
+        )
+        .expect("store mid");
+        assert_eq!(mid_cert.tbs.subject, "ca-mid");
+        let leaf_cert =
+            store_x509_lite_certificate(&root, "ca-mid", "leaf", "11", "2026-01-01", "2027-06-01")
+                .expect("store leaf");
+        verify_x509_lite_store_chain(&root, &leaf_cert).expect("chain");
+        // Missing parent store entry fails when mid cert removed.
+        let mut store = load_or_empty_x509_lite_store(&root).expect("load");
+        store.certificates.retain(|c| c.tbs.subject != "ca-mid");
+        write_x509_lite_store(&root, &store).expect("write");
+        // ca-mid is not a trust root → chain fails.
+        let err = verify_x509_lite_store_chain(&root, &leaf_cert).expect_err("missing mid");
+        assert_eq!(err.code, "AE-REG-013");
         let _ = fs::remove_dir_all(&root);
     }
 }

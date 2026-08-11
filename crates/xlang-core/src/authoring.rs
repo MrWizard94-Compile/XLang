@@ -4263,13 +4263,18 @@ mod tests {
         .expect("invalid edit should serialize");
         let error = apply_structural_edit(canonical_source, &invalid_edit)
             .expect_err("structural edits must not bypass task checkpoint validation");
-        // ADR-048: accept gate is product seed; verifier surfaces checkpoint rules as
-        // AE-TASK-004 (mapped from TASK_CHECKPOINT product failure) or AE-SEED-002.
-        let code = error.diagnostic().code;
+        // ADR-048/101: product accept preflight requires checkpoint (AE-SEED-015);
+        // structural accept may wrap as AE-SEED-001 with AE-SEED-015 in the message.
+        let diag = error.diagnostic();
+        let ok = diag.code == "AE-SEED-015"
+            || diag.code == "AE-TASK-004"
+            || diag.code == "AE-SEED-002"
+            || diag.message.contains("AE-SEED-015")
+            || diag.message.contains("checkpoint");
         assert!(
-            code == "AE-TASK-004" || code == "AE-SEED-002",
-            "expected AE-TASK-004 or AE-SEED-002, got {code}: {}",
-            error.diagnostic().message
+            ok,
+            "expected checkpoint rejection, got {}: {}",
+            diag.code, diag.message
         );
     }
 

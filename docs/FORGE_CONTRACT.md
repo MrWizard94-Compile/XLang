@@ -86,7 +86,7 @@ When the seed compiler fails, SPEAK lines of the form:
     AETHER_SEED_ERROR:{"schema":"aether.seed-error/v1",...}
 
 are the preferred structured diagnostic channel. Host product preflights already
-emit the same line format. **ADR-094:** seed.ae SPEAKs AE-SEED-005 for empty
-source (origin `seed-speak`) and host merges SPEAK on forge **and** verify
+emit the same line format. **ADR-094/098:** seed.ae SPEAKs AE-SEED-004/005/006/012
+pilot codes (origin `seed-speak`) and host merges SPEAK on forge **and** verify
 failure. Full seed SPEAK matrix remains residual
 (`seed_speak_emit_conformance_complete() == false`).

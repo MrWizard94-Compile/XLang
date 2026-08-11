@@ -344,24 +344,23 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-094:** seed SPEAK
-empty-source pilot (dual-compare rebuild) + multi-source unit surface; forge SPEAK
-merge on verify failure. Bootstrap is recovery/oracle only.
-**Next:** expand seed.ae SPEAK to remaining conformance codes; seed-native
-multi-file elaboration.
+reduce Rust bootstrap product-path authority. **Through ADR-098:** multi-code seed
+SPEAK pilot (004/005/006/012) + multi-source unit digests; forge SPEAK merge.
+Bootstrap is recovery/oracle only.
+**Next:** remaining SPEAK conformance codes; seed-native multi-file elaboration.
 Residual bootstrap: dual-compare oracle emit, recovery `--bootstrap` flags, full
 `aether.ast/v8`.
 
-**Law forks (reaffirmed 2026-08-11):** F-NATIVE through **M35i** (toolchain probe /
-hermetic env, ADR-059–095); F-REGISTRY through **M24h** X.509-lite certs
-(ADR-060–096). M21 FFI pilot remains product.
+**Law forks (reaffirmed 2026-08-11):** F-NATIVE through **M35j** (cross-compile
+target matrix, ADR-059–099); F-REGISTRY through **M24i** X.509-lite CA store
+(ADR-060–100). M21 FFI pilot remains product.
 
-**Still needing new ADR / matrix:** expanded FFI signatures, full RFC 5280 X.509,
-seed SPEAK full matrix, seed-native multi-file, real task handles/timeouts/parallelism
-(ADR-081; surface ADR-085/093/097; reserved ADR-089).
+**Still needing new ADR / matrix:** expanded FFI signatures, full RFC 5280 X.509 DER,
+seed SPEAK full matrix, seed-native multi-file, task handles/timeouts/parallel
+runtime (ADR-081; checkpoint required ADR-101; surface ADR-085/093/097).
 
 **Human backlog (updated 2026-08-11):**
-1. **BARP** — seed.ae SPEAK full conformance matrix + seed-native multi-file.
-2. F-NATIVE M35j+ (cross-compile target matrix / bundled hermetic toolchain).
-3. F-REGISTRY full X.509 DER/CA if authorized beyond X.509-lite.
-4. Task handles/timeouts/parallelism — implementable runtime ADRs beyond inventory.
+1. **BARP** — seed SPEAK full matrix + seed-native multi-file forge ABI.
+2. F-NATIVE M35k+ (bundled hermetic toolchain / sysroot).
+3. F-REGISTRY full X.509 DER if authorized beyond lite store.
+4. Task handles/timeouts/parallel **runtime** ADRs (beyond AE-SEED-015 checkpoint).

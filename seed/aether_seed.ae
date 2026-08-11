@@ -139,6 +139,36 @@ weave compile [borrow source: Text] -> Bytes:
     revise v131 <- 1
   otherwise:
     revise v131 <- 0
+  choose same v131 0:
+    revise v99 <- "import "
+    revise v102 <- "unit "
+    revise v99 <- join borrow v99 borrow v102
+    revise v21 <- seek borrow v68 borrow v99 0
+    choose less -1 v21:
+      speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-012\",\"message\":\"raw multi-module import needs project build\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+      revise v131 <- 1
+    otherwise:
+      revise v21 <- seek borrow v68 "world " 0
+      choose same v21 -1:
+        speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-006\",\"message\":\"missing top-level world\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+        revise v131 <- 1
+      otherwise:
+        revise v21 <- seek borrow v68 "weave main " 0
+        revise v15 <- seek borrow v68 "task weave main " 0
+        choose same v21 -1:
+          choose same v15 -1:
+            revise v28 <- seek borrow v68 "weave " 0
+            choose less -1 v28:
+              speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-004\",\"message\":\"missing top-level main weave\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+              revise v131 <- 1
+            otherwise:
+              revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
+        otherwise:
+          revise v30 <- 0
+  otherwise:
+    revise v30 <- 0
   revise v6 <- 0
   revise v7 <- ""
   revise v51 <- bytes ""

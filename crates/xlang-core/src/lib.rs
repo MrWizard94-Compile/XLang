@@ -51,20 +51,23 @@ pub use modules::{
     compile_project_modules_with_packages, decode_multi_source_envelope, elaborate_in_memory_units,
     elaborate_project_entry, elaborate_project_entry_with_packages, elaborate_project_modules,
     elaborate_project_modules_with_packages, encode_multi_source_envelope, mangle_weave,
-    multi_module_authority_note, product_multi_source_unit_surface,
-    product_multi_source_unit_surface_api, run_project_tests, run_project_tests_with_grants,
-    source_requires_project_modules, validate_lib_module_source, MultiSourceEnvelopeSurface,
-    MultiSourceUnitSurface, ProjectTestReport, ProjectTestResult, MULTI_SOURCE_ENVELOPE_SCHEMA,
+    multi_module_authority_note, product_multi_source_unit_digests_api,
+    product_multi_source_unit_surface, product_multi_source_unit_surface_api, run_project_tests,
+    run_project_tests_with_grants, source_requires_project_modules, validate_lib_module_source,
+    MultiSourceEnvelopeSurface, MultiSourceUnitSurface, ProjectTestReport, ProjectTestResult,
+    MULTI_SOURCE_ENVELOPE_SCHEMA,
 };
 pub use native::{
     f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
     lower_verified_aeth_to_llvm_object, lower_verified_aeth_to_native_exe,
-    lower_verified_aeth_to_native_object, native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot,
-    native_aeth_to_c_speak_multiweave_pilot, native_dual_run_vm_exit, native_exe_link_product,
+    lower_verified_aeth_to_native_exe_for_target, lower_verified_aeth_to_native_object,
+    native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot, native_aeth_to_c_speak_multiweave_pilot,
+    native_cross_compile_target_matrix, native_dual_run_vm_exit, native_exe_link_product,
     native_hermetic_toolchain_env, native_host_cc_dual_exec, native_host_cc_dual_exec_pilot,
     native_llvm_ir_emit_product, native_llvm_object_emit_product, native_object_emit_product,
-    native_toolchain_probe_product, probe_native_toolchain, require_hermetic_native_toolchain,
-    NativeDualExecReport, NativeError, NativeExeReport, NativeToolchainProbe,
+    native_supported_target_triples, native_target_is_supported, native_toolchain_probe_product,
+    probe_native_toolchain, require_hermetic_native_toolchain, NativeDualExecReport, NativeError,
+    NativeExeReport, NativeToolchainProbe,
 };
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
@@ -75,23 +78,26 @@ pub use project::{
 };
 pub use registry::{
     decode_x509_lite_pem, default_registry_trust_policy, empty_registry_cache,
-    empty_registry_trust, encode_x509_lite_pem, f_registry_authorized, fetch_signed_package,
-    generate_ed25519_trust_key, install_certified_intermediate, install_certified_signing_key,
-    install_trust_key, install_trust_key_with_algorithm, install_trust_root,
-    issue_x509_lite_certificate, load_or_default_trust_policy, parse_registry_cache,
-    parse_registry_trust, parse_registry_trust_policy, pin_local_package, pin_local_package_signed,
+    empty_registry_trust, empty_x509_lite_store, encode_x509_lite_pem, f_registry_authorized,
+    fetch_signed_package, generate_ed25519_trust_key, install_certified_intermediate,
+    install_certified_signing_key, install_trust_key, install_trust_key_with_algorithm,
+    install_trust_root, issue_x509_lite_certificate, load_or_default_trust_policy,
+    load_or_empty_x509_lite_store, parse_registry_cache, parse_registry_trust,
+    parse_registry_trust_policy, pin_local_package, pin_local_package_signed,
     registry_ed25519_https_pilot, registry_key_rotation_policy, registry_multi_level_cert_chain,
     registry_multi_root_trust_policy, registry_offline_cache_verify,
-    registry_root_certified_signing_keys, registry_signed_fetch_pilot,
+    registry_root_certified_signing_keys, registry_signed_fetch_pilot, registry_x509_lite_ca_store,
     registry_x509_lite_certificates, revoke_trust_key, rotate_trust_key, serialize_registry_cache,
     serialize_registry_trust, serialize_registry_trust_policy, set_trust_key_validity,
-    sign_package_binding, tbs_signing_message, verify_registry_cache, verify_x509_lite_certificate,
-    write_trust_policy, RegistryCacheDocument, RegistryError, RegistryPackagePin,
+    sign_package_binding, store_x509_lite_certificate, tbs_signing_message, verify_registry_cache,
+    verify_x509_lite_certificate, verify_x509_lite_store_chain, write_trust_policy,
+    write_x509_lite_store, RegistryCacheDocument, RegistryError, RegistryPackagePin,
     RegistryTrustDocument, RegistryTrustKey, RegistryTrustPolicy, RegistryX509LiteCert,
-    RegistryX509LiteTbs, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256, REGISTRY_CACHE_SCHEMA,
-    REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_POLICY_FILE,
+    RegistryX509LiteStore, RegistryX509LiteTbs, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256,
+    REGISTRY_CACHE_SCHEMA, REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_POLICY_FILE,
     REGISTRY_TRUST_POLICY_SCHEMA, REGISTRY_TRUST_SCHEMA, REGISTRY_X509_LITE_PEM_BEGIN,
-    REGISTRY_X509_LITE_PEM_END, REGISTRY_X509_LITE_SCHEMA,
+    REGISTRY_X509_LITE_PEM_END, REGISTRY_X509_LITE_SCHEMA, REGISTRY_X509_LITE_STORE_FILE,
+    REGISTRY_X509_LITE_STORE_SCHEMA,
 };
 pub use workspace::{
     compile_workspace_package, parse_workspace_document, refresh_workspace_lock,
@@ -2816,6 +2822,12 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
                 return Err(CompilerError::new(Span::synthetic(), message));
             }
         }
+        // ADR-101: task weaves must include at least one checkpoint (M19e honesty).
+        if product_requires_task_weave_checkpoint() {
+            if let Some(message) = seed_reject_task_weave_without_checkpoint(source) {
+                return Err(CompilerError::new(Span::synthetic(), message));
+            }
+        }
     }
     let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
         // ADR-090: forge errors may include seed SPEAK stdout for packet merge.
@@ -2945,6 +2957,7 @@ fn diagnostic_to_seed_error_packet(diagnostic: &Diagnostic) -> SeedErrorPacket {
             | "AE-SEED-012"
             | "AE-SEED-013"
             | "AE-SEED-014"
+            | "AE-SEED-015"
     ) {
         "host-preflight"
     } else {
@@ -3089,6 +3102,62 @@ fn classify_seed_verify_error(detail: &str) -> &'static str {
 fn seed_reject_empty_source(source: &str) -> Option<String> {
     if source.trim().is_empty() {
         return Some(format_seed_product_error("AE-SEED-005", "source is empty"));
+    }
+    None
+}
+
+/// ADR-101: each `task weave` body must contain at least one `checkpoint` line.
+///
+/// Does not implement handles/timeouts/parallel — enforces M19e cooperative cancel
+/// surface so empty task frames do not forge into opaque pack16 failures.
+fn seed_reject_task_weave_without_checkpoint(source: &str) -> Option<String> {
+    debug_assert!(
+        product_requires_task_weave_checkpoint(),
+        "ADR-101: task weave checkpoint required"
+    );
+    let lines: Vec<&str> = source.lines().collect();
+    let mut index = 0usize;
+    while index < lines.len() {
+        let trimmed = lines[index].trim_start();
+        if trimmed.starts_with("task weave ") {
+            let header_indent = lines[index].chars().take_while(|c| *c == ' ').count();
+            let name = trimmed
+                .strip_prefix("task weave ")
+                .unwrap_or("")
+                .split([' ', '['])
+                .next()
+                .unwrap_or("?");
+            let mut body_has_checkpoint = false;
+            let mut cursor = index + 1;
+            while cursor < lines.len() {
+                let body = lines[cursor];
+                if body.trim().is_empty() {
+                    cursor += 1;
+                    continue;
+                }
+                let indent = body.chars().take_while(|c| *c == ' ').count();
+                if indent <= header_indent {
+                    break;
+                }
+                if body.trim_start().starts_with("checkpoint") {
+                    body_has_checkpoint = true;
+                    break;
+                }
+                cursor += 1;
+            }
+            if !body_has_checkpoint {
+                return Some(format_seed_product_error(
+                    "AE-SEED-015",
+                    &format!(
+                        "line {}: task weave {name} requires at least one checkpoint (ADR-042/101; cooperative cancel surface)",
+                        index + 1
+                    ),
+                ));
+            }
+            index = cursor;
+            continue;
+        }
+        index += 1;
     }
     None
 }
@@ -3634,6 +3703,7 @@ pub fn seed_speak_emit_conformance_codes() -> &'static [&'static str] {
         "AE-SEED-012",
         "AE-SEED-013",
         "AE-SEED-014",
+        "AE-SEED-015",
     ]
 }
 
@@ -3660,6 +3730,24 @@ pub const fn seed_speak_emit_empty_source_pilot() -> bool {
 /// ADR-094: verify failures merge SPEAK packets from seed forge stdout.
 #[must_use]
 pub const fn forge_verify_merges_seed_speak() -> bool {
+    true
+}
+
+/// ADR-098: seed.ae SPEAK pilot codes (subset of conformance matrix).
+#[must_use]
+pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
+    &["AE-SEED-004", "AE-SEED-005", "AE-SEED-006", "AE-SEED-012"]
+}
+
+/// ADR-098: multi-code seed SPEAK pilot is product (still not full matrix).
+#[must_use]
+pub const fn seed_speak_emit_multi_code_pilot() -> bool {
+    true
+}
+
+/// ADR-101: product requires at least one `checkpoint` in each `task weave`.
+#[must_use]
+pub const fn product_requires_task_weave_checkpoint() -> bool {
     true
 }
 
@@ -3857,6 +3945,38 @@ mod product_task_frame_surface_tests {
     }
 
     #[test]
+    fn seed_speak_multi_code_pilot_covers_world_main_import() {
+        assert!(seed_speak_emit_multi_code_pilot());
+        let pilots = seed_speak_emit_pilot_codes();
+        assert!(pilots.contains(&"AE-SEED-004"));
+        assert!(pilots.contains(&"AE-SEED-005"));
+        assert!(pilots.contains(&"AE-SEED-006"));
+        assert!(pilots.contains(&"AE-SEED-012"));
+        let no_world = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "weave main [] -> Whole:\n  yield 0\n",
+        )
+        .expect("forge");
+        let packet = try_parse_seed_speak_error_packet(&no_world.stdout).expect("world packet");
+        assert_eq!(packet.code, "AE-SEED-006");
+        assert_eq!(packet.origin, "seed-speak");
+        let no_main = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world w\n\nweave helper [] -> Whole:\n  yield 1\n",
+        )
+        .expect("forge");
+        let packet = try_parse_seed_speak_error_packet(&no_main.stdout).expect("main packet");
+        assert_eq!(packet.code, "AE-SEED-004");
+        let import = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world w\n\nimport unit \"lib.ae\" as l\n\nweave main [] -> Whole:\n  yield 0\n",
+        )
+        .expect("forge");
+        let packet = try_parse_seed_speak_error_packet(&import.stdout).expect("import packet");
+        assert_eq!(packet.code, "AE-SEED-012");
+    }
+
+    #[test]
     fn product_task_model_inventory_reports_surface_and_reserved() {
         assert!(product_task_model_inventory_api());
         let source = include_str!("../../../examples/active-cancel.ae");
@@ -3872,6 +3992,24 @@ mod product_task_frame_surface_tests {
         assert!(!reserved.product_accepted);
         assert_eq!(reserved.reserved_form_hits.len(), 1);
         assert_eq!(reserved.reserved_form_hits[0].keyword, "timeout");
+    }
+
+    #[test]
+    fn product_requires_checkpoint_in_task_weave() {
+        assert!(product_requires_task_weave_checkpoint());
+        let source = "\
+world t
+
+task weave worker [] -> Whole:
+  yield 1
+
+weave main [] -> Whole:
+  yield 0
+";
+        let error = compile_product_bytecode(source).expect_err("missing checkpoint");
+        assert!(error.to_string().contains("AE-SEED-015"), "got {error}");
+        let packets = product_error_packets(source);
+        assert_eq!(packets[0].code, "AE-SEED-015");
     }
 }
 

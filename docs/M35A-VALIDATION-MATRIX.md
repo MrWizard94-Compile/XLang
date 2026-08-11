@@ -25,6 +25,8 @@
 | M35I-001 | `probe_native_toolchain` reports OS/arch/target | PASS |
 | M35I-002 | hermetic without cc | FAIL closed AE-NATIVE-006 or Ok when cc present |
 | M35I-003 | `aether native probe` CLI | prints probe line |
+| M35J-001 | unsupported target triple | FAIL closed AE-NATIVE-007 |
+| M35J-002 | host triple lower path | M35h dual-run or AE-NATIVE-004 without cc |
 
 ---
 

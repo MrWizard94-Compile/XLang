@@ -575,6 +575,10 @@ fn barp_adr072_product_seed_error_packet_abi() {
         aether_core::seed_speak_emit_empty_source_pilot(),
         "ADR-094: seed SPEAK empty-source pilot"
     );
+    assert!(
+        aether_core::seed_speak_emit_multi_code_pilot(),
+        "ADR-098: multi-code seed SPEAK pilot"
+    );
     let empty = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield 1\n");
     assert!(empty.is_empty());
     let packets = product_error_packets("");
@@ -599,6 +603,7 @@ fn barp_adr075_multi_source_envelope_product_forge() {
     assert!(product_multi_source_forge_envelope());
     assert!(!seed_native_multi_module_elaboration());
     assert!(aether_core::product_multi_source_unit_surface_api());
+    assert!(aether_core::product_multi_source_unit_digests_api());
     let lib = "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n";
     let main = "world app\n\nimport unit \"lib/math.ae\" as m\n\nweave main [] -> Whole:\n  yield call m.double 21\n";
     let envelope = encode_multi_source_envelope(&[
@@ -610,6 +615,7 @@ fn barp_adr075_multi_source_envelope_product_forge() {
     let surface = aether_core::product_multi_source_unit_surface(&envelope).expect("surface");
     assert_eq!(surface.unit_count, 2);
     assert_eq!(surface.entry_path.as_deref(), Some("src/main.ae"));
+    assert!(surface.units.iter().all(|u| u.source_sha256.len() == 64));
     let bytecode = compile_product_multi_source_envelope(&envelope).expect("multi forge");
     verify_bytecode(&bytecode).expect("verify multi");
     assert_eq!(run_bytecode(&bytecode).expect("run").exit_code, 42);
