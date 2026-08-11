@@ -140,6 +140,42 @@ weave compile [borrow source: Text] -> Bytes:
   otherwise:
     revise v131 <- 0
   choose same v131 0:
+    revise v21 <- glyph borrow v68 0
+    choose same v21 9:
+      speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-003\",\"message\":\"tab indentation is forbidden\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+      revise v131 <- 1
+    otherwise:
+      revise v99 <- "\n"
+      revise v102 <- "\t"
+      revise v99 <- join borrow v99 borrow v102
+      revise v21 <- seek borrow v68 borrow v99 0
+      choose less -1 v21:
+        speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-003\",\"message\":\"tab indentation is forbidden\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+        revise v131 <- 1
+      otherwise:
+        revise v30 <- 0
+  otherwise:
+    revise v30 <- 0
+  choose same v131 0:
+    revise v99 <- "f"
+    revise v102 <- "n "
+    revise v99 <- join borrow v99 borrow v102
+    revise v21 <- seek borrow v68 borrow v99 0
+    choose same v21 0:
+      speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-007\",\"message\":\"top-level legacy fn syntax is not Aether\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+      revise v131 <- 1
+    otherwise:
+      revise v99 <- "\nf"
+      revise v99 <- join borrow v99 borrow v102
+      revise v21 <- seek borrow v68 borrow v99 0
+      choose less -1 v21:
+        speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-007\",\"message\":\"top-level legacy fn syntax is not Aether\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+        revise v131 <- 1
+      otherwise:
+        revise v30 <- 0
+  otherwise:
+    revise v30 <- 0
+  choose same v131 0:
     revise v99 <- "import "
     revise v102 <- "unit "
     revise v99 <- join borrow v99 borrow v102

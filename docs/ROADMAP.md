@@ -344,10 +344,12 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-098:** multi-code seed
-SPEAK pilot (004/005/006/012) + multi-source unit digests; forge SPEAK merge.
+reduce Rust bootstrap product-path authority. **Through ADR-102:** seed SPEAK
+pilot (003/004/005/006/007/012), including bounded lexical tab / top-level `fn `
+detection, plus multi-source unit digests and forge SPEAK merge.
 Bootstrap is recovery/oracle only.
-**Next:** remaining SPEAK conformance codes; seed-native multi-file elaboration.
+**Next:** remaining SPEAK conformance codes (010/011/013/014/015); seed-native
+multi-file elaboration.
 Residual bootstrap: dual-compare oracle emit, recovery `--bootstrap` flags, full
 `aether.ast/v8`.
 

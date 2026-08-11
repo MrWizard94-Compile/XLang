@@ -3733,15 +3733,30 @@ pub const fn forge_verify_merges_seed_speak() -> bool {
     true
 }
 
-/// ADR-098: seed.ae SPEAK pilot codes (subset of conformance matrix).
+/// ADR-098 / ADR-102: seed.ae SPEAK pilot codes (subset of the conformance matrix).
 #[must_use]
 pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
-    &["AE-SEED-004", "AE-SEED-005", "AE-SEED-006", "AE-SEED-012"]
+    &[
+        "AE-SEED-003",
+        "AE-SEED-004",
+        "AE-SEED-005",
+        "AE-SEED-006",
+        "AE-SEED-007",
+        "AE-SEED-012",
+    ]
 }
 
 /// ADR-098: multi-code seed SPEAK pilot is product (still not full matrix).
 #[must_use]
 pub const fn seed_speak_emit_multi_code_pilot() -> bool {
+    true
+}
+
+/// ADR-102: the checked-in seed detects tab indentation and top-level `fn `
+/// lexically before it enters its compiler body. This is intentionally a
+/// bounded pilot rather than a claim of full diagnostic parity.
+#[must_use]
+pub const fn seed_speak_emit_lexical_edge_pilot() -> bool {
     true
 }
 
@@ -3945,13 +3960,37 @@ mod product_task_frame_surface_tests {
     }
 
     #[test]
-    fn seed_speak_multi_code_pilot_covers_world_main_import() {
+    fn seed_speak_multi_code_pilot_covers_lexical_and_structural_preflights() {
         assert!(seed_speak_emit_multi_code_pilot());
+        assert!(seed_speak_emit_lexical_edge_pilot());
         let pilots = seed_speak_emit_pilot_codes();
+        assert!(pilots.contains(&"AE-SEED-003"));
         assert!(pilots.contains(&"AE-SEED-004"));
         assert!(pilots.contains(&"AE-SEED-005"));
         assert!(pilots.contains(&"AE-SEED-006"));
+        assert!(pilots.contains(&"AE-SEED-007"));
         assert!(pilots.contains(&"AE-SEED-012"));
+        let assert_seed_packet = |source: &str, expected_code: &str| {
+            let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).expect("forge");
+            let packet = try_parse_seed_speak_error_packet(&forged.stdout)
+                .unwrap_or_else(|| panic!("{expected_code} packet missing: {}", forged.stdout));
+            assert_eq!(packet.code, expected_code);
+            assert_eq!(packet.origin, "seed-speak");
+        };
+        assert_seed_packet(
+            "\tworld w\n\nweave main [] -> Whole:\n  yield 0\n",
+            "AE-SEED-003",
+        );
+        assert_seed_packet(
+            "world w\n\n\tweave main [] -> Whole:\n  yield 0\n",
+            "AE-SEED-003",
+        );
+        assert_seed_packet("\tfn legacy() -> Int { return 0; }\n", "AE-SEED-003");
+        assert_seed_packet("fn main() -> Int { return 0; }\n", "AE-SEED-007");
+        assert_seed_packet(
+            "world w\n\nfn helper() -> Int { return 0; }\n",
+            "AE-SEED-007",
+        );
         let no_world = forge_bytecode(
             SEED_COMPILER_ARTIFACT,
             "weave main [] -> Whole:\n  yield 0\n",
@@ -3974,6 +4013,21 @@ mod product_task_frame_surface_tests {
         .expect("forge");
         let packet = try_parse_seed_speak_error_packet(&import.stdout).expect("import packet");
         assert_eq!(packet.code, "AE-SEED-012");
+
+        let escaped_newline_fn = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world w\n\nweave main [] -> Whole:\n  speak \"\\\\nfn \"\n  yield 0\n",
+        )
+        .expect("forge escaped literal");
+        assert!(
+            try_parse_seed_speak_error_packet(&escaped_newline_fn.stdout).is_none(),
+            "escaped literal must not trip the lexical fn pilot: {}",
+            escaped_newline_fn.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = escaped_newline_fn.value else {
+            panic!("escaped literal must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("escaped literal artifact verifies");
     }
 
     #[test]

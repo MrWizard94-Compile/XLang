@@ -569,7 +569,7 @@ fn barp_adr072_product_seed_error_packet_abi() {
     assert!(product_seed_error_speak_format());
     assert!(
         !seed_internal_error_packets(),
-        "full seed binary packet matrix still residual (ADR-094 empty pilot only)"
+        "full seed binary packet matrix remains residual (bounded ADR-094/098/102 pilots only)"
     );
     assert!(
         aether_core::seed_speak_emit_empty_source_pilot(),
@@ -578,6 +578,10 @@ fn barp_adr072_product_seed_error_packet_abi() {
     assert!(
         aether_core::seed_speak_emit_multi_code_pilot(),
         "ADR-098: multi-code seed SPEAK pilot"
+    );
+    assert!(
+        aether_core::seed_speak_emit_lexical_edge_pilot(),
+        "ADR-102: lexical seed SPEAK pilot"
     );
     let empty = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield 1\n");
     assert!(empty.is_empty());
