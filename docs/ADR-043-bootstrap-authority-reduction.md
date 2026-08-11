@@ -87,8 +87,9 @@ authority under Constitution.
     seed SPEAK diagnostic merge.  
 32. **ADR-082 (done):** stable SPEAK packet protocol; product multi-file host path.  
 33. **ADR-086 (done):** SPEAK emit conformance matrix + multi-file forge contract.  
-34. Residual bootstrap: dual-compare oracle, recovery flags, full `aether.ast/v8`.  
-35. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+34. **ADR-090 (done):** forge preserves SPEAK stdout on failure for packet merge.  
+35. Residual bootstrap: dual-compare oracle, recovery flags, full `aether.ast/v8`.  
+36. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 

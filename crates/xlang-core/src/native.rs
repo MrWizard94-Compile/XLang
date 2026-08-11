@@ -201,6 +201,124 @@ fn find_host_llvm_object_tool() -> Option<String> {
     None
 }
 
+/// M35h: product path can link a native executable from verified AETH.
+#[must_use]
+pub const fn native_exe_link_product() -> bool {
+    true
+}
+
+/// Lower verified AETH → C → host `cc`/`clang` linked executable (M35h).
+///
+/// Fails closed without a host C linker toolchain (`AE-NATIVE-004`). Optional
+/// dual-run: when `verify_exit` is true, runs the exe and requires exit == VM exit.
+pub fn lower_verified_aeth_to_native_exe(
+    bytecode: &[u8],
+    exe_path: &std::path::Path,
+    verify_exit: bool,
+) -> Result<NativeExeReport, NativeError> {
+    debug_assert!(
+        f_native_authorized() && native_exe_link_product(),
+        "ADR-091: F-NATIVE native exe product path"
+    );
+    let c_source = lower_verified_aeth_to_c(bytecode)?;
+    let Some(cc) = find_host_c_compiler() else {
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            "M35h native exe link requires host cc/clang/gcc (none found)",
+        ));
+    };
+    if let Some(parent) = exe_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|error| {
+                NativeError::new(
+                    "AE-NATIVE-004",
+                    format!("could not create exe parent dir: {error}"),
+                )
+            })?;
+        }
+    }
+    let temp_root = std::env::temp_dir().join(format!(
+        "aether-m35h-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(&temp_root).map_err(|error| {
+        NativeError::new("AE-NATIVE-004", format!("temp dir create failed: {error}"))
+    })?;
+    let c_path = temp_root.join("program.c");
+    std::fs::write(&c_path, &c_source).map_err(|error| {
+        NativeError::new(
+            "AE-NATIVE-004",
+            format!("could not write C source: {error}"),
+        )
+    })?;
+    let link = std::process::Command::new(&cc)
+        .arg(&c_path)
+        .arg("-o")
+        .arg(exe_path)
+        .output()
+        .map_err(|error| {
+            NativeError::new(
+                "AE-NATIVE-004",
+                format!("host C link invoke failed ({cc}): {error}"),
+            )
+        })?;
+    let _ = std::fs::remove_dir_all(&temp_root);
+    if !link.status.success() {
+        let stderr = String::from_utf8_lossy(&link.stderr);
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            format!("host C link failed ({cc}): {stderr}"),
+        ));
+    }
+    if !exe_path.is_file() {
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            format!("host C link did not produce {}", exe_path.display()),
+        ));
+    }
+    let mut native_exit = None;
+    let mut exits_match = None;
+    if verify_exit {
+        let vm_exit = crate::run_bytecode(bytecode)
+            .map_err(|error| NativeError::new("AE-NATIVE-001", error.to_string()))?
+            .exit_code;
+        let run = std::process::Command::new(exe_path)
+            .output()
+            .map_err(|error| {
+                NativeError::new("AE-NATIVE-004", format!("native exe run failed: {error}"))
+            })?;
+        let code = i64::from(run.status.code().unwrap_or(1));
+        native_exit = Some(code);
+        let matched = code == vm_exit;
+        exits_match = Some(matched);
+        if !matched {
+            return Err(NativeError::new(
+                "AE-NATIVE-005",
+                format!("native exe exit {code} diverged from VM exit {vm_exit}"),
+            ));
+        }
+    }
+    Ok(NativeExeReport {
+        cc_command: cc,
+        c_source,
+        native_exit,
+        exits_match,
+    })
+}
+
+/// Report from M35h native executable link.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeExeReport {
+    pub cc_command: String,
+    pub c_source: String,
+    pub native_exit: Option<i64>,
+    pub exits_match: Option<bool>,
+}
+
 fn validate_pure_pilot_artifact(artifact: &Artifact) -> Result<(), NativeError> {
     if artifact.functions.is_empty() {
         return Err(NativeError::new(
@@ -1217,6 +1335,34 @@ weave main [] -> Whole:
                         || error.message.contains("llc")
                         || error.message.contains("LLVM")
                 );
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn native_exe_link_fail_closed_without_cc_or_succeeds() {
+        assert!(native_exe_link_product());
+        let source = "world pure\n\nweave main [] -> Whole:\n  yield 11\n";
+        let bytecode = compile_product_bytecode(source).expect("product");
+        let dir = std::env::temp_dir().join(format!(
+            "aether-m35h-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("temp");
+        let exe = dir.join(if cfg!(windows) { "out.exe" } else { "out" });
+        match lower_verified_aeth_to_native_exe(&bytecode, &exe, true) {
+            Ok(report) => {
+                assert!(exe.is_file());
+                assert_eq!(report.exits_match, Some(true));
+                assert_eq!(report.native_exit, Some(11));
+            }
+            Err(error) => {
+                assert_eq!(error.code, "AE-NATIVE-004");
             }
         }
         let _ = std::fs::remove_dir_all(&dir);

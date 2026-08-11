@@ -344,24 +344,24 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-086:** SPEAK
-conformance matrix + multi-file forge contract; reserved AE-SEED-014 task
-surface (ADR-089). Bootstrap is recovery/oracle only.
+reduce Rust bootstrap product-path authority. **Through ADR-090:** forge preserves
+SPEAK on failure; multi-file host path + SPEAK conformance (ADR-086). Bootstrap is
+recovery/oracle only.
 **Next:** seed.ae systematic SPEAK emit (rebuild + dual-compare); seed-native
 multi-file elaboration.
 Residual bootstrap: dual-compare oracle emit, recovery `--bootstrap` flags, full
 `aether.ast/v8`.
 
-**Law forks (reaffirmed 2026-08-10):** F-NATIVE through **M35g** (LLVM object via
-host clang/llc, ADR-059–087); F-REGISTRY through **M24f** root-certified signing
-keys (ADR-060–088). M21 FFI pilot remains product.
+**Law forks (reaffirmed 2026-08-11):** F-NATIVE through **M35h** (native exe link,
+ADR-059–091); F-REGISTRY through **M24g** multi-level cert chains (ADR-060–092).
+M21 FFI pilot remains product.
 
-**Still needing new ADR / matrix:** expanded FFI signatures, full LLVM linker/exe
-path, X.509 CA hierarchy, seed.ae SPEAK emit, seed-native multi-file, real task
-handles/timeouts/parallelism (ADR-081; reserved surface ADR-089).
+**Still needing new ADR / matrix:** expanded FFI signatures, X.509 CA hierarchy,
+seed.ae SPEAK emit, seed-native multi-file, real task handles/timeouts/parallelism
+(ADR-081; surface ADR-085/093; reserved ADR-089).
 
-**Human backlog (updated 2026-08-10):**
+**Human backlog (updated 2026-08-11):**
 1. **BARP** — seed.ae SPEAK emit (dual-compare rebuild) + seed-native multi-file.
-2. F-NATIVE M35h+ (linker/exe product path).
-3. F-REGISTRY M24g X.509 CA if authorized.
-4. Task handles/timeouts/parallelism — implementable ADRs beyond reserved preflight.
+2. F-NATIVE M35i+ (cross-compile targets / hermetic toolchain).
+3. F-REGISTRY M24h X.509 CA if authorized.
+4. Task handles/timeouts/parallelism — implementable ADRs beyond surface/reserve.

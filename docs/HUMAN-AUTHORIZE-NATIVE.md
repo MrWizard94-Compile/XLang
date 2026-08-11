@@ -34,8 +34,8 @@ A human must write **exactly** (or clearly equivalent):
 **Recorded authorization (2026-08-10):** human wrote `I authorize Aether law fork F-NATIVE`
 (clearly equivalent intent); full residual-risk bounds above are enforced as fork law.
 
-**Reaffirmed (2026-08-10):** human again wrote `I authorize Aether law fork F-NATIVE`
-when directing M35c–g work (ADR-073–087), including LLVM object emit via host tools.
+**Reaffirmed (2026-08-11):** human again wrote `I authorize Aether law fork F-NATIVE`
+when directing M35c–h work (ADR-073–091), including native exe link.
 
 ## 4. After §3 — still not free-form implement
 

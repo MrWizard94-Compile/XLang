@@ -13,17 +13,17 @@ use aether_core::{
     compile_workspace_package, fetch_signed_package, forge_bytecode, format_project, format_source,
     format_source_product, install_trust_key, lower_verified_aeth_to_c,
     lower_verified_aeth_to_llvm_ir, lower_verified_aeth_to_llvm_object,
-    lower_verified_aeth_to_native_object, multi_module_authority_note, parse_project_document,
-    parse_workspace_document, pin_local_package, pin_local_package_signed,
-    product_cli_check_without_bootstrap, product_default_cli_toolchain,
-    product_format_without_bootstrap, product_project_format_without_bootstrap,
-    product_seed_rebuild_without_bootstrap, product_structure_json,
-    product_structure_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
-    revoke_trust_key, rotate_trust_key, run_bytecode, run_bytecode_with_grants,
-    run_project_tests_with_grants, serialize_project_document, serialize_workspace_document,
-    set_trust_key_validity, structural_document_json, unit_artifact_file_name, verify_bytecode,
-    verify_project, verify_registry_cache, verify_workspace, HostGrantConfig, InvocationValue,
-    LANGUAGE_NAME, LANGUAGE_VERSION,
+    lower_verified_aeth_to_native_exe, lower_verified_aeth_to_native_object,
+    multi_module_authority_note, parse_project_document, parse_workspace_document,
+    pin_local_package, pin_local_package_signed, product_cli_check_without_bootstrap,
+    product_default_cli_toolchain, product_format_without_bootstrap,
+    product_project_format_without_bootstrap, product_seed_rebuild_without_bootstrap,
+    product_structure_json, product_structure_without_bootstrap, refresh_project_lock,
+    refresh_workspace_lock, revoke_trust_key, rotate_trust_key, run_bytecode,
+    run_bytecode_with_grants, run_project_tests_with_grants, serialize_project_document,
+    serialize_workspace_document, set_trust_key_validity, structural_document_json,
+    unit_artifact_file_name, verify_bytecode, verify_project, verify_registry_cache,
+    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
@@ -68,6 +68,7 @@ fn check(source_path: &Path, bootstrap: bool) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn compile(
     source_path: &Path,
     output_path: &Path,
@@ -76,15 +77,22 @@ fn compile(
     native_object: bool,
     native_llvm_ir: bool,
     native_llvm_object: bool,
+    native_exe: bool,
 ) -> Result<(), String> {
     let source = read_source(source_path)?;
     // BARP Phase 2 (ADR-044): default product compile forges seed bytecode without
     // a bootstrap validate precondition. --bootstrap remains rebuild/oracle path.
-    // ADR-059/079/083/087: native lower flags for verified AETH.
-    let native_modes = [native_c, native_object, native_llvm_ir, native_llvm_object]
-        .into_iter()
-        .filter(|v| *v)
-        .count();
+    // ADR-059/079/083/087/091: native lower flags for verified AETH.
+    let native_modes = [
+        native_c,
+        native_object,
+        native_llvm_ir,
+        native_llvm_object,
+        native_exe,
+    ]
+    .into_iter()
+    .filter(|v| *v)
+    .count();
     if native_modes > 0 && use_bootstrap {
         return Err(
             "compile accepts either --bootstrap or a native lower flag, not both".to_owned(),
@@ -92,7 +100,7 @@ fn compile(
     }
     if native_modes > 1 {
         return Err(
-            "compile accepts only one native lower flag (--native-c, --native-object, --native-llvm-ir, --native-llvm-object)"
+            "compile accepts only one native lower flag (--native-c, --native-object, --native-llvm-ir, --native-llvm-object, --native-exe)"
                 .to_owned(),
         );
     }
@@ -143,6 +151,16 @@ fn compile(
         println!(
             "{LANGUAGE_NAME} {LANGUAGE_VERSION} lowered verified AETH to LLVM object {} via {tool} (F-NATIVE M35g)",
             output_path.display()
+        );
+        return Ok(());
+    }
+    if native_exe {
+        let report = lower_verified_aeth_to_native_exe(&bytecode, output_path, true)
+            .map_err(|error| error.to_string())?;
+        println!(
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} linked verified AETH to native exe {} via {} (F-NATIVE M35h)",
+            output_path.display(),
+            report.cc_command
         );
         return Ok(());
     }
@@ -884,6 +902,7 @@ fn run() -> Result<(), String> {
             let mut native_object = false;
             let mut native_llvm_ir = false;
             let mut native_llvm_object = false;
+            let mut native_exe = false;
             for extra in arguments.by_ref() {
                 if extra == "--bootstrap" {
                     use_bootstrap = true;
@@ -895,6 +914,8 @@ fn run() -> Result<(), String> {
                     native_llvm_ir = true;
                 } else if extra == "--native-llvm-object" {
                     native_llvm_object = true;
+                } else if extra == "--native-exe" {
+                    native_exe = true;
                 } else {
                     return Err(
                         "compile accepts --output <file> and optional --bootstrap or one native lower flag"
@@ -910,6 +931,7 @@ fn run() -> Result<(), String> {
                 native_object,
                 native_llvm_ir,
                 native_llvm_object,
+                native_exe,
             )
         }
         "registry" => {

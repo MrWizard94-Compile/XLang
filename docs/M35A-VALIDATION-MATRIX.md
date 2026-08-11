@@ -20,6 +20,8 @@
 | M35F-002 | unverified AETH rejected before IR lower | AE-NATIVE-001 |
 | M35G-001 | LLVM object without clang/llc | FAIL closed AE-NATIVE-004 |
 | M35G-002 | LLVM object with clang/llc | object file produced |
+| M35H-001 | native exe without cc | FAIL closed AE-NATIVE-004 |
+| M35H-002 | native exe with cc + dual-run | exit matches VM |
 
 ---
 

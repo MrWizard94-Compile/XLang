@@ -57,11 +57,12 @@ pub use modules::{
 };
 pub use native::{
     f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
-    lower_verified_aeth_to_llvm_object, lower_verified_aeth_to_native_object,
-    native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot, native_aeth_to_c_speak_multiweave_pilot,
-    native_dual_run_vm_exit, native_host_cc_dual_exec, native_host_cc_dual_exec_pilot,
-    native_llvm_ir_emit_product, native_llvm_object_emit_product, native_object_emit_product,
-    NativeDualExecReport, NativeError,
+    lower_verified_aeth_to_llvm_object, lower_verified_aeth_to_native_exe,
+    lower_verified_aeth_to_native_object, native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot,
+    native_aeth_to_c_speak_multiweave_pilot, native_dual_run_vm_exit, native_exe_link_product,
+    native_host_cc_dual_exec, native_host_cc_dual_exec_pilot, native_llvm_ir_emit_product,
+    native_llvm_object_emit_product, native_object_emit_product, NativeDualExecReport, NativeError,
+    NativeExeReport,
 };
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
@@ -73,10 +74,11 @@ pub use project::{
 pub use registry::{
     default_registry_trust_policy, empty_registry_cache, empty_registry_trust,
     f_registry_authorized, fetch_signed_package, generate_ed25519_trust_key,
-    install_certified_signing_key, install_trust_key, install_trust_key_with_algorithm,
-    install_trust_root, load_or_default_trust_policy, parse_registry_cache, parse_registry_trust,
-    parse_registry_trust_policy, pin_local_package, pin_local_package_signed,
-    registry_ed25519_https_pilot, registry_key_rotation_policy, registry_multi_root_trust_policy,
+    install_certified_intermediate, install_certified_signing_key, install_trust_key,
+    install_trust_key_with_algorithm, install_trust_root, load_or_default_trust_policy,
+    parse_registry_cache, parse_registry_trust, parse_registry_trust_policy, pin_local_package,
+    pin_local_package_signed, registry_ed25519_https_pilot, registry_key_rotation_policy,
+    registry_multi_level_cert_chain, registry_multi_root_trust_policy,
     registry_offline_cache_verify, registry_root_certified_signing_keys,
     registry_signed_fetch_pilot, revoke_trust_key, rotate_trust_key, serialize_registry_cache,
     serialize_registry_trust, serialize_registry_trust_policy, set_trust_key_validity,
@@ -2811,10 +2813,15 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         }
     }
     let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
+        // ADR-090: forge errors may include seed SPEAK stdout for packet merge.
         let detail = error.to_string();
         CompilerError::new(
             Span::synthetic(),
-            format_seed_product_error(classify_seed_forge_error(&detail), &detail),
+            format_seed_product_error_with_seed_stdout(
+                classify_seed_forge_error(&detail),
+                &detail,
+                &detail,
+            ),
         )
     })?;
     // ADR-078: if seed SPEAK emitted structured packets, prefer them in diagnostics
@@ -3531,11 +3538,14 @@ pub struct ProductTaskFrameSurface {
     pub task_weave_names: Vec<String>,
     pub task_weave_count: usize,
     pub total_task_frame_arena_capacity: u32,
+    /// Per-task checkpoint counts (ADR-093).
+    pub task_checkpoint_counts: Vec<(String, usize)>,
+    pub total_checkpoint_count: usize,
 }
 
 /// Inspect verified bytecode for M19e task-frame surface without executing.
 ///
-/// Read-only product tooling under ADR-081/085. Does not add handles, timeouts,
+/// Read-only product tooling under ADR-081/085/093. Does not add handles, timeouts,
 /// or parallelism.
 pub fn product_task_frame_surface(
     bytecode: &[u8],
@@ -3548,11 +3558,20 @@ pub fn product_task_frame_surface(
     let artifact = parse_artifact(bytecode)?;
     let mut task_weave_names = Vec::new();
     let mut total_task_frame_arena_capacity = 0u32;
+    let mut task_checkpoint_counts = Vec::new();
+    let mut total_checkpoint_count = 0usize;
     for function in &artifact.functions {
         if function.is_task() {
             task_weave_names.push(function.name.clone());
             total_task_frame_arena_capacity =
                 total_task_frame_arena_capacity.saturating_add(function.frame_arena_capacity);
+            let checkpoints = function
+                .code
+                .iter()
+                .filter(|op| **op == OP_TASK_CHECKPOINT)
+                .count();
+            total_checkpoint_count += checkpoints;
+            task_checkpoint_counts.push((function.name.clone(), checkpoints));
         }
     }
     let task_weave_count = task_weave_names.len();
@@ -3561,6 +3580,8 @@ pub fn product_task_frame_surface(
         task_weave_names,
         task_weave_count,
         total_task_frame_arena_capacity,
+        task_checkpoint_counts,
+        total_checkpoint_count,
     })
 }
 
@@ -3608,6 +3629,18 @@ pub const fn seed_speak_emit_conformance_complete() -> bool {
     false
 }
 
+/// ADR-090: forge/host invocation preserves SPEAK stdout on failure for packet merge.
+#[must_use]
+pub const fn forge_preserves_speak_on_failure() -> bool {
+    true
+}
+
+/// ADR-093: product task checkpoint density is part of task-frame surface.
+#[must_use]
+pub const fn product_task_checkpoint_density_api() -> bool {
+    true
+}
+
 #[cfg(test)]
 mod product_task_frame_surface_tests {
     use super::*;
@@ -3630,6 +3663,12 @@ mod product_task_frame_surface_tests {
             surface.task_weave_names
         );
         assert!(!surface.task_weave_names.is_empty());
+        assert!(product_task_checkpoint_density_api());
+        assert!(
+            surface.total_checkpoint_count >= 1,
+            "expected checkpoints in task frames, got {:?}",
+            surface.task_checkpoint_counts
+        );
     }
 
     #[test]
@@ -4736,11 +4775,28 @@ fn invoke_artifact_with_hosts(
         &mut stdout,
         &mut runtime_state,
         0,
-    )?;
+    );
+    // ADR-090: preserve seed SPEAK diagnostics on forge failure (Error[Whole] or runtime err).
+    let exit = match exit {
+        Ok(exit) => exit,
+        Err(mut error) => {
+            if !stdout.is_empty() {
+                error.message = format!("{}\n{}", error.message, stdout.trim_end());
+            }
+            return Err(error);
+        }
+    };
     let RuntimeExit::Return(value) = exit else {
         return Err(BytecodeError::new(
             0,
-            "a total host invocation reached an unhandled Aether Error[Whole] exit",
+            if stdout.is_empty() {
+                "a total host invocation reached an unhandled Aether Error[Whole] exit".to_owned()
+            } else {
+                format!(
+                    "a total host invocation reached an unhandled Aether Error[Whole] exit\n{}",
+                    stdout.trim_end()
+                )
+            },
         ));
     };
     Ok(InvocationOutput {

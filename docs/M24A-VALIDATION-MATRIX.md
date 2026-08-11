@@ -22,6 +22,8 @@
 | M24E-002 | signed pins pass under require_signature | PASS |
 | M24F-001 | install root + certified signer + signed pin | PASS |
 | M24F-002 | bad certification | FAIL closed AE-REG-011 |
+| M24G-001 | root → intermediate → leaf chain | PASS verify |
+| M24G-002 | intermediate may certify leaf | PASS |
 
 ---
 

@@ -33,8 +33,8 @@ A human must write **exactly** (or clearly equivalent):
 **Recorded authorization (2026-08-10):** human wrote `I authorize Aether law fork F-REGISTRY`
 (clearly equivalent intent); full residual-risk bounds above are enforced as fork law.
 
-**Reaffirmed (2026-08-10):** human again wrote `I authorize Aether law fork F-REGISTRY`
-when directing M24b–f work (ADR-074–088), including root-certified signing keys.
+**Reaffirmed (2026-08-11):** human again wrote `I authorize Aether law fork F-REGISTRY`
+when directing M24b–g work (ADR-074–092), including multi-level cert chains.
 
 ## 4. After §3 — still not free-form implement
 
