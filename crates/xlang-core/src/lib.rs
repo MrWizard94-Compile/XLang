@@ -37,8 +37,9 @@ fn decode_foreign_function_name(name: &str) -> Option<(&str, &str, &str)> {
 }
 
 pub use authoring::{
-    apply_structural_edit, diagnostic_json, structural_document_json, StructuralEditError,
-    StructuralEditResult, DIAGNOSTIC_SCHEMA_VERSION, STRUCTURAL_AST_SCHEMA_VERSION,
+    apply_structural_edit, diagnostic_json, product_structure_json, structural_document_json,
+    StructuralEditError, StructuralEditResult, DIAGNOSTIC_SCHEMA_VERSION,
+    PRODUCT_STRUCTURE_SCHEMA_VERSION, STRUCTURAL_AST_SCHEMA_VERSION,
     STRUCTURAL_EDIT_PROTOCOL_VERSION,
 };
 pub use modules::{
@@ -3049,6 +3050,18 @@ pub const fn product_format_without_bootstrap() -> bool {
 /// BARP ADR-053: CLI apply-edit trusts core product accept (no second forge).
 #[must_use]
 pub const fn apply_edit_cli_trusts_product_accept() -> bool {
+    true
+}
+
+/// BARP ADR-054: `project format --product` formats units via product seed only.
+#[must_use]
+pub const fn product_project_format_without_bootstrap() -> bool {
+    true
+}
+
+/// BARP ADR-054: `structure --product` / [`product_structure_json`] is seed-only.
+#[must_use]
+pub const fn product_structure_without_bootstrap() -> bool {
     true
 }
 

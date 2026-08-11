@@ -4,11 +4,11 @@ use aether_core::{
     compile_with_seed_product_authoritative, forge_bytecode, lib_module_validates_via_product_seed,
     product_cli_check_without_bootstrap, product_format_without_bootstrap,
     product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
-    product_path_requires_bootstrap_dual_compare, run_bytecode,
-    seed_interprets_m23_comptime_calls_natively, seed_product_diagnostics_phase3c,
-    seed_product_diagnostics_subset, seed_product_preflight_phase3b,
-    structural_edit_accepts_via_product_seed, verify_bytecode, InvocationOutput, InvocationValue,
-    SEED_COMPILER_ARTIFACT,
+    product_path_requires_bootstrap_dual_compare, product_project_format_without_bootstrap,
+    product_structure_without_bootstrap, run_bytecode, seed_interprets_m23_comptime_calls_natively,
+    seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
+    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed, verify_bytecode,
+    InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -395,6 +395,14 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
     assert!(
         apply_edit_cli_trusts_product_accept(),
         "ADR-053: apply-edit CLI trusts product accept"
+    );
+    assert!(
+        product_project_format_without_bootstrap(),
+        "ADR-054: product project format without bootstrap"
+    );
+    assert!(
+        product_structure_without_bootstrap(),
+        "ADR-054: product structure without bootstrap"
     );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")

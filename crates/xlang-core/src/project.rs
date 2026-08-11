@@ -541,13 +541,24 @@ pub fn verify_project(
     })
 }
 
-/// Format every unit in declaration order (bootstrap formatter).
+/// Format every unit in declaration order.
+///
+/// When `product` is false (default CLI path), uses bootstrap [`format_source`].
+/// When `product` is true (ADR-054), uses [`format_source_product`] only — no
+/// bootstrap AST rewrite.
 ///
 /// Does not write files. Callers may write with an explicit CLI flag.
 pub fn format_project(
     project_root: &Path,
     document: &ProjectDocument,
+    product: bool,
 ) -> Result<ProjectFormatReport, ProjectError> {
+    if product {
+        debug_assert!(
+            crate::product_project_format_without_bootstrap(),
+            "ADR-054: product project format must not require bootstrap"
+        );
+    }
     validate_project_document(document)?;
     let mut units = Vec::with_capacity(document.units.len());
     for unit in &document.units {
@@ -564,12 +575,16 @@ pub fn format_project(
                 format!("unit {} is not valid UTF-8", unit.path),
             )
         })?;
-        let formatted = format_source(&source).map_err(|error| {
-            ProjectError::new(
-                "AE-PROJECT-004",
-                format!("unit {} failed format: {error}", unit.path),
-            )
-        })?;
+        let formatted = if product {
+            format_unit_product(&unit.path, unit.role, &source)?
+        } else {
+            format_source(&source).map_err(|error| {
+                ProjectError::new(
+                    "AE-PROJECT-004",
+                    format!("unit {} failed format: {error}", unit.path),
+                )
+            })?
+        };
         units.push(ProjectFormatUnit {
             path: unit.path.clone(),
             formatted,
@@ -601,6 +616,48 @@ pub fn format_source_product(source: &str) -> Result<String, CompilerError> {
     let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
     crate::compile_product_bytecode(&normalized)?;
     Ok(normalized)
+}
+
+/// Product project-unit format (ADR-054): LF normalize + role-aware product accept.
+///
+/// - Standalone main/test (no module surface): [`format_source_product`]
+/// - Lib units: LF + product lib probe ([`validate_lib_module_source`])
+/// - Units with import/export: LF only after module surface structure checks
+///   (single-file product emit cannot elaborate imports)
+fn format_unit_product(
+    unit_path: &str,
+    role: ProjectUnitRole,
+    source: &str,
+) -> Result<String, ProjectError> {
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    if role == ProjectUnitRole::Lib {
+        validate_lib_module_source(unit_path, &normalized)?;
+        return Ok(normalized);
+    }
+    if source_requires_project_modules(&normalized) {
+        // Single-file product emit cannot elaborate imports; LF-normalize only.
+        // Entry units still require weave main (aligned with verify_project).
+        if (role == ProjectUnitRole::Main || role == ProjectUnitRole::Test)
+            && !normalized.lines().any(|line| {
+                let t = line.trim_start();
+                t.starts_with("weave main ")
+                    || t.starts_with("export weave main ")
+                    || t.starts_with("task weave main ")
+            })
+        {
+            return Err(ProjectError::new(
+                "AE-MOD-006",
+                format!("entry unit {unit_path} must declare weave main"),
+            ));
+        }
+        return Ok(normalized);
+    }
+    format_source_product(source).map_err(|error| {
+        ProjectError::new(
+            "AE-PROJECT-004",
+            format!("unit {unit_path} failed product format: {error}"),
+        )
+    })
 }
 
 #[cfg(test)]
@@ -688,6 +745,41 @@ mod tests {
     }
 
     #[test]
+    fn product_project_format_handles_lib_and_main_without_bootstrap() {
+        assert!(
+            crate::product_project_format_without_bootstrap(),
+            "ADR-054 tracker"
+        );
+        let root = temp_dir();
+        fs::create_dir_all(root.join("lib")).expect("lib");
+        let main_src = "world multi_main\r\n\r\nweave main [] -> Whole:\r\n  yield 3\r\n";
+        let lib_src = "world multi_lib\r\n\r\nexport weave helper [] -> Whole:\r\n  yield 9\r\n";
+        fs::write(root.join("main.ae"), main_src).expect("main");
+        fs::write(root.join("lib").join("helper.ae"), lib_src).expect("lib");
+        let json = r#"{
+  "schema": "aether.project/v1",
+  "name": "product_fmt",
+  "version": "0.1.0",
+  "units": [
+    { "path": "main.ae", "role": "main" },
+    { "path": "lib/helper.ae", "role": "lib" }
+  ]
+}"#;
+        let document = parse_project_document(json).expect("parse");
+        let report = format_project(&root, &document, true).expect("product project format");
+        assert_eq!(report.units.len(), 2);
+        assert_eq!(
+            report.units[0].formatted,
+            "world multi_main\n\nweave main [] -> Whole:\n  yield 3\n"
+        );
+        assert_eq!(
+            report.units[1].formatted,
+            "world multi_lib\n\nexport weave helper [] -> Whole:\n  yield 9\n"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn nested_multi_unit_project_verifies_with_lock() {
         let root = temp_dir();
         fs::create_dir_all(root.join("src")).expect("src");
@@ -723,7 +815,7 @@ mod tests {
         assert_eq!(unit_artifact_file_name("src/main.ae"), "src__main.aeth");
         assert_eq!(unit_artifact_file_name("lib/helper.ae"), "lib__helper.aeth");
 
-        let formatted = format_project(&root, &document).expect("format multi");
+        let formatted = format_project(&root, &document, false).expect("format multi");
         assert_eq!(formatted.units.len(), 2);
         assert_eq!(formatted.units[0].formatted, main_src);
         assert_eq!(formatted.units[1].formatted, lib_src);

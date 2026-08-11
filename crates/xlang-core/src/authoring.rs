@@ -27,6 +27,8 @@ pub const STRUCTURAL_AST_SCHEMA_VERSION: &str = "aether.ast/v8";
 pub const STRUCTURAL_EDIT_PROTOCOL_VERSION: &str = "aether.edit/v8";
 /// The JSON schema identifier used for machine-readable diagnostic envelopes.
 pub const DIAGNOSTIC_SCHEMA_VERSION: &str = "aether.diagnostic/v8";
+/// Product-only structure envelope (ADR-054) — not full AST.
+pub const PRODUCT_STRUCTURE_SCHEMA_VERSION: &str = "aether.product-structure/v1";
 
 const MAX_STRUCTURAL_EDIT_BYTES: usize = 4_000_000;
 const MAX_STRUCTURAL_EDIT_OPERATIONS: usize = 32;
@@ -79,9 +81,34 @@ impl From<CompilerError> for StructuralEditError {
 
 /// Return deterministic, pretty-printed `aether.ast/v8` JSON for valid source.
 /// Source spans always refer to the returned document's canonical LF source.
+/// Uses bootstrap AST (authoring authority).
 pub fn structural_document_json(source: &str) -> Result<String, CompilerError> {
     let (program, canonical_source) = canonicalize_source(source)?;
     serialize_document(&canonical_source, &program).map_err(serialization_error)
+}
+
+/// Product-path structure envelope (ADR-054): seed accept + LF source.
+///
+/// Schema [`PRODUCT_STRUCTURE_SCHEMA_VERSION`]. Does **not** emit `aether.ast/v8`
+/// and does **not** invoke the bootstrap compiler.
+pub fn product_structure_json(source: &str) -> Result<String, CompilerError> {
+    debug_assert!(
+        crate::product_structure_without_bootstrap(),
+        "ADR-054: product structure must not require bootstrap"
+    );
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    let bytecode = compile_product_bytecode(&normalized)?;
+    serde_json::to_string_pretty(&json!({
+        "schema": PRODUCT_STRUCTURE_SCHEMA_VERSION,
+        "language": {
+            "name": LANGUAGE_NAME,
+            "version": LANGUAGE_VERSION,
+        },
+        "productAccepted": true,
+        "artifactBytes": bytecode.len(),
+        "source": normalized,
+    }))
+    .map_err(serialization_error)
 }
 
 /// Serialize a stable `aether.diagnostic/v8` envelope for any compiler or
@@ -2739,6 +2766,29 @@ mod tests {
                 include_str!("../../../examples/comptime-calls.ae"),
             ),
         ]
+    }
+
+    #[test]
+    fn product_structure_json_accepts_without_bootstrap_ast() {
+        assert!(
+            crate::product_structure_without_bootstrap(),
+            "ADR-054 tracker"
+        );
+        let source = "world prod\r\n\r\nweave main [] -> Whole:\r\n  yield 1\r\n";
+        let document = product_structure_json(source).expect("product structure");
+        assert!(
+            document.contains(PRODUCT_STRUCTURE_SCHEMA_VERSION),
+            "schema missing: {document}"
+        );
+        assert!(document.contains("\"productAccepted\": true"), "{document}");
+        assert!(
+            document.contains("world prod\\n\\nweave main"),
+            "{document}"
+        );
+        assert!(!document.contains(STRUCTURAL_AST_SCHEMA_VERSION));
+        let legacy = product_structure_json("world w\n\nfn main() -> Int { return 0; }\n")
+            .expect_err("legacy must fail");
+        assert!(legacy.to_string().contains("AE-SEED-007"), "got {legacy}");
     }
 
     #[test]
