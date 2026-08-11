@@ -364,3 +364,8 @@ runtime (ADR-081; checkpoint required ADR-101; surface ADR-085/093/097).
 2. F-NATIVE M35k+ (bundled hermetic toolchain / sysroot).
 3. F-REGISTRY full X.509 DER if authorized beyond lite store.
 4. Task handles/timeouts/parallel **runtime** ADRs (beyond AE-SEED-015 checkpoint).
+
+**Full project audit (2026-08-11):** HEAD `12a2181` — pack verify PASS;
+`aether-gate -Mode full` **GATE PASS**; seed dual-compare identity green.
+See [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md)
+and [PROGRESS_REPORT-FULL-PROJECT.md](PROGRESS_REPORT-FULL-PROJECT.md).

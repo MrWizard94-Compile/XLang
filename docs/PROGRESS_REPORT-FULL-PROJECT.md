@@ -1,384 +1,216 @@
 # Aether / XLang — Comprehensive Project Progress Report
 
-```text
-Document: Comprehensive Project Progress Report
-Status: Current, evidence-led Level 4 product record
-Date: 2026-08-10
-Repository: XLang (Aether product workspace)
-Source snapshot HEAD: dd61bdec74f06d36ec285c0433e429c1eccb932b
-Branch: codex/xlang-local-first-studio (pushed, tracking origin)
-Current product package: aether-core / aether-cli 0.36.0
-Language contract: Aether 0.11 plus bounded M11–M23 / M19a–M19e surfaces
-Artifact contract: AETH v4–v12 input; v11 or v12 current output
-Authoring contract: aether.ast/v8, aether.edit/v8, aether.diagnostic/v8
-Preview channel: local folder only, UNLICENSED; not a public release
-Authority: AGENTS Constitution, MANIFEST.md, CORE_CLAIMS.md, ADRs, matrices
-Related rules: CONST-GATE-001, CONST-DONE-001, CONST-COMPLETE-001,
-  ENG-WARN-001, TEST-BEHAVIOR-001, DOC-SYNC-001, SEC-INPUT-001,
-  RND-INVAR-001, REL-PACKAGE-001, REV-PACK-001
-Live audit: docs/AUDIT_REPORT-2026-08-10-FULL-PROJECT.md
-  (GATE PASS mode=release)
-Supersedes: 2026-08-08 snapshot of this report (pre BARP ADR-064–069)
+**Date:** 2026-08-11  
+**HEAD:** `12a2181` on `codex/xlang-local-first-studio`  
+**Package contract:** **0.36.0** (language **0.11** + M19e AETH v12 + post-0.36 maturity program)  
+**Audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**  
+**Constitution:** AGENTS Constitution 5.0.1  
+
+---
+
+## 1. One-sentence status
+
+Aether is a **local-first, seed-hosted product compiler** with verified AETH
+execution, dual-compare self-host proofs, and human-authorized **F-NATIVE** /
+**F-REGISTRY** pilots — still **0.36.0** package contract, with BARP having moved
+product authority off the Rust bootstrap for default toolchain paths.
+
+---
+
+## 2. What the product is today
+
+### 2.1 Language and runtime
+
+| Layer | Status |
+| --- | --- |
+| Core language surface | Canonical **0.11** (M2 resources, M4 Error[Whole], M5/M15/M23 comptime, M6 layout, M7 nurseries, M8 pure host) |
+| Toolchain packages | M9–M18 projects/modules/LSP/tests/workspaces/stdlib; M19a–e resource/task; M21 FFI pilot; M22 cross-package; M23 seed-native |
+| AETH | **v11** default; **v12** for M19e `task weave` + `checkpoint` |
+| Default compile | **Seed forge** (`seed/aether_seed.aeth`) — not Rust bootstrap |
+| Execution | Verify-before-run VM; grant-empty pure fixtures; optional `--grant-*` / `--grant-lib` |
+
+### 2.2 Product toolchain (BARP)
+
+Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–101):
+
+| Capability | Authority |
+| --- | --- |
+| `compile` / seed rebuild | Product seed (ADR-067) |
+| `check` / `format` / `structure` / project format | Product default; `--bootstrap` recovery |
+| LSP diagnostics / symbols / hover / definition / format | Product-primary |
+| Structural edits | Product weave/body/record paths |
+| Multi-module / multi-source | Host elaborate + seed emit + unit digests |
+| Diagnostics | `AE-SEED-*` preflights + SPEAK packets; seed SPEAK pilot codes |
+| Bootstrap residual | Dual-compare oracle, recovery flags, full `aether.ast/v8` |
+
+### 2.3 Law forks (human-authorized)
+
+| Fork | Through | Highlights |
+| --- | --- | --- |
+| **F-NATIVE** | **M35j** (ADR-059–099) | AETH→C / object / LLVM IR / LLVM object / exe; host dual-run; probe + hermetic env; cross-target matrix (`AE-NATIVE-007`) |
+| **F-REGISTRY** | **M24i** (ADR-060–100) | Offline pin/verify; HMAC/Ed25519; explicit fetch; rotation; multi-root policy; multi-level key certs; X.509-lite + CA store (`AE-REG-012/013`) |
+
+### 2.4 Task model
+
+| Item | Status |
+| --- | --- |
+| M19e active-frame cancel | **Proven** (v12, checkpoints) |
+| Task frame surface / checkpoint density / inventory | **Proven** tooling (ADR-085/093/097) |
+| Reserved future surface | Fail-closed **AE-SEED-014** (ADR-089) |
+| Task weave requires checkpoint | Fail-closed **AE-SEED-015** (ADR-101) |
+| Handles / timeouts / parallel runtime | **Not implemented** (ADR-081 design only) |
+
+---
+
+## 3. Architecture snapshot
+
+```
+Aether source (.ae)
+    │
+    ├─ product path (default)
+    │     host preflights (AE-SEED-*)
+    │     multi-source? → host elaborate
+    │     forge seed/aether_seed.aeth  → AETH bytes
+    │     seed SPEAK merge on failure (pilot codes)
+    │     verify_bytecode
+    │
+    ├─ recovery path (--bootstrap)
+    │     Rust parser/validate/emit (oracle + AST)
+    │
+    └─ optional lowers (F-NATIVE, verified AETH only)
+          → C / object / LLVM / native exe (host tools)
+
+Verified AETH
+    ├─ aether run  (VM; pure or grants)
+    ├─ aether forge (compiler ABI only)
+    └─ dual-compare tests (product ≡ bootstrap where claimed)
 ```
 
 ---
 
-## Executive position
+## 4. Evidence ladder (how we know it works)
 
-**Aether is a real, locally usable compiler-and-VM toolchain pilot—not a
-general-purpose 1.0 language and not a replacement claim for Rust, C++, Go,
-Java, Python, TypeScript, or any other language.** It parses Aether source,
-emits Aether-owned **AETH** bytecode, verifies the bytecode, and executes it in
-the Aether VM. Guest **source** is not transpiled to Rust, C, JavaScript, or
-LLVM. Optional **verified AETH → ISO C** is an authorized F-NATIVE pilot only
-(M35a/b pure Whole subset).
-
-Package **0.36.0** combines:
-
-1. **Seed-hosted product compilation** as the default CLI path.  
-2. **BARP** (Bootstrap Authority Reduction Program, ADR-043–071): product owns
-   default check/format/structure, LSP diagnostics/symbols/hover/definition,
-   seed rebuild, and structural-edit ops on product units (including nested
-   choose/while body lists).  
-3. **Rust bootstrap as recovery/oracle only** (`--bootstrap`, dual-compare,
-   full `aether.ast/v8`).  
-4. Bounded language surface through M19e/M21/M23; offline projects, workspaces,
-   tests, stdlib, LSP; local technical-preview packaging.  
-5. Authorized law-fork pilots: **F-NATIVE** (AETH→C), **F-REGISTRY** (offline
-   digest cache only).  
-
-The project is deliberately strongest where it differentiates:
-
-| Strength | Evidence posture |
+| Evidence class | Mechanism |
 | --- | --- |
-| Verifier-first AETH | Verify before run and before write |
-| Explicit authority | No ambient guest FS/process/shell/network/model |
-| Evidence-led self-host | Seed≡bootstrap dual-compare on claimed corpora; product seed rebuild identity |
-| AI-oriented authoring without model authority | Versioned AST/edit/diagnostic protocol; product accept gates |
-| Honest residual claims | Seed packets, multi-file forge, network registry still open |
+| Unit / integration tests | `cargo test --workspace` |
+| Seed self-host | `seed_self_host` dual-compare + multi-generation |
+| Example corpus | Gate dual-compare of shipped examples |
+| Quality gate | `tools/aether-gate.ps1` (quick / full / release) |
+| Claim control | [CORE_CLAIMS.md](CORE_CLAIMS.md) status rules |
+| ADR trail | 100+ ADRs under `docs/ADR-*.md` |
+| Matrices | M* / M19E / M23 / M35A / M24A validation matrices |
+| Constitution | Project Level-4 pointer → pack AGENTS.md Section 0 |
 
-It remains early relative to mature ecosystems: no general generics, public
-registry, broad FFI, parallel runtime, large stdlib, public license channel, or
-consumer IDE product beyond bounded offline LSP.
+**Latest full-gate stamp:** 2026-08-11 HEAD `12a2181` — **GATE PASS mode=full**  
+**Seed identity:** `3B85696292FD5287F8778E708D095131D55094B04AB402209F8E77767B28E1A4`
 
-### One-page truth table (2026-08-10)
+---
 
-| Surface | Current truth | Important boundary |
+## 5. Recent maturity program (post–0.36 release)
+
+The 0.36 package contract (M19e) is the executable language baseline. Since then,
+work has been **independence and infrastructure maturity** without a package bump:
+
+### 5.1 BARP highlights (ADR-043 → 098/101)
+
+- Product-default CLI toolchain; bootstrap recovery only  
+- Multi-source envelope + multi-file host forge + unit digests  
+- SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
+- Seed SPEAK multi-code pilot: **AE-SEED-004/005/006/012** (dual-compare rebuild)  
+- Forge SPEAK capture on failure and verify merge  
+- Yield-in-truth-choose fail-closed (AE-SEED-013)  
+- Task checkpoint required (AE-SEED-015)  
+
+### 5.2 F-NATIVE (M35a → M35j)
+
+C pilot → locals → SPEAK/multi-weave → host-cc dual-exec → object → LLVM IR →
+LLVM object → native exe → toolchain probe/hermetic → **cross-compile target matrix**
+
+### 5.3 F-REGISTRY (M24a → M24i)
+
+Offline pin → HMAC signed → Ed25519/HTTPS → rotation → multi-root policy →
+root certs → multi-level chains → X.509-lite → **CA store + chain verify**
+
+### 5.4 Recent tip commits (illustrative)
+
+| Commit | Slice |
+| --- | --- |
+| `12a2181` | ADR-098–101 multi-code SPEAK, targets, CA store, checkpoint |
+| `1e2fa31` | ADR-094–097 SPEAK empty pilot, native probe, X.509-lite, task inventory |
+| `b5305cf` | ADR-090–093 forge SPEAK capture, native exe, multi-level certs, checkpoints |
+| `f03e310` | ADR-086–089 SPEAK matrix, LLVM object, root certs, task reserve |
+
+---
+
+## 6. Maturity scorecard
+
+| Domain | Maturity | Notes |
 | --- | --- | --- |
-| Aether source → AETH → verify → VM | **Implemented** | Aether-only VM default; no source transpile |
-| Product default compile / check / format / structure | **Proven (ADR-064)** | Recovery via `--bootstrap` |
-| Product seed rebuild (no `--bootstrap`) | **Proven (ADR-067)** | Dual-compare still uses bootstrap emit |
-| Structural top-level weave + weave-body + nested body lists + primitive record | **Proven product path (ADR-065/068/069/071)** | Full `aether.ast/v8` still recovery bootstrap |
-| LSP diagnostics / symbols / hover / definition | **Product-primary (ADR-058/063/066)** | Not a second product AETH emitter |
-| Multi-module / workspace | **Host elaborate + seed emit (ADR-056)** | Seed-native multi-file = false |
-| M23 pure comptime calls | **Seed-native D2a (ADR-043 Phase 1)** | No nested calls / control-flow callees |
-| M19e task-frame cancel | **AETH v12 implemented** | Checkpoint-only; no handles/timeouts/parallelism |
-| M21 foreign weave | **Whole-only pilot** | Native lib not sandboxed |
-| F-NATIVE M35a/b | **Verified AETH→C pure Whole pilot** | Not default; SPEAK/Text multi-weave later |
-| F-REGISTRY M24a | **Offline pin/verify cache** | No network fetch |
-| Technical-preview package | **Local release-gate verified** | `UNLICENSED`; not a public release |
-| “Better than all languages” | **Prohibited** | Scoped claims only with evidence |
+| Seed self-host | **High** | Byte-identical multi-generation |
+| Product vs bootstrap independence | **High** | Default product; residual oracle documented |
+| Diagnostics honesty | **Medium–High** | Host strong; seed SPEAK pilot expanding |
+| Multi-module | **Medium** | Host elaborate works; not seed-native |
+| Native lower | **Medium** | Useful pilot; host-dependent |
+| Registry | **Medium** | Offline + signed + lite CA; not full PKI |
+| Task concurrency | **Medium** | M19e solid; no handles/timeouts/parallel |
+| Foreign ABI | **Low–Medium** | Bounded pilot only |
+| Package versioning | **Stable** | Still 0.36.0 contract |
 
 ---
 
-## 1. Snapshot control and authority
+## 7. Explicit non-goals (current law)
 
-### 1.1 Snapshot basis
-
-| Field | Value |
-| --- | --- |
-| HEAD | `dd61bde` (`feat(barp): ADR-069 product weave-body statements and primitive records`) |
-| Branch | `codex/xlang-local-first-studio` @ origin |
-| Gate | `aether-gate -Mode release` → **GATE PASS** (2026-08-10) |
-| Seed SHA-256 | `A654F7FEF7DEC5E2B75F146CCCD491321AD8702FE6BA25947C0D409D7C686AE5` |
-| Packaged `aether.exe` SHA-256 | `1121616B701A419117D71FF6B26F05A9EDAED6EF929BF7769B6A08E6BB5C5F32` |
-| Preview root | `dist/aether-0.36.0-tp/` (generated; 339 files + SHA-256SUMS) |
-
-A pushed branch and a local package are **not** a public binary release.
-
-### 1.2 Source-of-truth hierarchy
-
-| Priority | Artifact |
-| --- | --- |
-| 1 | AGENTS Constitution (quality/safety process) |
-| 2 | [MANIFEST.md](../MANIFEST.md) |
-| 3 | [AETHER_0.36.md](AETHER_0.36.md) (+ prior package contracts) |
-| 4 | [CORE_CLAIMS.md](CORE_CLAIMS.md) |
-| 5 | ADRs, validation matrices, delivery reports |
-| 6 | Historical docs / roadmaps (context only) |
-
-### 1.3 Product identity
-
-| Field | Current value |
-| --- | --- |
-| Product name | Aether |
-| Core | `aether-core` 0.36.0 at `crates/xlang-core` |
-| CLI | `aether` via `aether-cli` 0.36.0 |
-| FFI pilot lib | `aether-ffi-pilot` 0.36.0 (`publish = false`) |
-| Rust | edition 2021, `rust-version = "1.88"` |
-| Product compile authority | Seed forge (`compile_product_bytecode`) |
-| Bootstrap authority | Recovery/oracle only (BARP ADR-064–069) |
-| License | `UNLICENSED` |
+- Ambient guest network / shell / model calls  
+- OS-thread parallel runtime as product claim  
+- Task handles / timeouts as implemented features  
+- Full RFC 5280 X.509 DER  
+- Bundled hermetic cross-compile sysroot  
+- Claiming seed SPEAK complete for every AE-SEED code  
+- Claiming seed-native multi-file forge  
 
 ---
 
-## 2. Vision actually implemented
+## 8. Recommended next increments
 
-Local-first, verifier-first, AI-primary **systems-language toolchain**:
+Ordered for dependency honesty (`CONST-DEP-001`):
 
-- Explicit ownership and closed effects without ambient allocation or hidden
-  exceptions.  
-- Capability host I/O and foreign load only under operator grants.  
-- Structured authoring data (`aether.ast/edit/diagnostic` v8) without giving a
-  model compile or write authority.  
-- Offline projects, workspaces, locks, tests, and bounded LSP.  
-
-North star: [NORTH_STAR.md](NORTH_STAR.md). Executable boundary: MANIFEST.
+1. **BARP:** expand seed SPEAK to remaining conformance codes; design seed-native multi-file forge ABI  
+2. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility  
+3. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite  
+4. **Task runtime:** implementable ADRs for handles and/or timeouts under ADR-081 invariants  
+5. **Optional package 0.37** when language surface or AETH version actually expands  
 
 ---
 
-## 3. Language and runtime capability map
-
-### 3.1 Core language (0.11 base + package increments)
-
-| Area | Status | Boundary |
-| --- | --- | --- |
-| World, weaves, records, shallow expressions | Implemented | Canonical grammar; no legacy C/Rust syntax |
-| Ownership modes own/borrow/access/move | Implemented | Explicit; fail closed |
-| M2 arenas/buffers | Implemented | Bounded capacities |
-| M4 `Error[Whole]` | Implemented | Abortive; no hidden exceptions |
-| M5/M15/M23 comptime | Implemented | Root-only; M23 seed-native D2a body subset |
-| M6 dual-layout tables | Implemented | Whole fields; no auto rewrite |
-| M7 nurseries | Implemented | Cooperative source-order; not OS threads |
-| M8 pure host weaves | Implemented | Fixture services; no ambient I/O |
-| M14 grant-backed I/O | Implemented | Explicit `--grant-*` roots/names |
-| M16 resource + handle | Implemented | Terminal handle over resource-free errors |
-| M19a release | Implemented | Explicit `release` |
-| M19b/d nursery×resource / spawn arenas | Implemented | Policy A+; dual-compare where claimed |
-| M19c Policy B (v11 cooperative) | Implemented | Unstarted cancel; mid-frame not claimed on v11 |
-| M19e task frames (v12) | Implemented | Checkpoint cancel only |
-| M21 foreign weave | Implemented pilot | Whole-only; residual native risk |
-| M23 pure comptime calls | Implemented | Seed-native D2a |
-
-### 3.2 Artifact / VM
-
-- Magic AETH; versions v4–v12 as compatibility inputs where claimed.  
-- Default product emit v11; v12 when task frames present.  
-- Verify-before-run and verify-before-write are project invariants.  
-- RTP-001 ASCII Text fast path (0.34): representation only; no AETH change.
-
----
-
-## 4. Compiler architecture and BARP maturity
-
-### 4.1 Two engines, one product default
-
-```text
-User source
-    │
-    ├─ Product path (DEFAULT) ── seed forge ── verify ── AETH
-    │     compile / check / format / structure / LSP / seed rebuild
-    │     structural product ops (ADR-065/068/069/071)
-    │
-    └─ Bootstrap path (RECOVERY/ORACLE)
-          --bootstrap check/format/structure/compile
-          dual-compare proofs
-          full aether.ast/v8
-```
-
-### 4.2 BARP ledger (ADR-043 → ADR-071)
-
-| ADR | Outcome |
-| --- | --- |
-| 043–050 | Program + Phase 1 M23 seed-native; forge-first product; preflights AE-SEED |
-| 051–054 | Bootstrap-free `compile_with_seed`; product check/format/structure/project format |
-| 055–058 | Product diagnostic ABI; multi-module honesty; edit base gate; LSP product diagnostics |
-| 059–060 | F-NATIVE M35a; F-REGISTRY M24a authorized pilots |
-| 061 | Direction only: seed error packets + multi-file forge (**not implemented**) |
-| 062–064 | M35b locals; product default CLI toolchain |
-| 065–067 | Product weave replace; LSP surface hover/def; product seed rebuild |
-| 068–069 | Product top-level weave insert/delete; weave-body statements; primitive records |
-| 070 | Product yield-in-truth-choose fail-closed; multi-module choose+revise |
-| 071 | Product nested choose/while body-list statement ops |
-
-### 4.3 Residual Rust bootstrap (honest)
-
-1. Dual-compare oracle emit (`compile --bootstrap` in tests/gate).  
-2. Recovery flags: `check|format|structure|project format --bootstrap`.  
-3. Full authoring tree `aether.ast/v8` (product structure is envelope).  
-4. Bootstrap remains the **proof** authority; product is the **default product**
-   authority.
-
----
-
-## 5. Tooling surface
-
-| Tool | Status | Notes |
-| --- | --- | --- |
-| `aether compile` | Product default seed | `--bootstrap` oracle; `--native-c` F-NATIVE |
-| `aether check` / `format` / `structure` | Product default | Recovery AST with `--bootstrap` |
-| `aether apply-edit` | Product accept + product ops subset | Full ast/v8 still recovery bootstrap |
-| `aether project` / `workspace` | Offline verify/lock/build/test/format | PKG-001 locks |
-| `aether test` / `project test` | Offline discovery + optional grants/reports | Exit 0 = pass |
-| `aether lsp` | Offline stdio M13a+b | Product diagnostics/symbols/hover/def |
-| `aether registry` | Offline pin-local / verify-cache | No network |
-| `aether forge` / `run` | Host forge ABI; grant-backed run | Verify first |
-
----
-
-## 6. Security and threat posture
-
-| Model | Scope |
-| --- | --- |
-| TP / 0.36 threat model | Local preview; no network product path |
-| v2 capable host | M14 grants; path jail |
-| v3 foreign ABI | M21 residual native risk accepted |
-| v4 native backend | F-NATIVE AETH→C only (authorized) |
-| v5 package registry | F-REGISTRY offline cache (authorized); network later |
-
-Invariants: guest AETH has no ambient FS/process/shell/network/model authority;
-CLI writes only caller-selected paths after validation; forge/VM verify first.
-
----
-
-## 7. Proof and measurement
-
-### 7.1 Dual-compare and seed identity (live)
-
-- 32 top-level examples seed≡bootstrap under gate.  
-- Seed self-host tests: multi-weave, M2–M8, M14–M16, M19a/b/e, M21, M23, full
-  surface, product seed rebuild identity.  
-- Gate seed pin: bootstrap ≡ product ≡ forged ≡ checked-in  
-  `A654F7FE…686AE5`.
-
-### 7.2 Performance evidence
-
-| ID | Claim | Boundary |
-| --- | --- | --- |
-| CLM-037 / RTP-001 | Local self-host median improvement recorded in AETHER_0.34 | One workload/hardware class; not a general language speed claim |
-
-### 7.3 Automated gate
+## 9. How to re-verify
 
 ```powershell
-pwsh -NoProfile -File tools/aether-gate.ps1 -Mode release
+# Constitution pack
+pwsh -File "..\..\AGENTS Constitution\tools\verify-pack.ps1"
+
+# Full project gate
+pwsh -File tools\aether-gate.ps1 -Mode full
+# expected: GATE PASS mode=full
+
+# Optional packaging gate
+pwsh -File tools\aether-gate.ps1 -Mode release
 ```
 
-Live result 2026-08-10: **GATE PASS mode=release** (fmt, clippy, full tests,
-dual-compare, seed identity, package + consumer verify).
-
 ---
 
-## 8. Package and distribution
+## 10. Document map
 
-| Item | State |
+| Doc | Role |
 | --- | --- |
-| Local technical-preview package | `dist/aether-0.36.0-tp/` |
-| Integrity | Exact SHA-256SUMS; unlisted files rejected |
-| License | `UNLICENSED` |
-| Public release / installer / signed channel | **Not claimed** |
+| [MANIFEST.md](../MANIFEST.md) | Executable product contract |
+| [CORE_CLAIMS.md](CORE_CLAIMS.md) | Proven vs residual claims |
+| [ROADMAP.md](ROADMAP.md) | Track order + human backlog |
+| [SEED_PROFILE.md](SEED_PROFILE.md) | Seed emission honesty |
+| [FORGE_CONTRACT.md](FORGE_CONTRACT.md) | Host forge ABI |
+| [DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md) | BARP program |
+| [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) | This audit stamp |
+| ADRs 043–101 | Maturity decision trail |
 
 ---
 
-## 9. Maturity assessment
-
-### 9.1 What is mature enough for local technical use
-
-- Compile/run pure Aether programs on the seed path.  
-- Offline project/workspace integrity.  
-- Grant-backed I/O experiments.  
-- Bounded LSP for diagnostics/navigation.  
-- Structural editing for product units (top-level + weave-body + records).  
-- Local TP packaging for consumers on the same machine class.
-
-### 9.2 What is not mature
-
-| Gap | Why it matters |
-| --- | --- |
-| Nested product structural body paths | Still bootstrap for choose/while lists |
-| Seed-internal structured error packets | Product diagnostics are host AE-SEED classification |
-| Seed-native multi-file forge | Host still elaborates modules |
-| Broad FFI / memory-safe foreign | Pilot Whole-only; native residual risk |
-| Network registry | Explicitly not implemented |
-| Parallel / timed / preemptive tasks | Outside M19e |
-| Public 1.0 ecosystem | License, packaging channel, stdlib breadth |
-
-### 9.3 Maturity scorecard (qualitative)
-
-| Dimension | Score (1–5) | Comment |
-| --- | --- | --- |
-| Core compile/run correctness | 4 | Dual-compare + verifier heavy |
-| Product independence from bootstrap | 4 | BARP through 069; residual nested AST/oracle |
-| Security model honesty | 5 | Explicit grants and residuals |
-| Tooling completeness | 3.5 | Strong offline CLI; no full IDE product |
-| Ecosystem / packaging | 2 | Local TP only |
-| Comparative superiority claims | 0 | Prohibited without scoped evidence |
-
----
-
-## 10. Risks
-
-| Risk | Mitigation |
-| --- | --- |
-| Silent seed/bootstrap drift | Dual-compare tests + gate identity |
-| Overclaiming self-host / independence | Trackers + residual lists in ADRs/claims |
-| Native residual risk (M21/F-NATIVE) | Explicit authorize docs; not default path |
-| DOC-SYNC lag after BARP speed | This audit + progress refresh |
-| Scope creep to “full language 1.0” | MANIFEST non-goals + CORE_CLAIMS status labels |
-
----
-
-## 11. Recommended next work (lawful order)
-
-1. **BARP residual:** ADR-061 seed error packets / multi-file forge direction as
-   vertical slices.  
-2. **F-NATIVE M35c+:** SPEAK/Text, multi-weave, dual-run with host `cc` when
-   available (new ADR + matrix).  
-3. **F-REGISTRY M24b:** signed fetch only with explicit network + threat update.  
-4. **Broader task model:** only with new ADR (handles/timeouts/parallelism).  
-5. **Public channel / license:** human decision only; not implied by TP package.
-
----
-
-## 12. Milestone ledger (compressed)
-
-| Era | Outcome |
-| --- | --- |
-| 0.1–0.11 | Language core through M8 host pilot |
-| 0.12–0.18 | Projects, modules, fine edits, LSP |
-| 0.19–0.24 | Host I/O, comptime chain, resource+handle, tests, workspaces, stdlib, xpkg |
-| 0.25–0.33 | M19a–d, M21, M23 |
-| 0.34–0.36 | RTP-001, PKG-001, M19e v12 |
-| Post-0.36 BARP (this HEAD) | ADR-043–069 product toolchain independence; F-NATIVE/F-REGISTRY pilots |
-
----
-
-## 13. How to verify this report
-
-```powershell
-# Full release audit
-pwsh -NoProfile -File tools/aether-gate.ps1 -Mode release
-# Expected: GATE PASS mode=release
-
-# Spot-check seed pin
-Get-FileHash -Algorithm SHA256 .\seed\aether_seed.aeth
-# Expected: A654F7FEF7DEC5E2B75F146CCCD491321AD8702FE6BA25947C0D409D7C686AE5
-```
-
-Companion audit: [AUDIT_REPORT-2026-08-10-FULL-PROJECT.md](AUDIT_REPORT-2026-08-10-FULL-PROJECT.md).
-
----
-
-## 14. Closing statement
-
-Aether 0.36 at HEAD `dd61bde` is a **credible local technical-preview systems
-toolchain** with strong verifier discipline, growing seed independence under
-BARP, and carefully bounded capability expansions. It is **not** a mainstream
-1.0 language, **not** a public product channel, and **not** free of residual
-Rust bootstrap roles—but those residuals are now narrow, documented, and
-intentionally held for proof and recovery rather than default product authority.
-
-Progress is real. Claims stay evidence-led.
-
----
-
-*End of PROGRESS_REPORT-FULL-PROJECT.md (2026-08-10).*
+*End of PROGRESS_REPORT-FULL-PROJECT.md*

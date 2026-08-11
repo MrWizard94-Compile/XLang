@@ -4,10 +4,12 @@ This repository hosts Aether, a local-first language and CLI toolchain for
 deterministic, AI-primary authorship. Aether toolchain package **0.36.0**
 (language surface **0.11** plus bounded M19e task semantics) parses only Aether
 source, emits deterministic AETH bytecode, verifies every artifact,
-and runs it in the Aether VM. It never translates source to Rust, C,
-JavaScript, LLVM, or another language. Verified AETH v4–v10 artifacts remain
-compatibility inputs with their original meanings. Source without task frames
-emits v11; valid M19e task source emits v12.
+and runs it in the Aether VM. **Default product path** is seed→AETH→VM; it does
+not translate Aether source to Rust, C, JavaScript, or another language as the
+product compiler. Optional F-NATIVE lowers **already-verified** AETH to C/object/
+LLVM/exe when the operator requests it (host toolchain required). Verified AETH
+v4–v10 artifacts remain compatibility inputs with their original meanings.
+Source without task frames emits v11; valid M19e task source emits v12.
 
 **Executable contract:** [MANIFEST.md](MANIFEST.md) · **Claims:**
 [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) · **Current delta:**
@@ -158,14 +160,18 @@ set in this order:
    — current package-integrity, runtime, and language-surface boundaries.
 4. [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) — exact seed-emitted product
    path and bootstrap responsibilities.
-5. [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/PROGRESS_REPORT-FULL-PROJECT.md) — current progress (2026-08-10)
-6. [docs/AUDIT_REPORT-2026-08-10-FULL-PROJECT.md](docs/AUDIT_REPORT-2026-08-10-FULL-PROJECT.md) — latest full audit
-   — maturity, evidence, and residuals.
+5. [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/PROGRESS_REPORT-FULL-PROJECT.md)
+   and [docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md)
+   — current progress and full project audit (2026-08-11).
 6. [docs/ROADMAP.md](docs/ROADMAP.md) — implemented scope and approved
    dependency order for future work.
 
-These documents do not claim general effects, parallel concurrency, broad FFI
-safety, a network registry, or a native backend exist in 0.36.
+**Honest law-fork surface (authorized, bounded):** F-NATIVE lowers **verified**
+AETH to optional C/object/LLVM/exe (M35a–j; host toolchain required); F-REGISTRY
+is host CLI offline pin + explicit signed fetch/CA (M24a–i). Default product
+compile remains seed→AETH→VM. These docs do **not** claim general effects,
+OS-thread parallel concurrency, broad FFI safety, full RFC 5280 X.509, or a
+bundled hermetic native toolchain.
 
 ## Workspace
 
