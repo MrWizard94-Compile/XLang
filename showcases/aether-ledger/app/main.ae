@@ -44,9 +44,26 @@ weave main [] -> Whole:
   bind sealed <- call pipe.sealed3 e0 e1 e2 area_ct
   bind concurrent <- call conc.parallel_fold3 e0 e1 e2
   bind head <- call pack_head e0 e1 e2
+  bind preview <- call pipe.preview3 e0 e1 e2
+  bind left_seg <- call dig.fold2 e0 e1
+  bind sseed <- call dig.seed
+  bind right_seg <- call dig.mix sseed e2
+  bind expected_conc <- call dig.combine left_seg right_seg
+  bind mutable sealed_ok <- 0
+  choose same sealed preview:
+    revise sealed_ok <- 1
+  bind mutable conc_ok <- 0
+  choose same concurrent expected_conc:
+    revise conc_ok <- 1
+  bind mutable head_ok <- 0
+  choose same head e0:
+    revise head_ok <- 1
   bind s0 <- call dig.seed
   bind s1 <- call dig.mix s0 sealed
   bind s2 <- call dig.mix s1 concurrent
   bind s3 <- call dig.mix s2 head
   bind s4 <- call dig.mix s3 area_ct
-  yield s4
+  bind s5 <- call dig.mix s4 sealed_ok
+  bind s6 <- call dig.mix s5 conc_ok
+  bind s7 <- call dig.mix s6 head_ok
+  yield s7

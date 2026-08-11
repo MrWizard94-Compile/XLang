@@ -74,9 +74,12 @@ authority under Constitution.
     `structural_edit_product_top_level_weave_ops()`.  
 26. **ADR-069 (done):** product weave-body statement ops + primitive record ops;
     `structural_edit_product_statement_and_record_ops()`.  
-27. Residual bootstrap: dual-compare oracle, recovery flags, nested body-list
+27. **ADR-070 (done):** product fail-closed yield-in-truth-choose (`AE-SEED-013`);
+    multi-module choose+revise supported (`product_rejects_yield_in_truth_choose`,
+    `multi_module_product_choose_revise_supported`). Showcase-driven.  
+28. Residual bootstrap: dual-compare oracle, recovery flags, nested body-list
     structural AST, full `aether.ast/v8`.  
-28. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+29. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 

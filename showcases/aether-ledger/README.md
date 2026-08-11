@@ -44,13 +44,20 @@ showcases/aether-ledger/
 | M6 dual-layout tables | `demos/layout_records_host.ae` |
 | M8 host + M19a release | `demos/host_and_release.ae` |
 
-### Honest multi-module residual
+### Control-flow rule (ADR-070 / showcase lesson)
 
-Cross-package elaboration + seed emit fails closed on some forms that work as
-**single-file** programs (notably `choose same` control in the app cone, and
-some host/table/record combinations). The workspace app therefore uses resource
-`choose allocate` (supported) and arithmetic composition for the integrity
-score; demos cover the remaining surface as single-file Aether programs.
+Truth-condition `choose` **must not** `yield` in a branch (bootstrap and product
+both reject; product uses `AE-SEED-013`). Legal multi-module product pattern:
+
+```aether
+bind mutable ok <- 0
+choose same sealed preview:
+  revise ok <- 1
+yield ok
+```
+
+Resource `choose allocate|append|at|…` may still `yield` in branches. Host/table/
+record combos remain denser as single-file demos.
 
 ## Build and run
 
@@ -65,7 +72,8 @@ cargo run -q -p aether-cli -- workspace lock .\showcases\aether-ledger\aether.wo
 cargo run -q -p aether-cli -- workspace verify .\showcases\aether-ledger\aether.workspace.json
 cargo run -q -p aether-cli -- workspace build .\showcases\aether-ledger\aether.workspace.json --package app --output .\target\aether-ledger.aeth
 cargo run -q -p aether-cli -- run .\target\aether-ledger.aeth
-# Expected exit: 7173361711191
+# Expected exit: 257789099815072090
+# (mix includes sealed/conc/head ok flags via ADR-070 choose+revise)
 ```
 
 ### Companion demos

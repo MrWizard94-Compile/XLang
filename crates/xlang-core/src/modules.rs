@@ -1093,6 +1093,7 @@ mod tests {
         fs::create_dir_all(root.join("lib")).unwrap();
         let math = "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n";
         let main = "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield call math.double 21\n";
+        // ADR-070 pattern: truth-choose revises then yields at weave root (product multi-module).
         let test = "world lib_test\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  bind r <- call math.double 21\n  bind mutable code <- 1\n  choose same r 42:\n    revise code <- 0\n  yield code\n";
         fs::write(root.join("lib/math.ae"), math).unwrap();
         fs::write(root.join("main.ae"), main).unwrap();
@@ -1132,7 +1133,8 @@ mod tests {
         fs::create_dir_all(root.join("lib")).unwrap();
         fs::create_dir_all(root.join("src")).unwrap();
         let math = "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n\nweave secret [n: Whole] -> Whole:\n  yield sum n 1\n";
-        let main = "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield call math.double 21\n";
+        // ADR-070: multi-module product path supports truth-choose + revise + root yield.
+        let main = "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  bind r <- call math.double 21\n  bind mutable code <- 1\n  choose same r 42:\n    revise code <- 0\n  yield code\n";
         fs::write(root.join("lib/math.ae"), math).unwrap();
         fs::write(root.join("src/main.ae"), main).unwrap();
         let main_hash = sha256_hex(main.as_bytes());
@@ -1160,7 +1162,7 @@ mod tests {
         assert!(!elaborated.contains("import unit"));
         let product = compile_project_modules(&root, &document).unwrap();
         let run = run_bytecode(&product).unwrap();
-        assert_eq!(run.exit_code, 42);
+        assert_eq!(run.exit_code, 0);
         // Oracle: product seed bytes dual-compare to bootstrap (tests only).
         let bootstrap = crate::compile_to_bytecode(&elaborated).unwrap();
         assert_eq!(

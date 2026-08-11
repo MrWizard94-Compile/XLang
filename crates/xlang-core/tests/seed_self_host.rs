@@ -4,12 +4,13 @@ use aether_core::{
     compile_with_seed_invokes_bootstrap, compile_with_seed_product_authoritative, forge_bytecode,
     host_elaborates_modules_seed_emits, lib_module_validates_via_product_seed,
     lsp_product_diagnostics_primary, lsp_product_surface_hover_definition,
-    product_cli_check_without_bootstrap, product_default_cli_toolchain, product_diagnostic_abi,
-    product_diagnostics, product_format_without_bootstrap, product_multi_module_invokes_bootstrap,
+    multi_module_product_choose_revise_supported, product_cli_check_without_bootstrap,
+    product_default_cli_toolchain, product_diagnostic_abi, product_diagnostics,
+    product_format_without_bootstrap, product_multi_module_invokes_bootstrap,
     product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
-    product_project_format_without_bootstrap, product_seed_rebuild_without_bootstrap,
-    product_structure_without_bootstrap, product_surface_symbols,
-    product_surface_symbols_without_bootstrap, run_bytecode,
+    product_project_format_without_bootstrap, product_rejects_yield_in_truth_choose,
+    product_seed_rebuild_without_bootstrap, product_structure_without_bootstrap,
+    product_surface_symbols, product_surface_symbols_without_bootstrap, run_bytecode,
     seed_interprets_m23_comptime_calls_natively, seed_native_multi_module_elaboration,
     seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
     seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
@@ -464,6 +465,14 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
         structural_edit_product_statement_and_record_ops(),
         "ADR-069: product weave-body statement and primitive record ops"
     );
+    assert!(
+        product_rejects_yield_in_truth_choose(),
+        "ADR-070: product rejects yield in truth-choose"
+    );
+    assert!(
+        multi_module_product_choose_revise_supported(),
+        "ADR-070: multi-module product choose+revise supported"
+    );
     let bootstrap = compile_to_bytecode(M23_COMPTIME_CALL_SOURCE)
         .expect("M23 fixture must bootstrap")
         .bytecode;
@@ -480,6 +489,27 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
             .exit_code,
         512
     );
+}
+
+#[test]
+fn barp_adr070_product_rejects_yield_in_truth_choose() {
+    let source = "world w\n\nweave main [] -> Whole:\n  bind x <- 7\n  choose same x 7:\n    yield 42\n  otherwise:\n    yield -1\n";
+    let error =
+        compile_product_bytecode(source).expect_err("yield in truth-choose must fail closed");
+    let message = error.to_string();
+    assert!(
+        message.contains("AE-SEED-013"),
+        "expected AE-SEED-013, got {message}"
+    );
+    assert!(
+        message.contains("truth-condition choose"),
+        "expected truth-choose hint, got {message}"
+    );
+    // Resource choose may still yield (M2) — product must accept.
+    let resource = "world w\n\nweave main [] -> Whole:\n  bind memory <- arena 32\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 0\n  choose allocate access memory move values 1 into values:\n    choose append move values 7 into values:\n      choose at borrow values 0 into observed:\n        yield observed\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
+    let ok =
+        compile_product_bytecode(resource).expect("resource choose yield must remain product-ok");
+    verify_bytecode(&ok).expect("resource choose product artifact must verify");
 }
 
 #[test]

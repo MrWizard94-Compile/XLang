@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064–069); residual recovery bootstrap  
-**Date:** 2026-08-08 (Phase 1–2 / ADR-044–069 2026-08-10)  
-**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-069](ADR-069-barp-product-statement-and-record-ops.md)  
+**Status:** Active program — product-default toolchain (ADR-064–070); residual recovery bootstrap  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044–070 2026-08-10)  
+**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-070](ADR-070-product-yield-in-truth-choose-and-multimodule-choose.md)  
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -202,6 +202,7 @@ Product project/workspace compile returns seed bytes via
 | LSP diagnostics / hover / def | **Product primary** (ADR-058/066) |
 | Structural top-level weaves | **Product path** (ADR-065/068 replace/insert/delete) |
 | Structural statements/records | **Product path** weave-body + primitive records (ADR-069); residual nested body lists |
+| Yield-in-truth-choose | **Product fail-closed** `AE-SEED-013` (ADR-070); multi-module choose+revise supported |
 | Seed rebuild | **Product compile** (ADR-067); `--bootstrap` oracle only |
 | Lib unit project verify | **Product seed probe** (ADR-052) |
 | Bootstrap residual | Dual-compare oracle, recovery flags, nested body-list AST, full ast/v8 |

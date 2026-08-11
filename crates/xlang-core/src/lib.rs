@@ -2757,6 +2757,13 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         if let Some(message) = seed_reject_missing_main_weave(source) {
             return Err(CompilerError::new(Span::synthetic(), message));
         }
+        // ADR-070: fail closed before forge when truth-choose yields (bootstrap
+        // rejects; seed otherwise emits broken jumps).
+        if product_rejects_yield_in_truth_choose() {
+            if let Some(message) = seed_reject_yield_in_truth_choose(source) {
+                return Err(CompilerError::new(Span::synthetic(), message));
+            }
+        }
     }
     let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
         let detail = error.to_string();
@@ -2833,6 +2840,11 @@ fn classify_seed_verify_error(detail: &str) -> &'static str {
         || normalized.contains("call references an unknown")
     {
         return "AE-SEED-011";
+    }
+    // Residual: if preflight misses, map illegal yield-in-choose seed emit noise.
+    if normalized.contains("jump target") || normalized.contains("unreachable aether instructions")
+    {
+        return "AE-SEED-013";
     }
     if normalized.contains("requires whole")
         || normalized.contains("stack has")
@@ -2982,6 +2994,64 @@ fn seed_reject_missing_main_weave(source: &str) -> Option<String> {
             "AE-SEED-004",
             "program requires a top-level weave main (or task weave main)",
         ));
+    }
+    None
+}
+
+/// BARP ADR-070: reject `yield` inside truth-condition `choose` branches.
+///
+/// Bootstrap rejects this as "yield is allowed only as the final statement of a
+/// weave root". Resource `choose allocate|append|at|store|load|…` may terminate
+/// branches with `yield` (M2/M6). Seed historically emitted broken jumps for
+/// truth-choose yields (showcase multi-module discovery). Product path fails
+/// closed before forge with `AE-SEED-013` — no bootstrap AST required.
+fn seed_reject_yield_in_truth_choose(source: &str) -> Option<String> {
+    debug_assert!(
+        product_rejects_yield_in_truth_choose(),
+        "ADR-070: product rejects yield in truth-choose"
+    );
+    // Stack of (choose_indent, is_truth_choose) for open choose regions.
+    let mut choose_stack: Vec<(usize, bool)> = Vec::new();
+    for (line_index, line) in source.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let indent = line.chars().take_while(|c| *c == ' ').count();
+        let trimmed = line.trim_start();
+        // Pop closed chooses when indent returns to or above their level.
+        while choose_stack
+            .last()
+            .is_some_and(|(choose_indent, _)| indent <= *choose_indent)
+        {
+            choose_stack.pop();
+        }
+        if let Some(rest) = trimmed.strip_prefix("choose ") {
+            let is_truth = rest.starts_with("same ")
+                || rest.starts_with("less ")
+                || rest.starts_with("bright")
+                || rest.starts_with("dim")
+                || rest.starts_with("not ")
+                // bare `choose <name>` truth variable form (not resource op).
+                || (!rest.starts_with("allocate ")
+                    && !rest.starts_with("append ")
+                    && !rest.starts_with("at ")
+                    && !rest.starts_with("store ")
+                    && !rest.starts_with("load ")
+                    && !rest.starts_with("lookup "));
+            choose_stack.push((indent, is_truth));
+            continue;
+        }
+        if (trimmed.starts_with("yield ") || trimmed == "yield")
+            && choose_stack.iter().any(|(_, is_truth)| *is_truth)
+        {
+            return Some(format_seed_product_error(
+                "AE-SEED-013",
+                &format!(
+                    "line {}: yield is not allowed inside a truth-condition choose branch (revise then yield at weave root; resource choose allocate/append/… may yield). aether check --bootstrap for full AST diagnostics",
+                    line_index + 1
+                ),
+            ));
+        }
     }
     None
 }
@@ -3182,12 +3252,12 @@ pub const fn product_default_cli_toolchain() -> bool {
     true
 }
 
-/// BARP ADR-064–069 honesty: bootstrap is recovery/oracle only — not the
-/// default product toolchain. Residual bootstrap roles after ADR-069:
+/// BARP ADR-064–070 honesty: bootstrap is recovery/oracle only — not the
+/// default product toolchain. Residual bootstrap roles after ADR-070:
 /// dual-compare oracle, recovery flags (`--bootstrap`), nested body-list
-/// structural edits (choose/while paths), and full `aether.ast/v8` structure.
-/// Product owns seed rebuild, top-level weave/record ops, weave-body statements,
-/// and LSP product-surface hover/definition.
+/// structural edits, and full `aether.ast/v8`. Product owns seed rebuild,
+/// structural product ops, multi-module choose-revise, yield-in-truth-choose
+/// fail-closed preflight, and LSP product-surface navigation.
 #[must_use]
 pub const fn bootstrap_is_recovery_oracle_only() -> bool {
     true
@@ -3225,6 +3295,20 @@ pub const fn lsp_product_surface_hover_definition() -> bool {
 /// (`compile_product_bytecode`); dual-compare oracle may still use `--bootstrap`.
 #[must_use]
 pub const fn product_seed_rebuild_without_bootstrap() -> bool {
+    true
+}
+
+/// BARP ADR-070: product path rejects `yield` inside truth-condition `choose`
+/// without bootstrap AST (fail closed before seed forge).
+#[must_use]
+pub const fn product_rejects_yield_in_truth_choose() -> bool {
+    true
+}
+
+/// BARP ADR-070 honesty: multi-module product path supports truth-`choose` with
+/// `revise` then root `yield` (showcase lesson); yield-in-truth-choose is illegal.
+#[must_use]
+pub const fn multi_module_product_choose_revise_supported() -> bool {
     true
 }
 
