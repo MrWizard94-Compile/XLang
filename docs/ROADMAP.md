@@ -344,24 +344,24 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-075:** product is the
-**default** CLI/LSP toolchain; SPEAK-format seed-error packets (host); multi-source
-forge envelope + in-memory multi-unit product forge (host elaborate + seed emit).
-Bootstrap is recovery/oracle only.
-**Next:** seed-binary SPEAK packet emit; seed-native multi-file elaboration.
+reduce Rust bootstrap product-path authority. **Through ADR-078:** product
+auto-accepts multi-source envelopes; SPEAK-format packets + seed SPEAK diagnostic
+merge. Bootstrap is recovery/oracle only.
+**Next:** systematic seed-binary SPEAK packets; seed-native multi-file elaboration.
 Residual bootstrap: dual-compare oracle emit, recovery `--bootstrap` flags, full
 `aether.ast/v8`.
 
-**Law forks (reaffirmed 2026-08-10):** F-NATIVE through **M35d** (host `cc`
-dual-exec + object pilot, ADR-059/062/073/076); F-REGISTRY through **M24c**
-Ed25519 + HTTPS fetch-signed (ADR-060/074/077). M21 FFI pilot remains product.
+**Law forks (reaffirmed 2026-08-10):** F-NATIVE through **M35e** (native object
+emit via host cc, ADR-059–079); F-REGISTRY through **M24d** key rotation/revoke/
+validity (ADR-060–080). M21 FFI pilot remains product.
 
-**Still needing new ADR / matrix:** expanded FFI signatures, full LLVM/object
-product path, CA hierarchy / key rotation, task handles/timeouts/parallelism,
-broader cancel, seed-binary error packet emit, seed-native multi-file forge.
+**Still needing new ADR / matrix:** expanded FFI signatures, LLVM IR product path,
+CA hierarchy, systematic seed SPEAK packets, seed-native multi-file forge,
+implementable task handles/timeouts/parallelism ([ADR-081](ADR-081-broader-task-model-design.md)
+design only).
 
 **Human backlog (updated 2026-08-10):**
-1. **BARP** — seed-binary SPEAK packets + seed-native multi-file forge.
-2. F-NATIVE M35e+ (LLVM/object product path when authorized).
-3. F-REGISTRY M24d key rotation / trust policy polish.
-4. Broader task cancellation / handles only through a new ADR.
+1. **BARP** — systematic seed-binary SPEAK + seed-native multi-file.
+2. F-NATIVE M35f+ (LLVM IR when authorized).
+3. F-REGISTRY M24e CA / multi-root trust polish.
+4. Task handles/timeouts/parallelism — implement only via new ADR after ADR-081.

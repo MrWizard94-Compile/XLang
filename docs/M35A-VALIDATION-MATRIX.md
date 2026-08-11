@@ -14,6 +14,8 @@
 | M35C-003 | dual-run helper: VM exit + successful C lower | `native_dual_run_vm_exit` |
 | M35D-001 | host cc dual-exec best-effort without cc | `cc_available=false` OK |
 | M35D-002 | when cc present, native exit matches VM | FAIL closed on diverge |
+| M35E-001 | native object emit without cc | FAIL closed AE-NATIVE-004 |
+| M35E-002 | native object emit with cc | object file produced |
 
 ---
 

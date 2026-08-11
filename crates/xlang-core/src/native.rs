@@ -549,6 +549,92 @@ fn find_host_c_compiler() -> Option<String> {
     None
 }
 
+/// M35e: product path can emit a native object file from verified AETH via host cc.
+#[must_use]
+pub const fn native_object_emit_product() -> bool {
+    true
+}
+
+/// M35e: lower verified AETH → C → host `cc -c` object file at `object_path`.
+///
+/// Requires a host C toolchain. Fails closed with `AE-NATIVE-004` when no `cc`
+/// is available (unlike dual-exec best-effort). Not LLVM IR; not a full product
+/// native linker path.
+pub fn lower_verified_aeth_to_native_object(
+    bytecode: &[u8],
+    object_path: &std::path::Path,
+) -> Result<String, NativeError> {
+    debug_assert!(
+        f_native_authorized() && native_object_emit_product(),
+        "ADR-079: F-NATIVE native object product path"
+    );
+    let c_source = lower_verified_aeth_to_c(bytecode)?;
+    let Some(cc) = find_host_c_compiler() else {
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            "M35e native object emit requires host cc/clang/gcc (none found)",
+        ));
+    };
+    if let Some(parent) = object_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|error| {
+                NativeError::new(
+                    "AE-NATIVE-004",
+                    format!("could not create object parent dir: {error}"),
+                )
+            })?;
+        }
+    }
+    let temp_root = std::env::temp_dir().join(format!(
+        "aether-m35e-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(&temp_root).map_err(|error| {
+        NativeError::new("AE-NATIVE-004", format!("temp dir create failed: {error}"))
+    })?;
+    let c_path = temp_root.join("program.c");
+    std::fs::write(&c_path, &c_source).map_err(|error| {
+        NativeError::new(
+            "AE-NATIVE-004",
+            format!("could not write C source: {error}"),
+        )
+    })?;
+    let output = std::process::Command::new(&cc)
+        .arg("-c")
+        .arg(&c_path)
+        .arg("-o")
+        .arg(object_path)
+        .output()
+        .map_err(|error| {
+            NativeError::new(
+                "AE-NATIVE-004",
+                format!("host C compiler invoke failed ({cc}): {error}"),
+            )
+        })?;
+    let _ = std::fs::remove_dir_all(&temp_root);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            format!("host C object emit failed ({cc}): {stderr}"),
+        ));
+    }
+    if !object_path.is_file() {
+        return Err(NativeError::new(
+            "AE-NATIVE-004",
+            format!(
+                "host C object emit did not produce {}",
+                object_path.display()
+            ),
+        ));
+    }
+    Ok(cc)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -622,5 +708,32 @@ weave main [] -> Whole:
             assert_eq!(report.native_exit, Some(7));
             assert_eq!(report.exits_match, Some(true));
         }
+    }
+
+    #[test]
+    fn native_object_emit_product_path_fail_closed_without_cc_or_succeeds() {
+        assert!(native_object_emit_product());
+        let source = "world pure\n\nweave main [] -> Whole:\n  yield 3\n";
+        let bytecode = compile_product_bytecode(source).expect("product");
+        let dir = std::env::temp_dir().join(format!(
+            "aether-m35e-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("temp");
+        let obj = dir.join(if cfg!(windows) { "out.obj" } else { "out.o" });
+        match lower_verified_aeth_to_native_object(&bytecode, &obj) {
+            Ok(_cc) => {
+                assert!(obj.is_file(), "object file must exist");
+            }
+            Err(error) => {
+                assert_eq!(error.code, "AE-NATIVE-004");
+                assert!(error.message.contains("requires host cc") || error.message.contains("cc"));
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

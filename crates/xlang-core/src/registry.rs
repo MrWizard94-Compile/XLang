@@ -86,6 +86,18 @@ pub struct RegistryTrustKey {
     /// `hmac-sha256` (default) or `ed25519` (M24c).
     #[serde(default = "default_trust_algorithm")]
     pub algorithm: String,
+    /// ISO-8601 UTC date `YYYY-MM-DD` when the key becomes valid (M24d).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_before: Option<String>,
+    /// ISO-8601 UTC date `YYYY-MM-DD` when the key expires (M24d).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_after: Option<String>,
+    /// When true, key must not verify or sign (M24d).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub revoked: bool,
+    /// Prior key id this key rotated from (M24d).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotated_from: Option<String>,
 }
 
 fn default_trust_algorithm() -> String {
@@ -111,6 +123,12 @@ pub const fn registry_signed_fetch_pilot() -> bool {
 /// M24c: Ed25519 PKI trust keys + HTTPS fetch-signed are product.
 #[must_use]
 pub const fn registry_ed25519_https_pilot() -> bool {
+    true
+}
+
+/// M24d: trust key rotation / revoke / validity window policy is product.
+#[must_use]
+pub const fn registry_key_rotation_policy() -> bool {
     true
 }
 
@@ -358,6 +376,10 @@ pub fn install_trust_key_with_algorithm(
         key_id: key_id.to_owned(),
         key_path: relative,
         algorithm,
+        not_before: None,
+        not_after: None,
+        revoked: false,
+        rotated_from: None,
     };
     let mut trust = load_or_empty_trust(cache_root)?;
     trust.keys.retain(|existing| existing.key_id != key.key_id);
@@ -365,6 +387,179 @@ pub fn install_trust_key_with_algorithm(
     trust.keys.sort_by(|a, b| a.key_id.cmp(&b.key_id));
     write_trust_index(cache_root, &trust)?;
     Ok(key)
+}
+
+/// M24d: revoke a trust key (fails closed on subsequent verify/sign).
+pub fn revoke_trust_key(
+    cache_root: &Path,
+    key_id: &str,
+) -> Result<RegistryTrustKey, RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_key_rotation_policy(),
+        "ADR-080: registry key rotation policy"
+    );
+    let mut trust = load_or_empty_trust(cache_root)?;
+    let key = trust
+        .keys
+        .iter_mut()
+        .find(|candidate| candidate.key_id == key_id)
+        .ok_or_else(|| {
+            RegistryError::new("AE-REG-006", format!("unknown trust key_id {key_id}"))
+        })?;
+    key.revoked = true;
+    let out = key.clone();
+    write_trust_index(cache_root, &trust)?;
+    Ok(out)
+}
+
+/// M24d: set validity window for a trust key (`YYYY-MM-DD` or empty to clear).
+pub fn set_trust_key_validity(
+    cache_root: &Path,
+    key_id: &str,
+    not_before: Option<&str>,
+    not_after: Option<&str>,
+) -> Result<RegistryTrustKey, RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_key_rotation_policy(),
+        "ADR-080: registry key rotation policy"
+    );
+    if let Some(date) = not_before {
+        validate_iso_date(date)?;
+    }
+    if let Some(date) = not_after {
+        validate_iso_date(date)?;
+    }
+    let mut trust = load_or_empty_trust(cache_root)?;
+    let key = trust
+        .keys
+        .iter_mut()
+        .find(|candidate| candidate.key_id == key_id)
+        .ok_or_else(|| {
+            RegistryError::new("AE-REG-006", format!("unknown trust key_id {key_id}"))
+        })?;
+    key.not_before = not_before.map(str::to_owned);
+    key.not_after = not_after.map(str::to_owned);
+    let out = key.clone();
+    write_trust_index(cache_root, &trust)?;
+    Ok(out)
+}
+
+/// M24d: install a new key and mark the prior key revoked (rotation).
+pub fn rotate_trust_key(
+    cache_root: &Path,
+    old_key_id: &str,
+    new_key_id: &str,
+    new_key_bytes: &[u8],
+    algorithm: &str,
+) -> Result<RegistryTrustKey, RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_key_rotation_policy(),
+        "ADR-080: registry key rotation policy"
+    );
+    if old_key_id == new_key_id {
+        return Err(RegistryError::new(
+            "AE-REG-006",
+            "rotate requires distinct old and new key ids",
+        ));
+    }
+    let _old = load_trust_key_meta(cache_root, old_key_id)?;
+    let mut new_key =
+        install_trust_key_with_algorithm(cache_root, new_key_id, new_key_bytes, algorithm)?;
+    // Attach rotation metadata and revoke old.
+    let mut trust = load_or_empty_trust(cache_root)?;
+    if let Some(old) = trust
+        .keys
+        .iter_mut()
+        .find(|candidate| candidate.key_id == old_key_id)
+    {
+        old.revoked = true;
+    }
+    if let Some(new) = trust
+        .keys
+        .iter_mut()
+        .find(|candidate| candidate.key_id == new_key_id)
+    {
+        new.rotated_from = Some(old_key_id.to_owned());
+        new_key = new.clone();
+    }
+    write_trust_index(cache_root, &trust)?;
+    Ok(new_key)
+}
+
+fn validate_iso_date(date: &str) -> Result<(), RegistryError> {
+    let parts: Vec<&str> = date.split('-').collect();
+    if parts.len() != 3
+        || parts[0].len() != 4
+        || parts[1].len() != 2
+        || parts[2].len() != 2
+        || !parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit()))
+    {
+        return Err(RegistryError::new(
+            "AE-REG-006",
+            format!("trust key validity date must be YYYY-MM-DD, got {date:?}"),
+        ));
+    }
+    Ok(())
+}
+
+fn trust_key_is_active(key: &RegistryTrustKey) -> Result<(), RegistryError> {
+    if key.revoked {
+        return Err(RegistryError::new(
+            "AE-REG-009",
+            format!("trust key {} is revoked", key.key_id),
+        ));
+    }
+    let today = utc_today_ymd();
+    if let Some(not_before) = &key.not_before {
+        if today.as_str() < not_before.as_str() {
+            return Err(RegistryError::new(
+                "AE-REG-009",
+                format!(
+                    "trust key {} is not yet valid (not_before={not_before})",
+                    key.key_id
+                ),
+            ));
+        }
+    }
+    if let Some(not_after) = &key.not_after {
+        if today.as_str() > not_after.as_str() {
+            return Err(RegistryError::new(
+                "AE-REG-009",
+                format!(
+                    "trust key {} is expired (not_after={not_after})",
+                    key.key_id
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn utc_today_ymd() -> String {
+    // Use system local date as YYYY-MM-DD (operator host clock).
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Approximate civil date from UNIX days (good enough for policy tests).
+    let days = (now / 86_400) as i64;
+    let (y, m, d) = unix_days_to_ymd(days);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+fn unix_days_to_ymd(mut days: i64) -> (i32, u32, u32) {
+    // Algorithm from civil_from_days (Howard Hinnant).
+    days += 719_468;
+    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
+    let doe = (days - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = (yoe as i64) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as i32, m as u32, d as u32)
 }
 
 /// Generate a fresh Ed25519 trust key under the cache root (M24c).
@@ -812,7 +1007,7 @@ fn write_trust_index(
 
 fn load_trust_key_meta(cache_root: &Path, key_id: &str) -> Result<RegistryTrustKey, RegistryError> {
     let trust = load_or_empty_trust(cache_root)?;
-    trust
+    let key = trust
         .keys
         .iter()
         .find(|candidate| candidate.key_id == key_id)
@@ -822,7 +1017,9 @@ fn load_trust_key_meta(cache_root: &Path, key_id: &str) -> Result<RegistryTrustK
                 "AE-REG-006",
                 format!("unknown trust key_id {key_id}; install with registry trust-key"),
             )
-        })
+        })?;
+    trust_key_is_active(&key)?;
+    Ok(key)
 }
 
 fn load_trust_key_bytes(cache_root: &Path, key_id: &str) -> Result<Vec<u8>, RegistryError> {
@@ -1109,6 +1306,37 @@ mod tests {
         assert_eq!(signed.algorithm.as_deref(), Some(REGISTRY_ALG_ED25519));
         assert_eq!(signed.signature.as_ref().map(|s| s.len()), Some(128));
         verify_registry_cache(&root).expect("ed25519 verify");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn key_rotation_and_revoke_fail_closed() {
+        assert!(registry_key_rotation_policy());
+        let root = temp_dir();
+        install_trust_key(&root, "v1", b"old-hmac-key-material-bytes!!").expect("v1");
+        let artifact = root.join("payload.bin");
+        fs::write(&artifact, b"AETH\x0brotate").expect("write");
+        pin_local_package_signed(&root, "demo", "1.0.0", &artifact, "v1").expect("signed v1");
+        let rotated = rotate_trust_key(
+            &root,
+            "v1",
+            "v2",
+            b"new-hmac-key-material-bytes!!",
+            REGISTRY_ALG_HMAC_SHA256,
+        )
+        .expect("rotate");
+        assert_eq!(rotated.key_id, "v2");
+        assert_eq!(rotated.rotated_from.as_deref(), Some("v1"));
+        // Old key is revoked: signing with v1 fails.
+        let err =
+            pin_local_package_signed(&root, "demo", "1.0.1", &artifact, "v1").expect_err("revoked");
+        assert_eq!(err.code, "AE-REG-009");
+        // New key works.
+        pin_local_package_signed(&root, "demo", "1.0.1", &artifact, "v2").expect("signed v2");
+        revoke_trust_key(&root, "v2").expect("revoke v2");
+        let err = pin_local_package_signed(&root, "demo", "1.0.2", &artifact, "v2")
+            .expect_err("revoked v2");
+        assert_eq!(err.code, "AE-REG-009");
         let _ = fs::remove_dir_all(&root);
     }
 }

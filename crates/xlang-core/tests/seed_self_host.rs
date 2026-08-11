@@ -605,6 +605,14 @@ fn barp_adr075_multi_source_envelope_product_forge() {
     let bytecode = compile_product_multi_source_envelope(&envelope).expect("multi forge");
     verify_bytecode(&bytecode).expect("verify multi");
     assert_eq!(run_bytecode(&bytecode).expect("run").exit_code, 42);
+    // ADR-078: product compile auto-detects multi-source envelopes.
+    let via_product = compile_product_bytecode(&envelope).expect("product multi-source");
+    assert_eq!(
+        run_bytecode(&via_product)
+            .expect("run product multi")
+            .exit_code,
+        42
+    );
 }
 
 #[test]

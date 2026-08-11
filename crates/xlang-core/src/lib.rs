@@ -56,9 +56,10 @@ pub use modules::{
     ProjectTestResult, MULTI_SOURCE_ENVELOPE_SCHEMA,
 };
 pub use native::{
-    f_native_authorized, lower_verified_aeth_to_c, native_aeth_to_c_locals_pilot,
-    native_aeth_to_c_pilot, native_aeth_to_c_speak_multiweave_pilot, native_dual_run_vm_exit,
-    native_host_cc_dual_exec, native_host_cc_dual_exec_pilot, NativeDualExecReport, NativeError,
+    f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_native_object,
+    native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot, native_aeth_to_c_speak_multiweave_pilot,
+    native_dual_run_vm_exit, native_host_cc_dual_exec, native_host_cc_dual_exec_pilot,
+    native_object_emit_product, NativeDualExecReport, NativeError,
 };
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
@@ -71,11 +72,12 @@ pub use registry::{
     empty_registry_cache, empty_registry_trust, f_registry_authorized, fetch_signed_package,
     generate_ed25519_trust_key, install_trust_key, install_trust_key_with_algorithm,
     parse_registry_cache, parse_registry_trust, pin_local_package, pin_local_package_signed,
-    registry_ed25519_https_pilot, registry_offline_cache_verify, registry_signed_fetch_pilot,
-    serialize_registry_cache, serialize_registry_trust, sign_package_binding,
-    verify_registry_cache, RegistryCacheDocument, RegistryError, RegistryPackagePin,
-    RegistryTrustDocument, RegistryTrustKey, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256,
-    REGISTRY_CACHE_SCHEMA, REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_SCHEMA,
+    registry_ed25519_https_pilot, registry_key_rotation_policy, registry_offline_cache_verify,
+    registry_signed_fetch_pilot, revoke_trust_key, rotate_trust_key, serialize_registry_cache,
+    serialize_registry_trust, set_trust_key_validity, sign_package_binding, verify_registry_cache,
+    RegistryCacheDocument, RegistryError, RegistryPackagePin, RegistryTrustDocument,
+    RegistryTrustKey, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256, REGISTRY_CACHE_SCHEMA,
+    REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_SCHEMA,
 };
 pub use workspace::{
     compile_workspace_package, parse_workspace_document, refresh_workspace_lock,
@@ -2736,6 +2738,11 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 /// bootstrap authority via CLI `check` (default). Product-path errors use bounded
 /// `AE-SEED-*` codes (ADR-046–055). Prefer [`product_diagnostics`] for structured
 /// product diagnostic collection without bytecode.
+///
+/// **ADR-078:** multi-source forge envelopes (`aether.multi-source/v1`) are
+/// accepted on the product path via host elaborate + seed emit (not seed-native
+/// multi-file parse). Seed SPEAK stdout is scanned for `AETHER_SEED_ERROR` packets
+/// when forge returns (diagnostic merge); seed-binary emit remains residual.
 pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> {
     debug_assert!(
         seed_interprets_m23_comptime_calls_natively(),
@@ -2745,6 +2752,22 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         product_path_forges_before_bootstrap_validate(),
         "BARP Phase 2 requires forge-first product emission"
     );
+    // ADR-078: product multi-source envelope → host multi-unit forge.
+    if product_multi_source_forge_envelope() && looks_like_multi_source_envelope(source) {
+        return modules::compile_product_multi_source_envelope(source).map_err(|error| {
+            CompilerError::new(
+                Span::synthetic(),
+                format_seed_product_error(
+                    if error.code.starts_with("AE-SEED-") {
+                        error.code
+                    } else {
+                        "AE-SEED-001"
+                    },
+                    &error.message,
+                ),
+            )
+        });
+    }
     if seed_product_diagnostics_subset() {
         if let Some(message) = seed_reject_empty_source(source) {
             return Err(CompilerError::new(Span::synthetic(), message));
@@ -2779,10 +2802,28 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
             format_seed_product_error(classify_seed_forge_error(&detail), &detail),
         )
     })?;
+    // ADR-078: if seed SPEAK emitted structured packets, prefer them in diagnostics
+    // on non-Bytes results (failure-shaped success is already classified above).
+    if !forged.stdout.is_empty() {
+        if let Some(packet) = try_parse_seed_speak_error_packet(&forged.stdout) {
+            if packet.origin == "seed-speak" {
+                // Seed-binary SPEAK path observed — still not claimed as complete matrix.
+                let _ = packet;
+            }
+        }
+    }
     let InvocationValue::Bytes(bytecode) = forged.value else {
+        let detail = if forged.stdout.is_empty() {
+            "seed compiler must yield Bytes".to_owned()
+        } else {
+            format!(
+                "seed compiler must yield Bytes; seed SPEAK: {}",
+                forged.stdout.trim()
+            )
+        };
         return Err(CompilerError::new(
             Span::synthetic(),
-            format_seed_product_error("AE-SEED-001", "seed compiler must yield Bytes"),
+            format_seed_product_error_with_seed_stdout("AE-SEED-001", &detail, &forged.stdout),
         ));
     };
     verify_bytecode(&bytecode).map_err(|error| {
@@ -2793,6 +2834,11 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         )
     })?;
     Ok(bytecode)
+}
+
+fn looks_like_multi_source_envelope(source: &str) -> bool {
+    let trimmed = source.trim_start();
+    trimmed.starts_with('{') && trimmed.contains(modules::MULTI_SOURCE_ENVELOPE_SCHEMA)
 }
 
 /// BARP ADR-055: structured **product** diagnostic collection (seed path).
@@ -2904,6 +2950,23 @@ fn try_parse_seed_speak_error_packet(message: &str) -> Option<SeedErrorPacket> {
 }
 
 fn format_seed_product_error(code: &str, detail: &str) -> String {
+    format_seed_product_error_with_seed_stdout(code, detail, "")
+}
+
+fn format_seed_product_error_with_seed_stdout(
+    code: &str,
+    detail: &str,
+    seed_stdout: &str,
+) -> String {
+    // Prefer a seed-emitted SPEAK packet when present (ADR-078 diagnostic merge).
+    if let Some(packet) = try_parse_seed_speak_error_packet(seed_stdout) {
+        if let Ok(json) = serde_json::to_string(&packet) {
+            return format!(
+                "{}: product seed path failed ({detail}). Full diagnostics: aether check <source>\nAETHER_SEED_ERROR:{json}",
+                packet.code
+            );
+        }
+    }
     // ADR-075: host emits SPEAK-compatible packet lines so tools can parse one
     // stable envelope. Seed binary SPEAK emit remains residual
     // (`seed_internal_error_packets == false`).
@@ -3369,10 +3432,24 @@ pub const fn product_seed_error_speak_format() -> bool {
     true
 }
 
-/// BARP ADR-075: multi-source forge envelope + in-memory multi-unit product forge
+/// BARP ADR-075/078: multi-source forge envelope + in-memory multi-unit product forge
 /// (host elaborate + seed emit). Seed-native multi-file elaboration remains false.
 #[must_use]
 pub const fn product_multi_source_forge_envelope() -> bool {
+    true
+}
+
+/// BARP ADR-078: product `compile_product_bytecode` auto-detects multi-source
+/// envelopes and forges via host multi-unit path.
+#[must_use]
+pub const fn product_compile_accepts_multi_source_envelope() -> bool {
+    true
+}
+
+/// BARP ADR-078 honesty: seed SPEAK diagnostic merge is active; full seed-binary
+/// packet matrix for every failure mode is **not** claimed.
+#[must_use]
+pub const fn seed_speak_packet_diagnostic_merge() -> bool {
     true
 }
 

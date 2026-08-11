@@ -15,6 +15,9 @@
 | M24C-001 | generate ed25519 trust key + signed pin | PASS |
 | M24C-002 | ed25519 verify-cache | PASS |
 | M24C-003 | bad ed25519 signature | FAIL closed AE-REG-007 |
+| M24D-001 | rotate-key revokes old, new signs | PASS |
+| M24D-002 | revoke-key blocks sign/verify | FAIL closed AE-REG-009 |
+| M24D-003 | set-key-validity out of window | FAIL closed AE-REG-009 |
 
 ---
 

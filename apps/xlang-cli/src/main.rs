@@ -12,15 +12,17 @@ use aether_core::{
     compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
     compile_workspace_package, fetch_signed_package, forge_bytecode, format_project, format_source,
     format_source_product, install_trust_key, lower_verified_aeth_to_c,
-    multi_module_authority_note, parse_project_document, parse_workspace_document,
-    pin_local_package, pin_local_package_signed, product_cli_check_without_bootstrap,
-    product_default_cli_toolchain, product_format_without_bootstrap,
-    product_project_format_without_bootstrap, product_seed_rebuild_without_bootstrap,
-    product_structure_json, product_structure_without_bootstrap, refresh_project_lock,
-    refresh_workspace_lock, run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
-    serialize_project_document, serialize_workspace_document, structural_document_json,
-    unit_artifact_file_name, verify_bytecode, verify_project, verify_registry_cache,
-    verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    lower_verified_aeth_to_native_object, multi_module_authority_note, parse_project_document,
+    parse_workspace_document, pin_local_package, pin_local_package_signed,
+    product_cli_check_without_bootstrap, product_default_cli_toolchain,
+    product_format_without_bootstrap, product_project_format_without_bootstrap,
+    product_seed_rebuild_without_bootstrap, product_structure_json,
+    product_structure_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
+    revoke_trust_key, rotate_trust_key, run_bytecode, run_bytecode_with_grants,
+    run_project_tests_with_grants, serialize_project_document, serialize_workspace_document,
+    set_trust_key_validity, structural_document_json, unit_artifact_file_name, verify_bytecode,
+    verify_project, verify_registry_cache, verify_workspace, HostGrantConfig, InvocationValue,
+    LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
@@ -70,16 +72,23 @@ fn compile(
     output_path: &Path,
     use_bootstrap: bool,
     native_c: bool,
+    native_object: bool,
 ) -> Result<(), String> {
     let source = read_source(source_path)?;
     // BARP Phase 2 (ADR-044): default product compile forges seed bytecode without
     // a bootstrap validate precondition. --bootstrap remains rebuild/oracle path.
-    // ADR-059: --native-c lowers verified AETH to ISO C (F-NATIVE pure pilot).
-    if native_c && use_bootstrap {
-        return Err("compile accepts either --bootstrap or --native-c, not both".to_owned());
+    // ADR-059/079: --native-c / --native-object lower verified AETH (F-NATIVE).
+    if (native_c || native_object) && use_bootstrap {
+        return Err(
+            "compile accepts either --bootstrap or --native-c/--native-object, not both".to_owned(),
+        );
+    }
+    if native_c && native_object {
+        return Err("compile accepts either --native-c or --native-object, not both".to_owned());
     }
     // ADR-067: product path (no --bootstrap) is seed rebuild + product compile.
     // --bootstrap remains dual-compare / recovery oracle emit only.
+    // ADR-078: multi-source envelopes are accepted on the product path.
     let bytecode = if use_bootstrap {
         compile_to_bytecode(&source)
             .map_err(|error| error.to_string())?
@@ -96,6 +105,15 @@ fn compile(
         write_source(output_path, &c_source)?;
         println!(
             "{LANGUAGE_NAME} {LANGUAGE_VERSION} lowered verified AETH to C {} (F-NATIVE M35c)",
+            output_path.display()
+        );
+        return Ok(());
+    }
+    if native_object {
+        let cc = lower_verified_aeth_to_native_object(&bytecode, output_path)
+            .map_err(|error| error.to_string())?;
+        println!(
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} lowered verified AETH to native object {} via {cc} (F-NATIVE M35e)",
             output_path.display()
         );
         return Ok(());
@@ -835,14 +853,17 @@ fn run() -> Result<(), String> {
             let output = next_argument(&mut arguments, "artifact output file")?;
             let mut use_bootstrap = false;
             let mut native_c = false;
+            let mut native_object = false;
             for extra in arguments.by_ref() {
                 if extra == "--bootstrap" {
                     use_bootstrap = true;
                 } else if extra == "--native-c" {
                     native_c = true;
+                } else if extra == "--native-object" {
+                    native_object = true;
                 } else {
                     return Err(
-                        "compile accepts --output <file> and optional --bootstrap or --native-c"
+                        "compile accepts --output <file> and optional --bootstrap, --native-c, or --native-object"
                             .to_owned(),
                     );
                 }
@@ -852,6 +873,7 @@ fn run() -> Result<(), String> {
                 Path::new(&output),
                 use_bootstrap,
                 native_c,
+                native_object,
             )
         }
         "registry" => {
@@ -1011,8 +1033,123 @@ fn run() -> Result<(), String> {
                         &key_id.to_string_lossy(),
                     )
                 }
+                "revoke-key" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let mut key_id = None;
+                    let mut args = arguments;
+                    while let Some(flag) = args.next() {
+                        if flag == "--key-id" {
+                            key_id = Some(next_argument(&mut args, "key id")?);
+                        } else {
+                            return Err("registry revoke-key accepts --key-id".to_owned());
+                        }
+                    }
+                    let key_id =
+                        key_id.ok_or_else(|| "registry revoke-key requires --key-id".to_owned())?;
+                    let key = revoke_trust_key(Path::new(&root), &key_id.to_string_lossy())
+                        .map_err(|error| error.to_string())?;
+                    println!(
+                        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry revoked trust key {}",
+                        key.key_id
+                    );
+                    Ok(())
+                }
+                "rotate-key" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let mut old_id = None;
+                    let mut new_id = None;
+                    let mut key_file = None;
+                    let mut algorithm = None;
+                    let mut args = arguments;
+                    while let Some(flag) = args.next() {
+                        if flag == "--old-key-id" {
+                            old_id = Some(next_argument(&mut args, "old key id")?);
+                        } else if flag == "--new-key-id" {
+                            new_id = Some(next_argument(&mut args, "new key id")?);
+                        } else if flag == "--key-file" {
+                            key_file = Some(next_argument(&mut args, "key file")?);
+                        } else if flag == "--algorithm" {
+                            algorithm = Some(next_argument(&mut args, "algorithm")?);
+                        } else {
+                            return Err(
+                                "registry rotate-key accepts --old-key-id --new-key-id --key-file [--algorithm]"
+                                    .to_owned(),
+                            );
+                        }
+                    }
+                    let old_id = old_id
+                        .ok_or_else(|| "registry rotate-key requires --old-key-id".to_owned())?;
+                    let new_id = new_id
+                        .ok_or_else(|| "registry rotate-key requires --new-key-id".to_owned())?;
+                    let key_file = key_file
+                        .ok_or_else(|| "registry rotate-key requires --key-file".to_owned())?;
+                    let algorithm = algorithm
+                        .as_ref()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "hmac-sha256".to_owned());
+                    let bytes = fs::read(Path::new(&key_file)).map_err(|error| {
+                        format!("could not read key file {}: {error}", key_file.to_string_lossy())
+                    })?;
+                    let key = rotate_trust_key(
+                        Path::new(&root),
+                        &old_id.to_string_lossy(),
+                        &new_id.to_string_lossy(),
+                        &bytes,
+                        &algorithm,
+                    )
+                    .map_err(|error| error.to_string())?;
+                    println!(
+                        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry rotated trust key {} -> {} ({})",
+                        old_id.to_string_lossy(),
+                        key.key_id,
+                        key.algorithm
+                    );
+                    Ok(())
+                }
+                "set-key-validity" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let mut key_id = None;
+                    let mut not_before = None;
+                    let mut not_after = None;
+                    let mut args = arguments;
+                    while let Some(flag) = args.next() {
+                        if flag == "--key-id" {
+                            key_id = Some(next_argument(&mut args, "key id")?);
+                        } else if flag == "--not-before" {
+                            not_before = Some(next_argument(&mut args, "not-before date")?);
+                        } else if flag == "--not-after" {
+                            not_after = Some(next_argument(&mut args, "not-after date")?);
+                        } else {
+                            return Err(
+                                "registry set-key-validity accepts --key-id [--not-before] [--not-after]"
+                                    .to_owned(),
+                            );
+                        }
+                    }
+                    let key_id = key_id.ok_or_else(|| {
+                        "registry set-key-validity requires --key-id".to_owned()
+                    })?;
+                    let key = set_trust_key_validity(
+                        Path::new(&root),
+                        &key_id.to_string_lossy(),
+                        not_before
+                            .as_ref()
+                            .map(|s| s.to_string_lossy().into_owned())
+                            .as_deref(),
+                        not_after
+                            .as_ref()
+                            .map(|s| s.to_string_lossy().into_owned())
+                            .as_deref(),
+                    )
+                    .map_err(|error| error.to_string())?;
+                    println!(
+                        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry key {} validity not_before={:?} not_after={:?}",
+                        key.key_id, key.not_before, key.not_after
+                    );
+                    Ok(())
+                }
                 other => Err(format!(
-                    "unknown registry subcommand {other} (use verify-cache, pin-local, trust-key, pin-local-signed, or fetch-signed)"
+                    "unknown registry subcommand {other} (use verify-cache, pin-local, trust-key, pin-local-signed, fetch-signed, revoke-key, rotate-key, or set-key-validity)"
                 )),
             }
         }
