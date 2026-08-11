@@ -6,17 +6,19 @@ use aether_core::{
     lsp_product_diagnostics_primary, lsp_product_surface_hover_definition,
     multi_module_product_choose_revise_supported, product_cli_check_without_bootstrap,
     product_default_cli_toolchain, product_diagnostic_abi, product_diagnostics,
-    product_format_without_bootstrap, product_multi_module_invokes_bootstrap,
-    product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
-    product_project_format_without_bootstrap, product_rejects_yield_in_truth_choose,
+    product_error_packets, product_format_without_bootstrap,
+    product_multi_module_invokes_bootstrap, product_path_forges_before_bootstrap_validate,
+    product_path_requires_bootstrap_dual_compare, product_project_format_without_bootstrap,
+    product_rejects_yield_in_truth_choose, product_seed_error_packet_abi,
     product_seed_rebuild_without_bootstrap, product_structure_without_bootstrap,
     product_surface_symbols, product_surface_symbols_without_bootstrap, run_bytecode,
-    seed_interprets_m23_comptime_calls_natively, seed_native_multi_module_elaboration,
-    seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
-    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
-    structural_edit_product_base_gate, structural_edit_product_statement_and_record_ops,
-    structural_edit_product_top_level_weave_ops, structural_edit_product_weave_replace,
-    verify_bytecode, InvocationOutput, InvocationValue, SEED_COMPILER_ARTIFACT,
+    seed_internal_error_packets, seed_interprets_m23_comptime_calls_natively,
+    seed_native_multi_module_elaboration, seed_product_diagnostics_phase3c,
+    seed_product_diagnostics_subset, seed_product_preflight_phase3b,
+    structural_edit_accepts_via_product_seed, structural_edit_product_base_gate,
+    structural_edit_product_statement_and_record_ops, structural_edit_product_top_level_weave_ops,
+    structural_edit_product_weave_replace, verify_bytecode, InvocationOutput, InvocationValue,
+    SEED_COMPILER_ARTIFACT, SEED_ERROR_PACKET_SCHEMA,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -557,6 +559,26 @@ fn barp_phase4_product_diagnostic_abi_and_import_unit() {
     );
     assert_eq!(import_diags.len(), 1);
     assert_eq!(import_diags[0].code, "AE-SEED-012");
+}
+
+#[test]
+fn barp_adr072_product_seed_error_packet_abi() {
+    assert!(product_seed_error_packet_abi());
+    assert!(
+        !seed_internal_error_packets(),
+        "seed binary packet emit still residual"
+    );
+    let empty = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield 1\n");
+    assert!(empty.is_empty());
+    let packets = product_error_packets("");
+    assert_eq!(packets.len(), 1);
+    assert_eq!(packets[0].schema, SEED_ERROR_PACKET_SCHEMA);
+    assert_eq!(packets[0].code, "AE-SEED-005");
+    assert_eq!(packets[0].origin, "host-preflight");
+    let typed = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield \"x\"\n");
+    assert_eq!(typed.len(), 1);
+    assert_eq!(typed[0].code, "AE-SEED-010");
+    assert_eq!(typed[0].origin, "host-classify");
 }
 
 #[test]

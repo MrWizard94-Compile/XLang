@@ -9,6 +9,9 @@
 | M35A-005 | no Aether-source→C without AETH | only verified AETH input |
 | M35B-001 | bind + sum + yield lowers with locals | C has locals[] and + |
 | M35B-002 | VM exit matches for bind sum fixture | exit 42 |
+| M35C-001 | speak Text + multi-weave call lowers | C has fputs + aether_fn_ CALL |
+| M35C-002 | VM exit + stdout for multi-weave speak fixture | exit 42, stdout `ok` |
+| M35C-003 | dual-run helper: VM exit + successful C lower | `native_dual_run_vm_exit` |
 
 ---
 

@@ -79,8 +79,10 @@ authority under Constitution.
     `multi_module_product_choose_revise_supported`). Showcase-driven.  
 28. **ADR-071 (done):** product nested choose/while body-list statement ops;
     `structural_edit_product_nested_body_list_ops()`.  
-29. Residual bootstrap: dual-compare oracle, recovery flags, full `aether.ast/v8`.  
-30. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
+29. **ADR-072 (done):** product seed-error packet ABI (`product_error_packets`);
+    seed-binary emit still false.  
+30. Residual bootstrap: dual-compare oracle, recovery flags, full `aether.ast/v8`.  
+31. Each phase ships with matrix green, DOC-SYNC, and honest Seed Profile claims.
 
 ## Consequences
 

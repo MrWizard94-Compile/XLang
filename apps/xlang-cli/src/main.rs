@@ -10,14 +10,14 @@ mod test_runner;
 use aether_core::{
     apply_edit_cli_trusts_product_accept, apply_structural_edit, canonical_ast,
     compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
-    compile_workspace_package, forge_bytecode, format_project, format_source,
-    format_source_product, lower_verified_aeth_to_c, multi_module_authority_note,
-    parse_project_document, parse_workspace_document, pin_local_package,
-    product_cli_check_without_bootstrap, product_default_cli_toolchain,
-    product_format_without_bootstrap, product_project_format_without_bootstrap,
-    product_seed_rebuild_without_bootstrap, product_structure_json,
-    product_structure_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
-    run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
+    compile_workspace_package, fetch_signed_package, forge_bytecode, format_project, format_source,
+    format_source_product, install_trust_key, lower_verified_aeth_to_c,
+    multi_module_authority_note, parse_project_document, parse_workspace_document,
+    pin_local_package, pin_local_package_signed, product_cli_check_without_bootstrap,
+    product_default_cli_toolchain, product_format_without_bootstrap,
+    product_project_format_without_bootstrap, product_seed_rebuild_without_bootstrap,
+    product_structure_json, product_structure_without_bootstrap, refresh_project_lock,
+    refresh_workspace_lock, run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
     serialize_project_document, serialize_workspace_document, structural_document_json,
     unit_artifact_file_name, verify_bytecode, verify_project, verify_registry_cache,
     verify_workspace, HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
@@ -25,7 +25,7 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c]\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-c to lower verified AETH to ISO C (F-NATIVE M35a pure Whole pilot; not default).\nregistry pin-local/verify-cache are offline-only F-REGISTRY M24a (no network)."
+        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c]\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-c to lower verified AETH to ISO C (F-NATIVE M35c pure pilot: Whole locals, SPEAK/Text, multi-weave CALL; not default).\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b HMAC pilot (explicit only; file:// or http://; no TLS)."
     );
 }
 
@@ -95,7 +95,7 @@ fn compile(
         let c_source = lower_verified_aeth_to_c(&bytecode).map_err(|error| error.to_string())?;
         write_source(output_path, &c_source)?;
         println!(
-            "{LANGUAGE_NAME} {LANGUAGE_VERSION} lowered verified AETH to C {} (F-NATIVE M35a)",
+            "{LANGUAGE_NAME} {LANGUAGE_VERSION} lowered verified AETH to C {} (F-NATIVE M35c)",
             output_path.display()
         );
         return Ok(());
@@ -137,6 +137,60 @@ fn registry_pin_local(
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry pinned {}@{} -> {} (sha256={})",
         pin.name, pin.version, pin.artifact, pin.sha256
+    );
+    Ok(())
+}
+
+fn registry_trust_key(cache_root: &Path, key_id: &str, key_file: &Path) -> Result<(), String> {
+    let key_bytes = fs::read(key_file)
+        .map_err(|error| format!("could not read trust key {}: {error}", key_file.display()))?;
+    let key =
+        install_trust_key(cache_root, key_id, &key_bytes).map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry trust key {} installed at {}",
+        key.key_id, key.key_path
+    );
+    Ok(())
+}
+
+fn registry_pin_local_signed(
+    cache_root: &Path,
+    name: &str,
+    version: &str,
+    artifact: &Path,
+    key_id: &str,
+) -> Result<(), String> {
+    let pin = pin_local_package_signed(cache_root, name, version, artifact, key_id)
+        .map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry signed-pin {}@{} -> {} (sha256={} sig={} key={})",
+        pin.name,
+        pin.version,
+        pin.artifact,
+        pin.sha256,
+        pin.signature.as_deref().unwrap_or(""),
+        pin.key_id.as_deref().unwrap_or("")
+    );
+    Ok(())
+}
+
+fn registry_fetch_signed(
+    cache_root: &Path,
+    name: &str,
+    version: &str,
+    source_url: &str,
+    signature: &str,
+    key_id: &str,
+) -> Result<(), String> {
+    let pin = fetch_signed_package(cache_root, name, version, source_url, signature, key_id)
+        .map_err(|error| error.to_string())?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry fetch-signed {}@{} -> {} (sha256={} key={})",
+        pin.name,
+        pin.version,
+        pin.artifact,
+        pin.sha256,
+        pin.key_id.as_deref().unwrap_or("")
     );
     Ok(())
 }
@@ -844,8 +898,121 @@ fn run() -> Result<(), String> {
                         Path::new(&artifact),
                     )
                 }
+                "trust-key" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let mut key_id = None;
+                    let mut key_file = None;
+                    let mut args = arguments;
+                    while let Some(flag) = args.next() {
+                        if flag == "--key-id" {
+                            key_id = Some(next_argument(&mut args, "key id")?);
+                        } else if flag == "--key-file" {
+                            key_file = Some(next_argument(&mut args, "key file")?);
+                        } else {
+                            return Err(
+                                "registry trust-key accepts --key-id --key-file".to_owned()
+                            );
+                        }
+                    }
+                    let key_id =
+                        key_id.ok_or_else(|| "registry trust-key requires --key-id".to_owned())?;
+                    let key_file = key_file
+                        .ok_or_else(|| "registry trust-key requires --key-file".to_owned())?;
+                    registry_trust_key(
+                        Path::new(&root),
+                        &key_id.to_string_lossy(),
+                        Path::new(&key_file),
+                    )
+                }
+                "pin-local-signed" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let mut name = None;
+                    let mut version = None;
+                    let mut artifact = None;
+                    let mut key_id = None;
+                    let mut args = arguments;
+                    while let Some(flag) = args.next() {
+                        if flag == "--name" {
+                            name = Some(next_argument(&mut args, "package name")?);
+                        } else if flag == "--version" {
+                            version = Some(next_argument(&mut args, "package version")?);
+                        } else if flag == "--artifact" {
+                            artifact = Some(next_argument(&mut args, "artifact path")?);
+                        } else if flag == "--key-id" {
+                            key_id = Some(next_argument(&mut args, "key id")?);
+                        } else {
+                            return Err(
+                                "registry pin-local-signed accepts --name --version --artifact --key-id"
+                                    .to_owned(),
+                            );
+                        }
+                    }
+                    let name = name
+                        .ok_or_else(|| "registry pin-local-signed requires --name".to_owned())?;
+                    let version = version.ok_or_else(|| {
+                        "registry pin-local-signed requires --version".to_owned()
+                    })?;
+                    let artifact = artifact.ok_or_else(|| {
+                        "registry pin-local-signed requires --artifact".to_owned()
+                    })?;
+                    let key_id = key_id
+                        .ok_or_else(|| "registry pin-local-signed requires --key-id".to_owned())?;
+                    registry_pin_local_signed(
+                        Path::new(&root),
+                        &name.to_string_lossy(),
+                        &version.to_string_lossy(),
+                        Path::new(&artifact),
+                        &key_id.to_string_lossy(),
+                    )
+                }
+                "fetch-signed" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let mut name = None;
+                    let mut version = None;
+                    let mut url = None;
+                    let mut signature = None;
+                    let mut key_id = None;
+                    let mut args = arguments;
+                    while let Some(flag) = args.next() {
+                        if flag == "--name" {
+                            name = Some(next_argument(&mut args, "package name")?);
+                        } else if flag == "--version" {
+                            version = Some(next_argument(&mut args, "package version")?);
+                        } else if flag == "--url" {
+                            url = Some(next_argument(&mut args, "source url")?);
+                        } else if flag == "--signature" {
+                            signature = Some(next_argument(&mut args, "signature hex")?);
+                        } else if flag == "--key-id" {
+                            key_id = Some(next_argument(&mut args, "key id")?);
+                        } else {
+                            return Err(
+                                "registry fetch-signed accepts --name --version --url --signature --key-id"
+                                    .to_owned(),
+                            );
+                        }
+                    }
+                    let name = name
+                        .ok_or_else(|| "registry fetch-signed requires --name".to_owned())?;
+                    let version = version
+                        .ok_or_else(|| "registry fetch-signed requires --version".to_owned())?;
+                    let url =
+                        url.ok_or_else(|| "registry fetch-signed requires --url".to_owned())?;
+                    let signature = signature.ok_or_else(|| {
+                        "registry fetch-signed requires --signature".to_owned()
+                    })?;
+                    let key_id = key_id
+                        .ok_or_else(|| "registry fetch-signed requires --key-id".to_owned())?;
+                    registry_fetch_signed(
+                        Path::new(&root),
+                        &name.to_string_lossy(),
+                        &version.to_string_lossy(),
+                        &url.to_string_lossy(),
+                        &signature.to_string_lossy(),
+                        &key_id.to_string_lossy(),
+                    )
+                }
                 other => Err(format!(
-                    "unknown registry subcommand {other} (use verify-cache or pin-local)"
+                    "unknown registry subcommand {other} (use verify-cache, pin-local, trust-key, pin-local-signed, or fetch-signed)"
                 )),
             }
         }

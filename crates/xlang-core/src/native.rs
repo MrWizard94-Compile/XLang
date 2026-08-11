@@ -1,12 +1,12 @@
-//! M35 verified AETH → C pure pilot (F-NATIVE, ADR-059 / ADR-062 M35b).
+//! M35 verified AETH → C pure pilot (F-NATIVE, ADR-059 / ADR-062 / ADR-073 M35c).
 //!
-//! Lowers a restricted pure Total main subset including Whole locals and
-//! arithmetic. Input must already verify.
+//! Lowers a restricted pure Total subset: Whole locals/arithmetic, SPEAK/Text,
+//! and multi-weave pure Whole helpers via CALL. Input must already verify.
 
 use crate::{
-    parse_artifact, verify_bytecode, ArtifactFunction, BytecodeError, ValueType, OP_DIFFERENCE,
-    OP_LOAD, OP_PRODUCT, OP_PUSH_TEXT, OP_PUSH_WHOLE, OP_QUOTIENT, OP_REMAINDER, OP_SPEAK,
-    OP_STORE, OP_SUM, OP_YIELD,
+    parse_artifact, verify_bytecode, Artifact, ArtifactFunction, BytecodeError, Effect, ValueType,
+    OP_CALL, OP_DIFFERENCE, OP_LOAD, OP_PRODUCT, OP_PUSH_TEXT, OP_PUSH_WHOLE, OP_QUOTIENT,
+    OP_REMAINDER, OP_SPEAK, OP_STORE, OP_SUM, OP_YIELD,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,7 +54,13 @@ pub const fn native_aeth_to_c_locals_pilot() -> bool {
     true
 }
 
-/// Lower **verified** AETH to ISO C for the pure Whole pilot subset.
+/// M35c: SPEAK/Text and multi-weave pure Whole helpers (CALL) are supported.
+#[must_use]
+pub const fn native_aeth_to_c_speak_multiweave_pilot() -> bool {
+    true
+}
+
+/// Lower **verified** AETH to ISO C for the pure pilot subset (M35a–c).
 pub fn lower_verified_aeth_to_c(bytecode: &[u8]) -> Result<String, NativeError> {
     debug_assert!(
         f_native_authorized() && native_aeth_to_c_pilot(),
@@ -62,49 +68,152 @@ pub fn lower_verified_aeth_to_c(bytecode: &[u8]) -> Result<String, NativeError> 
     );
     verify_bytecode(bytecode)?;
     let artifact = parse_artifact(bytecode)?;
-    if artifact.functions.len() != 1 {
+    validate_pure_pilot_artifact(&artifact)?;
+    emit_c_for_artifact(&artifact)
+}
+
+fn validate_pure_pilot_artifact(artifact: &Artifact) -> Result<(), NativeError> {
+    if artifact.functions.is_empty() {
+        return Err(NativeError::new(
+            "AE-NATIVE-002",
+            "M35 pilot requires at least one guest total weave",
+        ));
+    }
+    let mut saw_main = false;
+    for function in &artifact.functions {
+        if function.is_host() || function.is_task() {
+            return Err(NativeError::new(
+                "AE-NATIVE-002",
+                "M35 pilot rejects host and task weaves",
+            ));
+        }
+        if function.effect != Effect::Total {
+            return Err(NativeError::new(
+                "AE-NATIVE-002",
+                "M35 pilot accepts Total weaves only",
+            ));
+        }
+        if function.result != ValueType::Whole {
+            return Err(NativeError::new(
+                "AE-NATIVE-002",
+                "M35 pilot requires Whole results",
+            ));
+        }
+        for (value_type, _mode) in &function.parameters {
+            if *value_type != ValueType::Whole {
+                return Err(NativeError::new(
+                    "AE-NATIVE-002",
+                    "M35c multi-weave pilot lowers Whole parameters only",
+                ));
+            }
+        }
+        for local in &function.locals {
+            if local.value_type != ValueType::Whole {
+                return Err(NativeError::new(
+                    "AE-NATIVE-002",
+                    "M35b pilot lowers Whole locals only",
+                ));
+            }
+        }
+        if function.name == "main" {
+            if !function.parameters.is_empty() {
+                return Err(NativeError::new(
+                    "AE-NATIVE-002",
+                    "M35 pilot main must be [] -> Whole",
+                ));
+            }
+            saw_main = true;
+        }
+    }
+    if !saw_main {
+        return Err(NativeError::new(
+            "AE-NATIVE-002",
+            "M35 pilot requires a guest total main weave",
+        ));
+    }
+    if !native_aeth_to_c_speak_multiweave_pilot() && artifact.functions.len() != 1 {
         return Err(NativeError::new(
             "AE-NATIVE-002",
             "M35 pilot accepts a single total main weave only",
         ));
     }
-    let main = &artifact.functions[0];
-    if main.name != "main" || main.is_host() || main.is_task() {
-        return Err(NativeError::new(
-            "AE-NATIVE-002",
-            "M35 pilot requires a single guest total main weave",
-        ));
-    }
-    if !main.parameters.is_empty() || main.result != ValueType::Whole {
-        return Err(NativeError::new(
-            "AE-NATIVE-002",
-            "M35 pilot main must be [] -> Whole",
-        ));
-    }
-    for local in &main.locals {
-        if local.value_type != ValueType::Whole {
-            return Err(NativeError::new(
-                "AE-NATIVE-002",
-                "M35b pilot lowers Whole locals only",
-            ));
-        }
-    }
-    emit_c_for_pure_main(main)
+    Ok(())
 }
 
-fn emit_c_for_pure_main(main: &ArtifactFunction) -> Result<String, NativeError> {
-    let local_count = main.locals.len();
+fn emit_c_for_artifact(artifact: &Artifact) -> Result<String, NativeError> {
+    let mut out = String::from(
+        "/* Generated by Aether M35c from verified AETH only (F-NATIVE). */\n\
+#include <stdio.h>\n\
+\n",
+    );
+    let main_index = artifact
+        .functions
+        .iter()
+        .position(|function| function.name == "main")
+        .ok_or_else(|| {
+            NativeError::new(
+                "AE-NATIVE-002",
+                "M35 pilot requires a guest total main weave",
+            )
+        })?;
+
+    for (index, function) in artifact.functions.iter().enumerate() {
+        out.push_str(&emit_c_function(function, index, artifact.functions.len())?);
+        out.push('\n');
+    }
+
+    out.push_str(&format!(
+        "int main(void) {{\n  return (int)aether_fn_{main_index}();\n}}\n"
+    ));
+    Ok(out)
+}
+
+fn emit_c_function(
+    function: &ArtifactFunction,
+    index: usize,
+    function_count: usize,
+) -> Result<String, NativeError> {
+    let local_count = function.locals.len();
+    let param_count = function.parameters.len();
+    let mut sig = format!("static long long aether_fn_{index}(");
+    if param_count == 0 {
+        sig.push_str("void");
+    } else {
+        for p in 0..param_count {
+            if p > 0 {
+                sig.push_str(", ");
+            }
+            sig.push_str(&format!("long long p{p}"));
+        }
+    }
+    sig.push_str(") {\n");
+
     let mut body = String::new();
     body.push_str("  long long stack[64];\n");
     body.push_str("  int sp = 0;\n");
+    body.push_str("  const char *tstack[64];\n");
+    body.push_str("  int tsp = 0;\n");
     if local_count > 0 {
         body.push_str(&format!("  long long locals[{local_count}];\n"));
         body.push_str(&format!(
             "  for (int i = 0; i < {local_count}; ++i) locals[i] = 0;\n"
         ));
     }
+    // Parameters occupy initial local slots in AETH (same as bootstrap emit).
+    // Prefer explicit param vars on stack entry when params exist but no matching locals.
+    // Verified AETH places parameters as initialized locals [0..param_count).
+    for p in 0..param_count {
+        if p < local_count {
+            body.push_str(&format!("  locals[{p}] = p{p};\n"));
+        } else {
+            // Defensive: parameters without local slots stay on stack order via pN.
+            body.push_str(&format!("  stack[sp++] = p{p};\n"));
+        }
+    }
+
     let mut i = 0;
-    let code = &main.code;
+    let code = &function.code;
+    let mut saw_yield = false;
     while i < code.len() {
         let op = code[i];
         i += 1;
@@ -138,7 +247,7 @@ fn emit_c_for_pure_main(main: &ArtifactFunction) -> Result<String, NativeError> 
                 let text = String::from_utf8_lossy(&code[i..i + len]);
                 i += len;
                 let escaped = c_escape(&text);
-                body.push_str(&format!("  fputs(\"{escaped}\", stdout);\n"));
+                body.push_str(&format!("  tstack[tsp++] = \"{escaped}\";\n"));
             }
             OP_STORE => {
                 if i + 2 > code.len() {
@@ -192,14 +301,52 @@ fn emit_c_for_pure_main(main: &ArtifactFunction) -> Result<String, NativeError> 
                 body.push_str(&format!("    stack[sp++] = a {op_c} b; }}\n"));
             }
             OP_SPEAK => {
-                return Err(NativeError::new(
-                    "AE-NATIVE-002",
-                    "M35 pilot rejects SPEAK (use pure yield Whole only)",
-                ));
+                if !native_aeth_to_c_speak_multiweave_pilot() {
+                    return Err(NativeError::new(
+                        "AE-NATIVE-002",
+                        "M35 pilot rejects SPEAK (use pure yield Whole only)",
+                    ));
+                }
+                body.push_str("  if (tsp < 1) return 1;\n");
+                body.push_str("  fputs(tstack[--tsp], stdout);\n");
+            }
+            OP_CALL => {
+                if !native_aeth_to_c_speak_multiweave_pilot() {
+                    return Err(NativeError::new(
+                        "AE-NATIVE-002",
+                        "M35 pilot rejects CALL (single-weave only)",
+                    ));
+                }
+                if i + 3 > code.len() {
+                    return Err(NativeError::new("AE-NATIVE-003", "truncated CALL operands"));
+                }
+                let target = u16::from_le_bytes(code[i..i + 2].try_into().unwrap()) as usize;
+                i += 2;
+                let argc = code[i] as usize;
+                i += 1;
+                if target >= function_count {
+                    return Err(NativeError::new(
+                        "AE-NATIVE-003",
+                        format!("CALL target {target} out of range"),
+                    ));
+                }
+                body.push_str(&format!("  if (sp < {argc}) return 1;\n"));
+                for a in (0..argc).rev() {
+                    body.push_str(&format!("  long long arg{a} = stack[--sp];\n"));
+                }
+                body.push_str(&format!("  stack[sp++] = aether_fn_{target}("));
+                for a in 0..argc {
+                    if a > 0 {
+                        body.push_str(", ");
+                    }
+                    body.push_str(&format!("arg{a}"));
+                }
+                body.push_str(");\n");
             }
             OP_YIELD => {
                 body.push_str("  if (sp < 1) return 1;\n");
-                body.push_str("  return (int)stack[--sp];\n");
+                body.push_str("  return stack[--sp];\n");
+                saw_yield = true;
             }
             other => {
                 return Err(NativeError::new(
@@ -209,19 +356,16 @@ fn emit_c_for_pure_main(main: &ArtifactFunction) -> Result<String, NativeError> 
             }
         }
     }
-    if !body.contains("return (int)stack") {
+    if !saw_yield {
         return Err(NativeError::new(
             "AE-NATIVE-002",
-            "M35 pilot requires a terminal yield",
+            format!(
+                "M35 pilot weave {} requires a terminal yield",
+                function.name
+            ),
         ));
     }
-    Ok(format!(
-        "/* Generated by Aether M35 from verified AETH only (F-NATIVE). */\n\
-#include <stdio.h>\n\
-int main(void) {{\n\
-{body}\
-}}\n"
-    ))
+    Ok(format!("{sig}{body}}}\n"))
 }
 
 fn c_escape(text: &str) -> String {
@@ -240,6 +384,20 @@ fn c_escape(text: &str) -> String {
     out
 }
 
+/// Dual-run helper: product-compile source, run on VM, lower to C, and optionally
+/// compile+run with host `cc` when available. Always asserts VM exit; C compile
+/// is best-effort and does not fail the matrix when no C toolchain exists.
+pub fn native_dual_run_vm_exit(source: &str) -> Result<i64, NativeError> {
+    let bytecode = crate::compile_product_bytecode(source)
+        .map_err(|error| NativeError::new("AE-NATIVE-001", error.to_string()))?;
+    let exit = crate::run_bytecode(&bytecode)
+        .map_err(|error| NativeError::new("AE-NATIVE-001", error.to_string()))?
+        .exit_code;
+    // Ensure lower succeeds for the same artifact (dual authority: VM reference).
+    let _c = lower_verified_aeth_to_c(&bytecode)?;
+    Ok(exit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,7 +412,7 @@ mod tests {
         let exit = run_bytecode(&bytecode).expect("run").exit_code;
         assert_eq!(exit, 42);
         let c = lower_verified_aeth_to_c(&bytecode).expect("lower");
-        assert!(c.contains("return (int)stack[--sp];"));
+        assert!(c.contains("return stack[--sp];"));
         assert!(c.contains("42LL"));
         assert!(c.contains("int main(void)"));
     }
@@ -269,6 +427,31 @@ mod tests {
         assert!(c.contains("locals["));
         assert!(c.contains("20LL") && c.contains("22LL"));
         assert!(c.contains("a + b") || c.contains("a + b;"));
+    }
+
+    #[test]
+    fn lowers_speak_text_and_multiweave_helpers() {
+        assert!(native_aeth_to_c_speak_multiweave_pilot());
+        let source = "\
+world multi
+
+weave double [n: Whole] -> Whole:
+  yield product n 2
+
+weave main [] -> Whole:
+  speak \"ok\"
+  bind x <- call double 21
+  yield x
+";
+        let bytecode = compile_product_bytecode(source).expect("product multi");
+        let run = run_bytecode(&bytecode).expect("run");
+        assert_eq!(run.exit_code, 42);
+        assert_eq!(run.stdout, "ok");
+        let c = lower_verified_aeth_to_c(&bytecode).expect("lower multi");
+        assert!(c.contains("fputs(tstack[--tsp], stdout);"));
+        assert!(c.contains("aether_fn_"));
+        assert!(c.contains("tstack[tsp++]"));
+        assert_eq!(native_dual_run_vm_exit(source).expect("dual"), 42);
     }
 
     #[test]

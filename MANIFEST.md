@@ -292,6 +292,9 @@ operation vocabulary, and compatibility policy are in
 | **Structural product edits** | Top-level weave + weave-body statements + nested choose/while body lists + primitive records without bootstrap base AST (ADR-065/068/069/071) |
 | **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
 | **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; full `aether.ast/v8`; dual-compare tests/gate |
+| **Product seed-error packets** | Host `aether.seed-error/v1` via `product_error_packets` (ADR-072); seed-binary SPEAK emit residual |
+| **F-NATIVE M35c** | Verified AETH→C: Whole locals, SPEAK/Text, multi-weave CALL (ADR-073); VM reference |
+| **F-REGISTRY M24b** | HMAC trust keys, signed pins, explicit `fetch-signed` file:// or http:// (ADR-074); no TLS; no auto-fetch |
 | **F-NATIVE M35a/b** | `compile --native-c` — verified AETH → ISO C pure Whole + locals/arithmetic (ADR-059/062); VM remains default |
 | **F-REGISTRY M24a** | `registry pin-local` / `verify-cache` — offline digest pins only (ADR-060); no network |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |

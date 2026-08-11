@@ -55,7 +55,8 @@ pub use modules::{
 };
 pub use native::{
     f_native_authorized, lower_verified_aeth_to_c, native_aeth_to_c_locals_pilot,
-    native_aeth_to_c_pilot, NativeError,
+    native_aeth_to_c_pilot, native_aeth_to_c_speak_multiweave_pilot, native_dual_run_vm_exit,
+    NativeError,
 };
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
@@ -65,10 +66,13 @@ pub use project::{
     ProjectUnitReport, ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
 };
 pub use registry::{
-    empty_registry_cache, f_registry_authorized, parse_registry_cache, pin_local_package,
-    registry_offline_cache_verify, serialize_registry_cache, verify_registry_cache,
-    RegistryCacheDocument, RegistryError, RegistryPackagePin, REGISTRY_CACHE_SCHEMA,
-    REGISTRY_INDEX_FILE,
+    empty_registry_cache, empty_registry_trust, f_registry_authorized, fetch_signed_package,
+    install_trust_key, parse_registry_cache, parse_registry_trust, pin_local_package,
+    pin_local_package_signed, registry_offline_cache_verify, registry_signed_fetch_pilot,
+    serialize_registry_cache, serialize_registry_trust, sign_package_binding,
+    verify_registry_cache, RegistryCacheDocument, RegistryError, RegistryPackagePin,
+    RegistryTrustDocument, RegistryTrustKey, REGISTRY_CACHE_SCHEMA, REGISTRY_INDEX_FILE,
+    REGISTRY_TRUST_FILE, REGISTRY_TRUST_SCHEMA,
 };
 pub use workspace::{
     compile_workspace_package, parse_workspace_document, refresh_workspace_lock,
@@ -2807,6 +2811,91 @@ pub fn product_diagnostics(source: &str) -> Vec<Diagnostic> {
     }
 }
 
+/// Product seed-error packet schema (ADR-072 / ADR-061 first vertical).
+pub const SEED_ERROR_PACKET_SCHEMA: &str = "aether.seed-error/v1";
+
+/// One structured product seed-error packet (host ABI).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SeedErrorPacket {
+    pub schema: String,
+    pub code: String,
+    pub message: String,
+    pub line: usize,
+    pub column: usize,
+    /// `host-preflight` | `host-classify` | `seed-speak` (when seed emits packets).
+    pub origin: String,
+}
+
+/// BARP ADR-072: product path exposes seed-error **packets** as the structured
+/// diagnostic ABI. Host preflights and classified forge/verify failures are
+/// normalized into [`SeedErrorPacket`]. Future seed-internal SPEAK lines of the
+/// form `AETHER_SEED_ERROR:{json}` are decoded when present (seed emit still
+/// optional — see [`seed_internal_error_packets`]).
+#[must_use]
+pub fn product_error_packets(source: &str) -> Vec<SeedErrorPacket> {
+    debug_assert!(
+        product_seed_error_packet_abi(),
+        "ADR-072: product seed-error packet ABI"
+    );
+    product_diagnostics(source)
+        .into_iter()
+        .map(|diagnostic| diagnostic_to_seed_error_packet(&diagnostic))
+        .collect()
+}
+
+/// Pretty-printed JSON array of [`product_error_packets`].
+pub fn product_error_packets_json(source: &str) -> String {
+    serde_json::to_string_pretty(&product_error_packets(source)).unwrap_or_else(|_| "[]".to_owned())
+}
+
+fn diagnostic_to_seed_error_packet(diagnostic: &Diagnostic) -> SeedErrorPacket {
+    // Prefer embedded seed-speak packets when the message body carries one.
+    if let Some(packet) = try_parse_seed_speak_error_packet(&diagnostic.message) {
+        return packet;
+    }
+    let origin = if matches!(
+        diagnostic.code,
+        "AE-SEED-003"
+            | "AE-SEED-004"
+            | "AE-SEED-005"
+            | "AE-SEED-006"
+            | "AE-SEED-007"
+            | "AE-SEED-012"
+            | "AE-SEED-013"
+    ) {
+        "host-preflight"
+    } else {
+        "host-classify"
+    };
+    SeedErrorPacket {
+        schema: SEED_ERROR_PACKET_SCHEMA.to_owned(),
+        code: diagnostic.code.to_owned(),
+        message: diagnostic.message.clone(),
+        line: diagnostic.span.line,
+        column: diagnostic.span.column,
+        origin: origin.to_owned(),
+    }
+}
+
+/// Decode optional seed-emitted packet lines: `AETHER_SEED_ERROR:{json}`.
+fn try_parse_seed_speak_error_packet(message: &str) -> Option<SeedErrorPacket> {
+    const PREFIX: &str = "AETHER_SEED_ERROR:";
+    for line in message.lines() {
+        let trimmed = line.trim();
+        let Some(json) = trimmed.strip_prefix(PREFIX) else {
+            continue;
+        };
+        if let Ok(mut packet) = serde_json::from_str::<SeedErrorPacket>(json) {
+            if packet.schema != SEED_ERROR_PACKET_SCHEMA {
+                continue;
+            }
+            packet.origin = "seed-speak".to_owned();
+            return Some(packet);
+        }
+    }
+    None
+}
+
 fn format_seed_product_error(code: &str, detail: &str) -> String {
     format!("{code}: product seed path failed ({detail}). Full diagnostics: aether check <source>")
 }
@@ -3222,10 +3311,17 @@ pub const fn lsp_product_diagnostics_primary() -> bool {
     true
 }
 
-/// BARP ADR-061 honesty: seed-internal structured error packets not yet implemented.
+/// BARP ADR-061/072 honesty: seed binary does **not** yet emit structured error
+/// packets on SPEAK. Host product packet ABI is available ([`product_error_packets`]).
 #[must_use]
 pub const fn seed_internal_error_packets() -> bool {
     false
+}
+
+/// BARP ADR-072: host product seed-error packet ABI ([`product_error_packets`]).
+#[must_use]
+pub const fn product_seed_error_packet_abi() -> bool {
+    true
 }
 
 /// BARP ADR-062: default `format_source` prefers product AE-SEED when both reject.

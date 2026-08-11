@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064–071); residual recovery bootstrap  
-**Date:** 2026-08-08 (Phase 1–2 / ADR-044–071 2026-08-10)  
-**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-071](ADR-071-barp-product-nested-body-list-ops.md)  
+**Status:** Active program — product-default toolchain (ADR-064–072); residual recovery bootstrap  
+**Date:** 2026-08-08 (Phase 1–2 / ADR-044–072 2026-08-10)  
+**Decision:** [ADR-043](ADR-043-bootstrap-authority-reduction.md)–[ADR-072](ADR-072-barp-product-seed-error-packet-abi.md)  
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -202,6 +202,7 @@ Product project/workspace compile returns seed bytes via
 | Structural top-level weaves | **Product path** (ADR-065/068 replace/insert/delete) |
 | Structural statements/records | **Product path** weave-body + primitive records (ADR-069) |
 | Nested body lists | **Product path** choose/while `whenBright`/`whenDim`/`body` (ADR-071) |
+| Seed-error packets | **Host packet ABI** `aether.seed-error/v1` (ADR-072); seed SPEAK emit residual |
 | Yield-in-truth-choose | **Product fail-closed** `AE-SEED-013` (ADR-070); multi-module choose+revise supported |
 | Seed rebuild | **Product compile** (ADR-067); `--bootstrap` oracle only |
 | Lib unit project verify | **Product seed probe** (ADR-052) |

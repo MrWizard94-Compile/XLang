@@ -34,6 +34,9 @@ A human must write **exactly** (or clearly equivalent):
 **Recorded authorization (2026-08-10):** human wrote `I authorize Aether law fork F-NATIVE`
 (clearly equivalent intent); full residual-risk bounds above are enforced as fork law.
 
+**Reaffirmed (2026-08-10):** human again wrote `I authorize Aether law fork F-NATIVE`
+when directing M35c SPEAK/multi-weave work (ADR-073).
+
 ## 4. After §3 — still not free-form implement
 
 Authorization opens the fork. Vertical ADR + matrix still required (`CONST-DEP-001`).
