@@ -319,6 +319,119 @@ pub struct NativeExeReport {
     pub exits_match: Option<bool>,
 }
 
+/// M35i: hermetic/toolchain probe product API (ADR-095).
+#[must_use]
+pub const fn native_toolchain_probe_product() -> bool {
+    true
+}
+
+/// M35i: optional hermetic tool path env vars are honored.
+///
+/// `AETHER_CC`, `AETHER_CLANG`, `AETHER_LLC` override PATH discovery when set.
+/// When `AETHER_NATIVE_HERMETIC=1`, missing explicit tool paths fail closed.
+#[must_use]
+pub const fn native_hermetic_toolchain_env() -> bool {
+    true
+}
+
+/// Host native toolchain discovery report (M35i).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeToolchainProbe {
+    pub cc: Option<String>,
+    pub clang: Option<String>,
+    pub llc: Option<String>,
+    pub hermetic: bool,
+    pub target_triple: Option<String>,
+    pub host_os: String,
+    pub host_arch: String,
+}
+
+/// Probe host C/LLVM tools and optional hermetic env (M35i).
+///
+/// Does not compile; fail-open when tools are absent unless hermetic mode is set
+/// (see [`require_hermetic_native_toolchain`]).
+#[must_use]
+pub fn probe_native_toolchain() -> NativeToolchainProbe {
+    debug_assert!(
+        f_native_authorized() && native_toolchain_probe_product(),
+        "ADR-095: native toolchain probe"
+    );
+    let hermetic = std::env::var("AETHER_NATIVE_HERMETIC")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let cc = std::env::var("AETHER_CC")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(find_host_c_compiler);
+    let clang = std::env::var("AETHER_CLANG")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| find_named_tool(&["clang", "clang.exe"]));
+    let llc = std::env::var("AETHER_LLC")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| find_named_tool(&["llc", "llc.exe"]));
+    let target_triple = std::env::var("AETHER_NATIVE_TARGET")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(default_host_target_triple);
+    NativeToolchainProbe {
+        cc,
+        clang,
+        llc,
+        hermetic,
+        target_triple,
+        host_os: std::env::consts::OS.to_owned(),
+        host_arch: std::env::consts::ARCH.to_owned(),
+    }
+}
+
+/// M35i hermetic gate: when hermetic env is set, require at least one usable cc.
+pub fn require_hermetic_native_toolchain() -> Result<NativeToolchainProbe, NativeError> {
+    debug_assert!(
+        f_native_authorized() && native_hermetic_toolchain_env(),
+        "ADR-095: hermetic toolchain env"
+    );
+    let probe = probe_native_toolchain();
+    if probe.hermetic && probe.cc.is_none() {
+        return Err(NativeError::new(
+            "AE-NATIVE-006",
+            "hermetic native mode (AETHER_NATIVE_HERMETIC=1) requires AETHER_CC or a host C compiler",
+        ));
+    }
+    Ok(probe)
+}
+
+fn find_named_tool(candidates: &[&str]) -> Option<String> {
+    for candidate in candidates {
+        if std::process::Command::new(candidate)
+            .arg("--version")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+        {
+            return Some((*candidate).to_owned());
+        }
+    }
+    None
+}
+
+fn default_host_target_triple() -> Option<String> {
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        "aarch64" => "aarch64",
+        "x86" => "i686",
+        other => other,
+    };
+    let os = match std::env::consts::OS {
+        "windows" => "pc-windows-msvc",
+        "linux" => "unknown-linux-gnu",
+        "macos" => "apple-darwin",
+        other => other,
+    };
+    Some(format!("{arch}-{os}"))
+}
+
 fn validate_pure_pilot_artifact(artifact: &Artifact) -> Result<(), NativeError> {
     if artifact.functions.is_empty() {
         return Err(NativeError::new(
@@ -1366,5 +1479,29 @@ weave main [] -> Whole:
             }
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn native_toolchain_probe_reports_host_and_hermetic_gate() {
+        assert!(native_toolchain_probe_product());
+        assert!(native_hermetic_toolchain_env());
+        let probe = probe_native_toolchain();
+        assert!(!probe.host_os.is_empty());
+        assert!(!probe.host_arch.is_empty());
+        assert!(probe.target_triple.is_some());
+        // Non-hermetic: always Ok.
+        std::env::remove_var("AETHER_NATIVE_HERMETIC");
+        require_hermetic_native_toolchain().expect("non-hermetic probe");
+        // Hermetic without cc fails closed when no tools/env.
+        std::env::set_var("AETHER_NATIVE_HERMETIC", "1");
+        std::env::set_var("AETHER_CC", "");
+        // Empty AETHER_CC is treated as unset; if host has cc, probe still Ok.
+        let hermetic = require_hermetic_native_toolchain();
+        match hermetic {
+            Ok(p) => assert!(p.hermetic),
+            Err(error) => assert_eq!(error.code, "AE-NATIVE-006"),
+        }
+        std::env::remove_var("AETHER_NATIVE_HERMETIC");
+        std::env::remove_var("AETHER_CC");
     }
 }

@@ -24,6 +24,9 @@
 | M24F-002 | bad certification | FAIL closed AE-REG-011 |
 | M24G-001 | root → intermediate → leaf chain | PASS verify |
 | M24G-002 | intermediate may certify leaf | PASS |
+| M24H-001 | issue X.509-lite cert + verify | PASS |
+| M24H-002 | PEM encode/decode round-trip | PASS |
+| M24H-003 | tampered signature | FAIL closed AE-REG-012 |
 
 ---
 

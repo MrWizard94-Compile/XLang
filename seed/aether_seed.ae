@@ -131,8 +131,14 @@ weave compile [borrow source: Text] -> Bytes:
   bind mutable v128 <- 0
   bind mutable v129 <- 0
   bind mutable v130 <- 0
+  bind mutable v131 <- 0
   revise v68 <- join borrow source "\n"
   revise v5 <- measure borrow v68
+  choose same v5 1:
+    speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-005\",\"message\":\"source is empty\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+    revise v131 <- 1
+  otherwise:
+    revise v131 <- 0
   revise v6 <- 0
   revise v7 <- ""
   revise v51 <- bytes ""
@@ -3102,6 +3108,10 @@ weave compile [borrow source: Text] -> Bytes:
   revise v47 <- pack16 v52
   revise v46 <- fuse borrow v46 borrow v47
   revise v46 <- fuse borrow v46 borrow v53
+  choose same v131 1:
+    revise v46 <- bytes ""
+  otherwise:
+    revise v30 <- 0
   yield move v46
 
 weave main [] -> Whole:

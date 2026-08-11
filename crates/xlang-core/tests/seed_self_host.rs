@@ -124,18 +124,18 @@ fn seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant() {
     );
 
     // Insert a fresh unused local so the variant differs without colliding with
-    // the seed's existing high-numbered slots (v103 through v130 are bound for
-    // M23 body-interpreter temps / BARP Phase 1).
+    // the seed's existing high-numbered slots (v103 through v131: M23 temps +
+    // ADR-094 empty SPEAK flag).
     let variant = if SEED_SOURCE.contains("  bind mutable v65 <- 0\r\n") {
         SEED_SOURCE.replacen(
             "  bind mutable v65 <- 0\r\n",
-            "  bind mutable v65 <- 0\r\n  bind mutable v131 <- 0\r\n",
+            "  bind mutable v65 <- 0\r\n  bind mutable v132 <- 0\r\n",
             1,
         )
     } else {
         SEED_SOURCE.replacen(
             "  bind mutable v65 <- 0\n",
-            "  bind mutable v65 <- 0\n  bind mutable v131 <- 0\n",
+            "  bind mutable v65 <- 0\n  bind mutable v132 <- 0\n",
             1,
         )
     };
@@ -569,7 +569,11 @@ fn barp_adr072_product_seed_error_packet_abi() {
     assert!(product_seed_error_speak_format());
     assert!(
         !seed_internal_error_packets(),
-        "seed binary packet emit still residual"
+        "full seed binary packet matrix still residual (ADR-094 empty pilot only)"
+    );
+    assert!(
+        aether_core::seed_speak_emit_empty_source_pilot(),
+        "ADR-094: seed SPEAK empty-source pilot"
     );
     let empty = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield 1\n");
     assert!(empty.is_empty());
@@ -594,6 +598,7 @@ fn barp_adr072_product_seed_error_packet_abi() {
 fn barp_adr075_multi_source_envelope_product_forge() {
     assert!(product_multi_source_forge_envelope());
     assert!(!seed_native_multi_module_elaboration());
+    assert!(aether_core::product_multi_source_unit_surface_api());
     let lib = "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n";
     let main = "world app\n\nimport unit \"lib/math.ae\" as m\n\nweave main [] -> Whole:\n  yield call m.double 21\n";
     let envelope = encode_multi_source_envelope(&[
@@ -602,6 +607,9 @@ fn barp_adr075_multi_source_envelope_product_forge() {
     ])
     .expect("encode envelope");
     assert!(envelope.contains("aether.multi-source/v1"));
+    let surface = aether_core::product_multi_source_unit_surface(&envelope).expect("surface");
+    assert_eq!(surface.unit_count, 2);
+    assert_eq!(surface.entry_path.as_deref(), Some("src/main.ae"));
     let bytecode = compile_product_multi_source_envelope(&envelope).expect("multi forge");
     verify_bytecode(&bytecode).expect("verify multi");
     assert_eq!(run_bytecode(&bytecode).expect("run").exit_code, 42);

@@ -22,6 +22,9 @@
 | M35G-002 | LLVM object with clang/llc | object file produced |
 | M35H-001 | native exe without cc | FAIL closed AE-NATIVE-004 |
 | M35H-002 | native exe with cc + dual-run | exit matches VM |
+| M35I-001 | `probe_native_toolchain` reports OS/arch/target | PASS |
+| M35I-002 | hermetic without cc | FAIL closed AE-NATIVE-006 or Ok when cc present |
+| M35I-003 | `aether native probe` CLI | prints probe line |
 
 ---
 

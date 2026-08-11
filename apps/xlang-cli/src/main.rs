@@ -10,16 +10,17 @@ mod test_runner;
 use aether_core::{
     apply_edit_cli_trusts_product_accept, apply_structural_edit, canonical_ast,
     compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
-    compile_workspace_package, fetch_signed_package, forge_bytecode, format_project, format_source,
-    format_source_product, install_trust_key, lower_verified_aeth_to_c,
-    lower_verified_aeth_to_llvm_ir, lower_verified_aeth_to_llvm_object,
-    lower_verified_aeth_to_native_exe, lower_verified_aeth_to_native_object,
-    multi_module_authority_note, parse_project_document, parse_workspace_document,
-    pin_local_package, pin_local_package_signed, product_cli_check_without_bootstrap,
-    product_default_cli_toolchain, product_format_without_bootstrap,
-    product_project_format_without_bootstrap, product_seed_rebuild_without_bootstrap,
-    product_structure_json, product_structure_without_bootstrap, refresh_project_lock,
-    refresh_workspace_lock, revoke_trust_key, rotate_trust_key, run_bytecode,
+    compile_workspace_package, encode_x509_lite_pem, fetch_signed_package, forge_bytecode,
+    format_project, format_source, format_source_product, install_trust_key,
+    issue_x509_lite_certificate, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
+    lower_verified_aeth_to_llvm_object, lower_verified_aeth_to_native_exe,
+    lower_verified_aeth_to_native_object, multi_module_authority_note, parse_project_document,
+    parse_workspace_document, pin_local_package, pin_local_package_signed, probe_native_toolchain,
+    product_cli_check_without_bootstrap, product_default_cli_toolchain,
+    product_format_without_bootstrap, product_project_format_without_bootstrap,
+    product_seed_rebuild_without_bootstrap, product_structure_json,
+    product_structure_without_bootstrap, refresh_project_lock, refresh_workspace_lock,
+    require_hermetic_native_toolchain, revoke_trust_key, rotate_trust_key, run_bytecode,
     run_bytecode_with_grants, run_project_tests_with_grants, serialize_project_document,
     serialize_workspace_document, set_trust_key_validity, structural_document_json,
     unit_artifact_file_name, verify_bytecode, verify_project, verify_registry_cache,
@@ -28,8 +29,24 @@ use aether_core::{
 
 fn usage() {
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c]\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-c to lower verified AETH to ISO C (F-NATIVE M35c pure pilot: Whole locals, SPEAK/Text, multi-weave CALL; not default).\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b HMAC pilot (explicit only; file:// or http://; no TLS)."
+        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c|--native-exe]\n  aether native probe\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether registry issue-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources (including M21 foreign weave pilot; seed≡bootstrap proven for examples/foreign-pilot.ae).\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-c / --native-exe for F-NATIVE lower (M35c–h); aether native probe is M35i hermetic/toolchain discovery.\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b+; issue-x509-lite is M24h (not full RFC 5280)."
     );
+}
+
+fn native_probe() -> Result<(), String> {
+    let probe = require_hermetic_native_toolchain().map_err(|error| error.to_string())?;
+    let _ = probe_native_toolchain();
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} native probe: os={} arch={} target={} hermetic={} cc={} clang={} llc={}",
+        probe.host_os,
+        probe.host_arch,
+        probe.target_triple.as_deref().unwrap_or("-"),
+        probe.hermetic,
+        probe.cc.as_deref().unwrap_or("-"),
+        probe.clang.as_deref().unwrap_or("-"),
+        probe.llc.as_deref().unwrap_or("-"),
+    );
+    Ok(())
 }
 
 fn read_source(path: &Path) -> Result<String, String> {
@@ -934,6 +951,18 @@ fn run() -> Result<(), String> {
                 native_exe,
             )
         }
+        "native" => {
+            let subcommand = next_argument(&mut arguments, "native subcommand")?;
+            match subcommand.to_string_lossy().as_ref() {
+                "probe" => {
+                    if arguments.next().is_some() {
+                        return Err("native probe accepts no further arguments".to_owned());
+                    }
+                    native_probe()
+                }
+                other => Err(format!("unknown native subcommand {other}")),
+            }
+        }
         "registry" => {
             let subcommand = next_argument(&mut arguments, "registry subcommand")?;
             match subcommand.to_string_lossy().as_ref() {
@@ -1206,8 +1235,74 @@ fn run() -> Result<(), String> {
                     );
                     Ok(())
                 }
+                "issue-x509-lite" => {
+                    let root = next_argument(&mut arguments, "cache root")?;
+                    let mut issuer = None;
+                    let mut subject = None;
+                    let mut serial = None;
+                    let mut not_before = None;
+                    let mut not_after = None;
+                    let mut output = None;
+                    let mut args = arguments;
+                    while let Some(flag) = args.next() {
+                        if flag == "--issuer" {
+                            issuer = Some(next_argument(&mut args, "issuer key id")?);
+                        } else if flag == "--subject" {
+                            subject = Some(next_argument(&mut args, "subject key id")?);
+                        } else if flag == "--serial" {
+                            serial = Some(next_argument(&mut args, "serial")?);
+                        } else if flag == "--not-before" {
+                            not_before = Some(next_argument(&mut args, "not-before")?);
+                        } else if flag == "--not-after" {
+                            not_after = Some(next_argument(&mut args, "not-after")?);
+                        } else if flag == "--output" {
+                            output = Some(next_argument(&mut args, "pem output")?);
+                        } else {
+                            return Err(
+                                "registry issue-x509-lite accepts --issuer --subject --serial --not-before --not-after [--output]"
+                                    .to_owned(),
+                            );
+                        }
+                    }
+                    let issuer = issuer
+                        .ok_or_else(|| "registry issue-x509-lite requires --issuer".to_owned())?;
+                    let subject = subject
+                        .ok_or_else(|| "registry issue-x509-lite requires --subject".to_owned())?;
+                    let serial = serial
+                        .ok_or_else(|| "registry issue-x509-lite requires --serial".to_owned())?;
+                    let not_before = not_before.ok_or_else(|| {
+                        "registry issue-x509-lite requires --not-before".to_owned()
+                    })?;
+                    let not_after = not_after.ok_or_else(|| {
+                        "registry issue-x509-lite requires --not-after".to_owned()
+                    })?;
+                    let cert = issue_x509_lite_certificate(
+                        Path::new(&root),
+                        &issuer.to_string_lossy(),
+                        &subject.to_string_lossy(),
+                        &serial.to_string_lossy(),
+                        &not_before.to_string_lossy(),
+                        &not_after.to_string_lossy(),
+                    )
+                    .map_err(|error| error.to_string())?;
+                    let pem = encode_x509_lite_pem(&cert);
+                    if let Some(path) = output {
+                        fs::write(Path::new(&path), &pem).map_err(|error| {
+                            format!("could not write {}: {error}", path.to_string_lossy())
+                        })?;
+                        println!(
+                            "{LANGUAGE_NAME} {LANGUAGE_VERSION} registry issued X.509-lite cert {} -> {} to {}",
+                            cert.tbs.issuer,
+                            cert.tbs.subject,
+                            path.to_string_lossy()
+                        );
+                    } else {
+                        print!("{pem}");
+                    }
+                    Ok(())
+                }
                 other => Err(format!(
-                    "unknown registry subcommand {other} (use verify-cache, pin-local, trust-key, pin-local-signed, fetch-signed, revoke-key, rotate-key, or set-key-validity)"
+                    "unknown registry subcommand {other} (use verify-cache, pin-local, trust-key, pin-local-signed, fetch-signed, revoke-key, rotate-key, set-key-validity, or issue-x509-lite)"
                 )),
             }
         }

@@ -292,11 +292,11 @@ operation vocabulary, and compatibility policy are in
 | **Structural product edits** | Top-level weave + weave-body statements + nested choose/while body lists + primitive records without bootstrap base AST (ADR-065/068/069/071) |
 | **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
 | **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; full `aether.ast/v8`; dual-compare tests/gate |
-| **Product seed-error packets** | SPEAK protocol + forge SPEAK-on-failure capture (ADR-082/086/090); seed.ae emit residual |
-| **Multi-source forge** | Product multi-file host path + forge contract (ADR-075–086); seed-native residual |
-| **F-NATIVE M35c–h** | AETH→C/object/LLVM-IR/LLVM-object/`--native-exe` (ADR-073–091) |
-| **F-REGISTRY M24b–g** | HMAC/Ed25519/HTTPS/rotation/policy/root+multi-level certs (ADR-074–092); no auto-fetch |
-| **Task model** | ADR-081 design; surface+checkpoint density (ADR-085/093); reserved AE-SEED-014 (ADR-089) |
+| **Product seed-error packets** | SPEAK protocol + forge SPEAK-on-failure/verify merge (ADR-082/086/090/094); seed SPEAK empty pilot; full matrix residual |
+| **Multi-source forge** | Product multi-file host path + unit surface (ADR-075–086/094); seed-native residual |
+| **F-NATIVE M35c–i** | AETH→C/object/LLVM-IR/LLVM-object/`--native-exe` + `native probe` hermetic (ADR-073–095) |
+| **F-REGISTRY M24b–h** | HMAC/Ed25519/HTTPS/rotation/policy/root+multi-level + X.509-lite (ADR-074–096); no auto-fetch |
+| **Task model** | ADR-081 design; surface/checkpoint/inventory (ADR-085/093/097); reserved AE-SEED-014 (ADR-089) |
 | **F-NATIVE M35a/b** | `compile --native-c` — verified AETH → ISO C pure Whole + locals/arithmetic (ADR-059/062); VM remains default |
 | **F-REGISTRY M24a** | `registry pin-local` / `verify-cache` — offline digest pins only (ADR-060); no network |
 | **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |

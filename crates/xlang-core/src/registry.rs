@@ -159,6 +159,223 @@ pub const fn registry_multi_level_cert_chain() -> bool {
     true
 }
 
+/// M24h: X.509-inspired lightweight certificates (not full RFC 5280).
+#[must_use]
+pub const fn registry_x509_lite_certificates() -> bool {
+    true
+}
+
+pub const REGISTRY_X509_LITE_SCHEMA: &str = "aether.registry-x509-lite/v1";
+pub const REGISTRY_X509_LITE_PEM_BEGIN: &str = "-----BEGIN AETHER CERT-----";
+pub const REGISTRY_X509_LITE_PEM_END: &str = "-----END AETHER CERT-----";
+
+/// Lightweight certificate TBS (to-be-signed) fields (M24h).
+///
+/// Not X.509 DER. Ed25519 over a canonical text TBS only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryX509LiteTbs {
+    pub schema: String,
+    pub version: u32,
+    pub serial: String,
+    pub issuer: String,
+    pub subject: String,
+    pub not_before: String,
+    pub not_after: String,
+    pub subject_key_id: String,
+    pub public_key_algorithm: String,
+    pub public_key_sha256: String,
+}
+
+/// Signed lightweight certificate (M24h).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegistryX509LiteCert {
+    pub tbs: RegistryX509LiteTbs,
+    pub signature_algorithm: String,
+    /// Hex-encoded Ed25519 signature over [`tbs_signing_message`].
+    pub signature: String,
+}
+
+/// Canonical TBS signing message for M24h certificates.
+#[must_use]
+pub fn tbs_signing_message(tbs: &RegistryX509LiteTbs) -> String {
+    format!(
+        "aether.registry-x509-lite/v1\nversion={}\nserial={}\nissuer={}\nsubject={}\nnot_before={}\nnot_after={}\nsubject_key_id={}\npub_alg={}\npub_sha256={}",
+        tbs.version,
+        tbs.serial,
+        tbs.issuer,
+        tbs.subject,
+        tbs.not_before,
+        tbs.not_after,
+        tbs.subject_key_id,
+        tbs.public_key_algorithm,
+        tbs.public_key_sha256
+    )
+}
+
+/// Issue an X.509-lite certificate for a subject key, signed by an issuer key.
+pub fn issue_x509_lite_certificate(
+    cache_root: &Path,
+    issuer_key_id: &str,
+    subject_key_id: &str,
+    serial: &str,
+    not_before: &str,
+    not_after: &str,
+) -> Result<RegistryX509LiteCert, RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_x509_lite_certificates(),
+        "ADR-096: X.509-lite certificates"
+    );
+    validate_iso_date(not_before)?;
+    validate_iso_date(not_after)?;
+    if serial.is_empty() || serial.len() > 64 {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            "certificate serial must be 1..=64 characters",
+        ));
+    }
+    let issuer = load_trust_key_meta(cache_root, issuer_key_id)?;
+    if issuer.algorithm != REGISTRY_ALG_ED25519 {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            "X.509-lite issuer must be Ed25519",
+        ));
+    }
+    if issuer.revoked {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            format!("issuer key {issuer_key_id} is revoked"),
+        ));
+    }
+    let subject = load_trust_key_meta(cache_root, subject_key_id)?;
+    if subject.algorithm != REGISTRY_ALG_ED25519 {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            "X.509-lite subject must be Ed25519",
+        ));
+    }
+    let subject_material = load_trust_key_bytes(cache_root, subject_key_id)?;
+    let public_key_sha256 = crate::sha256_hex(&subject_material);
+    let tbs = RegistryX509LiteTbs {
+        schema: REGISTRY_X509_LITE_SCHEMA.to_owned(),
+        version: 1,
+        serial: serial.to_owned(),
+        issuer: issuer_key_id.to_owned(),
+        subject: subject_key_id.to_owned(),
+        not_before: not_before.to_owned(),
+        not_after: not_after.to_owned(),
+        subject_key_id: subject_key_id.to_owned(),
+        public_key_algorithm: REGISTRY_ALG_ED25519.to_owned(),
+        public_key_sha256,
+    };
+    let message = tbs_signing_message(&tbs);
+    let issuer_material = load_trust_key_bytes(cache_root, issuer_key_id)?;
+    if issuer_material.len() < 32 {
+        return Err(RegistryError::new(
+            "AE-REG-006",
+            "issuer key material is truncated",
+        ));
+    }
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&issuer_material[..32]);
+    let signing = SigningKey::from_bytes(&seed);
+    let signature = hex_encode(signing.sign(message.as_bytes()).to_bytes().as_ref());
+    Ok(RegistryX509LiteCert {
+        tbs,
+        signature_algorithm: REGISTRY_ALG_ED25519.to_owned(),
+        signature,
+    })
+}
+
+/// Verify an X.509-lite certificate against the issuer key in the trust store.
+pub fn verify_x509_lite_certificate(
+    cache_root: &Path,
+    cert: &RegistryX509LiteCert,
+) -> Result<(), RegistryError> {
+    debug_assert!(
+        f_registry_authorized() && registry_x509_lite_certificates(),
+        "ADR-096: X.509-lite certificates"
+    );
+    if cert.tbs.schema != REGISTRY_X509_LITE_SCHEMA {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            format!("unsupported certificate schema {}", cert.tbs.schema),
+        ));
+    }
+    if cert.signature_algorithm != REGISTRY_ALG_ED25519 {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            "X.509-lite signature algorithm must be ed25519",
+        ));
+    }
+    let issuer = load_trust_key_meta(cache_root, &cert.tbs.issuer)?;
+    if issuer.revoked {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            format!("issuer key {} is revoked", cert.tbs.issuer),
+        ));
+    }
+    let subject_material = load_trust_key_bytes(cache_root, &cert.tbs.subject)?;
+    let digest = crate::sha256_hex(&subject_material);
+    if digest != cert.tbs.public_key_sha256 {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            "certificate subject public key digest does not match trust material",
+        ));
+    }
+    let message = tbs_signing_message(&cert.tbs);
+    let issuer_material = load_trust_key_bytes(cache_root, &cert.tbs.issuer)?;
+    let verifying = ed25519_verifying_key_from_material(&issuer_material)?;
+    let sig_bytes = hex_decode(&cert.signature)
+        .map_err(|_| RegistryError::new("AE-REG-012", "certificate signature is not valid hex"))?;
+    if sig_bytes.len() != 64 {
+        return Err(RegistryError::new(
+            "AE-REG-012",
+            "certificate signature must be 64 bytes",
+        ));
+    }
+    let mut sig_arr = [0u8; 64];
+    sig_arr.copy_from_slice(&sig_bytes);
+    let signature = Signature::from_bytes(&sig_arr);
+    verifying
+        .verify(message.as_bytes(), &signature)
+        .map_err(|_| {
+            RegistryError::new(
+                "AE-REG-012",
+                "X.509-lite certificate signature verification failed",
+            )
+        })?;
+    Ok(())
+}
+
+/// Encode certificate as PEM-like AETHER CERT block (hex body, not base64).
+#[must_use]
+pub fn encode_x509_lite_pem(cert: &RegistryX509LiteCert) -> String {
+    let json = serde_json::to_string(cert).unwrap_or_else(|_| "{}".to_owned());
+    let hex_body = hex_encode(json.as_bytes());
+    format!("{REGISTRY_X509_LITE_PEM_BEGIN}\n{hex_body}\n{REGISTRY_X509_LITE_PEM_END}\n")
+}
+
+/// Decode PEM-like AETHER CERT block.
+pub fn decode_x509_lite_pem(pem: &str) -> Result<RegistryX509LiteCert, RegistryError> {
+    let trimmed = pem.trim();
+    let start = trimmed
+        .find(REGISTRY_X509_LITE_PEM_BEGIN)
+        .ok_or_else(|| RegistryError::new("AE-REG-012", "missing BEGIN AETHER CERT marker"))?;
+    let after_begin = start + REGISTRY_X509_LITE_PEM_BEGIN.len();
+    let end_rel = trimmed[after_begin..]
+        .find(REGISTRY_X509_LITE_PEM_END)
+        .ok_or_else(|| RegistryError::new("AE-REG-012", "missing END AETHER CERT marker"))?;
+    let body = &trimmed[after_begin..after_begin + end_rel];
+    let hex: String = body.chars().filter(|c| !c.is_whitespace()).collect();
+    let bytes = hex_decode(&hex)
+        .map_err(|_| RegistryError::new("AE-REG-012", "AETHER CERT body is not valid hex"))?;
+    let json = String::from_utf8(bytes)
+        .map_err(|_| RegistryError::new("AE-REG-012", "AETHER CERT body is not UTF-8 JSON"))?;
+    serde_json::from_str(&json).map_err(|error| {
+        RegistryError::new("AE-REG-012", format!("invalid AETHER CERT JSON: {error}"))
+    })
+}
+
 pub const REGISTRY_TRUST_POLICY_FILE: &str = "aether.registry-trust-policy.json";
 pub const REGISTRY_TRUST_POLICY_SCHEMA: &str = "aether.registry-trust-policy/v1";
 
@@ -1820,6 +2037,37 @@ mod tests {
         fs::write(&artifact, b"AETH\x0bmulti-level").expect("write");
         pin_local_package_signed(&root, "demo", "1.0.0", &artifact, "signer").expect("signed");
         verify_registry_cache(&root).expect("verify multi-level chain");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn x509_lite_certificate_issue_verify_and_pem_round_trip() {
+        assert!(registry_x509_lite_certificates());
+        let root = temp_dir();
+        let mut root_seed = [0u8; 32];
+        root_seed[0] = 11;
+        install_trust_root(&root, "ca-root", &root_seed).expect("root");
+        let mut leaf_seed = [0u8; 32];
+        leaf_seed[0] = 22;
+        install_trust_key_with_algorithm(&root, "leaf", &leaf_seed, REGISTRY_ALG_ED25519)
+            .expect("leaf");
+        let cert =
+            issue_x509_lite_certificate(&root, "ca-root", "leaf", "1", "2026-01-01", "2027-01-01")
+                .expect("issue");
+        assert_eq!(cert.tbs.schema, REGISTRY_X509_LITE_SCHEMA);
+        assert_eq!(cert.tbs.issuer, "ca-root");
+        assert_eq!(cert.tbs.subject, "leaf");
+        verify_x509_lite_certificate(&root, &cert).expect("verify");
+        let pem = encode_x509_lite_pem(&cert);
+        assert!(pem.contains(REGISTRY_X509_LITE_PEM_BEGIN));
+        let decoded = decode_x509_lite_pem(&pem).expect("decode pem");
+        assert_eq!(decoded, cert);
+        verify_x509_lite_certificate(&root, &decoded).expect("verify pem");
+        // Tamper fails closed.
+        let mut bad = cert.clone();
+        bad.signature = "00".repeat(64);
+        let err = verify_x509_lite_certificate(&root, &bad).expect_err("bad sig");
+        assert_eq!(err.code, "AE-REG-012");
         let _ = fs::remove_dir_all(&root);
     }
 }

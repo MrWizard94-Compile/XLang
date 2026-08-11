@@ -202,7 +202,7 @@ Product project/workspace compile returns seed bytes via
 | Structural top-level weaves | **Product path** (ADR-065/068 replace/insert/delete) |
 | Structural statements/records | **Product path** weave-body + primitive records (ADR-069) |
 | Nested body lists | **Product path** choose/while `whenBright`/`whenDim`/`body` (ADR-071) |
-| Seed-error packets | **Host packet ABI** `aether.seed-error/v1` (ADR-072); seed SPEAK emit residual |
+| Seed-error packets | **Host packet ABI** `aether.seed-error/v1` (ADR-072); seed SPEAK empty pilot (ADR-094); full matrix residual |
 | Yield-in-truth-choose | **Product fail-closed** `AE-SEED-013` (ADR-070); multi-module choose+revise supported |
 | Seed rebuild | **Product compile** (ADR-067); `--bootstrap` oracle only |
 | Lib unit project verify | **Product seed probe** (ADR-052) |

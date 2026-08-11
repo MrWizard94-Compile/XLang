@@ -79,12 +79,14 @@ Seed does **not** natively parse multi-source envelopes
 (`seed_native_multi_module_elaboration() == false`). A future seed-native
 multi-file ABI would require a new forge weave signature and Seed Profile claim.
 
-## Seed SPEAK diagnostic contract (ADR-082/086)
+## Seed SPEAK diagnostic contract (ADR-082/086/090/094)
 
 When the seed compiler fails, SPEAK lines of the form:
 
     AETHER_SEED_ERROR:{"schema":"aether.seed-error/v1",...}
 
 are the preferred structured diagnostic channel. Host product preflights already
-emit the same line format. Systematic seed.ae SPEAK emit for all conformance
-codes is residual (`seed_speak_emit_conformance_complete() == false`).
+emit the same line format. **ADR-094:** seed.ae SPEAKs AE-SEED-005 for empty
+source (origin `seed-speak`) and host merges SPEAK on forge **and** verify
+failure. Full seed SPEAK matrix remains residual
+(`seed_speak_emit_conformance_complete() == false`).

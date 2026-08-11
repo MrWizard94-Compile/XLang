@@ -51,18 +51,20 @@ pub use modules::{
     compile_project_modules_with_packages, decode_multi_source_envelope, elaborate_in_memory_units,
     elaborate_project_entry, elaborate_project_entry_with_packages, elaborate_project_modules,
     elaborate_project_modules_with_packages, encode_multi_source_envelope, mangle_weave,
-    multi_module_authority_note, run_project_tests, run_project_tests_with_grants,
-    source_requires_project_modules, validate_lib_module_source, ProjectTestReport,
-    ProjectTestResult, MULTI_SOURCE_ENVELOPE_SCHEMA,
+    multi_module_authority_note, product_multi_source_unit_surface,
+    product_multi_source_unit_surface_api, run_project_tests, run_project_tests_with_grants,
+    source_requires_project_modules, validate_lib_module_source, MultiSourceEnvelopeSurface,
+    MultiSourceUnitSurface, ProjectTestReport, ProjectTestResult, MULTI_SOURCE_ENVELOPE_SCHEMA,
 };
 pub use native::{
     f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
     lower_verified_aeth_to_llvm_object, lower_verified_aeth_to_native_exe,
     lower_verified_aeth_to_native_object, native_aeth_to_c_locals_pilot, native_aeth_to_c_pilot,
     native_aeth_to_c_speak_multiweave_pilot, native_dual_run_vm_exit, native_exe_link_product,
-    native_host_cc_dual_exec, native_host_cc_dual_exec_pilot, native_llvm_ir_emit_product,
-    native_llvm_object_emit_product, native_object_emit_product, NativeDualExecReport, NativeError,
-    NativeExeReport,
+    native_hermetic_toolchain_env, native_host_cc_dual_exec, native_host_cc_dual_exec_pilot,
+    native_llvm_ir_emit_product, native_llvm_object_emit_product, native_object_emit_product,
+    native_toolchain_probe_product, probe_native_toolchain, require_hermetic_native_toolchain,
+    NativeDualExecReport, NativeError, NativeExeReport, NativeToolchainProbe,
 };
 pub use project::{
     format_project, format_source, format_source_product, parse_project_document,
@@ -72,21 +74,24 @@ pub use project::{
     ProjectUnitReport, ProjectUnitRole, ProjectVerifyReport, PROJECT_SCHEMA_VERSION,
 };
 pub use registry::{
-    default_registry_trust_policy, empty_registry_cache, empty_registry_trust,
-    f_registry_authorized, fetch_signed_package, generate_ed25519_trust_key,
-    install_certified_intermediate, install_certified_signing_key, install_trust_key,
-    install_trust_key_with_algorithm, install_trust_root, load_or_default_trust_policy,
-    parse_registry_cache, parse_registry_trust, parse_registry_trust_policy, pin_local_package,
-    pin_local_package_signed, registry_ed25519_https_pilot, registry_key_rotation_policy,
-    registry_multi_level_cert_chain, registry_multi_root_trust_policy,
-    registry_offline_cache_verify, registry_root_certified_signing_keys,
-    registry_signed_fetch_pilot, revoke_trust_key, rotate_trust_key, serialize_registry_cache,
+    decode_x509_lite_pem, default_registry_trust_policy, empty_registry_cache,
+    empty_registry_trust, encode_x509_lite_pem, f_registry_authorized, fetch_signed_package,
+    generate_ed25519_trust_key, install_certified_intermediate, install_certified_signing_key,
+    install_trust_key, install_trust_key_with_algorithm, install_trust_root,
+    issue_x509_lite_certificate, load_or_default_trust_policy, parse_registry_cache,
+    parse_registry_trust, parse_registry_trust_policy, pin_local_package, pin_local_package_signed,
+    registry_ed25519_https_pilot, registry_key_rotation_policy, registry_multi_level_cert_chain,
+    registry_multi_root_trust_policy, registry_offline_cache_verify,
+    registry_root_certified_signing_keys, registry_signed_fetch_pilot,
+    registry_x509_lite_certificates, revoke_trust_key, rotate_trust_key, serialize_registry_cache,
     serialize_registry_trust, serialize_registry_trust_policy, set_trust_key_validity,
-    sign_package_binding, verify_registry_cache, write_trust_policy, RegistryCacheDocument,
-    RegistryError, RegistryPackagePin, RegistryTrustDocument, RegistryTrustKey,
-    RegistryTrustPolicy, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256, REGISTRY_CACHE_SCHEMA,
+    sign_package_binding, tbs_signing_message, verify_registry_cache, verify_x509_lite_certificate,
+    write_trust_policy, RegistryCacheDocument, RegistryError, RegistryPackagePin,
+    RegistryTrustDocument, RegistryTrustKey, RegistryTrustPolicy, RegistryX509LiteCert,
+    RegistryX509LiteTbs, REGISTRY_ALG_ED25519, REGISTRY_ALG_HMAC_SHA256, REGISTRY_CACHE_SCHEMA,
     REGISTRY_INDEX_FILE, REGISTRY_TRUST_FILE, REGISTRY_TRUST_POLICY_FILE,
-    REGISTRY_TRUST_POLICY_SCHEMA, REGISTRY_TRUST_SCHEMA,
+    REGISTRY_TRUST_POLICY_SCHEMA, REGISTRY_TRUST_SCHEMA, REGISTRY_X509_LITE_PEM_BEGIN,
+    REGISTRY_X509_LITE_PEM_END, REGISTRY_X509_LITE_SCHEMA,
 };
 pub use workspace::{
     compile_workspace_package, parse_workspace_document, refresh_workspace_lock,
@@ -2848,11 +2853,17 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
             format_seed_product_error_with_seed_stdout("AE-SEED-001", &detail, &forged.stdout),
         ));
     };
+    // ADR-094: seed may SPEAK structured packets then yield empty/invalid Bytes
+    // (empty-source pilot). Prefer SPEAK packets on verify failure.
     verify_bytecode(&bytecode).map_err(|error| {
         let detail = error.to_string();
         CompilerError::new(
             Span::synthetic(),
-            format_seed_product_error(classify_seed_verify_error(&detail), &detail),
+            format_seed_product_error_with_seed_stdout(
+                classify_seed_verify_error(&detail),
+                &detail,
+                &forged.stdout,
+            ),
         )
     })?;
     Ok(bytecode)
@@ -3163,7 +3174,10 @@ fn seed_reject_legacy_syntax_heuristics(source: &str) -> Option<String> {
             || trimmed.contains("-> Int")
             || trimmed.contains("-> i64");
         // Aether does not use brace blocks; `{`/`}` on a line is legacy/hostile.
-        let brace = trimmed.contains('{') || trimmed.contains('}');
+        // ADR-094: SPEAK lines may carry JSON seed-error packets (`AETHER_SEED_ERROR:{...}`).
+        let speak_packet_line = trimmed.starts_with("speak ")
+            && (trimmed.contains("AETHER_SEED_ERROR:") || trimmed.contains("\\\"schema\\\""));
+        let brace = (trimmed.contains('{') || trimmed.contains('}')) && !speak_packet_line;
         if legacy || brace {
             return Some(format_seed_product_error(
                 "AE-SEED-007",
@@ -3635,10 +3649,118 @@ pub const fn forge_preserves_speak_on_failure() -> bool {
     true
 }
 
+/// ADR-094: seed.ae SPEAK pilot for empty source (AE-SEED-005, origin seed-speak).
+///
+/// Full conformance matrix remains residual (`seed_speak_emit_conformance_complete`).
+#[must_use]
+pub const fn seed_speak_emit_empty_source_pilot() -> bool {
+    true
+}
+
+/// ADR-094: verify failures merge SPEAK packets from seed forge stdout.
+#[must_use]
+pub const fn forge_verify_merges_seed_speak() -> bool {
+    true
+}
+
 /// ADR-093: product task checkpoint density is part of task-frame surface.
 #[must_use]
 pub const fn product_task_checkpoint_density_api() -> bool {
     true
+}
+
+/// ADR-097: product task-model inventory (surface + reserved forms + spawn targets).
+#[must_use]
+pub const fn product_task_model_inventory_api() -> bool {
+    true
+}
+
+/// One reserved task-surface form found in source (ADR-089/097; not implemented).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReservedTaskFormHit {
+    pub line: usize,
+    pub keyword: String,
+}
+
+/// Product task-model inventory for tooling (ADR-097 under ADR-081 design bounds).
+///
+/// Does **not** implement handles, timeouts, or parallel scheduling.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProductTaskModelInventory {
+    pub task_frame_surface: Option<ProductTaskFrameSurface>,
+    pub reserved_form_hits: Vec<ReservedTaskFormHit>,
+    pub spawn_targets: Vec<String>,
+    pub product_accepted: bool,
+}
+
+/// Inventory task-related surface for a source unit (read-only; ADR-097).
+#[must_use]
+pub fn product_task_model_inventory(source: &str) -> ProductTaskModelInventory {
+    debug_assert!(
+        product_task_model_inventory_api(),
+        "ADR-097: product task-model inventory"
+    );
+    let reserved_form_hits = scan_reserved_task_forms(source);
+    let spawn_targets = scan_spawn_call_targets(source);
+    match compile_product_bytecode(source) {
+        Ok(bytecode) => {
+            let task_frame_surface = product_task_frame_surface(&bytecode).ok();
+            ProductTaskModelInventory {
+                task_frame_surface,
+                reserved_form_hits,
+                spawn_targets,
+                product_accepted: true,
+            }
+        }
+        Err(_) => ProductTaskModelInventory {
+            task_frame_surface: None,
+            reserved_form_hits,
+            spawn_targets,
+            product_accepted: false,
+        },
+    }
+}
+
+fn scan_reserved_task_forms(source: &str) -> Vec<ReservedTaskFormHit> {
+    let mut hits = Vec::new();
+    for (index, line) in source.lines().enumerate() {
+        let lower = line.trim_start().to_ascii_lowercase();
+        let keyword = if lower.starts_with("timeout ") {
+            Some("timeout")
+        } else if lower.starts_with("task handle ") || lower.starts_with("handle task ") {
+            Some("task-handle")
+        } else if lower.starts_with("parallel together") || lower.starts_with("together parallel") {
+            Some("parallel")
+        } else {
+            None
+        };
+        if let Some(keyword) = keyword {
+            hits.push(ReservedTaskFormHit {
+                line: index + 1,
+                keyword: keyword.to_owned(),
+            });
+        }
+    }
+    hits
+}
+
+fn scan_spawn_call_targets(source: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+    for line in source.lines() {
+        let trimmed = line.trim_start();
+        // M7: `spawn call name ... into` / `spawn call alias.name ...`
+        if let Some(rest) = trimmed.strip_prefix("spawn call ") {
+            let name = rest
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_matches(|c| c == '(' || c == ')');
+            if !name.is_empty() && !targets.iter().any(|t| t == name) {
+                targets.push(name.to_owned());
+            }
+        }
+    }
+    targets
 }
 
 #[cfg(test)]
@@ -3700,6 +3822,56 @@ mod product_task_frame_surface_tests {
         let packets = product_error_packets(source);
         assert_eq!(packets[0].code, "AE-SEED-014");
         assert_eq!(packets[0].origin, "host-preflight");
+    }
+
+    #[test]
+    fn seed_speak_empty_source_pilot_emits_seed_speak_packet() {
+        assert!(seed_speak_emit_empty_source_pilot());
+        assert!(forge_verify_merges_seed_speak());
+        assert!(!seed_speak_emit_conformance_complete());
+        assert!(!seed_internal_error_packets());
+        let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, "").expect("forge empty yields Bytes");
+        assert!(
+            forged.stdout.contains("AETHER_SEED_ERROR:"),
+            "seed SPEAK missing: {}",
+            forged.stdout
+        );
+        let packet = try_parse_seed_speak_error_packet(&forged.stdout).expect("packet");
+        assert_eq!(packet.code, "AE-SEED-005");
+        assert_eq!(packet.origin, "seed-speak");
+        match forged.value {
+            InvocationValue::Bytes(bytes) => {
+                assert!(
+                    bytes.is_empty() || verify_bytecode(&bytes).is_err(),
+                    "empty pilot must not yield a valid AETH"
+                );
+            }
+            other => panic!("expected Bytes, got {other:?}"),
+        }
+        // Product empty still host-preflight; SPEAK merge proven via forge path above.
+        let product = compile_product_bytecode("");
+        assert!(product.is_err());
+        let packets = product_error_packets("");
+        assert_eq!(packets[0].code, "AE-SEED-005");
+        assert_eq!(packets[0].origin, "host-preflight");
+    }
+
+    #[test]
+    fn product_task_model_inventory_reports_surface_and_reserved() {
+        assert!(product_task_model_inventory_api());
+        let source = include_str!("../../../examples/active-cancel.ae");
+        let inv = product_task_model_inventory(source);
+        assert!(inv.product_accepted);
+        let surface = inv.task_frame_surface.expect("surface");
+        assert!(surface.task_weave_count >= 1);
+        assert!(surface.total_checkpoint_count >= 1);
+        assert!(inv.reserved_form_hits.is_empty());
+        let reserved = product_task_model_inventory(
+            "world t\n\nweave main [] -> Whole:\n  timeout 5\n  yield 0\n",
+        );
+        assert!(!reserved.product_accepted);
+        assert_eq!(reserved.reserved_form_hits.len(), 1);
+        assert_eq!(reserved.reserved_form_hits[0].keyword, "timeout");
     }
 }
 

@@ -896,6 +896,77 @@ pub fn elaborate_in_memory_units(
     elaborate_modules_map(&modules, entry_path)
 }
 
+/// ADR-094: multi-source unit inventory surface (host path; seed-native still false).
+#[must_use]
+pub const fn product_multi_source_unit_surface_api() -> bool {
+    true
+}
+
+/// One unit in a multi-source envelope inventory (ADR-094).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MultiSourceUnitSurface {
+    pub path: String,
+    pub role: ProjectUnitRole,
+    pub source_byte_len: usize,
+    pub has_world: bool,
+}
+
+/// Multi-source envelope inventory without forge (ADR-094 tooling surface).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MultiSourceEnvelopeSurface {
+    pub schema: String,
+    pub units: Vec<MultiSourceUnitSurface>,
+    pub entry_path: Option<String>,
+    pub unit_count: usize,
+}
+
+/// Inventory multi-source envelope units without elaborating or forging.
+pub fn product_multi_source_unit_surface(
+    envelope: &str,
+) -> Result<MultiSourceEnvelopeSurface, ProjectError> {
+    debug_assert!(
+        product_multi_source_unit_surface_api(),
+        "ADR-094: multi-source unit surface"
+    );
+    let decoded = decode_multi_source_envelope(envelope)?;
+    let mut units = Vec::new();
+    let mut entry_path = None;
+    for (path, source) in decoded {
+        let role = if path == "main.ae"
+            || path.ends_with("/main.ae")
+            || path.ends_with("\\main.ae")
+            || path.ends_with("/src/main.ae")
+        {
+            if entry_path.is_some() {
+                return Err(module_error(
+                    "AE-MOD-006",
+                    "multi-source envelope has multiple main units",
+                ));
+            }
+            entry_path = Some(path.clone());
+            ProjectUnitRole::Main
+        } else {
+            ProjectUnitRole::Lib
+        };
+        let has_world = source
+            .lines()
+            .any(|line| line.trim_start().starts_with("world "));
+        units.push(MultiSourceUnitSurface {
+            path,
+            role,
+            source_byte_len: source.len(),
+            has_world,
+        });
+    }
+    let unit_count = units.len();
+    Ok(MultiSourceEnvelopeSurface {
+        schema: MULTI_SOURCE_ENVELOPE_SCHEMA.to_owned(),
+        units,
+        entry_path,
+        unit_count,
+    })
+}
+
 /// Host multi-file product forge from a multi-source envelope Text.
 ///
 /// Role heuristic: unit whose path ends with `main.ae` or is named `main.ae` is
