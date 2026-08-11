@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.36.0** (language **0.11** + M19e AETH v12 + post-0.36 maturity program)  
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-102 lexical seed-SPEAK pilot — **GATE PASS mode=full**
+**Current delivery verification:** ADR-103 reserved-task seed-SPEAK pilot — **GATE PASS mode=full**
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -41,7 +41,7 @@ Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTR
 | LSP diagnostics / symbols / hover / definition / format | Product-primary |
 | Structural edits | Product weave/body/record paths |
 | Multi-module / multi-source | Host elaborate + seed emit + unit digests |
-| Diagnostics | `AE-SEED-*` preflights + SPEAK packets; bounded seed pilot 003/004/005/006/007/012 |
+| Diagnostics | `AE-SEED-*` preflights + SPEAK packets; bounded seed pilot 003/004/005/006/007/012/014 |
 | Bootstrap residual | Dual-compare oracle, recovery flags, full `aether.ast/v8` |
 
 ### 2.3 Law forks (human-authorized)
@@ -102,8 +102,8 @@ Verified AETH
 | Matrices | M* / M19E / M23 / M35A / M24A validation matrices |
 | Constitution | Project Level-4 pointer → pack AGENTS.md Section 0 |
 
-**Latest full-gate stamp:** 2026-08-11 ADR-102 delivery — **GATE PASS mode=full**
-**Seed identity:** `BC0527A2E870C33899BEBAC64098B661946C214A5311E5EC9819C5A450522773`
+**Latest full-gate stamp:** 2026-08-11 ADR-103 delivery — **GATE PASS mode=full**
+**Seed identity:** `A692BEEA7BEB9891E5D64028A8537126AF2C52929754CA89399A8783C74BC76B`
 
 ---
 
@@ -112,12 +112,12 @@ Verified AETH
 The 0.36 package contract (M19e) is the executable language baseline. Since then,
 work has been **independence and infrastructure maturity** without a package bump:
 
-### 5.1 BARP highlights (ADR-043 → 102)
+### 5.1 BARP highlights (ADR-043 → 103)
 
 - Product-default CLI toolchain; bootstrap recovery only  
 - Multi-source envelope + multi-file host forge + unit digests  
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
-- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/012**; 003/007 are bounded lexical checks (dual-compare rebuild)
+- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/012/014**; 003/007 are bounded lexical checks and 014 scans canonical reserved-task prefixes (dual-compare rebuild)
 - Forge SPEAK capture on failure and verify merge  
 - Yield-in-truth-choose fail-closed (AE-SEED-013)  
 - Task checkpoint required (AE-SEED-015)  
@@ -138,15 +138,17 @@ X.509-lite → **CA store + chain verify + cache-gate validation**
 
 | Commit | Slice |
 | --- | --- |
+| `ec5e33c` | ADR-102 lexical seed-SPEAK tab / legacy-`fn` pilot |
 | `f294701` | M24i CA-store / M35j target-flow operator hardening |
 | `12a2181` | ADR-098–101 multi-code SPEAK, targets, CA store, checkpoint |
 | `1e2fa31` | ADR-094–097 SPEAK empty pilot, native probe, X.509-lite, task inventory |
 | `b5305cf` | ADR-090–093 forge SPEAK capture, native exe, multi-level certs, checkpoints |
 | `f03e310` | ADR-086–089 SPEAK matrix, LLVM object, root certs, task reserve |
 
-**Current verified delivery:** ADR-102 extends the seed-SPEAK pilot with bounded
-ASCII-tab (`AE-SEED-003`) and line-start legacy `fn ` (`AE-SEED-007`) checks;
-the full conformance matrix and seed-native multi-file remain residual.
+**Current verified delivery:** ADR-103 extends the seed-SPEAK pilot with
+canonical lowercase line-prefix detection for the reserved task surface
+(`AE-SEED-014`), including `timeout`, task-handle, and parallel proposals. The
+full conformance matrix and seed-native multi-file remain residual.
 
 ---
 
@@ -182,7 +184,7 @@ the full conformance matrix and seed-native multi-file remain residual.
 
 Ordered for dependency honesty (`CONST-DEP-001`):
 
-1. **BARP:** expand seed SPEAK to remaining conformance codes; design seed-native multi-file forge ABI  
+1. **BARP:** expand seed SPEAK to remaining conformance codes (010/011/013/015); design seed-native multi-file forge ABI
 2. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility  
 3. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite  
 4. **Task runtime:** implementable ADRs for handles and/or timeouts under ADR-081 invariants  

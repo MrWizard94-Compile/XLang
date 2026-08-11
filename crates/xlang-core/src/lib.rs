@@ -3733,7 +3733,8 @@ pub const fn forge_verify_merges_seed_speak() -> bool {
     true
 }
 
-/// ADR-098 / ADR-102: seed.ae SPEAK pilot codes (subset of the conformance matrix).
+/// ADR-098 / ADR-102 / ADR-103: seed.ae SPEAK pilot codes (subset of the
+/// conformance matrix).
 #[must_use]
 pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
     &[
@@ -3743,6 +3744,7 @@ pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
         "AE-SEED-006",
         "AE-SEED-007",
         "AE-SEED-012",
+        "AE-SEED-014",
     ]
 }
 
@@ -3757,6 +3759,14 @@ pub const fn seed_speak_emit_multi_code_pilot() -> bool {
 /// bounded pilot rather than a claim of full diagnostic parity.
 #[must_use]
 pub const fn seed_speak_emit_lexical_edge_pilot() -> bool {
+    true
+}
+
+/// ADR-103: the checked-in seed recognizes the canonical lowercase reserved
+/// task-surface prefixes line by line before it enters the compiler body.
+/// This remains a bounded diagnostic pilot, not full task-syntax parity.
+#[must_use]
+pub const fn seed_speak_emit_reserved_task_pilot() -> bool {
     true
 }
 
@@ -3960,9 +3970,10 @@ mod product_task_frame_surface_tests {
     }
 
     #[test]
-    fn seed_speak_multi_code_pilot_covers_lexical_and_structural_preflights() {
+    fn seed_speak_pilot_covers_lexical_structural_and_reserved_task_preflights() {
         assert!(seed_speak_emit_multi_code_pilot());
         assert!(seed_speak_emit_lexical_edge_pilot());
+        assert!(seed_speak_emit_reserved_task_pilot());
         let pilots = seed_speak_emit_pilot_codes();
         assert!(pilots.contains(&"AE-SEED-003"));
         assert!(pilots.contains(&"AE-SEED-004"));
@@ -3970,6 +3981,7 @@ mod product_task_frame_surface_tests {
         assert!(pilots.contains(&"AE-SEED-006"));
         assert!(pilots.contains(&"AE-SEED-007"));
         assert!(pilots.contains(&"AE-SEED-012"));
+        assert!(pilots.contains(&"AE-SEED-014"));
         let assert_seed_packet = |source: &str, expected_code: &str| {
             let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).expect("forge");
             let packet = try_parse_seed_speak_error_packet(&forged.stdout)
@@ -4014,6 +4026,20 @@ mod product_task_frame_surface_tests {
         let packet = try_parse_seed_speak_error_packet(&import.stdout).expect("import packet");
         assert_eq!(packet.code, "AE-SEED-012");
 
+        for reserved_source in [
+            "world t\n\nweave main [] -> Whole:\n  timeout 1\n  yield 0\n",
+            "world t\n\nweave main [] -> Whole:\n  task handle worker\n  yield 0\n",
+            "world t\n\nweave main [] -> Whole:\n  handle task worker\n  yield 0\n",
+            "world t\n\nweave main [] -> Whole:\n    parallel together\n  yield 0\n",
+            "world t\n\nweave main [] -> Whole:\n  together parallel\n  yield 0\n",
+        ] {
+            assert_seed_packet(reserved_source, "AE-SEED-014");
+        }
+        assert_seed_packet(
+            "weave main [] -> Whole:\n  timeout 1\n  yield 0\n",
+            "AE-SEED-006",
+        );
+
         let escaped_newline_fn = forge_bytecode(
             SEED_COMPILER_ARTIFACT,
             "world w\n\nweave main [] -> Whole:\n  speak \"\\\\nfn \"\n  yield 0\n",
@@ -4028,6 +4054,21 @@ mod product_task_frame_surface_tests {
             panic!("escaped literal must forge to bytecode")
         };
         verify_bytecode(&bytecode).expect("escaped literal artifact verifies");
+
+        let reserved_literal = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nweave main [] -> Whole:\n  speak \"timeout 1\"\n  yield 0\n",
+        )
+        .expect("forge reserved literal");
+        assert!(
+            try_parse_seed_speak_error_packet(&reserved_literal.stdout).is_none(),
+            "Text literal must not trip the reserved-task pilot: {}",
+            reserved_literal.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = reserved_literal.value else {
+            panic!("reserved literal must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("reserved literal artifact verifies");
     }
 
     #[test]

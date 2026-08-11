@@ -5,7 +5,7 @@ M20/M20b, M17b–d, M21, M22, and M23 pure comptime calls; RTP-001 runtime
 performance increment; PKG-001 offline workspace locks; package **0.36**
 current. M19e is implemented as the verifier-checked v12 task-frame slice
 (ADR-042); TP-1/TP-2 delivered; portfolio ADR-014
-**Date:** 2026-08-10 (BARP through ADR-067; product authority reduction active)
+**Date:** 2026-08-11 (BARP through ADR-103; product authority reduction active)
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
 constitution gate.
@@ -344,11 +344,12 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-102:** seed SPEAK
-pilot (003/004/005/006/007/012), including bounded lexical tab / top-level `fn `
-detection, plus multi-source unit digests and forge SPEAK merge.
+reduce Rust bootstrap product-path authority. **Through ADR-103:** seed SPEAK
+pilot (003/004/005/006/007/012/014), including bounded lexical tab / top-level
+`fn ` detection and canonical reserved-task prefixes, plus multi-source unit
+digests and forge SPEAK merge.
 Bootstrap is recovery/oracle only.
-**Next:** remaining SPEAK conformance codes (010/011/013/014/015); seed-native
+**Next:** remaining SPEAK conformance codes (010/011/013/015); seed-native
 multi-file elaboration.
 Residual bootstrap: dual-compare oracle emit, recovery `--bootstrap` flags, full
 `aether.ast/v8`.

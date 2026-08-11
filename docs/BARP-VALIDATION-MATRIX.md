@@ -12,8 +12,9 @@
 | BARP-SPEAK-008 | Seed source rebuild through bootstrap, product, and forge | Byte-identical to checked-in `seed/aether_seed.aeth` |
 | BARP-SPEAK-009 | Full conformance tracker | Remains `false`; no diagnostic-parity claim |
 | BARP-SPEAK-010 | Tab plus legacy `fn ` at a source-line start | Stable priority emits `AE-SEED-003`; lower-priority pilot does not replace it |
-| BARP-SPEAK-010 | Tab plus legacy `fn ` at a source-line start | Stable priority emits `AE-SEED-003`; lower-priority pilot does not replace it |
-| BARP-SPEAK-010 | Tab plus legacy `fn ` at a source-line start | Stable priority emits `AE-SEED-003`; lower-priority pilot does not replace it |
+| BARP-SPEAK-011 | Canonical reserved-task prefix after any ASCII-space indentation | Seed SPEAK `AE-SEED-014` for `timeout `, `task handle `, `handle task `, `parallel together`, or `together parallel` |
+| BARP-SPEAK-012 | Valid `speak` Text literal containing `timeout ` | Does not trigger the line-aware reserved-task pilot |
+| BARP-SPEAK-013 | Missing `world` plus a reserved-task prefix | Existing higher-priority seed pilot remains `AE-SEED-006` |
 
 ## Boundary
 

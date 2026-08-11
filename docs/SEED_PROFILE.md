@@ -31,10 +31,11 @@ multi-file natively). LSP diagnostics are product-primary (ADR-058); hover/defin
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
 project format, LSP format, product structural weave/statement/record ops, and seed
 rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
-oracle, and residual nested body-list structural AST only. **ADR-094/098/102:** seed
+oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103:** seed
 SPEAKs structured `AETHER_SEED_ERROR` for empty source, missing world, missing main,
 raw multi-module import, and bounded lexical ASCII-tab / top-level `fn ` conditions
-(origin `seed-speak`); full SPEAK conformance matrix remains residual.
+plus canonical reserved-task prefixes (origin `seed-speak`); full SPEAK conformance
+matrix remains residual.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,
