@@ -6,6 +6,10 @@
 **Related Rule IDs:** CONST-DEP-001, DOC-ADR-001, RND-INVAR-001, SEC-INPUT-001, TEST-BEHAVIOR-001
 **Depends on:** ADR-010, ADR-072, ADR-110, ADR-116, ADR-120
 
+**Later scoped extension:** ADR-122 independently adds one immediate
+single-digit decimal-Whole argument shape. It does not broaden this ADR's
+zero-argument decision.
+
 ## Context
 
 M7 defines a root nursery with nested child calls:
@@ -77,7 +81,7 @@ a nonempty destination suffix while leaving all M7 behavior to the full compiler
 4. A later-declared checkpointed task helper proves seed/bootstrap identity,
    verification, and execution.
 5. A Text literal, an erroring parent nursery, intervening blank/non-spawn
-   line, six-space descendant, argument-bearing child, missing `into` /
+   line, six-space descendant, multi-digit or multi-argument child, missing `into` /
    destination suffixes, and missing-world source prove literal, immediate
    parent/child-state, zero-argument, delimiter, and priority boundaries.
 6. The rebuilt seed must pass the full release gate, including four-way seed
@@ -88,7 +92,7 @@ a nonempty destination suffix while leaving all M7 behavior to the full compiler
 | Alternative | Decision |
 | --- | --- |
 | Scan every `spawn call` line | Rejected: it would grant arbitrary nested source parser authority. |
-| Parse argument-bearing spawn calls | Rejected: argument/delimiter parsing belongs to the full M7 parser. |
+| Parse arbitrary argument-bearing spawn calls | Rejected: argument/delimiter parsing belongs to the full M7 parser; ADR-122 later admits only one separately proven single-digit lexical shape. |
 | Scan any descendant of `together:` | Rejected: it would broaden the witness beyond the immediate canonical child. |
 | Validate task identity or destination | Rejected: those are semantic M7 responsibilities. |
 | Leave nursery targets bootstrap-only | Rejected: the literal parent/child/delimiter shape is narrow and directly provable. |
@@ -97,8 +101,9 @@ a nonempty destination suffix while leaving all M7 behavior to the full compiler
 
 This ADR covers only an ordinary total-Whole `weave ` with a root line exactly
 `together:` followed immediately by a four-space zero-argument
-`spawn call target into destination` line. It does not claim argument-bearing
-spawn support, full nested parsing, repeated or later nursery children, blank
+`spawn call target into destination` line. It does not claim general
+argument-bearing spawn support (ADR-122 later covers only one single-digit
+shape), full nested parsing, repeated or later nursery children, blank
 line tolerance, destination validation, task identity, header parsing, effect/
 result/signature validation, resource/ownership policy, scheduler behavior,
 source spans beyond fixed `1:1`, full `AE-SEED-011` parity, or seed-native

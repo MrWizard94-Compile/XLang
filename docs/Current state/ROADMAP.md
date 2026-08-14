@@ -53,18 +53,24 @@ it is not a current status source or authorization.
    `spawn call target into destination` child. M7 nesting, task identity,
    arguments, destination, effect/result, resource, ownership, and scheduler
    policy remain full-compiler responsibilities. See [ADR-121](../historical%20docs/ADR-121-barp-seed-speak-root-nursery-zero-argument-spawn-unknown-call-pilot.md).
-7. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
+7. **BARP ADR-122 — release verified.**
+   The bounded AE-SEED-011 witness additionally covers only an immediate
+   four-space `spawn call target digit into destination` child when `digit` is
+   exactly one ASCII decimal character. Multi-digit, signed, general atom, and
+   multi-argument forms plus M7 semantic legality remain full-compiler
+   responsibilities. See [ADR-122](../historical%20docs/ADR-122-barp-seed-speak-root-nursery-single-digit-whole-spawn-unknown-call-pilot.md).
+8. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
    AE-SEED-013 shape with an explicit false-positive boundary, or separately
    design seed-native multi-file elaboration. Do not infer parser/type-checker
    authority from the existing line-state witnesses.
-8. **Mainstream language/library vertical.** Select one controlled generic,
+9. **Mainstream language/library vertical.** Select one controlled generic,
    data-model, effect, or standard-library ergonomics increment only after its
    grammar, seed, verifier, VM, authoring, compatibility, and limit design are
    written and accepted.
-9. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
+10. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
    fixtures, and offline project workflows before expanding surface area merely
    for feature count.
-10. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
+11. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
    M24i are available for a next scoped ADR, threat-model update, validation
    matrix, and release proof. Neither is an automatic expansion of current
    authority.

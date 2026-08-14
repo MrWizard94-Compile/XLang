@@ -105,6 +105,11 @@ adds a literal ordinary total-Whole root
 nursery witness only for an immediate zero-argument
 `spawn call target into destination` child; M7 task, destination, nesting,
 resource, and scheduler legality remain with the full compiler.
+[ADR-122](docs/historical%20docs/ADR-122-barp-seed-speak-root-nursery-single-digit-whole-spawn-unknown-call-pilot.md)
+adds only the adjacent one-digit decimal-Whole child form
+`spawn call target digit into destination`; general arguments, task identity,
+destination, nesting, resource, and scheduler legality remain with the full
+compiler.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

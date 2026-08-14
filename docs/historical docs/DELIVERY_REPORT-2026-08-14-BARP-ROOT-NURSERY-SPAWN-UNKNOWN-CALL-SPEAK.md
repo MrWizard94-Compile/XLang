@@ -8,6 +8,11 @@ turning the seed into an M7 parser, task checker, or scheduler.
 **Scope:** ADR-121 direct-seed root-nursery zero-argument spawn unknown-target diagnostic authority reduction
 **Rule IDs:** CONST-COMPLETE-001, CONST-DEP-001, CONST-DONE-001, CONST-GATE-001, DOC-SYNC-001, ENG-WARN-001, RND-INVAR-001, SEC-INPUT-001, TEST-BEHAVIOR-001
 
+**Later scoped extension:** At this delivery's release gate, all argument-bearing
+children remained outside the witness. ADR-122 later adds only one immediate
+single-digit decimal-Whole argument shape; all broader argument forms remain
+outside the seed scanner.
+
 ## Implemented behavior
 
 The checked-in seed direct-call scan now records a prior-line state only for a
@@ -43,7 +48,7 @@ outside or above the scanner.
 | Direct seed forge | PASS — literal root nursery child emits one blank-Bytes `AE-SEED-011` seed-SPEAK packet with schema and fixed position |
 | Product merge | PASS — product compilation preserves the `AE-SEED-011` / `seed-speak` packet |
 | Valid source boundary | PASS — later-declared checkpointed task target verifies, matches bootstrap, and exits with the expected result |
-| False-positive boundary | PASS — spawn-shaped Text literal, erroring parent, delayed/descendant child, and argument-bearing child emit no pilot packet |
+| False-positive boundary | PASS at ADR-121 delivery — spawn-shaped Text literal, erroring parent, delayed/descendant child, and argument-bearing child emit no pilot packet |
 | Delimiter boundary | PASS — missing `into` or destination suffix does not trigger this witness |
 | Priority boundary | PASS — missing world supersedes the lower-priority root-nursery spawn witness |
 | BARP tracker | PASS — ADR-121 registers while `seed_speak_emit_conformance_complete()` remains false |

@@ -93,6 +93,12 @@ root `together:` followed immediately by a four-space zero-argument
 delimiter to be literal ` into ` with a destination suffix, but does not
 validate M7 nesting, task identity, arguments, destination legality, effect,
 result, resource, ownership, or scheduler policy.
+[ADR-122](docs/historical%20docs/ADR-122-barp-seed-speak-root-nursery-single-digit-whole-spawn-unknown-call-pilot.md)
+extends only that immediate root-nursery witness to
+`spawn call target digit into destination`, where `digit` is exactly one ASCII
+decimal character and the next byte starts literal ` into `. It does not parse
+general arguments or validate M7 task identity, destination legality, nesting,
+effect/result, signature, resource, ownership, or scheduler policy.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

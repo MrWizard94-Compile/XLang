@@ -86,7 +86,7 @@ When the seed compiler fails, SPEAK lines of the form:
     AETHER_SEED_ERROR:{"schema":"aether.seed-error/v1",...}
 
 are the preferred structured diagnostic channel. Host product preflights already
-emit the same line format. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117/118/119/120:** seed.ae SPEAKs
+emit the same line format. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117/118/119/120/121/122:** seed.ae SPEAKs
 AE-SEED-003/004/005/006/007/010/011/012/013/014/015 pilot codes (origin `seed-speak`);
 003 and 007 are bounded line-start lexical checks, 014 is a canonical-lowercase
 line-prefix guard for reserved task proposals, 015 is a canonical top-level
@@ -97,17 +97,18 @@ add only canonical ordinary-Whole `choose same` / `choose less` / exact
 `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact
 `choose not dim:` nested-yield witnesses for 013; the product preflight retains
 broader 013 coverage. Host merges SPEAK on
-forge **and** verify failure. ADR-110/111/116/117/118/119/120/121 add only canonical
+forge **and** verify failure. ADR-110/111/116/117/118/119/120/121/122 add only canonical
 total-Whole direct-bind, root-yield-call, root-revise-call, root-speak-call, and
 delimiter-bounded root-handle-call target-existence checks plus an erroring-Whole
-root-forward-call and an immediate root-nursery zero-argument spawn-call
-target-existence check against canonical top-level declaration headers (ordinary,
-export, host, foreign, or task). The witness accepts forward ordinary headers,
-exact end-of-line zero-argument targets, fixed `into` / `otherwise error into`
-handle delimiters, only the literal `-> Whole raises Whole:` forward caller
-marker, and only a literal total root `together:` whose immediate four-space
-child has the zero-argument `spawn call target into destination` shape; it is not
-general name binding,
+root-forward-call plus immediate root-nursery zero-argument and single-digit
+Whole spawn-call target-existence checks against canonical top-level declaration
+headers (ordinary, export, host, foreign, or task). The witness accepts forward
+ordinary headers, exact end-of-line zero-argument targets, fixed `into` /
+`otherwise error into` handle delimiters, only the literal `-> Whole raises
+Whole:` forward caller marker, and only a literal total root `together:` whose
+immediate four-space child has either the zero-argument
+`spawn call target into destination` shape or exactly one ASCII decimal digit
+before the literal ` into ` delimiter; it is not general name binding,
 destination or terminality validation, full header parsing, Text-result
 validation, M4 effect/resource validation, or call-kind approval. Full seed
 SPEAK matrix remains residual
