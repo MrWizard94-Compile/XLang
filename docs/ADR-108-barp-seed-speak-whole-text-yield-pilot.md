@@ -29,8 +29,10 @@ checker.
    `AE-SEED-010`, `origin: "seed-speak"`, and the stable position `1:1`.
    The seed returns blank Bytes and does not replace a higher-priority pilot.
 4. On the product forge path, the established packet merge preserves this exact
-   seed-emitted packet with `origin: "seed-speak"`. Other `AE-SEED-010` forms
-   remain host-classified unless a later bounded pilot expressly covers them.
+   seed-emitted packet with `origin: "seed-speak"`. ADR-115 later adds exact
+   Whole Truth-literal `yield bright` / `yield dim` witnesses; other
+   `AE-SEED-010` forms remain host-classified unless a later bounded pilot
+   expressly covers them.
 5. A `Text`-return weave, a `speak` statement, text that merely contains the
    characters `yield`, task weaves, and noncanonical headers are outside this
    bounded pilot. They remain the existing compiler/product-diagnostics domain.

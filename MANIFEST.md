@@ -39,10 +39,11 @@ Post-0.36 BARP maturity keeps that package contract unchanged while reducing
 direct-seed diagnostic residual: the checked-in seed SPEAK pilot covers
 AE-SEED-003/004/005/006/007/010/011/012/013/014/015, including a canonical task-body
 scan that requires an exact indented `checkpoint` statement, a canonical
-ordinary-Whole weave scan for `yield "..."`, canonical `choose same` / `choose less`
-  nested-yield witnesses, exact literal `choose bright:` / `choose dim:`
-  nested-yield witnesses, and exact unary-literal `choose not bright:` /
-  `choose not dim:` nested-yield witnesses. ADR-110/111 add a two-pass canonical direct-call witness
+ordinary-Whole weave scan for `yield "..."` and exact `yield bright` / `yield dim`,
+canonical `choose same` / `choose less` nested-yield witnesses, exact literal
+`choose bright:` / `choose dim:` nested-yield witnesses, and exact unary-literal
+`choose not bright:` / `choose not dim:` nested-yield witnesses. ADR-110/111 add
+a two-pass canonical direct-call witness
 for `bind … <- call` and root `yield call` forms that recognizes a missing target
 across declared top-level weave headers while preserving ordinary forward
 declarations. It changes no accepted valid source, AETH schema, VM behavior,
@@ -55,7 +56,9 @@ canonical `choose less` direct-forge witness, while
 adds only exact `choose bright:` / `choose dim:` witnesses, and
 [ADR-114](docs/ADR-114-barp-seed-speak-unary-literal-truth-choose-yield-pilot.md)
 adds only exact `choose not bright:` / `choose not dim:` witnesses. ADR-070
-retains the broader product preflight.
+retains the broader product preflight. [ADR-115](docs/ADR-115-barp-seed-speak-whole-truth-yield-pilot.md)
+adds only exact Whole-return `yield bright` / `yield dim` witnesses; broader
+result-type diagnostics remain host-classified.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

@@ -7,7 +7,7 @@ verified-execution evidence tooling; and M25 local source-package publication.
 Package **0.37** remains current. M19e
 is implemented as the verifier-checked v12 task-frame slice
 (ADR-042); TP-1/TP-2 delivered; portfolio ADR-014
-**Date:** 2026-08-14 (BARP through ADR-114; product authority reduction active)
+**Date:** 2026-08-14 (BARP through ADR-115; product authority reduction active)
 **Scope:** This orders language design and engineering work. Each future
 milestone still requires its own versioned specification, evidence, and
 constitution gate.
@@ -354,11 +354,11 @@ gate builds, stages, consumer-verifies, and integrity-probes the package
 (`GATE PASS mode=release` re-verified 2026-08-10 at HEAD `dd61bde`).
 
 **Active program:** [ADR-043](ADR-043-bootstrap-authority-reduction.md) BARP —
-reduce Rust bootstrap product-path authority. **Through ADR-114:** seed SPEAK
+reduce Rust bootstrap product-path authority. **Through ADR-115:** seed SPEAK
 pilot (003/004/005/006/007/010/011/012/013/014/015), including bounded lexical tab /
 top-level `fn ` detection, canonical reserved-task prefixes, exact canonical
-task-checkpoint detection, and canonical ordinary-Whole Text-literal-yield
-detection plus canonical ordinary-Whole `choose same` / `choose less` /
+task-checkpoint detection, and canonical ordinary-Whole Text-literal / exact
+Truth-literal yield detection plus canonical ordinary-Whole `choose same` / `choose less` /
 exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` /
 exact `choose not dim:` nested-yield detection,
 canonical ordinary-Whole direct-bind/root-yield unknown-call detection with

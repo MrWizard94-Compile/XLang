@@ -510,6 +510,20 @@ weave compile [borrow source: Text] -> Bytes:
               revise v30 <- 0
           otherwise:
             revise v30 <- 0
+          choose same v127 1:
+            choose same borrow v99 "yield bright":
+              speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-010\",\"message\":\"Whole weave cannot yield a Truth literal\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+              revise v131 <- 1
+              revise v40 <- bright
+            otherwise:
+              choose same borrow v99 "yield dim":
+                speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-010\",\"message\":\"Whole weave cannot yield a Truth literal\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+                revise v131 <- 1
+                revise v40 <- bright
+              otherwise:
+                revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
       otherwise:
         revise v30 <- 0
   otherwise:

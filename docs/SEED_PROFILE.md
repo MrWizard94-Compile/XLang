@@ -31,12 +31,13 @@ multi-file natively). LSP diagnostics are product-primary (ADR-058); hover/defin
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
 project format, LSP format, product structural weave/statement/record ops, and seed
 rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
-oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112/113/114:** seed
+oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115:** seed
 SPEAKs structured `AETHER_SEED_ERROR` for empty source, missing world, missing main,
 raw multi-module import, and bounded lexical ASCII-tab / top-level `fn ` conditions
 plus canonical reserved-task prefixes and canonical top-level task bodies without
-an exact indented `checkpoint` statement, plus a Text literal returned from a
-canonical ordinary `Whole` weave, canonical `choose same` / `choose less` /
+an exact indented `checkpoint` statement, plus a Text literal or exact
+`yield bright` / `yield dim` returned from a canonical ordinary `Whole` weave,
+canonical `choose same` / `choose less` /
 exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` /
 exact `choose not dim:` nested yield, and canonical direct unknown-call forms
 (origin `seed-speak`); full SPEAK conformance
@@ -135,8 +136,9 @@ form, AETH byte, seed input, seed artifact, or seed-emission proof obligation.
 ADR-106 adds a bounded direct-forge task diagnostic pilot: before normal
 compilation, the seed recognizes canonical top-level task headers and requires
 an exact indented `checkpoint` statement before the next top-level line or end
-of source. ADR-108 separately recognizes only an indented `yield "..."` line in
-a canonical ordinary `weave … -> Whole:` body. ADR-109/112/113/114 separately
+of source. ADR-108/115 separately recognize only an indented `yield "..."` line
+or exact `yield bright` / `yield dim` line in a canonical ordinary
+`weave … -> Whole:` body. ADR-109/112/113/114 separately
 recognize only a nested `yield` below canonical `choose same` / `choose less`
 lines or exact `choose bright:` / `choose dim:` / `choose not bright:` /
 `choose not dim:` lines in that same bounded ordinary-Whole context; the normal

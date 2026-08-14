@@ -25,7 +25,7 @@
 | BARP-SPEAK-021 | Valid `weave … -> Text:` with an indented `yield "…"` line | Does not trigger the Whole-result pilot; seed emits verified AETH |
 | BARP-SPEAK-022 | Missing `world` plus an otherwise canonical Whole Text-literal yield | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-023 | Product-path canonical Whole Text-literal yield diagnostic packet | `AE-SEED-010`, `origin: seed-speak`; forge packet merge preserves this exact bounded witness |
-| BARP-SPEAK-024 | Product-path Whole Truth-literal yield diagnostic packet | `AE-SEED-010`, `origin: host-classify`; the broader type family remains outside the pilot |
+| BARP-SPEAK-024 | Product-path exact Whole Truth-literal yield diagnostic packet | `AE-SEED-010`, `origin: seed-speak`; the broader type family remains outside the pilot |
 | BARP-SPEAK-025 | Canonical ordinary `weave … -> Whole:` with `choose same …:` and an indented branch `yield` | Seed SPEAK `AE-SEED-013`, `origin: seed-speak`, blank Bytes result |
 | BARP-SPEAK-026 | `choose same` that revises then reaches a root-level `yield` | Does not trigger the nested-yield pilot; seed emits verified AETH |
 | BARP-SPEAK-027 | Resource `choose allocate` / `append` / `at` with permitted nested yields | Does not trigger the truth-condition pilot; seed emits verified AETH |
@@ -59,6 +59,11 @@
 | BARP-SPEAK-055 | Valid `choose not flag:` branch that revises then reaches a root-level `yield` | Does not trigger the exact unary-literal pilot; seed artifact verifies and matches bootstrap |
 | BARP-SPEAK-056 | Missing `world` plus an otherwise canonical unary-literal Truth invalid yield | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-057 | Product-path canonical unary-literal Truth nested-yield diagnostic packet | `AE-SEED-013`, `origin: host-preflight`; ADR-070 retains the broader pre-forge safety boundary |
+| BARP-SPEAK-058 | Canonical ordinary `weave … -> Whole:` with exact `yield bright` | Seed SPEAK `AE-SEED-010`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-059 | Canonical ordinary `weave … -> Whole:` with exact `yield dim` | Seed SPEAK `AE-SEED-010`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-060 | `Truth`-return weave with exact `yield bright` / `yield dim`, plus a Whole `main` | Does not trigger the Whole-only pilot; seed artifact verifies, matches bootstrap, and exits with the expected result |
+| BARP-SPEAK-061 | Missing `world` plus an otherwise canonical Whole Truth-literal yield | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-062 | Product-path exact Whole Truth-literal yield packet | `AE-SEED-010`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
 
 ## Boundary
 

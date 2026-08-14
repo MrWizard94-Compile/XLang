@@ -3743,7 +3743,7 @@ pub const fn forge_verify_merges_seed_speak() -> bool {
     true
 }
 
-/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113 / ADR-114: seed.ae SPEAK pilot codes (subset of the
+/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113 / ADR-114 / ADR-115: seed.ae SPEAK pilot codes (subset of the
 /// conformance matrix).
 #[must_use]
 pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
@@ -3797,6 +3797,15 @@ pub const fn seed_speak_emit_task_checkpoint_pilot() -> bool {
 /// a bounded Text-literal result pilot, not general type-diagnostic parity.
 #[must_use]
 pub const fn seed_speak_emit_whole_text_yield_pilot() -> bool {
+    true
+}
+
+/// ADR-115: the checked-in seed line-scans canonical ordinary `weave` bodies
+/// that return `Whole` and rejects exact `yield bright` / `yield dim` lines.
+/// This is a bounded Truth-literal result pilot, not general return-type
+/// diagnostic parity.
+#[must_use]
+pub const fn seed_speak_emit_whole_truth_yield_pilot() -> bool {
     true
 }
 
@@ -4026,6 +4035,7 @@ mod product_task_frame_surface_tests {
         assert!(seed_speak_emit_reserved_task_pilot());
         assert!(seed_speak_emit_task_checkpoint_pilot());
         assert!(seed_speak_emit_whole_text_yield_pilot());
+        assert!(seed_speak_emit_whole_truth_yield_pilot());
         assert!(seed_speak_emit_truth_choose_yield_pilot());
         assert!(seed_speak_emit_unknown_call_pilot());
         let pilots = seed_speak_emit_pilot_codes();
@@ -4141,6 +4151,14 @@ weave main [] -> Whole:\n\
             "AE-SEED-010",
         );
         assert_seed_packet(
+            "world w\n\nweave main [] -> Whole:\n  yield bright\n",
+            "AE-SEED-010",
+        );
+        assert_seed_packet(
+            "world w\n\nweave main [] -> Whole:\n  yield dim\n",
+            "AE-SEED-010",
+        );
+        assert_seed_packet(
             "world w\n\nweave main [] -> Whole:\n  bind x <- 7\n  choose same x 7:\n    yield 42\n  otherwise:\n    yield -1\n",
             "AE-SEED-013",
         );
@@ -4176,6 +4194,8 @@ weave main [] -> Whole:\n\
             "weave main [] -> Whole:\n  choose same 1 1:\n    yield 42\n  otherwise:\n    yield -1\n",
             "AE-SEED-006",
         );
+        assert_seed_packet("weave main [] -> Whole:\n  yield bright\n", "AE-SEED-006");
+        assert_seed_packet("weave main [] -> Whole:\n  yield dim\n", "AE-SEED-006");
         assert_seed_packet(
             "weave main [] -> Whole:\n  choose less 1 2:\n    yield 42\n  otherwise:\n    yield -1\n",
             "AE-SEED-006",

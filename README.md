@@ -64,7 +64,8 @@ BARP's bounded direct-seed diagnostic pilot now SPEAKs
 AE-SEED-003/004/005/006/007/010/011/012/013/014/015. Its task-checkpoint portion
 recognizes only canonical top-level task headers and exact indented
 `checkpoint` statements; its AE-SEED-010 portion recognizes only a Text literal
-returned from a canonical ordinary `Whole` weave; its AE-SEED-013 portion
+or exact `yield bright` / `yield dim` literal returned from a canonical ordinary
+`Whole` weave; its AE-SEED-013 portion
 recognizes only a nested `yield` below canonical `choose same`, `choose less`,
   exact `choose bright:` / `choose dim:`, or exact unary-literal `choose not
   bright:` / `choose not dim:` in such a weave;
@@ -77,7 +78,8 @@ accepted valid source nor claims full diagnostic parity. See
 [ADR-111](docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md),
 [ADR-112](docs/ADR-112-barp-seed-speak-less-choose-yield-pilot.md), and
 [ADR-113](docs/ADR-113-barp-seed-speak-literal-truth-choose-yield-pilot.md), and
-[ADR-114](docs/ADR-114-barp-seed-speak-unary-literal-truth-choose-yield-pilot.md).
+[ADR-114](docs/ADR-114-barp-seed-speak-unary-literal-truth-choose-yield-pilot.md), and
+[ADR-115](docs/ADR-115-barp-seed-speak-whole-truth-yield-pilot.md).
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

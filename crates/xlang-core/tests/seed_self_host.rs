@@ -790,6 +790,86 @@ fn barp_adr114_seed_speaks_canonical_unary_literal_truth_choose_yield() {
 }
 
 #[test]
+fn barp_adr115_seed_speaks_canonical_whole_truth_literal_yield() {
+    for literal in ["bright", "dim"] {
+        let invalid = format!("world w\n\nweave main [] -> Whole:\n  yield {literal}\n");
+
+        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, &invalid)
+            .expect("canonical Whole Truth-literal source must reach the seed forge");
+        assert!(
+            direct.stdout.contains("\"code\":\"AE-SEED-010\""),
+            "expected a seed-native AE-SEED-010 packet for {literal}, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct.stdout.contains("\"origin\":\"seed-speak\""),
+            "expected seed-speak origin for {literal}, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct
+                .stdout
+                .contains("\"message\":\"Whole weave cannot yield a Truth literal\""),
+            "expected the Truth-literal diagnostic message for {literal}, got: {}",
+            direct.stdout
+        );
+        assert_eq!(
+            direct.stdout.matches("AETHER_SEED_ERROR:").count(),
+            1,
+            "canonical {literal} source must emit exactly one packet: {}",
+            direct.stdout
+        );
+        match direct.value {
+            InvocationValue::Bytes(bytes) => assert!(
+                bytes.is_empty(),
+                "canonical {literal} SPEAK must return blank Bytes, got {} bytes",
+                bytes.len()
+            ),
+            other => panic!("canonical {literal} SPEAK must return Bytes, got {other:?}"),
+        }
+
+        let product = compile_product_bytecode(&invalid)
+            .expect_err("canonical Whole Truth literal must fail product compilation");
+        assert!(
+            product.to_string().contains("AE-SEED-010"),
+            "expected AE-SEED-010 for {literal}, got {product}"
+        );
+        let packets = product_error_packets(&invalid);
+        assert_eq!(packets.len(), 1);
+        assert_eq!(packets[0].code, "AE-SEED-010");
+        assert_eq!(packets[0].origin, "seed-speak");
+    }
+
+    for literal in ["bright", "dim"] {
+        let valid = format!(
+            "world w\n\nweave truth_value [] -> Truth:\n  yield {literal}\n\nweave main [] -> Whole:\n  yield 42\n"
+        );
+        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, &valid)
+            .expect("Truth-return literal source must reach the seed forge");
+        assert!(
+            !direct.stdout.contains("AETHER_SEED_ERROR:"),
+            "Truth-return {literal} source must remain outside the Whole pilot: {}",
+            direct.stdout
+        );
+        let seeded = bytes(direct);
+        verify_bytecode(&seeded).expect("Truth-return literal seed artifact must verify");
+        let bootstrap = compile_to_bytecode(&valid)
+            .expect("Truth-return literal source must bootstrap")
+            .bytecode;
+        assert_eq!(
+            seeded, bootstrap,
+            "Truth-return {literal} source must retain seed/bootstrap identity"
+        );
+        assert_eq!(
+            run_bytecode(&seeded)
+                .expect("Truth-return literal seed artifact must run")
+                .exit_code,
+            42
+        );
+    }
+}
+
+#[test]
 fn barp_phase3a_product_path_rejects_odd_indent_with_ae_seed_code() {
     let source = "world w\n\nweave main [] -> Whole:\n yield 1\n";
     let error = compile_product_bytecode(source).expect_err("odd indent must fail closed");
@@ -885,7 +965,7 @@ fn barp_adr072_product_seed_error_packet_abi() {
     let truth_typed = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield bright\n");
     assert_eq!(truth_typed.len(), 1);
     assert_eq!(truth_typed[0].code, "AE-SEED-010");
-    assert_eq!(truth_typed[0].origin, "host-classify");
+    assert_eq!(truth_typed[0].origin, "seed-speak");
 }
 
 #[test]
