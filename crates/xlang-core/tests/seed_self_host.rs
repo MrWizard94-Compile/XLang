@@ -2426,6 +2426,173 @@ fn barp_adr125_seed_speaks_canonical_root_nursery_dim_truth_spawn_unknown_calls(
 }
 
 #[test]
+fn barp_adr126_seed_speaks_canonical_root_nursery_empty_text_spawn_unknown_calls() {
+    let source = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call nope \"\" into result\n  yield result\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, source)
+        .expect("canonical empty-Text root nursery spawn unknown call must reach the seed forge");
+    assert!(
+        direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+        "expected a seed-native AE-SEED-011 packet for empty-Text root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct.stdout.contains("\"origin\":\"seed-speak\""),
+        "expected seed-speak origin for empty-Text root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct
+            .stdout
+            .contains("\"schema\":\"aether.seed-error/v1\""),
+        "expected seed error schema for empty-Text root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct.stdout.contains("\"line\":1,\"column\":1"),
+        "expected 1:1 seed-SPEAK position for empty-Text root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct.stdout.contains(
+            "\"message\":\"canonical direct call target does not name a top-level declared weave\""
+        ),
+        "expected the unknown-call message for empty-Text root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert_eq!(
+        direct.stdout.matches("AETHER_SEED_ERROR:").count(),
+        1,
+        "canonical empty-Text root nursery spawn source must emit exactly one packet: {}",
+        direct.stdout
+    );
+    match direct.value {
+        InvocationValue::Bytes(bytes) => assert!(
+            bytes.is_empty(),
+            "canonical empty-Text root nursery spawn SPEAK must return blank Bytes, got {} bytes",
+            bytes.len()
+        ),
+        other => {
+            panic!("canonical empty-Text root nursery spawn SPEAK must return Bytes, got {other:?}")
+        }
+    }
+
+    let product = compile_product_bytecode(source).expect_err(
+        "canonical empty-Text root nursery spawn unknown call must fail product compilation",
+    );
+    assert!(
+        product.to_string().contains("AE-SEED-011"),
+        "expected AE-SEED-011 for empty-Text root nursery spawn, got {product}"
+    );
+    let packets = product_error_packets(source);
+    assert_eq!(packets.len(), 1);
+    assert_eq!(packets[0].schema, SEED_ERROR_PACKET_SCHEMA);
+    assert_eq!(packets[0].code, "AE-SEED-011");
+    assert_eq!(packets[0].line, 1);
+    assert_eq!(packets[0].column, 1);
+    assert_eq!(packets[0].origin, "seed-speak");
+
+    let valid = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call worker \"\" into result\n  yield result\n\nweave worker [message: Text] -> Whole:\n  yield 42\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, valid)
+        .expect("declared empty-Text root nursery spawn call must reach the seed forge");
+    assert!(
+        !direct.stdout.contains("AETHER_SEED_ERROR:"),
+        "declared empty-Text root nursery spawn call must remain outside the pilot: {}",
+        direct.stdout
+    );
+    let seeded = bytes(direct);
+    verify_bytecode(&seeded)
+        .expect("declared empty-Text root nursery spawn seed artifact must verify");
+    let bootstrap = compile_to_bytecode(valid)
+        .expect("declared empty-Text root nursery spawn source must bootstrap")
+        .bytecode;
+    assert_eq!(
+        seeded, bootstrap,
+        "declared empty-Text root nursery spawn call must retain seed/bootstrap identity"
+    );
+    assert_eq!(
+        run_bytecode(&seeded)
+            .expect("declared empty-Text root nursery spawn seed artifact must run")
+            .exit_code,
+        42
+    );
+
+    let assert_no_empty_text_pilot = |source: &str, boundary: &str| {
+        match forge_bytecode(SEED_COMPILER_ARTIFACT, source) {
+            Ok(direct) => assert!(
+                !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+                "{boundary} must remain outside the empty-Text pilot: {}",
+                direct.stdout
+            ),
+            Err(error) => assert!(
+                !error.to_string().contains("AE-SEED-011"),
+                "{boundary} must not emit the empty-Text pilot before its existing seed failure: {error}"
+            ),
+        }
+    };
+
+    for nonmatch in [
+        "spawn call nope \"x\" into result",
+        "spawn call nope bytes \"00\" into result",
+        "spawn call nope message into result",
+        "spawn call nope \"\" \"\" into result",
+        "spawn call nope \"\" into",
+    ] {
+        let source = format!(
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    {nonmatch}\n  yield result\n"
+        );
+        assert_no_empty_text_pilot(
+            &source,
+            &format!("out-of-scope root nursery spawn `{nonmatch}`"),
+        );
+    }
+
+    for (boundary, spacer) in [
+        ("a blank line", "\n"),
+        ("a non-spawn nursery child", "    bind mutable spare <- 0\n"),
+    ] {
+        let source = format!(
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n{spacer}    spawn call nope \"\" into result\n  yield result\n"
+        );
+        assert_no_empty_text_pilot(
+            &source,
+            &format!("empty-Text root nursery spawn after {boundary}"),
+        );
+    }
+
+    let descendant = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n      spawn call nope \"\" into result\n  yield result\n";
+    assert_no_empty_text_pilot(descendant, "six-space empty-Text nursery descendant");
+
+    let wrong_parameter = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call worker \"\" into result\n  yield result\n\nweave worker [limit: Whole] -> Whole:\n  yield limit\n";
+    assert_no_empty_text_pilot(
+        wrong_parameter,
+        "existing target with a wrong parameter type",
+    );
+    let product = compile_product_bytecode(wrong_parameter)
+        .expect_err("wrong-parameter empty-Text nursery target must fail product compilation");
+    assert!(
+        !product.to_string().contains("AE-SEED-011"),
+        "wrong parameter type must retain full compiler authority, got {product}"
+    );
+
+    let erroring_caller = "world w\n\nweave relay [] -> Whole raises Whole:\n  bind mutable result <- 0\n  together:\n    spawn call nope \"\" into result\n  raise 0\n\nweave main [] -> Whole:\n  bind mutable value <- 0\n  bind mutable code <- 0\n  handle call relay into value otherwise error into code\n";
+    assert_no_empty_text_pilot(erroring_caller, "erroring empty-Text root nursery spawn");
+
+    let missing_world = "weave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call nope \"\" into result\n  yield result\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, missing_world)
+        .expect("missing-world empty-Text root nursery spawn source must reach the seed forge");
+    assert!(
+        direct.stdout.contains("\"code\":\"AE-SEED-006\""),
+        "missing world must retain higher-priority AE-SEED-006, got: {}",
+        direct.stdout
+    );
+    assert!(
+        !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+        "missing world must suppress the lower-priority empty-Text root nursery spawn pilot: {}",
+        direct.stdout
+    );
+}
+
+#[test]
 fn barp_phase3a_product_path_rejects_odd_indent_with_ae_seed_code() {
     let source = "world w\n\nweave main [] -> Whole:\n yield 1\n";
     let error = compile_product_bytecode(source).expect_err("odd indent must fail closed");
@@ -2540,6 +2707,10 @@ fn barp_adr072_product_seed_error_packet_abi() {
     assert!(
         aether_core::seed_speak_emit_root_nursery_dim_truth_spawn_unknown_call_pilot(),
         "ADR-125: root nursery exact dim Truth spawn-call unknown-call seed SPEAK pilot"
+    );
+    assert!(
+        aether_core::seed_speak_emit_root_nursery_empty_text_spawn_unknown_call_pilot(),
+        "ADR-126: root nursery exact empty Text spawn-call unknown-call seed SPEAK pilot"
     );
     let empty = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield 1\n");
     assert!(empty.is_empty());

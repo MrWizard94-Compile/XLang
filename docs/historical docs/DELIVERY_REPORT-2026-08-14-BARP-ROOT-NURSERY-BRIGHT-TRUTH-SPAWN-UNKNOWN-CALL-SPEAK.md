@@ -83,6 +83,10 @@ families; full seed SPEAK conformance; and seed-native multi-file elaboration
 remain separate scoped work. Preserve the verifier-first artifact rule,
 dual-compare proof, and no-ambient-authority boundary.
 
+**Later scoped extension:** ADR-126 separately recognizes only the immediate
+exact empty-Text child `spawn call target "" into destination`; it does not
+broaden this exact-bright delivery.
+
 ---
 
 *End of DELIVERY_REPORT-2026-08-14-BARP-ROOT-NURSERY-BRIGHT-TRUTH-SPAWN-UNKNOWN-CALL-SPEAK.md*

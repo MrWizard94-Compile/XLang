@@ -124,7 +124,15 @@ resource, and scheduler legality remain with the full compiler.
 adds only the adjacent exact `Truth`-literal child form
 `spawn call target dim into destination`; `bright` remains ADR-124, while names,
 general expressions, task identity, destination, nesting, resource, and
-scheduler legality remain with the full compiler.
+scheduler legality remain with the full compiler. Exact empty `Text` is a
+separate ADR-126 witness.
+[ADR-126](docs/historical%20docs/ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md)
+adds only the adjacent exact empty-`Text` child form
+`spawn call target "" into destination`; it uses an ordinary `weave` with a
+`Text` parameter only for valid-source evidence and does not add Text
+task-frame support. Nonempty or escaped Text, Bytes, names, task identity,
+destination, nesting, resource, and scheduler legality remain with the full
+compiler.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

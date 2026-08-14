@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064–072; bounded pilot increments through ADR-125); ADR-125 release verified; residual recovery bootstrap
-**Date:** 2026-08-14 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-125 release verification)
-**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-125](../historical%20docs/ADR-125-barp-seed-speak-root-nursery-dim-truth-spawn-unknown-call-pilot.md)
+**Status:** Active program — product-default toolchain (ADR-064–072; bounded pilot increments through ADR-126); ADR-126 release verified; residual recovery bootstrap
+**Date:** 2026-08-14 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-126 release verification)
+**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-126](../historical%20docs/ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md)
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---

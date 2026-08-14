@@ -10,6 +10,10 @@
 `dim` Truth argument shape. It does not broaden this ADR's exact-`bright`
 decision.
 
+**Later scoped extension:** ADR-126 independently adds only the immediate exact
+empty-Text argument shape. It does not broaden this ADR's exact-`bright`
+decision.
+
 ## Context
 
 M7 accepts owned copy `Truth` task parameters, including the canonical literal
@@ -96,7 +100,7 @@ exactly `bright`, with no general `Truth` expression, name, or `dim` parsing.
 This ADR covers only an ordinary total-Whole `weave` with a root line exactly
 `together:` followed immediately by a four-space
 `spawn call target bright into destination` line. It does not claim exact `dim`
-beyond ADR-125, names, `not`, general `Truth` expressions, Whole literals beyond ADR-121/122/123,
+beyond ADR-125, exact empty Text beyond ADR-126, names, `not`, general `Truth` expressions, Whole literals beyond ADR-121/122/123,
 multiple arguments, full nested parsing, later nursery children, blank-line
 tolerance, task identity, destination validation, header parsing,
 effect/result/signature validation, resource/ownership policy, scheduler
@@ -111,6 +115,7 @@ seed-native multi-file elaboration.
 - [ADR-122](ADR-122-barp-seed-speak-root-nursery-single-digit-whole-spawn-unknown-call-pilot.md)
 - [ADR-123](ADR-123-barp-seed-speak-root-nursery-two-digit-positive-whole-spawn-unknown-call-pilot.md)
 - [ADR-125](ADR-125-barp-seed-speak-root-nursery-dim-truth-spawn-unknown-call-pilot.md)
+- [ADR-126](ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md)
 - [Delivery report](DELIVERY_REPORT-2026-08-14-BARP-ROOT-NURSERY-BRIGHT-TRUTH-SPAWN-UNKNOWN-CALL-SPEAK.md)
 - [BARP design](../Current%20state/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 - [BARP validation matrix](../Current%20state/BARP-VALIDATION-MATRIX.md)

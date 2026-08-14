@@ -14,6 +14,10 @@ two-digit-Whole decision.
 `dim` Truth argument shape. It does not broaden this ADR's positive two-digit-
 Whole decision.
 
+**Later scoped extension:** ADR-126 independently adds only the immediate exact
+empty-Text argument shape. It does not broaden this ADR's positive two-digit-
+Whole decision.
+
 ## Context
 
 M7 admits a nursery child with a copy Whole argument:
@@ -68,9 +72,10 @@ three-or-more digit forms.
   host-capability surface.
 - Positive two-digit decimal is a recognition condition, not a general Whole
   parser. Zero, one-digit, signed, leading-zero, three-or-more digit, name,
-  Text, Bytes, move/borrow/access, and multi-argument shapes retain their
-  existing bounded witness or the full compiler; ADR-124 separately admits only
-  exact `bright`, and ADR-125 separately admits only exact `dim`.
+  nonempty/escaped Text, Bytes, move/borrow/access, and multi-argument shapes
+  retain their existing bounded witness or the full compiler; ADR-124 separately
+  admits only exact `bright`, ADR-125 separately admits only exact `dim`, and
+  ADR-126 separately admits only exact empty Text.
 - The branch reuses the existing Whole scratch state and ADR-121 parent state.
   It introduces no seed binding and leaves the `v132` unused-local self-host
   variant probe intact.
@@ -102,7 +107,7 @@ three-or-more digit forms.
 | Recognize arbitrary multi-digit Whole literals | Rejected: canonical numeric range handling needs its own proof. |
 | Recognize signed two-digit literals | Rejected: sign and `-0` rules would broaden lexical authority. |
 | Recognize leading-zero forms | Rejected: the bootstrap literal predicate rejects them before target resolution. |
-| Recognize general Truth, name, Text, or ownership arguments | Rejected: those require broader type and ownership priority evidence; ADR-124 and ADR-125 separately admit only exact `bright` and `dim`. |
+| Recognize general Truth, name, Text, or ownership arguments | Rejected: those require broader type and ownership priority evidence; ADR-124 and ADR-125 separately admit only exact `bright` and `dim`, while ADR-126 separately admits only exact empty Text. |
 | Validate the task signature or destination | Rejected: those remain M7 semantic responsibilities. |
 | Leave all positive two-digit spawns bootstrap-only | Rejected: the exact `10`–`99` delimiter shape is useful, lexer-aligned, and directly provable. |
 
@@ -114,7 +119,7 @@ This ADR covers only an ordinary total-Whole `weave ` with a root line exactly
 two-character ASCII decimal Whole literal (`10` through `99`). It does not
 claim zero/one-digit coverage beyond ADR-121/122, signed, leading-zero,
 three-or-more digit, any Truth coverage beyond ADR-124 exact `bright` and
-ADR-125 exact `dim`, general atom, multiple argument, full nested parsing,
+ADR-125 exact `dim`, any Text coverage beyond ADR-126 exact empty Text, general atom, multiple argument, full nested parsing,
 later nursery child, blank-line tolerance, task identity, destination
 validation, header parsing, effect/result/signature validation,
 resource/ownership policy, scheduler behavior, source spans beyond fixed `1:1`,
@@ -128,6 +133,7 @@ full `AE-SEED-011` parity, or seed-native multi-file elaboration.
 - [ADR-122](ADR-122-barp-seed-speak-root-nursery-single-digit-whole-spawn-unknown-call-pilot.md)
 - [ADR-124](ADR-124-barp-seed-speak-root-nursery-bright-truth-spawn-unknown-call-pilot.md)
 - [ADR-125](ADR-125-barp-seed-speak-root-nursery-dim-truth-spawn-unknown-call-pilot.md)
+- [ADR-126](ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md)
 - [Delivery report](DELIVERY_REPORT-2026-08-14-BARP-ROOT-NURSERY-TWO-DIGIT-POSITIVE-WHOLE-SPAWN-UNKNOWN-CALL-SPEAK.md)
 - [BARP design](../Current%20state/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 - [BARP validation matrix](../Current%20state/BARP-VALIDATION-MATRIX.md)

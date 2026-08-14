@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-125 canonical root-nursery exact-dim Truth spawn unknown-target seed-SPEAK pilot — targeted red/green, direct, valid-source, predecessor/lexical/signature/caller-state/delimiter/priority boundaries, product/self-host, tracker, and full release gate PASS
+**Current delivery verification:** ADR-126 canonical root-nursery exact-empty-Text spawn unknown-target seed-SPEAK pilot — targeted red/green, direct, valid-source, predecessor/lexical/signature/caller-state/delimiter/priority boundaries, product/self-host, tracker, and full release gate PASS
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -105,8 +105,8 @@ Verified AETH
 | Matrices | M* / M19E / M23 / M35A / M24A validation matrices |
 | Constitution | Project Level-4 pointer → pack AGENTS.md Section 0 |
 
-**Latest full-gate stamp:** 2026-08-14 ADR-125 delivery — **GATE PASS mode=release** (pack v5.0.1; 357 Markdown files / 1,427 local links; full-quality suite, four-way seed identity, 442-file package plus `SHA-256SUMS`, and independent consumer verification)
-**Latest release-verified seed identity:** `110D8FF718D7FF578903C75398CB465C6499F5CBF2995F7C5617B4802DEFD6DB`
+**Latest full-gate stamp:** 2026-08-14 ADR-126 delivery — **GATE PASS mode=release** (pack v5.0.1; 359 Markdown files / 1,447 local links; full-quality suite, four-way seed identity, 444-file package plus `SHA-256SUMS`, and independent consumer verification)
+**Latest release-verified seed identity:** `D0D17756F587709BC85E323E0545281E304362288B687BAA0D48D8C334E18AFB`
 
 ---
 
@@ -116,13 +116,14 @@ The 0.36 package contract (M19e) remains the executable language baseline. M25
 now advances the toolchain package to 0.37 with a local package ecosystem step;
 BARP and M32 work remain **independence and infrastructure maturity**:
 
-### 5.1 BARP highlights (ADR-043 → 125; ADR-125 release verified)
+### 5.1 BARP highlights (ADR-043 → 126; ADR-126 release verified)
 
 - Product-default CLI toolchain; bootstrap recovery only  
 - Multi-source envelope + multi-file host forge + unit digests  
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
 - Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal or exact Truth-literal yield, 011 detects canonical total-Whole direct-bind/root-yield/root-revise/root-speak target existence, delimiter-bounded root-handle target existence, literal-erroring-header root-forward target existence, and literal total-root-nursery immediate zero-argument, single-digit Whole, positive two-digit Whole, or exact-bright Truth spawn target existence across declared top-level weave headers (the handle form requires fixed `into` / `otherwise error into` delimiters that leave a destination suffix; the forward form requires `-> Whole raises Whole:`; the nursery forms require root `together:` plus immediate `spawn call target into destination`, `spawn call target digit into destination` with one ASCII decimal `digit`, `spawn call target digits into destination` with exactly two ASCII decimal characters and a nonzero first digit, or `spawn call target bright into destination`), and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
-- ADR-125 additionally recognizes only the immediate exact-`dim` Truth child `spawn call target dim into destination`; full release, seed identity, and packaged consumer verification pass.
+- ADR-125 additionally recognizes only the immediate exact-`dim` Truth child `spawn call target dim into destination`; full release, seed identity, and packaged consumer verification pass. Exact empty Text is separately ADR-126.
+- ADR-126 additionally recognizes only the immediate exact-empty-Text child `spawn call target "" into destination`; its valid target is an ordinary one-Text-parameter weave, not a task-frame expansion. Targeted red/green, direct, valid, predecessor, boundary, priority, product/self-host, tracker, full release, seed identity, and packaged consumer verification pass.
 - Forge SPEAK capture on failure and verify merge  
 - Yield-in-truth-choose fail-closed (AE-SEED-013)  
 - Task checkpoint required (AE-SEED-015)  
@@ -196,7 +197,7 @@ ADR-124 zero-warning release gate also passes: pack v5.0.1, 355 Markdown files /
 verification. The full seed SPEAK conformance matrix and seed-native multi-file
 remain residual.
 
-**Current release-verified implementation:** ADR-125 extends the
+**Prior release-verified implementation:** ADR-125 extends the
 same direct `AE-SEED-011` witness to the exact-Truth-literal
 `spawn call target dim into destination` form only, with a destination suffix.
 It preserves the ADR-124 `bright` witness and all prior Whole forms. Names,
@@ -212,6 +213,21 @@ pack v5.0.1, 357 Markdown files / 1,427 local links, four-way seed identity
 442-file technical-preview package plus `SHA-256SUMS` with independent consumer
 verification. Full seed SPEAK conformance and seed-native multi-file remain
 residual.
+
+**Current release-verified implementation:** ADR-126 extends the
+same direct `AE-SEED-011` witness only to the exact empty-Text
+`spawn call target "" into destination` form, with a nonempty destination
+suffix. It preserves the ADR-124 `bright`, ADR-125 `dim`, and prior Whole
+forms. The valid source target is a later-declared ordinary
+`weave worker [message: Text] -> Whole`, not a Text task-frame parameter.
+Nonempty/escaped Text, Bytes, names, multiple arguments, M7 semantic forms, and
+full parser/type ownership remain outside the seed witness. Targeted red/green,
+direct, valid, predecessor, boundary, priority, product/self-host, tracker, and
+45-test full seed-self-host evidence pass. The 2026-08-14 zero-warning release
+gate also passes: pack v5.0.1, 359 Markdown files / 1,447 local links, four-way
+seed identity `D0D17756F587709BC85E323E0545281E304362288B687BAA0D48D8C334E18AFB`,
+and a 444-file technical-preview package plus `SHA-256SUMS` with independent
+consumer verification.
 
 ---
 

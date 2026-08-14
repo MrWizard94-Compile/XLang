@@ -12,7 +12,12 @@
 [ADR-125](../historical%20docs/ADR-125-barp-seed-speak-root-nursery-dim-truth-spawn-unknown-call-pilot.md)
 adds the adjacent exact-`dim` nursery-call witness under the same bounded
 direct-forge diagnostic contract; it is likewise not an M25 protocol or version
-change.
+change. [ADR-126](../historical%20docs/ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md)
+adds only the adjacent exact empty-`Text` nursery-call witness
+`spawn call target "" into destination`; its valid target is an ordinary
+`weave` with one `Text` parameter, not a task-frame expansion. It likewise
+does not change M25, Aether surface syntax, AETH, verifier, VM, or capability
+contracts.
 
 ## What changed
 

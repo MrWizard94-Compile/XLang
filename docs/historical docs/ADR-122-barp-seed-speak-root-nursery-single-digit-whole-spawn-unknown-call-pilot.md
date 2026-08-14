@@ -10,7 +10,8 @@
 two-digit decimal-Whole argument shape (`10` through `99`), and ADR-124
 independently adds one immediate exact-`bright` Truth argument shape. ADR-125
 independently adds one immediate exact-`dim` Truth argument shape. Neither
-broadens this ADR's one-digit decision.
+broadens this ADR's one-digit decision. ADR-126 separately adds only one
+immediate exact empty-Text argument shape.
 
 ## Context
 
@@ -67,8 +68,9 @@ discipline.
 - Single-digit decimal is a lexical recognition condition, not a claim that the
   seed parses Whole literals. ADR-123 later admits only positive two-digit
   decimal, ADR-124 later admits only exact `bright`, and ADR-125 later admits
-  only exact `dim`; signed, leading-zero, three-or-more-digit, name, `not dim`,
-  Text, Bytes, move/borrow/access, and multi-argument shapes remain with the
+  only exact `dim`, and ADR-126 later admits only exact empty Text; signed,
+  leading-zero, three-or-more-digit, name, `not dim`, nonempty/escaped Text,
+  Bytes, move/borrow/access, and multi-argument shapes remain with the
   full parser.
 - The branch reuses existing Whole scratch state after its glyph check and the
   ADR-121 parent state. It introduces no new seed binding and leaves the
@@ -107,8 +109,8 @@ This ADR covers only an ordinary total-Whole `weave ` with a root line exactly
 `together:` followed immediately by a four-space
 `spawn call target digit into destination` line, where `digit` is one ASCII
 decimal character. It does not claim positive two-digit coverage beyond ADR-123,
-exact-`bright` Truth coverage beyond ADR-124, or exact-`dim` Truth coverage
-beyond ADR-125; signed, leading-zero, three-or-more-digit, or negative Whole
+exact-`bright` Truth coverage beyond ADR-124, exact-`dim` Truth coverage
+beyond ADR-125, or exact empty-Text coverage beyond ADR-126; signed, leading-zero, three-or-more-digit, or negative Whole
 literals, general atoms, multiple
 arguments, full nested parsing, later nursery children,
 blank-line tolerance, task identity, destination validation, header parsing,
@@ -124,6 +126,7 @@ seed-native multi-file elaboration.
 - [ADR-123](ADR-123-barp-seed-speak-root-nursery-two-digit-positive-whole-spawn-unknown-call-pilot.md)
 - [ADR-124](ADR-124-barp-seed-speak-root-nursery-bright-truth-spawn-unknown-call-pilot.md)
 - [ADR-125](ADR-125-barp-seed-speak-root-nursery-dim-truth-spawn-unknown-call-pilot.md)
+- [ADR-126](ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md)
 - [Delivery report](DELIVERY_REPORT-2026-08-14-BARP-ROOT-NURSERY-SINGLE-DIGIT-WHOLE-SPAWN-UNKNOWN-CALL-SPEAK.md)
 - [BARP design](../Current%20state/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 - [BARP validation matrix](../Current%20state/BARP-VALIDATION-MATRIX.md)

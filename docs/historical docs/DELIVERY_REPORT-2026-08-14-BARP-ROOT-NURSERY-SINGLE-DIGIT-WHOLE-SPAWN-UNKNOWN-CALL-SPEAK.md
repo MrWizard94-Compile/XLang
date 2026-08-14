@@ -61,6 +61,10 @@ Completeness, dependency order, intended-behavior tests, documentation, security
 
 Signed, leading-zero, three-or-more-digit, names, `not dim`, general Truth, general atom, and multi-argument spawn calls; non-immediate/nested nursery children; broader `AE-SEED-011` and `AE-SEED-013` families; full seed SPEAK conformance; and seed-native multi-file elaboration remain separate scoped work. ADR-124 and ADR-125 separately admit only exact `bright` and `dim`. Preserve the verifier-first artifact rule, dual-compare proof, and no-ambient-authority boundary.
 
+**Later scoped extension:** ADR-126 separately recognizes only the immediate
+exact empty-Text child `spawn call target "" into destination`; it does not
+broaden this one-digit delivery.
+
 ---
 
 *End of DELIVERY_REPORT-2026-08-14-BARP-ROOT-NURSERY-SINGLE-DIGIT-WHOLE-SPAWN-UNKNOWN-CALL-SPEAK.md*

@@ -171,6 +171,15 @@ zero-argument targets, and the normal product path merges their exact seed
 packet. This does not form a general seed name binder, destination validator,
 Text-result validator, or call-kind approval.
 
+ADR-121/122/123/124/125/126 separately add immediate four-space children of a
+literal total-Whole root `together:`: the zero-argument, one-digit Whole,
+positive two-digit Whole, exact `bright`, exact `dim`, and exact empty-Text
+`spawn call target "" into destination` shapes. ADR-126 verifies a later
+ordinary one-Text-parameter weave only as a valid-source boundary; task weave
+frames remain Whole/Truth-only. These are line-state target-existence witnesses,
+not Text parsing, name binding, signature, destination, resource, or scheduler
+validation.
+
 ## Required shape
 
 A Seed Profile program must contain:

@@ -6,6 +6,10 @@
 **Related Rule IDs:** CONST-DEP-001, DOC-ADR-001, RND-INVAR-001, SEC-INPUT-001, TEST-BEHAVIOR-001
 **Depends on:** ADR-010, ADR-072, ADR-121, ADR-122, ADR-123, ADR-124
 
+**Later scoped extension:** ADR-126 independently adds only the immediate exact
+empty-Text argument shape. It does not broaden this ADR's exact-`dim`
+decision.
+
 ## Context
 
 M7 accepts owned copy `Truth` task parameters, including the canonical literal
@@ -56,6 +60,7 @@ name, or unary parsing.
 - `dim` is a recognition condition, not a general Truth parser. Existing
   `bright` remains ADR-124; names, `not dim`, other expressions, and
   multi-argument forms retain the full compiler or a separately accepted pilot.
+  Exact empty Text is separately ADR-126.
 - The branch reuses existing source-line state and Whole/Text scratch state. It
   introduces no seed binding and leaves the `v132` unused-local self-host variant
   probe intact.
@@ -93,7 +98,7 @@ name, or unary parsing.
 This ADR covers only an ordinary total-Whole `weave` with a root line exactly
 `together:` followed immediately by a four-space
 `spawn call target dim into destination` line. It does not claim `bright`
-beyond ADR-124, names, `not dim`, general Truth expressions, Whole literals
+beyond ADR-124, exact empty Text beyond ADR-126, names, `not dim`, general Truth expressions, Whole literals
 beyond ADR-121/122/123, multiple arguments, full nested parsing, later nursery
 children, blank-line tolerance, task identity, destination validation, header
 parsing, effect/result/signature validation, resource/ownership policy,
@@ -108,6 +113,7 @@ or seed-native multi-file elaboration.
 - [ADR-122](ADR-122-barp-seed-speak-root-nursery-single-digit-whole-spawn-unknown-call-pilot.md)
 - [ADR-123](ADR-123-barp-seed-speak-root-nursery-two-digit-positive-whole-spawn-unknown-call-pilot.md)
 - [ADR-124](ADR-124-barp-seed-speak-root-nursery-bright-truth-spawn-unknown-call-pilot.md)
+- [ADR-126](ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md)
 - [Delivery report](DELIVERY_REPORT-2026-08-14-BARP-ROOT-NURSERY-DIM-TRUTH-SPAWN-UNKNOWN-CALL-SPEAK.md)
 - [BARP design](../Current%20state/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 - [BARP validation matrix](../Current%20state/BARP-VALIDATION-MATRIX.md)

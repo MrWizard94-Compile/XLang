@@ -11,7 +11,8 @@ single-digit decimal-Whole argument shape, ADR-123 independently adds one
 immediate positive two-digit decimal-Whole argument shape, and ADR-124
 independently adds one immediate exact-`bright` Truth argument shape. ADR-125
 independently adds one immediate exact-`dim` Truth argument shape. None broadens
-this ADR's zero-argument decision.
+this ADR's zero-argument decision. ADR-126 separately adds only one immediate
+exact empty-Text argument shape.
 
 ## Context
 
@@ -58,7 +59,8 @@ a nonempty destination suffix while leaving all M7 behavior to the full compiler
    position `1:1`, blank Bytes, and the established unknown-call message.
    Product forge preserves the packet.
 6. A later-declared checkpointed `task weave` target remains valid,
-   seed/bootstrap byte-identical, verified, and executable. Text literals,
+   seed/bootstrap byte-identical, verified, and executable. Nonempty or escaped
+   Text literals,
    erroring parents, malformed delimiters, and missing `world` stay outside or
    above this bounded witness.
 
@@ -83,7 +85,7 @@ a nonempty destination suffix while leaving all M7 behavior to the full compiler
 3. Product compilation proves the merged `AE-SEED-011` / `seed-speak` packet.
 4. A later-declared checkpointed task helper proves seed/bootstrap identity,
    verification, and execution.
-5. A Text literal, an erroring parent nursery, intervening blank/non-spawn
+5. A nonempty or escaped Text literal, an erroring parent nursery, intervening blank/non-spawn
    line, six-space descendant, multi-digit or multi-argument child, missing `into` /
    destination suffixes, and missing-world source prove literal, immediate
    parent/child-state, zero-argument, delimiter, and priority boundaries.
@@ -106,8 +108,8 @@ This ADR covers only an ordinary total-Whole `weave ` with a root line exactly
 `together:` followed immediately by a four-space zero-argument
 `spawn call target into destination` line. It does not claim general
 argument-bearing spawn support (ADR-122 later covers one single-digit shape,
-ADR-123 one positive two-digit shape, ADR-124 exact `bright`, and ADR-125 exact
-`dim`), full nested parsing, repeated or later nursery children, blank
+ADR-123 one positive two-digit shape, ADR-124 exact `bright`, ADR-125 exact
+`dim`, and ADR-126 exact empty Text), full nested parsing, repeated or later nursery children, blank
 line tolerance, destination validation, task identity, header parsing, effect/
 result/signature validation, resource/ownership policy, scheduler behavior,
 source spans beyond fixed `1:1`, full `AE-SEED-011` parity, or seed-native
@@ -120,6 +122,7 @@ multi-file elaboration.
 - [ADR-110](ADR-110-barp-seed-speak-unknown-call-pilot.md)
 - [ADR-116](ADR-116-barp-seed-speak-zero-argument-unknown-call-pilot.md)
 - [ADR-120](ADR-120-barp-seed-speak-root-forward-unknown-call-pilot.md)
+- [ADR-126](ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md)
 - [Delivery report](DELIVERY_REPORT-2026-08-14-BARP-ROOT-NURSERY-SPAWN-UNKNOWN-CALL-SPEAK.md)
 - [BARP design](../Current%20state/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 - [BARP validation matrix](../Current%20state/BARP-VALIDATION-MATRIX.md)

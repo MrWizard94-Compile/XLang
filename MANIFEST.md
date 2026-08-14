@@ -119,7 +119,17 @@ extends only that same immediate root-nursery witness to
 destination suffix remains. Exact `bright` remains ADR-124; names, general
 `Truth` expressions, and general arguments, plus M7 task identity, destination
 legality, nesting, effect/result, signature, resource, ownership, and scheduler
-policy, remain outside the branch.
+policy, remain outside the branch. Exact empty `Text` is a separate ADR-126
+witness.
+[ADR-126](docs/historical%20docs/ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md)
+extends only that same immediate root-nursery witness to
+`spawn call target "" into destination`, where the literal `"" into ` follows
+the opaque target and a destination suffix remains. It validates a later
+ordinary `weave` with a `Text` parameter only as valid-source evidence; M19e
+task frames remain Whole/Truth-only. Nonempty or escaped Text, Bytes, names,
+general arguments, M7 task identity, destination legality, nesting,
+effect/result, signature, resource, ownership, and scheduler policy remain
+outside the branch.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated
