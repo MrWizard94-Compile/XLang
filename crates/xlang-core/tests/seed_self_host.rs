@@ -520,6 +520,70 @@ fn barp_adr070_product_rejects_yield_in_truth_choose() {
 }
 
 #[test]
+fn barp_adr112_seed_speaks_canonical_less_choose_yield() {
+    let invalid = "world w\n\nweave main [] -> Whole:\n  bind value <- 7\n  choose less value 8:\n    yield 42\n  otherwise:\n    yield -1\n";
+
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, invalid)
+        .expect("canonical less-choose source must reach the seed forge");
+    assert!(
+        direct.stdout.contains("\"code\":\"AE-SEED-013\""),
+        "expected a seed-native AE-SEED-013 packet, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct.stdout.contains("\"origin\":\"seed-speak\""),
+        "expected seed-speak origin, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct.stdout.contains(
+            "\"message\":\"yield is not allowed inside a canonical comparison choose branch\""
+        ),
+        "expected the comparison-choose diagnostic message, got: {}",
+        direct.stdout
+    );
+    assert_eq!(
+        direct.stdout.matches("AETHER_SEED_ERROR:").count(),
+        1,
+        "canonical less-choose source must emit exactly one packet: {}",
+        direct.stdout
+    );
+    match direct.value {
+        InvocationValue::Bytes(bytes) => assert!(
+            bytes.is_empty(),
+            "canonical less-choose SPEAK must return blank Bytes, got {} bytes",
+            bytes.len()
+        ),
+        other => panic!("canonical less-choose SPEAK must return Bytes, got {other:?}"),
+    }
+
+    let product = compile_product_bytecode(invalid)
+        .expect_err("canonical less-choose nested yield must fail product compilation");
+    assert!(
+        product.to_string().contains("AE-SEED-013"),
+        "expected AE-SEED-013, got {product}"
+    );
+    let packets = product_error_packets(invalid);
+    assert_eq!(packets.len(), 1);
+    assert_eq!(packets[0].code, "AE-SEED-013");
+    assert_eq!(packets[0].origin, "host-preflight");
+
+    let valid = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  bind value <- 7\n  choose less value 8:\n    revise result <- 42\n  otherwise:\n    revise result <- -1\n  yield result\n";
+    let bootstrap = compile_to_bytecode(valid)
+        .expect("root-yield less-choose source must bootstrap")
+        .bytecode;
+    let seeded = bytes(
+        forge_bytecode(SEED_COMPILER_ARTIFACT, valid)
+            .expect("root-yield less-choose source must forge through the seed"),
+    );
+    verify_bytecode(&seeded).expect("root-yield less-choose seed artifact must verify");
+    assert_eq!(
+        seeded, bootstrap,
+        "root-yield less-choose source must retain seed/bootstrap identity"
+    );
+}
+
+#[test]
 fn barp_phase3a_product_path_rejects_odd_indent_with_ae_seed_code() {
     let source = "world w\n\nweave main [] -> Whole:\n yield 1\n";
     let error = compile_product_bytecode(source).expect_err("odd indent must fail closed");

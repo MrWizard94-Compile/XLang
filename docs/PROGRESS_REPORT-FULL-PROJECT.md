@@ -1,10 +1,10 @@
 # Aether / XLang — Comprehensive Project Progress Report
 
-**Date:** 2026-08-11  
+**Date:** 2026-08-13
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-111 canonical root-yield unknown-call seed-SPEAK pilot — targeted and full product/self-host/release evidence PASS; approved Constitution scanner correction verified with contextual review completed
+**Current delivery verification:** ADR-112 canonical less-choose nested-yield seed-SPEAK pilot — targeted and full product/self-host/release evidence PASS; approved Constitution scanner correction remains verified with contextual review completed
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -105,8 +105,8 @@ Verified AETH
 | Matrices | M* / M19E / M23 / M35A / M24A validation matrices |
 | Constitution | Project Level-4 pointer → pack AGENTS.md Section 0 |
 
-**Latest full-gate stamp:** 2026-08-11 ADR-111 delivery — **GATE PASS mode=release** (includes full-quality suite)
-**Seed identity:** `726301FC243CE36DA35C4CE08A428BB783E72B3165F1CA56957B91D89E747467`
+**Latest full-gate stamp:** 2026-08-13 ADR-112 delivery — **GATE PASS mode=release** (includes full-quality suite)
+**Seed identity:** `E09FA42287B106FC48068EC5CCB558F29CDFDA8EB8D9D5BD9CB1B4927F24C57D`
 
 ---
 
@@ -116,12 +116,12 @@ The 0.36 package contract (M19e) remains the executable language baseline. M25
 now advances the toolchain package to 0.37 with a local package ecosystem step;
 BARP and M32 work remain **independence and infrastructure maturity**:
 
-### 5.1 BARP highlights (ADR-043 → 111)
+### 5.1 BARP highlights (ADR-043 → 112)
 
 - Product-default CLI toolchain; bootstrap recovery only  
 - Multi-source envelope + multi-file host forge + unit digests  
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
-- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal yield, 011 detects one canonical direct-bind/root-yield-call target-existence witness across declared top-level weave headers with ordinary-forward-header support, and 013 detects only a canonical ordinary-Whole `choose same` nested yield (dual-compare rebuild)
+- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal yield, 011 detects one canonical direct-bind/root-yield-call target-existence witness across declared top-level weave headers with ordinary-forward-header support, and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` nested yield (dual-compare rebuild)
 - Forge SPEAK capture on failure and verify merge  
 - Yield-in-truth-choose fail-closed (AE-SEED-013)  
 - Task checkpoint required (AE-SEED-015)  
@@ -174,15 +174,14 @@ installed package. M25 adds no network/resolver/signing/guest authority.
 | `b5305cf` | ADR-090–093 forge SPEAK capture, native exe, multi-level certs, checkpoints |
 | `f03e310` | ADR-086–089 SPEAK matrix, LLVM object, root certs, task reserve |
 
-**Current implementation:** ADR-111 extends ADR-110's direct, name-safe
-AE-SEED-011 seed-SPEAK witness with one canonical ordinary-Whole root
-`yield call` shape whose target has no matching declared top-level weave header.
-It preserves direct-bind behavior, ordinary forward declarations, declared host
-targets, call-shaped Text literals, missing-world priority, and full-compiler
-call-kind authority. Targeted and release-gate evidence passes, including the
-bootstrap/product/forge/check-in proof. It leaves M32a/M32b as local
-methodology only, not a performance claim. The full seed SPEAK conformance
-matrix and seed-native multi-file remain residual.
+**Current implementation:** ADR-112 extends ADR-109's direct `AE-SEED-013`
+seed-SPEAK witness to one canonical ordinary-Whole `choose less` branch with a
+deeper `yield`. It preserves the existing `choose same` witness, resource
+`choose` behavior, missing-world priority, valid root-yield comparison artifacts,
+and ADR-070's broader product `host-preflight` safety boundary. Targeted and
+release-gate evidence passes, including bootstrap/product/forge/check-in proof.
+It leaves M32a/M32b as local methodology only, not a performance claim. The full
+seed SPEAK conformance matrix and seed-native multi-file remain residual.
 
 ---
 
@@ -258,8 +257,9 @@ pwsh -File tools\aether-gate.ps1 -Mode release
 | [DELIVERY_REPORT-2026-08-11-M25-LOCAL-PACKAGE-PUBLICATION.md](DELIVERY_REPORT-2026-08-11-M25-LOCAL-PACKAGE-PUBLICATION.md) | M25 0.37 delivery / full and release evidence |
 | [DELIVERY_REPORT-2026-08-11-BARP-UNKNOWN-CALL-SPEAK.md](DELIVERY_REPORT-2026-08-11-BARP-UNKNOWN-CALL-SPEAK.md) | ADR-110 direct seed diagnostic delivery / current verification status |
 | [DELIVERY_REPORT-2026-08-11-BARP-ROOT-YIELD-UNKNOWN-CALL-SPEAK.md](DELIVERY_REPORT-2026-08-11-BARP-ROOT-YIELD-UNKNOWN-CALL-SPEAK.md) | ADR-111 root-yield seed diagnostic delivery / current verification status |
+| [DELIVERY_REPORT-2026-08-13-BARP-LESS-CHOOSE-SPEAK.md](DELIVERY_REPORT-2026-08-13-BARP-LESS-CHOOSE-SPEAK.md) | ADR-112 less-choose seed diagnostic delivery / current verification status |
 | [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) | This audit stamp |
-| ADRs 043–111 | Maturity decision trail |
+| ADRs 043–112 | Maturity decision trail |
 
 ---
 

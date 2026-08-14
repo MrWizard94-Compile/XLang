@@ -43,6 +43,10 @@
 | BARP-SPEAK-039 | Text literal containing root-yield-call-shaped characters | Does not trigger the pilot; seed emits verified AETH |
 | BARP-SPEAK-040 | Missing `world` plus an otherwise canonical root-yield unknown call | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-041 | Product-path canonical root-yield unknown-call diagnostic packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves this exact bounded witness |
+| BARP-SPEAK-042 | Canonical ordinary `weave … -> Whole:` with `choose less …:` and a deeper branch `yield` | Seed SPEAK `AE-SEED-013`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-043 | `choose less` that revises then reaches a root-level `yield` | Does not trigger the nested-yield pilot; seed artifact verifies and matches bootstrap |
+| BARP-SPEAK-044 | Missing `world` plus an otherwise canonical invalid `choose less` yield | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-045 | Product-path canonical `choose less` nested-yield diagnostic packet | `AE-SEED-013`, `origin: host-preflight`; ADR-070 retains the broader pre-forge safety boundary |
 
 ## Boundary
 

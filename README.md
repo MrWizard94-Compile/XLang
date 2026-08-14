@@ -65,14 +65,16 @@ AE-SEED-003/004/005/006/007/010/011/012/013/014/015. Its task-checkpoint portion
 recognizes only canonical top-level task headers and exact indented
 `checkpoint` statements; its AE-SEED-010 portion recognizes only a Text literal
 returned from a canonical ordinary `Whole` weave; its AE-SEED-013 portion
-recognizes only a nested `yield` below canonical `choose same` in such a weave;
+recognizes only a nested `yield` below canonical `choose same` or `choose less`
+in such a weave;
 and its AE-SEED-011 portion recognizes one canonical direct `bind … <- call`
 or root `yield call` whose target has no matching top-level declaration header
 (ordinary, export, host, foreign, or task). It establishes target existence
 only; call-kind legality remains with the full compiler. Neither changes
 accepted valid source nor claims full diagnostic parity. See
 [ADR-110](docs/ADR-110-barp-seed-speak-unknown-call-pilot.md) and
-[ADR-111](docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md).
+[ADR-111](docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md), and
+[ADR-112](docs/ADR-112-barp-seed-speak-less-choose-yield-pilot.md).
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:
