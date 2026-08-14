@@ -107,6 +107,21 @@ else {
     Write-Host "Skipping pack verify (-SkipPack)" -ForegroundColor Yellow
 }
 
+# --- Documentation link integrity ---
+$docLinkVerifier = Join-Path $RepoRoot "tools\verify-doc-links.ps1"
+$docLinkTests = Join-Path $RepoRoot "tools\test-doc-links.ps1"
+foreach ($requiredDocTool in @($docLinkVerifier, $docLinkTests)) {
+    if (-not (Test-Path -LiteralPath $requiredDocTool -PathType Leaf)) {
+        Fail "required documentation link tool is missing: $requiredDocTool"
+    }
+}
+Invoke-Checked "documentation link verifier fixtures" {
+    & pwsh -NoProfile -File $docLinkTests
+}
+Invoke-Checked "documentation link integrity" {
+    & pwsh -NoProfile -File $docLinkVerifier -RepositoryRoot $RepoRoot
+}
+
 # --- Format ---
 Invoke-Checked "cargo fmt --check" {
     cargo fmt --all -- --check

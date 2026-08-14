@@ -12,13 +12,14 @@ closed to the M35j matrix, with host dual-run and cross link-only behavior. Veri
 v4–v10 artifacts remain compatibility inputs with their original meanings.
 Source without task frames emits v11; valid M19e task source emits v12.
 
-**Executable contract:** [MANIFEST.md](MANIFEST.md) · **Claims:**
-[docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) · **Current delta:**
-[docs/AETHER_0.37.md](docs/AETHER_0.37.md)
+**Executable contract:** [MANIFEST.md](MANIFEST.md) · **Documentation:**
+[docs/README.md](docs/README.md) · **Claims:**
+[docs/CORE_CLAIMS.md](docs/Current%20state/CORE_CLAIMS.md) · **Current delta:**
+[docs/AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md)
 
 **Current bounded task-frame behavior:**
-[M19e active-frame cancellation](docs/DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md) /
-[ADR-042](docs/ADR-042-m19e-active-frame-cancel.md). Package 0.36 accepts
+[M19e active-frame cancellation](docs/historical%20docs/DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md) /
+[ADR-042](docs/historical%20docs/ADR-042-m19e-active-frame-cancel.md). Package 0.36 accepts
 closed-subset `task weave` / `checkpoint` source, emits v12 task frames, and
 deterministically cancels parked frames on a later eligible sibling failure.
 
@@ -57,8 +58,8 @@ install, and cache verification without changing source, AETH, seed, VM, or
 guest authority.
 M19e adds no registry, network authority, guest cancellation API, or host
 capability. See
-[docs/AETHER_0.11.md](docs/AETHER_0.11.md),
-[docs/AETHER_0.37.md](docs/AETHER_0.37.md), and [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+[docs/AETHER_0.11.md](docs/Current%20state/AETHER_0.11.md),
+[docs/AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md), and [docs/SEED_PROFILE.md](docs/Current%20state/SEED_PROFILE.md).
 
 BARP's bounded direct-seed diagnostic pilot now SPEAKs
 AE-SEED-003/004/005/006/007/010/011/012/013/014/015. Its task-checkpoint portion
@@ -74,12 +75,12 @@ or root `yield call` whose target has no matching top-level declaration header
 (ordinary, export, host, foreign, or task). It establishes target existence
 only; call-kind legality remains with the full compiler. Neither changes
 accepted valid source nor claims full diagnostic parity. See
-[ADR-110](docs/ADR-110-barp-seed-speak-unknown-call-pilot.md) and
-[ADR-111](docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md),
-[ADR-112](docs/ADR-112-barp-seed-speak-less-choose-yield-pilot.md), and
-[ADR-113](docs/ADR-113-barp-seed-speak-literal-truth-choose-yield-pilot.md), and
-[ADR-114](docs/ADR-114-barp-seed-speak-unary-literal-truth-choose-yield-pilot.md), and
-[ADR-115](docs/ADR-115-barp-seed-speak-whole-truth-yield-pilot.md).
+[ADR-110](docs/historical%20docs/ADR-110-barp-seed-speak-unknown-call-pilot.md) and
+[ADR-111](docs/historical%20docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md),
+[ADR-112](docs/historical%20docs/ADR-112-barp-seed-speak-less-choose-yield-pilot.md), and
+[ADR-113](docs/historical%20docs/ADR-113-barp-seed-speak-literal-truth-choose-yield-pilot.md), and
+[ADR-114](docs/historical%20docs/ADR-114-barp-seed-speak-unary-literal-truth-choose-yield-pilot.md), and
+[ADR-115](docs/historical%20docs/ADR-115-barp-seed-speak-whole-truth-yield-pilot.md).
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:
@@ -110,7 +111,7 @@ names; M23 adds one eligible pure helper call. The fixed 1,024-directive budget
 remains. Comptime has no control flow, recursion, Text/Bytes/Truth evaluation,
 resource/effect/host authority, macros, or configurable fuel. M23 source is
 seed-native under its documented D2a subset with no bootstrap materialization
-bridge, as documented in [docs/AETHER_0.33.md](docs/AETHER_0.33.md).
+bridge, as documented in [docs/AETHER_0.33.md](docs/historical%20docs/AETHER_0.33.md).
 
 M6 adds author-visible layout for multi-field tables:
 
@@ -127,7 +128,7 @@ weave main [] -> Whole:
 
 `layout rows` and `layout columns` store the same logical cells with different
 physical order. See
-[docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md](docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md).
+[docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md](docs/historical%20docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md).
 
 ## Versioned structural authoring contract
 
@@ -139,8 +140,8 @@ formatter-owned result, and seed-compiles it before the CLI writes source to an
 explicit output path. It exposes effect annotations, M4/M5/M6/M7 nodes, and a
 required `Bind.stage` (`runtime` or `comptime`). V8 adds the explicit
 `Weave.task` Boolean and typed `Checkpoint` statement; M23 uses the existing
-`Call` expression node. See [docs/AETHER_AUTHORING_PROTOCOL_v8.md](docs/AETHER_AUTHORING_PROTOCOL_v8.md)
-and [docs/ADR-005-structural-authoring-contract.md](docs/ADR-005-structural-authoring-contract.md).
+`Call` expression node. See [docs/AETHER_AUTHORING_PROTOCOL_v8.md](docs/Current%20state/AETHER_AUTHORING_PROTOCOL_v8.md)
+and [docs/ADR-005-structural-authoring-contract.md](docs/historical%20docs/ADR-005-structural-authoring-contract.md).
 
 ### Still honest limits
 
@@ -173,22 +174,22 @@ vision. The project is deliberately designing for AI-primary authorship while
 keeping deterministic, locally verifiable compiler authority. Read the design
 set in this order:
 
-1. [docs/NORTH_STAR.md](docs/NORTH_STAR.md) — intended product direction and
+1. [docs/NORTH_STAR.md](docs/Current%20state/NORTH_STAR.md) — intended product direction and
    current-law constraints.
-2. [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md) — proven facts, accepted
+2. [docs/CORE_CLAIMS.md](docs/Current%20state/CORE_CLAIMS.md) — proven facts, accepted
    directions, research hypotheses, and prohibited claims.
-3. [docs/AETHER_0.37.md](docs/AETHER_0.37.md),
-   [docs/ADR-041-pkg-001-offline-workspace-locks.md](docs/ADR-041-pkg-001-offline-workspace-locks.md),
-   [docs/ADR-040-runtime-text-ascii-fast-path.md](docs/ADR-040-runtime-text-ascii-fast-path.md),
-   [docs/ADR-039-m23-comptime-pure-calls.md](docs/ADR-039-m23-comptime-pure-calls.md),
-   and [docs/ADR-042-m19e-active-frame-cancel.md](docs/ADR-042-m19e-active-frame-cancel.md)
+3. [docs/AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md),
+   [docs/ADR-041-pkg-001-offline-workspace-locks.md](docs/historical%20docs/ADR-041-pkg-001-offline-workspace-locks.md),
+   [docs/ADR-040-runtime-text-ascii-fast-path.md](docs/historical%20docs/ADR-040-runtime-text-ascii-fast-path.md),
+   [docs/ADR-039-m23-comptime-pure-calls.md](docs/historical%20docs/ADR-039-m23-comptime-pure-calls.md),
+   and [docs/ADR-042-m19e-active-frame-cancel.md](docs/historical%20docs/ADR-042-m19e-active-frame-cancel.md)
    — current package-integrity, runtime, and language-surface boundaries.
-4. [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md) — exact seed-emitted product
+4. [docs/SEED_PROFILE.md](docs/Current%20state/SEED_PROFILE.md) — exact seed-emitted product
    path and bootstrap responsibilities.
-5. [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/PROGRESS_REPORT-FULL-PROJECT.md)
-   and [docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md)
+5. [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/Current%20state/PROGRESS_REPORT-FULL-PROJECT.md)
+   and [docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](docs/historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md)
    — current progress and full project audit (2026-08-11).
-6. [docs/ROADMAP.md](docs/ROADMAP.md) — implemented scope and approved
+6. [docs/ROADMAP.md](docs/Current%20state/ROADMAP.md) — implemented scope and approved
    dependency order for future work.
 
 **Honest law-fork surface (authorized, bounded):** F-NATIVE lowers **verified**
@@ -261,8 +262,8 @@ cargo run -p aether-cli -- project verify .\target\workspace\local_math\aether.p
 The installed directory is a normal locked project. Add it deliberately to an
 `aether.workspace/v1` file and declare existing M22 `depends_on` authorization
 before other packages import it. Bundle/cache inputs are hostile-file checked;
-they are not signed or remotely authenticated. See [the 0.37 contract](docs/AETHER_0.37.md)
-and [its threat model](docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
+they are not signed or remotely authenticated. See [the 0.37 contract](docs/Current%20state/AETHER_0.37.md)
+and [its threat model](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 
 ## Product interface
 
@@ -280,8 +281,8 @@ bounded v2 JSON reports, rejects differing profile, environment, workload, or
 observable behavior, and never executes report data. The comparison is a local
 methodology record—not a timing threshold, optimization claim, toolchain
 attestation, or cross-machine result. Reports write only to explicit paths after
-success. See [ADR-104](docs/ADR-104-m32a-verified-execution-benchmarks.md) and
-[ADR-105](docs/ADR-105-m32b-profile-bound-comparisons.md).
+success. See [ADR-104](docs/historical%20docs/ADR-104-m32a-verified-execution-benchmarks.md) and
+[ADR-105](docs/historical%20docs/ADR-105-m32b-profile-bound-comparisons.md).
 
 ## Local technical-preview package
 
@@ -297,10 +298,10 @@ version-derived `dist\aether-0.37.0-tp` package, verifies its exact hashes and
 behavior as a consumer, and proves the verifier rejects an unlisted package
 file. It does not commit, tag, push, or publish anything. The package is
 `UNLICENSED`; public distribution requires a separate human licensing and
-release decision. See [the 0.37 local-package notes](docs/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md)
-and [current local-package threat model](docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
+release decision. See [the 0.37 local-package notes](docs/Current%20state/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md)
+and [current local-package threat model](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 
 ## Governance
 
-Product contract: [MANIFEST.md](MANIFEST.md), [docs/AETHER_0.37.md](docs/AETHER_0.37.md),
+Product contract: [MANIFEST.md](MANIFEST.md), [docs/AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md),
 and the linked ADR/matrix evidence.

@@ -76,10 +76,10 @@ operator-approved native code.
 ## Read next
 
 - [Executable contract](MANIFEST.md)
-- [Aether 0.36 contract](docs/AETHER_0.36.md)
-- [Release notes](docs/RELEASE_NOTES-0.36-TECHNICAL-PREVIEW.md)
-- [Changelog](docs/CHANGELOG-0.36.md)
-- [Current technical-preview threat model](docs/THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md)
-- [AI authoring protocol v8](docs/AETHER_AUTHORING_PROTOCOL_v8.md)
+- [Aether 0.36 contract](docs/historical%20docs/AETHER_0.36.md)
+- [Release notes](docs/historical%20docs/RELEASE_NOTES-0.36-TECHNICAL-PREVIEW.md)
+- [Changelog](docs/historical%20docs/CHANGELOG-0.36.md)
+- [Current technical-preview threat model](docs/historical%20docs/THREAT_MODEL-0.36-TECHNICAL-PREVIEW.md)
+- [AI authoring protocol v8](docs/Current%20state/AETHER_AUTHORING_PROTOCOL_v8.md)
 
 *Local preview package entry point for Aether 0.36.0.*

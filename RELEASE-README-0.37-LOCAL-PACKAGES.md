@@ -68,11 +68,11 @@ file authority; host I/O remains operator-granted.
 
 ## Documentation
 
-- [Aether 0.37 contract](docs/AETHER_0.37.md)
-- [M25 design](docs/DESIGN-M25-LOCAL-PACKAGE-PUBLICATION.md)
-- [M25 ADR](docs/ADR-107-m25-local-package-publication.md)
-- [M25 validation matrix](docs/M25-VALIDATION-MATRIX.md)
-- [M25 threat model](docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md)
-- [Release notes](docs/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md)
+- [Aether 0.37 contract](docs/Current%20state/AETHER_0.37.md)
+- [M25 design](docs/historical%20docs/DESIGN-M25-LOCAL-PACKAGE-PUBLICATION.md)
+- [M25 ADR](docs/historical%20docs/ADR-107-m25-local-package-publication.md)
+- [M25 validation matrix](docs/Current%20state/M25-VALIDATION-MATRIX.md)
+- [M25 threat model](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md)
+- [Release notes](docs/Current%20state/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md)
 
 *Local preview package entry point for Aether 0.37.0.*

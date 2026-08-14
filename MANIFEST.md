@@ -27,14 +27,14 @@ Package 0.35 adds PKG-001 offline workspace locks: explicit `project lock` and
 pins, project-manifest confinement, and locked-workspace build preflight. The
 increment changes no guest source form, AETH artifact, seed behavior, VM
 semantics, host capability, registry boundary, or network authority. See
-[docs/AETHER_0.35.md](docs/AETHER_0.35.md).
+[docs/AETHER_0.35.md](docs/historical%20docs/AETHER_0.35.md).
 Package 0.36 adds M19e bounded active-frame cancellation: explicit `task weave`
 and `checkpoint` forms, v12 task descriptors, deterministic source-order
 round-robin task frames, verifier-proven checkpoint loop edges, private
 pre-admitted task lanes, and VM-internal reverse-slot teardown/zeroization on a
 later eligible companion failure. It preserves v11 for source without task
 frames and adds no host effect, task handle, timeout, manual cancellation, or
-parallel execution. See [docs/AETHER_0.36.md](docs/AETHER_0.36.md).
+parallel execution. See [docs/AETHER_0.36.md](docs/historical%20docs/AETHER_0.36.md).
 Post-0.36 BARP maturity keeps that package contract unchanged while reducing
 direct-seed diagnostic residual: the checked-in seed SPEAK pilot covers
 AE-SEED-003/004/005/006/007/010/011/012/013/014/015, including a canonical task-body
@@ -48,15 +48,15 @@ for `bind … <- call` and root `yield call` forms that recognizes a missing tar
 across declared top-level weave headers while preserving ordinary forward
 declarations. It changes no accepted valid source, AETH schema, VM behavior,
 host authority, or full-diagnostic parity claim. See
-[docs/ADR-110-barp-seed-speak-unknown-call-pilot.md](docs/ADR-110-barp-seed-speak-unknown-call-pilot.md)
-and [docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md](docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md).
-[ADR-112](docs/ADR-112-barp-seed-speak-less-choose-yield-pilot.md) adds the
+[docs/ADR-110-barp-seed-speak-unknown-call-pilot.md](docs/historical%20docs/ADR-110-barp-seed-speak-unknown-call-pilot.md)
+and [docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md](docs/historical%20docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md).
+[ADR-112](docs/historical%20docs/ADR-112-barp-seed-speak-less-choose-yield-pilot.md) adds the
 canonical `choose less` direct-forge witness, while
-[ADR-113](docs/ADR-113-barp-seed-speak-literal-truth-choose-yield-pilot.md)
+[ADR-113](docs/historical%20docs/ADR-113-barp-seed-speak-literal-truth-choose-yield-pilot.md)
 adds only exact `choose bright:` / `choose dim:` witnesses, and
-[ADR-114](docs/ADR-114-barp-seed-speak-unary-literal-truth-choose-yield-pilot.md)
+[ADR-114](docs/historical%20docs/ADR-114-barp-seed-speak-unary-literal-truth-choose-yield-pilot.md)
 adds only exact `choose not bright:` / `choose not dim:` witnesses. ADR-070
-retains the broader product preflight. [ADR-115](docs/ADR-115-barp-seed-speak-whole-truth-yield-pilot.md)
+retains the broader product preflight. [ADR-115](docs/historical%20docs/ADR-115-barp-seed-speak-whole-truth-yield-pilot.md)
 adds only exact Whole-return `yield bright` / `yield dim` witnesses; broader
 result-type diagnostics remain host-classified.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
@@ -68,9 +68,9 @@ installs the verified `project/` tree only to an explicit absent directory. It
 is a toolchain-only package: no Aether source form, AETH byte/version, seed,
 verifier, VM, project/workspace schema, resolver, URL/network operation,
 signature/publisher identity, automatic workspace mutation, or guest authority
-is added. See [docs/AETHER_0.37.md](docs/AETHER_0.37.md),
-[docs/ADR-107-m25-local-package-publication.md](docs/ADR-107-m25-local-package-publication.md),
-and [docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md](docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
+is added. See [docs/AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md),
+[docs/ADR-107-m25-local-package-publication.md](docs/historical%20docs/ADR-107-m25-local-package-publication.md),
+and [docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 Authoring uses `aether.ast/v8`, `aether.edit/v8`, and
 `aether.diagnostic/v8`. The CLI provides offline
 project/workspace verify, `aether test` / `aether project test` (optional
@@ -80,8 +80,8 @@ under `stdlib/`.
 Verified AETH v4–v11 remain compatibility inputs. M21 foreign pilot is Whole-only
 under explicit library grant; native code is **not** sandboxed. Cooperative
 Policy B (unstarted cancel / return-end owners) remains the v11 compatibility
-behavior. M19e's [active-frame cancellation design](docs/DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md)
-and [ADR-042](docs/ADR-042-m19e-active-frame-cancel.md) define the implemented,
+behavior. M19e's [active-frame cancellation design](docs/historical%20docs/DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md)
+and [ADR-042](docs/historical%20docs/ADR-042-m19e-active-frame-cancel.md) define the implemented,
 strictly checkpointed v12 successor.
 
 ## Scope Boundary
@@ -94,30 +94,30 @@ tooling. M32a/M32b has no language or
 artifact effect. This manifest intentionally does not promote long-range
 research directions to implemented behavior. The
 AI-first systems-language direction, evidence policy, and staged dependencies
-are [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
-[docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
+are [docs/NORTH_STAR.md](docs/Current%20state/NORTH_STAR.md),
+[docs/CORE_CLAIMS.md](docs/Current%20state/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/Current%20state/ROADMAP.md).
 The accepted M1 direction is
-[docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md).
+[docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md](docs/historical%20docs/DESIGN-M1-VALUE-RESOURCE-SEMANTICS.md).
 The bounded executable M2 decision is
-[docs/ADR-004-aeth-v6-bounded-resources.md](docs/ADR-004-aeth-v6-bounded-resources.md).
+[docs/ADR-004-aeth-v6-bounded-resources.md](docs/historical%20docs/ADR-004-aeth-v6-bounded-resources.md).
 General generics, C-header interop, libloading, ambient guest I/O, and a native
 backend are not Aether 0.11 surface area. M4 implements the bounded, testable
 `Error[Whole]` capability in
-[docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md](docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md)
-and [docs/AETHER_0.7.md](docs/AETHER_0.7.md). M5 implements bounded explicit
+[docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md](docs/historical%20docs/DESIGN-M4-TYPED-ERROR-EFFECTS.md)
+and [docs/AETHER_0.7.md](docs/historical%20docs/AETHER_0.7.md). M5 implements bounded explicit
 literal compile-time `Whole` evaluation in
-[docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md](docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md)
-and [docs/AETHER_0.8.md](docs/AETHER_0.8.md). M6 implements explicit layout
+[docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md](docs/historical%20docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md)
+and [docs/AETHER_0.8.md](docs/historical%20docs/AETHER_0.8.md). M6 implements explicit layout
 shapes and dual-layout tables in
-[docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md](docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md)
-and [docs/AETHER_0.9.md](docs/AETHER_0.9.md). M7 implements structured nurseries
-in [docs/AETHER_0.10.md](docs/AETHER_0.10.md). M8 implements the capability-closed
-pure host ABI pilot in [docs/AETHER_0.11.md](docs/AETHER_0.11.md). M9 adds
+[docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md](docs/historical%20docs/DESIGN-M6-EXPLICIT-LAYOUT-SHAPES.md)
+and [docs/AETHER_0.9.md](docs/historical%20docs/AETHER_0.9.md). M7 implements structured nurseries
+in [docs/AETHER_0.10.md](docs/historical%20docs/AETHER_0.10.md). M8 implements the capability-closed
+pure host ABI pilot in [docs/AETHER_0.11.md](docs/Current%20state/AETHER_0.11.md). M9 adds
 offline project metadata and formatting in
-[docs/AETHER_0.12.md](docs/AETHER_0.12.md). M10 multi-unit nested project tooling
-is in [docs/AETHER_0.13.md](docs/AETHER_0.13.md). Structural authoring is local
+[docs/AETHER_0.12.md](docs/historical%20docs/AETHER_0.12.md). M10 multi-unit nested project tooling
+is in [docs/AETHER_0.13.md](docs/historical%20docs/AETHER_0.13.md). Structural authoring is local
 tooling metadata, not a host-capability expansion; its current contract is
-[docs/AETHER_AUTHORING_PROTOCOL_v8.md](docs/AETHER_AUTHORING_PROTOCOL_v8.md).
+[docs/AETHER_AUTHORING_PROTOCOL_v8.md](docs/Current%20state/AETHER_AUTHORING_PROTOCOL_v8.md).
 
 ## Implemented Language Boundary
 
@@ -210,15 +210,15 @@ or earlier same-weave comptime names. Bootstrap validates; the seed evaluates
 the D2a callee body without host, foreign, resource, effect, nursery,
 control-flow, or nested-call authority, and folds to existing `COMPTIME_WHOLE`
 (56). Product path forges original source and dual-compares with bootstrap. See
-[docs/AETHER_0.33.md](docs/AETHER_0.33.md), [ADR-039](docs/ADR-039-m23-comptime-pure-calls.md),
-and [ADR-043](docs/ADR-043-bootstrap-authority-reduction.md).
+[docs/AETHER_0.33.md](docs/historical%20docs/AETHER_0.33.md), [ADR-039](docs/historical%20docs/ADR-039-m23-comptime-pure-calls.md),
+and [ADR-043](docs/historical%20docs/ADR-043-bootstrap-authority-reduction.md).
 
 RTP-001 (package 0.34) is an implementation-only VM change. Runtime `Text`
 stores cached ASCII provenance; ASCII `measure`, `glyph`, `cut`, and `seek` use
 byte positions that are exactly scalar positions, while non-ASCII values retain
 Unicode scalar traversal. It has no guest-visible form or artifact change. See
-[docs/AETHER_0.34.md](docs/AETHER_0.34.md) and
-[ADR-040](docs/ADR-040-runtime-text-ascii-fast-path.md).
+[docs/AETHER_0.34.md](docs/historical%20docs/AETHER_0.34.md) and
+[ADR-040](docs/historical%20docs/ADR-040-runtime-text-ascii-fast-path.md).
 
 M16 (package 0.21) allows a **total** weave to own M2/M6 resources and use
 terminal `handle call` against a resource-free copy-only `Error[Whole]` callee.
@@ -257,7 +257,7 @@ accepts only that verified source and writes an explicit local cache entry at
 `packages/<name>/<version>`; content mismatch for the same identity fails closed.
 `pkg install` verifies and materializes a normal locked project directory only
 at an explicit absent output. It does not resolve, fetch, sign, authenticate,
-auto-install, or mutate workspaces. See [AETHER_0.37.md](docs/AETHER_0.37.md).
+auto-install, or mutate workspaces. See [AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md).
 
 M20 (package 0.24) ships stdlib layer 0 under `stdlib/` (pure Whole helpers).
 M20b (package 0.27) expands layer 1: more Whole helpers plus pure `truth.ae` and
@@ -288,9 +288,9 @@ integrity and requires equal profile, environment, selection, source identity,
 and behavior before emitting median deltas. It never executes a report or
 writes over an input report. M32a/M32b do not accept caller benchmark
 source/artifact input, make a performance guarantee, change Aether/AETH
-semantics, or widen host authority. See [ADR-104](docs/ADR-104-m32a-verified-execution-benchmarks.md),
-[ADR-105](docs/ADR-105-m32b-profile-bound-comparisons.md), and
-[M32b matrix](docs/M32B-VALIDATION-MATRIX.md).
+semantics, or widen host authority. See [ADR-104](docs/historical%20docs/ADR-104-m32a-verified-execution-benchmarks.md),
+[ADR-105](docs/historical%20docs/ADR-105-m32b-profile-bound-comparisons.md), and
+[M32b matrix](docs/Current%20state/M32B-VALIDATION-MATRIX.md).
 
 M21 (package 0.31) adds `foreign weave` (Whole-only pilot) with host-side
 libloading after `--grant-lib KEY=PATH`. Human residual-risk acceptance recorded;
@@ -354,7 +354,7 @@ machine-readable, including `AE-EFFECT-001` through `AE-EFFECT-004`,
 Every `Bind` node must
 state `stage: "runtime"` or `stage: "comptime"`. The exact schemas, limits,
 operation vocabulary, and compatibility policy are in
-[docs/AETHER_AUTHORING_PROTOCOL_v8.md](docs/AETHER_AUTHORING_PROTOCOL_v8.md).
+[docs/AETHER_AUTHORING_PROTOCOL_v8.md](docs/Current%20state/AETHER_AUTHORING_PROTOCOL_v8.md).
 
 ## Compile Path Boundary
 
@@ -429,7 +429,7 @@ The CLI is the only active product interface. Aether has no active desktop,
 WebView, model, or network integration. Its AI-first design is expressed through
 the versioned structural contracts and deterministic diagnostics, not by giving
 an AI service compilation or persistence authority. The retired workbench is
-recorded in [docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-studio.md).
+recorded in [docs/ADR-006-retire-aether-studio.md](docs/historical%20docs/ADR-006-retire-aether-studio.md).
 
 ## Project tooling boundary (M9 / M10)
 
@@ -447,9 +447,9 @@ aether project build <project-file> --output <artifact.aeth>
 `project build` elaborates the main unit’s import DAG, dual-compares
 bootstrap≡seed AETH bytes, and writes the seed artifact. Single-file `compile`
 remains seed-hosted and rejects raw `import unit` (use project build). See
-[docs/DESIGN-M11-LANGUAGE-MODULES.md](docs/DESIGN-M11-LANGUAGE-MODULES.md),
-[docs/DESIGN-M9-PROJECT-TOOLING.md](docs/DESIGN-M9-PROJECT-TOOLING.md), and
-[docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md).
+[docs/DESIGN-M11-LANGUAGE-MODULES.md](docs/historical%20docs/DESIGN-M11-LANGUAGE-MODULES.md),
+[docs/DESIGN-M9-PROJECT-TOOLING.md](docs/historical%20docs/DESIGN-M9-PROJECT-TOOLING.md), and
+[docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/historical%20docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md).
 
 ## Quality Gate
 
@@ -480,10 +480,10 @@ pwsh -NoProfile -File .\tools\package-preview.ps1
 pwsh -NoProfile -File .\dist\aether-0.37.0-tp\verify-preview.ps1
 ```
 
-Current local-package threat model: [docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md](docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
+Current local-package threat model: [docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
 
-Historical 0.12 pure-surface freeze: [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/THREAT_MODEL-TECHNICAL-PREVIEW.md).
-Capable host I/O threat model (M14): [docs/THREAT_MODEL-v2-CAPABLE-HOST.md](docs/THREAT_MODEL-v2-CAPABLE-HOST.md).  
-TP delivery: [docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md](docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md).  
-M10 delivery: [docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md](docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md).  
-M14 delivery: [docs/DELIVERY_REPORT-2026-08-04-M14-HOST-IO.md](docs/DELIVERY_REPORT-2026-08-04-M14-HOST-IO.md).
+Historical 0.12 pure-surface freeze: [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/historical%20docs/THREAT_MODEL-TECHNICAL-PREVIEW.md).
+Capable host I/O threat model (M14): [docs/THREAT_MODEL-v2-CAPABLE-HOST.md](docs/Current%20state/THREAT_MODEL-v2-CAPABLE-HOST.md).
+TP delivery: [docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md](docs/historical%20docs/DELIVERY_REPORT-2026-08-04-TECHNICAL-PREVIEW.md).
+M10 delivery: [docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md](docs/historical%20docs/DELIVERY_REPORT-2026-08-04-M10-MULTI-UNIT-PROJECTS.md).
+M14 delivery: [docs/DELIVERY_REPORT-2026-08-04-M14-HOST-IO.md](docs/historical%20docs/DELIVERY_REPORT-2026-08-04-M14-HOST-IO.md).

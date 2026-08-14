@@ -4,9 +4,9 @@
 > v10 state captured before the current 0.36 implementation. It is retained as
 > audit history only and must not be used as the active product contract. The
 > current sources of truth are [MANIFEST.md](MANIFEST.md),
-> [docs/AETHER_0.36.md](docs/AETHER_0.36.md),
-> [docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and
-> [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/PROGRESS_REPORT-FULL-PROJECT.md).
+> [docs/AETHER_0.36.md](docs/historical%20docs/AETHER_0.36.md),
+> [docs/CORE_CLAIMS.md](docs/Current%20state/CORE_CLAIMS.md), and
+> [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/Current%20state/PROGRESS_REPORT-FULL-PROJECT.md).
 > The former `legacy/` application/prototype trees referenced below were removed
 > from the active checkout by the user and are not build inputs.
 
@@ -64,8 +64,8 @@ hidden host exception route or macro expansion path.
 
 This audit records the implemented Aether 0.10 migration/product boundary. The
 separate AI-first language direction is evidence-gated rather than represented
-as completed feature work: [docs/NORTH_STAR.md](docs/NORTH_STAR.md),
-[docs/CORE_CLAIMS.md](docs/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/ROADMAP.md).
+as completed feature work: [docs/NORTH_STAR.md](docs/Current%20state/NORTH_STAR.md),
+[docs/CORE_CLAIMS.md](docs/Current%20state/CORE_CLAIMS.md), and [docs/ROADMAP.md](docs/Current%20state/ROADMAP.md).
 General effects/resumptions, broader compile-time execution, OS-thread
 parallelism, general generics, C interop, and fine-grained arbitrary-node
 structural AI edits remain future research/design items. M3–M7's implemented
@@ -86,7 +86,7 @@ bootstrap.
 
 This is canonical Aether 0.10 source-emission self-hosting. Rust remains the
 bootstrap and invalid-source diagnostic authority; full diagnostic parity is not
-claimed. Scope: [docs/SEED_PROFILE.md](docs/SEED_PROFILE.md).
+claimed. Scope: [docs/SEED_PROFILE.md](docs/Current%20state/SEED_PROFILE.md).
 
 ## Retired Application Boundary
 
@@ -95,7 +95,7 @@ integration, and its generated Windows installers were removed. They are not a
 production build input or release requirement. The CLI keeps the same
 seed-hosted compiler and structural-edit safety boundary without an application
 or model authority. The decision and reversibility rationale are in
-[docs/ADR-006-retire-aether-studio.md](docs/ADR-006-retire-aether-studio.md).
+[docs/ADR-006-retire-aether-studio.md](docs/historical%20docs/ADR-006-retire-aether-studio.md).
 
 The historical `legacy/aether-genesis-ai-studio` material remains reference
 only under the existing legacy rule; it is not active application source.
@@ -127,7 +127,7 @@ malformed payloads, stale base source, and bounded-input violations. Core and
 CLI contract tests prove a valid edit round-trip plus seed validation, while
 malformed/stale requests return deterministic machine-readable diagnostics and
 do not replace source. The current v3 contract is
-[docs/AETHER_AUTHORING_PROTOCOL_v3.md](docs/AETHER_AUTHORING_PROTOCOL_v3.md);
+[docs/AETHER_AUTHORING_PROTOCOL_v3.md](docs/historical%20docs/AETHER_AUTHORING_PROTOCOL_v3.md);
 v1 and v2 remain historical compatibility documentation.
 
 ## M5 Deterministic Compile-Time Evaluation
@@ -137,30 +137,30 @@ signed-`Whole` arithmetic operation under a fixed 1,024-directive budget.
 Results lower to AETH `COMPTIME_WHOLE` provenance and ordinary local storage
 (current default emission is AETH v10). The design, decision, validation
 matrix, and delivery evidence are
-[docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md](docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md),
-[docs/ADR-008-m5-deterministic-comptime.md](docs/ADR-008-m5-deterministic-comptime.md),
-[docs/M5-VALIDATION-MATRIX.md](docs/M5-VALIDATION-MATRIX.md), and
-[docs/DELIVERY_REPORT-2026-08-03-M5-DETERMINISTIC-COMPTIME.md](docs/DELIVERY_REPORT-2026-08-03-M5-DETERMINISTIC-COMPTIME.md).
+[docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md](docs/historical%20docs/DESIGN-M5-DETERMINISTIC-COMPTIME.md),
+[docs/ADR-008-m5-deterministic-comptime.md](docs/historical%20docs/ADR-008-m5-deterministic-comptime.md),
+[docs/M5-VALIDATION-MATRIX.md](docs/historical%20docs/M5-VALIDATION-MATRIX.md), and
+[docs/DELIVERY_REPORT-2026-08-03-M5-DETERMINISTIC-COMPTIME.md](docs/historical%20docs/DELIVERY_REPORT-2026-08-03-M5-DETERMINISTIC-COMPTIME.md).
 
 ## M6 Dual-Layout Tables
 
 Explicit `shape` declarations and `table Shape layout rows|columns` with closed
 allocate/store/load, semantic equivalence, and seed byte identity are recorded
-in [docs/ADR-009-m6-explicit-layout-shapes.md](docs/ADR-009-m6-explicit-layout-shapes.md)
-and [docs/DELIVERY_REPORT-2026-08-03-M6-EXPLICIT-LAYOUT.md](docs/DELIVERY_REPORT-2026-08-03-M6-EXPLICIT-LAYOUT.md).
+in [docs/ADR-009-m6-explicit-layout-shapes.md](docs/historical%20docs/ADR-009-m6-explicit-layout-shapes.md)
+and [docs/DELIVERY_REPORT-2026-08-03-M6-EXPLICIT-LAYOUT.md](docs/historical%20docs/DELIVERY_REPORT-2026-08-03-M6-EXPLICIT-LAYOUT.md).
 
 ## M8 Host ABI Pilot
 
 Capability-closed pure host weaves (host weave + HOST_CALL / AETH v11) are
 implemented with product fixtures whole_inc and 	ext_extent only. See
-[docs/AETHER_0.11.md](docs/AETHER_0.11.md),
-[docs/ADR-011-m8-host-abi-pilot.md](docs/ADR-011-m8-host-abi-pilot.md), and
-[docs/DELIVERY_REPORT-2026-08-04-M8-HOST-ABI.md](docs/DELIVERY_REPORT-2026-08-04-M8-HOST-ABI.md).
+[docs/AETHER_0.11.md](docs/Current%20state/AETHER_0.11.md),
+[docs/ADR-011-m8-host-abi-pilot.md](docs/historical%20docs/ADR-011-m8-host-abi-pilot.md), and
+[docs/DELIVERY_REPORT-2026-08-04-M8-HOST-ABI.md](docs/historical%20docs/DELIVERY_REPORT-2026-08-04-M8-HOST-ABI.md).
 
 ## M7 Structured Nurseries
 
 Lexical `together`/`spawn` with cooperative source-order execution and
 first-failure cancel of remaining unstarted spawns is recorded in
-[docs/ADR-010-m7-structured-concurrency.md](docs/ADR-010-m7-structured-concurrency.md)
-and [docs/DELIVERY_REPORT-2026-08-03-M7-STRUCTURED-CONCURRENCY.md](docs/DELIVERY_REPORT-2026-08-03-M7-STRUCTURED-CONCURRENCY.md).
+[docs/ADR-010-m7-structured-concurrency.md](docs/historical%20docs/ADR-010-m7-structured-concurrency.md)
+and [docs/DELIVERY_REPORT-2026-08-03-M7-STRUCTURED-CONCURRENCY.md](docs/historical%20docs/DELIVERY_REPORT-2026-08-03-M7-STRUCTURED-CONCURRENCY.md).
 No OS-thread parallelism is claimed.

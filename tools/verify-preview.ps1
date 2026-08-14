@@ -214,11 +214,11 @@ function Assert-RequiredPackageFiles([string]$Root, [string]$Version) {
         "examples/project/aether.project.json",
         "examples/workspace/aether.workspace.json",
         "examples/package-publish/source/aether.project.json",
-        "docs/AETHER_0.37.md",
-        "docs/AETHER_AUTHORING_PROTOCOL_v8.md",
-        "docs/CHANGELOG-0.37.md",
-        "docs/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md",
-        "docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md"
+        "docs/Current state/AETHER_0.37.md",
+        "docs/Current state/AETHER_AUTHORING_PROTOCOL_v8.md",
+        "docs/Current state/CHANGELOG-0.37.md",
+        "docs/Current state/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md",
+        "docs/Current state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md"
     )
     foreach ($relativePath in $requiredFiles) {
         $fullPath = Get-ConfinedPackagePath $Root $relativePath "required package path"
