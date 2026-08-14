@@ -97,19 +97,19 @@ add only canonical ordinary-Whole `choose same` / `choose less` / exact
 `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact
 `choose not dim:` nested-yield witnesses for 013; the product preflight retains
 broader 013 coverage. Host merges SPEAK on
-forge **and** verify failure. ADR-110/111/116/117/118/119/120/121/122/123 add only canonical
+forge **and** verify failure. ADR-110/111/116/117/118/119/120/121/122/123/124 add only canonical
 total-Whole direct-bind, root-yield-call, root-revise-call, root-speak-call, and
 delimiter-bounded root-handle-call target-existence checks plus an erroring-Whole
-root-forward-call plus immediate root-nursery zero-argument, single-digit, and
-positive two-digit Whole spawn-call target-existence checks against canonical top-level declaration
+root-forward-call plus immediate root-nursery zero-argument, single-digit,
+positive two-digit Whole, and exact-`bright` Truth spawn-call target-existence checks against canonical top-level declaration
 headers (ordinary, export, host, foreign, or task). The witness accepts forward
 ordinary headers, exact end-of-line zero-argument targets, fixed `into` /
 `otherwise error into` handle delimiters, only the literal `-> Whole raises
 Whole:` forward caller marker, and only a literal total root `together:` whose
 immediate four-space child has either the zero-argument
-`spawn call target into destination` shape, exactly one ASCII decimal digit, or
-exactly two ASCII decimal digits with a nonzero first digit before the literal
-` into ` delimiter; it is not general name binding,
+`spawn call target into destination` shape, exactly one ASCII decimal digit,
+exactly two ASCII decimal digits with a nonzero first digit, or exact `bright`
+before the literal ` into ` delimiter; it is not general name binding,
 destination or terminality validation, full header parsing, Text-result
 validation, M4 effect/resource validation, or call-kind approval. Full seed
 SPEAK matrix remains residual

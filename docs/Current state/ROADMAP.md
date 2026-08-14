@@ -67,18 +67,24 @@ it is not a current status source or authorization.
    forms plus M7 semantic legality remain full-compiler responsibilities. Full
    release, seed identity, and packaged consumer verification pass. See
    [ADR-123](../historical%20docs/ADR-123-barp-seed-speak-root-nursery-two-digit-positive-whole-spawn-unknown-call-pilot.md).
-9. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
+9. **BARP ADR-124 — release verified.**
+   The bounded AE-SEED-011 witness additionally covers only an immediate
+   four-space `spawn call target bright into destination` child. `dim`, names,
+   general Truth expressions, and multi-argument forms plus M7 semantic legality
+   remain full-compiler responsibilities. See
+   [ADR-124](../historical%20docs/ADR-124-barp-seed-speak-root-nursery-bright-truth-spawn-unknown-call-pilot.md).
+10. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
    AE-SEED-013 shape with an explicit false-positive boundary, or separately
    design seed-native multi-file elaboration. Do not infer parser/type-checker
    authority from the existing line-state witnesses.
-10. **Mainstream language/library vertical.** Select one controlled generic,
+11. **Mainstream language/library vertical.** Select one controlled generic,
    data-model, effect, or standard-library ergonomics increment only after its
    grammar, seed, verifier, VM, authoring, compatibility, and limit design are
    written and accepted.
-11. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
+12. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
    fixtures, and offline project workflows before expanding surface area merely
    for feature count.
-11. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
+13. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
    M24i are available for a next scoped ADR, threat-model update, validation
    matrix, and release proof. Neither is an automatic expansion of current
    authority.

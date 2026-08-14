@@ -6,6 +6,10 @@
 **Related Rule IDs:** CONST-DEP-001, DOC-ADR-001, RND-INVAR-001, SEC-INPUT-001, TEST-BEHAVIOR-001
 **Depends on:** ADR-010, ADR-072, ADR-121, ADR-122
 
+**Later scoped extension:** ADR-124 independently adds only the immediate exact
+`bright` Truth argument shape. It does not broaden this ADR's positive
+two-digit-Whole decision.
+
 ## Context
 
 M7 admits a nursery child with a copy Whole argument:
@@ -59,9 +63,10 @@ three-or-more digit forms.
   adds no accepted-source, AETH, VM, verifier, forge ABI, dependency, or
   host-capability surface.
 - Positive two-digit decimal is a recognition condition, not a general Whole
-  parser. Zero, one-digit, signed, leading-zero, three-or-more digit, Truth,
+  parser. Zero, one-digit, signed, leading-zero, three-or-more digit, `dim`,
   name, Text, Bytes, move/borrow/access, and multi-argument shapes retain their
-  existing bounded witness or the full compiler.
+  existing bounded witness or the full compiler; ADR-124 separately admits only
+  exact `bright`.
 - The branch reuses the existing Whole scratch state and ADR-121 parent state.
   It introduces no seed binding and leaves the `v132` unused-local self-host
   variant probe intact.
@@ -79,7 +84,7 @@ three-or-more digit forms.
 3. The lexical endpoints `10` and `99`, plus a later-declared checkpointed
    one-Whole-parameter task called with `42`, prove range boundaries,
    seed/bootstrap identity, verification, and execution.
-4. Leading-zero, three-digit, signed, Truth, multi-argument, delayed,
+4. Leading-zero, three-digit, signed, `dim`/name/general-Truth, multi-argument, delayed,
    descendant, missing-destination, non-task-target, erroring-parent, and
    missing-world sources prove literal, caller-state, delimiter, and priority
    boundaries.
@@ -93,7 +98,7 @@ three-or-more digit forms.
 | Recognize arbitrary multi-digit Whole literals | Rejected: canonical numeric range handling needs its own proof. |
 | Recognize signed two-digit literals | Rejected: sign and `-0` rules would broaden lexical authority. |
 | Recognize leading-zero forms | Rejected: the bootstrap literal predicate rejects them before target resolution. |
-| Recognize Truth, name, Text, or ownership arguments | Rejected: those require broader type and ownership priority evidence. |
+| Recognize general Truth, name, Text, or ownership arguments | Rejected: those require broader type and ownership priority evidence; ADR-124 separately admits only exact `bright`. |
 | Validate the task signature or destination | Rejected: those remain M7 semantic responsibilities. |
 | Leave all positive two-digit spawns bootstrap-only | Rejected: the exact `10`–`99` delimiter shape is useful, lexer-aligned, and directly provable. |
 
@@ -104,7 +109,8 @@ This ADR covers only an ordinary total-Whole `weave ` with a root line exactly
 `spawn call target digits into destination` line, where `digits` is a positive
 two-character ASCII decimal Whole literal (`10` through `99`). It does not
 claim zero/one-digit coverage beyond ADR-121/122, signed, leading-zero,
-three-or-more digit, general atom, multiple argument, full nested parsing,
+three-or-more digit, any Truth coverage beyond ADR-124 exact `bright`, general
+atom, multiple argument, full nested parsing,
 later nursery child, blank-line tolerance, task identity, destination
 validation, header parsing, effect/result/signature validation,
 resource/ownership policy, scheduler behavior, source spans beyond fixed `1:1`,
@@ -116,6 +122,7 @@ full `AE-SEED-011` parity, or seed-native multi-file elaboration.
 - [ADR-072](ADR-072-barp-product-seed-error-packet-abi.md)
 - [ADR-121](ADR-121-barp-seed-speak-root-nursery-zero-argument-spawn-unknown-call-pilot.md)
 - [ADR-122](ADR-122-barp-seed-speak-root-nursery-single-digit-whole-spawn-unknown-call-pilot.md)
+- [ADR-124](ADR-124-barp-seed-speak-root-nursery-bright-truth-spawn-unknown-call-pilot.md)
 - [Delivery report](DELIVERY_REPORT-2026-08-14-BARP-ROOT-NURSERY-TWO-DIGIT-POSITIVE-WHOLE-SPAWN-UNKNOWN-CALL-SPEAK.md)
 - [BARP design](../Current%20state/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 - [BARP validation matrix](../Current%20state/BARP-VALIDATION-MATRIX.md)

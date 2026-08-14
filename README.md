@@ -115,6 +115,11 @@ adds only the adjacent positive two-digit decimal-Whole child form
 `spawn call target digits into destination` for `10` through `99`; complete
 Whole syntax/range handling, general arguments, task identity, destination,
 nesting, resource, and scheduler legality remain with the full compiler.
+[ADR-124](docs/historical%20docs/ADR-124-barp-seed-speak-root-nursery-bright-truth-spawn-unknown-call-pilot.md)
+adds only the adjacent exact `Truth`-literal child form
+`spawn call target bright into destination`; `dim`, names, general expressions,
+task identity, destination, nesting, resource, and scheduler legality remain
+with the full compiler.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

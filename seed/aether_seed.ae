@@ -709,6 +709,41 @@ weave compile [borrow source: Text] -> Bytes:
               revise v30 <- 0
           otherwise:
             revise v30 <- 0
+          choose same v128 0:
+            choose same v133 1:
+              choose same v127 1:
+                choose same v28 4:
+                  revise v102 <- "spawn call "
+                  revise v15 <- seek borrow v99 borrow v102 0
+                  choose same v15 0:
+                    revise v130 <- sum v15 11
+                    revise v123 <- seek borrow v99 " " v130
+                    choose less v130 v123:
+                      revise v31 <- sum v123 1
+                      revise v102 <- "bright into "
+                      revise v15 <- seek borrow v99 borrow v102 v31
+                      choose same v15 v31:
+                        revise v41 <- sum v15 12
+                        choose less v41 v29:
+                          revise v126 <- cut borrow v99 v130 v123
+                          revise v128 <- 1
+                          revise v40 <- bright
+                        otherwise:
+                          revise v30 <- 0
+                      otherwise:
+                        revise v30 <- 0
+                    otherwise:
+                      revise v30 <- 0
+                  otherwise:
+                    revise v30 <- 0
+                otherwise:
+                  revise v30 <- 0
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
           choose same v127 2:
             choose same v28 2:
               choose same v128 0:

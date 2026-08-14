@@ -97,7 +97,7 @@
 | BARP-SPEAK-093 | Product-path canonical root forward-call unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
 | BARP-SPEAK-094 | Canonical ordinary total-Whole root `together:` followed immediately by four-space zero-argument `spawn call nope into result`, with no matching top-level declaration header | Seed SPEAK `AE-SEED-011`, schema `aether.seed-error/v1`, `origin: seed-speak`, position `1:1`, blank Bytes result |
 | BARP-SPEAK-095 | Canonical root nursery spawn to a later-declared checkpointed task weave | Does not trigger the pilot; seed artifact verifies, matches bootstrap, and exits with the expected result |
-| BARP-SPEAK-096 | Spawn-shaped Text literal, erroring-Whole parent nursery, intervening blank/non-spawn line, six-space descendant, or three-or-more-digit/negative/Truth/multi-argument child | Do not trigger the literal total-root immediate four-space zero-argument, single-digit, or positive-two-digit-Whole-child pilots; full M7 diagnostics retain authority |
+| BARP-SPEAK-096 | Spawn-shaped Text literal, erroring-Whole parent nursery, intervening blank/non-spawn line, six-space descendant, or three-or-more-digit/negative/`dim`/name/general-Truth/multi-argument child | Do not trigger the literal total-root immediate four-space zero-argument, single-digit, positive-two-digit-Whole, or exact-`bright`-Truth-child pilots; full M7 diagnostics retain authority |
 | BARP-SPEAK-097 | Root nursery `spawn call nope` with no `into` delimiter or no destination suffix | Does not trigger the bounded unknown-target pilot; full syntax diagnostics retain authority |
 | BARP-SPEAK-098 | Missing `world` plus an otherwise canonical root-nursery spawn unknown target | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-099 | Product-path canonical root-nursery spawn unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
@@ -112,6 +112,11 @@
 | BARP-SPEAK-108 | Immediate root nursery leading-zero, three-or-more-digit, signed, Truth, multi-argument, missing-destination, delayed, descendant, non-task-target, or erroring-Whole-parent source | Does not trigger the two-digit bounded unknown-target pilot; leading-zero forms fail literal validation before target resolution and full M7 syntax/semantic diagnostics retain authority |
 | BARP-SPEAK-109 | Missing `world` plus an otherwise canonical positive two-digit root-nursery spawn unknown target | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-110 | Product-path canonical positive two-digit root-nursery spawn unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
+| BARP-SPEAK-111 | Canonical ordinary total-Whole root `together:` followed immediately by four-space `spawn call nope bright into result`, with no matching top-level declaration header | Seed SPEAK `AE-SEED-011`, schema `aether.seed-error/v1`, `origin: seed-speak`, position `1:1`, blank Bytes result |
+| BARP-SPEAK-112 | Canonical root nursery exact-`bright` spawn to a later-declared checkpointed `task weave` with one Truth parameter | Does not trigger the pilot; seed artifact verifies, matches bootstrap, and exits `42` |
+| BARP-SPEAK-113 | Immediate root nursery `dim`, name, repeated-argument, missing-destination, delayed, descendant, non-task-target, wrong-parameter, or erroring-Whole-parent source | Does not trigger the exact-`bright` bounded unknown-target pilot; existing seed failures or full M7 syntax/semantic diagnostics retain authority |
+| BARP-SPEAK-114 | Missing `world` plus an otherwise canonical exact-`bright` root-nursery spawn unknown target | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-115 | Product-path canonical exact-`bright` root-nursery spawn unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
 
 ## Boundary
 

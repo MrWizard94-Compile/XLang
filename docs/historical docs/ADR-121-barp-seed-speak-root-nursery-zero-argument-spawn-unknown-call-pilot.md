@@ -7,9 +7,10 @@
 **Depends on:** ADR-010, ADR-072, ADR-110, ADR-116, ADR-120
 
 **Later scoped extensions:** ADR-122 independently adds one immediate
-single-digit decimal-Whole argument shape, and ADR-123 independently adds one
-immediate positive two-digit decimal-Whole argument shape. Neither broadens
-this ADR's zero-argument decision.
+single-digit decimal-Whole argument shape, ADR-123 independently adds one
+immediate positive two-digit decimal-Whole argument shape, and ADR-124
+independently adds one immediate exact-`bright` Truth argument shape. None
+broadens this ADR's zero-argument decision.
 
 ## Context
 
@@ -103,8 +104,9 @@ a nonempty destination suffix while leaving all M7 behavior to the full compiler
 This ADR covers only an ordinary total-Whole `weave ` with a root line exactly
 `together:` followed immediately by a four-space zero-argument
 `spawn call target into destination` line. It does not claim general
-argument-bearing spawn support (ADR-122 later covers one single-digit shape and
-ADR-123 one positive two-digit shape), full nested parsing, repeated or later nursery children, blank
+argument-bearing spawn support (ADR-122 later covers one single-digit shape,
+ADR-123 one positive two-digit shape, and ADR-124 exact `bright`), full nested
+parsing, repeated or later nursery children, blank
 line tolerance, destination validation, task identity, header parsing, effect/
 result/signature validation, resource/ownership policy, scheduler behavior,
 source spans beyond fixed `1:1`, full `AE-SEED-011` parity, or seed-native

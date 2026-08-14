@@ -11,8 +11,9 @@ turning the seed into an M7 parser, task checker, or scheduler.
 **Later scoped extensions:** At this delivery's release gate, all argument-bearing
 children remained outside the witness. ADR-122 later adds only one immediate
 single-digit decimal-Whole argument shape, and ADR-123 later adds only one
-immediate positive two-digit decimal-Whole shape; all broader argument forms
-remain outside the seed scanner.
+immediate positive two-digit decimal-Whole shape. ADR-124 later adds only one
+immediate exact-`bright` Truth shape; all broader argument forms remain outside
+the seed scanner.
 
 ## Implemented behavior
 
@@ -84,9 +85,9 @@ consumer verification.
 
 ## Residuals
 
-Argument-bearing spawn calls, non-immediate or nested nursery children, broader
-`AE-SEED-011` and `AE-SEED-013` families, full seed SPEAK conformance, and
-seed-native multi-file elaboration remain separate scoped work. Preserve the
+Other argument-bearing spawn calls, non-immediate or nested nursery children,
+broader `AE-SEED-011` and `AE-SEED-013` families, full seed SPEAK conformance,
+and seed-native multi-file elaboration remain separate scoped work. Preserve the
 verifier-first artifact rule, dual-compare proof, and no-ambient-authority
 boundary.
 
