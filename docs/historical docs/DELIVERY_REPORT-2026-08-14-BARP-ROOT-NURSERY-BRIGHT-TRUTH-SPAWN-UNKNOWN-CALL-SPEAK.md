@@ -6,6 +6,10 @@
 **Scope:** ADR-124 direct-seed root-nursery exact bright Truth spawn unknown-target diagnostic authority reduction
 **Rule IDs:** CONST-COMPLETE-001, CONST-DEP-001, CONST-DONE-001, CONST-GATE-001, DOC-SYNC-001, ENG-WARN-001, RND-INVAR-001, SEC-INPUT-001, TEST-BEHAVIOR-001
 
+**Later scoped extension:** ADR-125 independently adds only the immediate exact
+`dim` Truth argument shape; it does not broaden this ADR's exact-`bright`
+decision.
+
 ## Implemented behavior
 
 After ADR-121's zero-argument, ADR-122's one-digit, and ADR-123's positive
@@ -40,7 +44,7 @@ verified, and executable with `bright`.
 | Direct seed forge | PASS — exact `bright` child emits one blank-Bytes `AE-SEED-011` seed-SPEAK packet with schema and fixed position |
 | Product merge | PASS — product compilation preserves the `AE-SEED-011` / `seed-speak` packet |
 | Valid source boundary | PASS — later-declared checkpointed one-Truth task target verifies, matches bootstrap, and exits `42` |
-| False-positive boundary | PASS — `dim`, name, repeated-argument, missing-destination, delayed, descendant, non-task-target, wrong-parameter, and erroring-parent sources emit no ADR-124 packet; their existing seed failure, when any, retains its prior authority |
+| False-positive boundary | PASS — name, `not dim`, repeated-argument, missing-destination, delayed, descendant, non-task-target, wrong-parameter, and erroring-parent sources emit no ADR-124 packet; their existing seed failure, when any, retains its prior authority |
 | Priority boundary | PASS — missing world emits `AE-SEED-006`, not `AE-SEED-011` |
 | BARP tracker | PASS — ADR-124 registers while `seed_speak_emit_conformance_complete()` remains false |
 | Seed Profile variant boundary | PASS — ADR-124 adds no local binding and preserves the established `v132` unused-local self-host variant probe |
@@ -72,12 +76,12 @@ claiming full seed SPEAK parity.
 
 ## Residuals
 
-Zero/one/two-digit Whole handling remains ADR-121/122/123; `dim`, Truth names,
-unary/general Truth, and multi-argument spawn calls; non-immediate/nested
-nursery children; broader `AE-SEED-011` and `AE-SEED-013` families; full seed
-SPEAK conformance; and seed-native multi-file elaboration remain separate scoped
-work. Preserve the verifier-first artifact rule, dual-compare proof, and
-no-ambient-authority boundary.
+Zero/one/two-digit Whole handling remains ADR-121/122/123; exact `dim` remains
+ADR-125; Truth names, unary/general Truth, and multi-argument spawn calls;
+non-immediate/nested nursery children; broader `AE-SEED-011` and `AE-SEED-013`
+families; full seed SPEAK conformance; and seed-native multi-file elaboration
+remain separate scoped work. Preserve the verifier-first artifact rule,
+dual-compare proof, and no-ambient-authority boundary.
 
 ---
 

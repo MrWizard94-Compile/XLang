@@ -117,9 +117,14 @@ Whole syntax/range handling, general arguments, task identity, destination,
 nesting, resource, and scheduler legality remain with the full compiler.
 [ADR-124](docs/historical%20docs/ADR-124-barp-seed-speak-root-nursery-bright-truth-spawn-unknown-call-pilot.md)
 adds only the adjacent exact `Truth`-literal child form
-`spawn call target bright into destination`; `dim`, names, general expressions,
-task identity, destination, nesting, resource, and scheduler legality remain
-with the full compiler.
+`spawn call target bright into destination`; the separate exact-`dim` scope is
+ADR-125, while names, general expressions, task identity, destination, nesting,
+resource, and scheduler legality remain with the full compiler.
+[ADR-125](docs/historical%20docs/ADR-125-barp-seed-speak-root-nursery-dim-truth-spawn-unknown-call-pilot.md)
+adds only the adjacent exact `Truth`-literal child form
+`spawn call target dim into destination`; `bright` remains ADR-124, while names,
+general expressions, task identity, destination, nesting, resource, and
+scheduler legality remain with the full compiler.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

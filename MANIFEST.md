@@ -109,10 +109,17 @@ resource, ownership, or scheduler policy.
 [ADR-124](docs/historical%20docs/ADR-124-barp-seed-speak-root-nursery-bright-truth-spawn-unknown-call-pilot.md)
 extends only that same immediate root-nursery witness to
 `spawn call target bright into destination`, where `bright into ` is literal and
-a destination suffix remains. It does not parse `dim`, names, general `Truth`
-expressions, or general arguments, or validate M7 task identity, destination
-legality, nesting, effect/result, signature, resource, ownership, or scheduler
-policy.
+a destination suffix remains. Exact `dim` is a separate ADR-125 witness; names,
+general `Truth` expressions, and general arguments remain outside this branch,
+as do M7 task identity, destination legality, nesting, effect/result, signature,
+resource, ownership, and scheduler policy.
+[ADR-125](docs/historical%20docs/ADR-125-barp-seed-speak-root-nursery-dim-truth-spawn-unknown-call-pilot.md)
+extends only that same immediate root-nursery witness to
+`spawn call target dim into destination`, where `dim into ` is literal and a
+destination suffix remains. Exact `bright` remains ADR-124; names, general
+`Truth` expressions, and general arguments, plus M7 task identity, destination
+legality, nesting, effect/result, signature, resource, ownership, and scheduler
+policy, remain outside the branch.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

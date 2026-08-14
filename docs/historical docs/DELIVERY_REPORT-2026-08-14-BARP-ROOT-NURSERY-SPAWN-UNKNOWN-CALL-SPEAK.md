@@ -12,8 +12,9 @@ turning the seed into an M7 parser, task checker, or scheduler.
 children remained outside the witness. ADR-122 later adds only one immediate
 single-digit decimal-Whole argument shape, and ADR-123 later adds only one
 immediate positive two-digit decimal-Whole shape. ADR-124 later adds only one
-immediate exact-`bright` Truth shape; all broader argument forms remain outside
-the seed scanner.
+immediate exact-`bright` Truth shape, and ADR-125 later adds only one immediate
+exact-`dim` Truth shape; all broader argument forms remain outside the seed
+scanner.
 
 ## Implemented behavior
 

@@ -1792,22 +1792,33 @@ fn barp_adr122_seed_speaks_canonical_root_nursery_single_digit_whole_spawn_unkno
         3
     );
 
+    let assert_no_single_digit_pilot = |source: &str, boundary: &str| {
+        match forge_bytecode(SEED_COMPILER_ARTIFACT, source) {
+            Ok(direct) => assert!(
+                !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+                "{boundary} must remain outside the one-digit pilot: {}",
+                direct.stdout
+            ),
+            Err(error) => assert!(
+                !error.to_string().contains("AE-SEED-011"),
+                "{boundary} must not emit the one-digit pilot before its existing seed failure: {error}"
+            ),
+        }
+    };
+
     for nonmatch in [
         "spawn call nope 123 into result",
         "spawn call nope -3 into result",
-        "spawn call nope dim into result",
+        "spawn call nope not dim into result",
         "spawn call nope 3 4 into result",
         "spawn call nope 3 into",
     ] {
         let source = format!(
             "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    {nonmatch}\n  yield result\n"
         );
-        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, &source)
-            .expect("out-of-scope one-digit root nursery spawn source must reach the seed forge");
-        assert!(
-            !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
-            "out-of-scope root nursery spawn `{nonmatch}` must remain outside the one-digit pilot: {}",
-            direct.stdout
+        assert_no_single_digit_pilot(
+            &source,
+            &format!("out-of-scope root nursery spawn `{nonmatch}`"),
         );
     }
 
@@ -1964,22 +1975,33 @@ fn barp_adr123_seed_speaks_canonical_root_nursery_two_digit_positive_whole_spawn
         42
     );
 
+    let assert_no_two_digit_pilot = |source: &str, boundary: &str| {
+        match forge_bytecode(SEED_COMPILER_ARTIFACT, source) {
+            Ok(direct) => assert!(
+                !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+                "{boundary} must remain outside the two-digit pilot: {}",
+                direct.stdout
+            ),
+            Err(error) => assert!(
+                !error.to_string().contains("AE-SEED-011"),
+                "{boundary} must not emit the two-digit pilot before its existing seed failure: {error}"
+            ),
+        }
+    };
+
     for nonmatch in [
         "spawn call nope 123 into result",
         "spawn call nope -42 into result",
-        "spawn call nope dim into result",
+        "spawn call nope not dim into result",
         "spawn call nope 42 7 into result",
         "spawn call nope 42 into",
     ] {
         let source = format!(
             "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    {nonmatch}\n  yield result\n"
         );
-        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, &source)
-            .expect("out-of-scope two-digit root nursery spawn source must reach the seed forge");
-        assert!(
-            !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
-            "out-of-scope root nursery spawn `{nonmatch}` must remain outside the two-digit pilot: {}",
-            direct.stdout
+        assert_no_two_digit_pilot(
+            &source,
+            &format!("out-of-scope root nursery spawn `{nonmatch}`"),
         );
     }
 
@@ -2168,7 +2190,7 @@ fn barp_adr124_seed_speaks_canonical_root_nursery_bright_truth_spawn_unknown_cal
         };
 
     for nonmatch in [
-        "spawn call nope dim into result",
+        "spawn call nope not dim into result",
         "spawn call nope flag into result",
         "spawn call nope bright bright into result",
         "spawn call nope bright into",
@@ -2227,6 +2249,178 @@ fn barp_adr124_seed_speaks_canonical_root_nursery_bright_truth_spawn_unknown_cal
     assert!(
         !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
         "missing world must suppress the lower-priority bright root nursery spawn pilot: {}",
+        direct.stdout
+    );
+}
+
+#[test]
+fn barp_adr125_seed_speaks_canonical_root_nursery_dim_truth_spawn_unknown_calls() {
+    let source = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call nope dim into result\n  yield result\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, source)
+        .expect("canonical dim root nursery spawn unknown call must reach the seed forge");
+    assert!(
+        direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+        "expected a seed-native AE-SEED-011 packet for dim root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct.stdout.contains("\"origin\":\"seed-speak\""),
+        "expected seed-speak origin for dim root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct
+            .stdout
+            .contains("\"schema\":\"aether.seed-error/v1\""),
+        "expected seed error schema for dim root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct.stdout.contains("\"line\":1,\"column\":1"),
+        "expected 1:1 seed-SPEAK position for dim root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct.stdout.contains(
+            "\"message\":\"canonical direct call target does not name a top-level declared weave\""
+        ),
+        "expected the unknown-call message for dim root nursery spawn, got: {}",
+        direct.stdout
+    );
+    assert_eq!(
+        direct.stdout.matches("AETHER_SEED_ERROR:").count(),
+        1,
+        "canonical dim root nursery spawn source must emit exactly one packet: {}",
+        direct.stdout
+    );
+    match direct.value {
+        InvocationValue::Bytes(bytes) => assert!(
+            bytes.is_empty(),
+            "canonical dim root nursery spawn SPEAK must return blank Bytes, got {} bytes",
+            bytes.len()
+        ),
+        other => panic!("canonical dim root nursery spawn SPEAK must return Bytes, got {other:?}"),
+    }
+
+    let product = compile_product_bytecode(source)
+        .expect_err("canonical dim root nursery spawn unknown call must fail product compilation");
+    assert!(
+        product.to_string().contains("AE-SEED-011"),
+        "expected AE-SEED-011 for dim root nursery spawn, got {product}"
+    );
+    let packets = product_error_packets(source);
+    assert_eq!(packets.len(), 1);
+    assert_eq!(packets[0].schema, SEED_ERROR_PACKET_SCHEMA);
+    assert_eq!(packets[0].code, "AE-SEED-011");
+    assert_eq!(packets[0].line, 1);
+    assert_eq!(packets[0].column, 1);
+    assert_eq!(packets[0].origin, "seed-speak");
+
+    let valid = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call worker dim into result\n  yield result\n\ntask weave worker [flag: Truth] -> Whole:\n  checkpoint\n  yield 42\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, valid)
+        .expect("declared dim root nursery spawn call must reach the seed forge");
+    assert!(
+        !direct.stdout.contains("AETHER_SEED_ERROR:"),
+        "declared dim root nursery spawn call must remain outside the pilot: {}",
+        direct.stdout
+    );
+    let seeded = bytes(direct);
+    verify_bytecode(&seeded).expect("declared dim root nursery spawn seed artifact must verify");
+    let bootstrap = compile_to_bytecode(valid)
+        .expect("declared dim root nursery spawn source must bootstrap")
+        .bytecode;
+    assert_eq!(
+        seeded, bootstrap,
+        "declared dim root nursery spawn call must retain seed/bootstrap identity"
+    );
+    assert_eq!(
+        run_bytecode(&seeded)
+            .expect("declared dim root nursery spawn seed artifact must run")
+            .exit_code,
+        42
+    );
+
+    let assert_no_dim_pilot =
+        |source: &str, boundary: &str| match forge_bytecode(SEED_COMPILER_ARTIFACT, source) {
+            Ok(direct) => assert!(
+                !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+                "{boundary} must remain outside the dim pilot: {}",
+                direct.stdout
+            ),
+            Err(error) => assert!(
+                !error.to_string().contains("AE-SEED-011"),
+                "{boundary} must not emit the dim pilot before its existing seed failure: {error}"
+            ),
+        };
+
+    for nonmatch in [
+        "spawn call nope bright into result",
+        "spawn call nope flag into result",
+        "spawn call nope not dim into result",
+        "spawn call nope dim dim into result",
+        "spawn call nope dim into",
+    ] {
+        let source = format!(
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    {nonmatch}\n  yield result\n"
+        );
+        if nonmatch == "spawn call nope bright into result" {
+            let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, &source)
+                .expect("ADR-124 bright predecessor source must reach the seed forge");
+            assert!(
+                direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+                "ADR-124 bright predecessor witness must remain intact: {}",
+                direct.stdout
+            );
+        } else {
+            assert_no_dim_pilot(
+                &source,
+                &format!("out-of-scope root nursery spawn `{nonmatch}`"),
+            );
+        }
+    }
+
+    for (boundary, spacer) in [
+        ("a blank line", "\n"),
+        ("a non-spawn nursery child", "    bind mutable spare <- 0\n"),
+    ] {
+        let source = format!(
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n{spacer}    spawn call nope dim into result\n  yield result\n"
+        );
+        assert_no_dim_pilot(&source, &format!("dim root nursery spawn after {boundary}"));
+    }
+
+    let descendant = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n      spawn call nope dim into result\n  yield result\n";
+    assert_no_dim_pilot(descendant, "six-space dim nursery descendant");
+
+    let non_task_target = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call worker dim into result\n  yield result\n\nweave worker [flag: Truth] -> Whole:\n  yield 42\n";
+    assert_no_dim_pilot(non_task_target, "declared non-task target");
+
+    let wrong_parameter = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call worker dim into result\n  yield result\n\ntask weave worker [limit: Whole] -> Whole:\n  checkpoint\n  yield limit\n";
+    assert_no_dim_pilot(
+        wrong_parameter,
+        "existing target with a wrong parameter type",
+    );
+    let product = compile_product_bytecode(wrong_parameter)
+        .expect_err("wrong-parameter dim nursery target must fail product compilation");
+    assert!(
+        !product.to_string().contains("AE-SEED-011"),
+        "wrong parameter type must retain full compiler authority, got {product}"
+    );
+
+    let erroring_caller = "world w\n\nweave relay [] -> Whole raises Whole:\n  bind mutable result <- 0\n  together:\n    spawn call nope dim into result\n  raise 0\n\nweave main [] -> Whole:\n  bind mutable value <- 0\n  bind mutable code <- 0\n  handle call relay into value otherwise error into code\n";
+    assert_no_dim_pilot(erroring_caller, "erroring dim root nursery spawn");
+
+    let missing_world = "weave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call nope dim into result\n  yield result\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, missing_world)
+        .expect("missing-world dim root nursery spawn source must reach the seed forge");
+    assert!(
+        direct.stdout.contains("\"code\":\"AE-SEED-006\""),
+        "missing world must retain higher-priority AE-SEED-006, got: {}",
+        direct.stdout
+    );
+    assert!(
+        !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+        "missing world must suppress the lower-priority dim root nursery spawn pilot: {}",
         direct.stdout
     );
 }
@@ -2342,6 +2536,10 @@ fn barp_adr072_product_seed_error_packet_abi() {
     assert!(
         aether_core::seed_speak_emit_root_nursery_bright_truth_spawn_unknown_call_pilot(),
         "ADR-124: root nursery exact bright Truth spawn-call unknown-call seed SPEAK pilot"
+    );
+    assert!(
+        aether_core::seed_speak_emit_root_nursery_dim_truth_spawn_unknown_call_pilot(),
+        "ADR-125: root nursery exact dim Truth spawn-call unknown-call seed SPEAK pilot"
     );
     let empty = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield 1\n");
     assert!(empty.is_empty());

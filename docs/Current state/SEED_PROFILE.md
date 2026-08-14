@@ -31,7 +31,7 @@ multi-file natively). LSP diagnostics are product-primary (ADR-058); hover/defin
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
  project format, LSP format, product structural weave/statement/record ops, and seed
  rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
- oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117/118/119/120/121/122/123/124:** seed
+ oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117/118/119/120/121/122/123/124/125:** seed
 SPEAKs structured `AETHER_SEED_ERROR` for empty source, missing world, missing main,
 raw multi-module import, and bounded lexical ASCII-tab / top-level `fn ` conditions
 plus canonical reserved-task prefixes and canonical top-level task bodies without
@@ -54,8 +54,11 @@ unknown-call forms only when that immediate child is
 `spawn call target digits into destination` with exactly two ASCII decimal
 characters and a nonzero first digit, and literal ordinary total-Whole
 root-nursery exact-bright Truth spawn unknown-call forms only when that immediate
-child is `spawn call target bright into destination` with a destination suffix
-(origin `seed-speak`); full SPEAK conformance matrix remains residual.
+child is `spawn call target bright into destination` with a destination suffix,
+and literal ordinary total-Whole root-nursery exact-dim Truth spawn unknown-call
+forms only when that immediate child is `spawn call target dim into destination`
+with a destination suffix (origin `seed-speak`); full SPEAK conformance matrix
+remains residual.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,

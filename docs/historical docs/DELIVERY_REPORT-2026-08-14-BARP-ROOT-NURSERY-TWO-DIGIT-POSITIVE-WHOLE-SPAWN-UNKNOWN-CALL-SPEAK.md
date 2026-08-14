@@ -10,6 +10,10 @@
 `bright` Truth argument shape; it does not broaden this ADR's positive
 two-digit-Whole decision.
 
+**Later scoped extension:** ADR-125 independently adds only the immediate exact
+`dim` Truth argument shape; it does not broaden this ADR's positive two-digit-
+Whole decision.
+
 ## Implemented behavior
 
 After ADR-121's zero-argument and ADR-122's one-digit branches decline a source, the checked-in seed recognizes a literal ordinary total-Whole root `together:` only when its next physical line is exactly four-space `spawn call target digits into destination`. `digits` must be exactly two ASCII decimal characters, with the first in `1`–`9` and the second in `0`–`9`; the next byte must begin literal ` into ` and a destination suffix must remain.
@@ -35,7 +39,7 @@ An absent top-level declaration then emits exactly one blank-Bytes `AE-SEED-011`
 | Product merge | PASS — product compilation preserves the `AE-SEED-011` / `seed-speak` packet |
 | Lexical endpoints | PASS — `10` and `99` reach the bounded witness; leading-zero literals retain literal priority |
 | Valid source boundary | PASS — later-declared checkpointed one-Whole task target verifies, matches bootstrap, and exits `42` |
-| False-positive boundary | PASS — three-digit, signed, `dim`/name/general-Truth, multi-argument, delayed, descendant, and non-task-target sources emit no pilot packet |
+| False-positive boundary | PASS — three-digit, signed, name/`not dim`/general-Truth, multi-argument, delayed, descendant, and non-task-target sources emit no pilot packet |
 | Delimiter boundary | PASS — a missing destination suffix does not trigger this witness |
 | Caller/priority boundary | PASS — erroring parent emits no pilot packet; missing world supersedes the lower-priority witness |
 | BARP tracker | PASS — ADR-123 registers while `seed_speak_emit_conformance_complete()` remains false |
@@ -58,7 +62,7 @@ The targeted red/green test, rebuilt seed, focused tracker evidence, and full Co
 
 ## Residuals
 
-Zero/one-digit handling remains ADR-121/122; signed, leading-zero, three-or-more digit, `dim`, names, general Truth, general atom, and multi-argument spawn calls; non-immediate/nested nursery children; broader `AE-SEED-011` and `AE-SEED-013` families; full seed SPEAK conformance; and seed-native multi-file elaboration remain separate scoped work. ADR-124 separately admits only exact `bright`. Preserve the verifier-first artifact rule, dual-compare proof, and no-ambient-authority boundary.
+Zero/one-digit handling remains ADR-121/122; signed, leading-zero, three-or-more digit, names, `not dim`, general Truth, general atom, and multi-argument spawn calls; non-immediate/nested nursery children; broader `AE-SEED-011` and `AE-SEED-013` families; full seed SPEAK conformance; and seed-native multi-file elaboration remain separate scoped work. ADR-124 and ADR-125 separately admit only exact `bright` and `dim`. Preserve the verifier-first artifact rule, dual-compare proof, and no-ambient-authority boundary.
 
 ---
 

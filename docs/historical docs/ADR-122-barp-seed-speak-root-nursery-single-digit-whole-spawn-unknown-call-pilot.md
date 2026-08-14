@@ -8,7 +8,8 @@
 
 **Later scoped extensions:** ADR-123 independently adds one immediate positive
 two-digit decimal-Whole argument shape (`10` through `99`), and ADR-124
-independently adds one immediate exact-`bright` Truth argument shape. Neither
+independently adds one immediate exact-`bright` Truth argument shape. ADR-125
+independently adds one immediate exact-`dim` Truth argument shape. Neither
 broadens this ADR's one-digit decision.
 
 ## Context
@@ -65,9 +66,10 @@ discipline.
   dependency, or host-capability surface.
 - Single-digit decimal is a lexical recognition condition, not a claim that the
   seed parses Whole literals. ADR-123 later admits only positive two-digit
-  decimal, and ADR-124 later admits only exact `bright`; signed, leading-zero,
-  three-or-more-digit, `dim`, name, Text, Bytes, move/borrow/access, and
-  multi-argument shapes remain with the full parser.
+  decimal, ADR-124 later admits only exact `bright`, and ADR-125 later admits
+  only exact `dim`; signed, leading-zero, three-or-more-digit, name, `not dim`,
+  Text, Bytes, move/borrow/access, and multi-argument shapes remain with the
+  full parser.
 - The branch reuses existing Whole scratch state after its glyph check and the
   ADR-121 parent state. It introduces no new seed binding and leaves the
   `v132` unused-local self-host variant probe intact.
@@ -83,7 +85,7 @@ discipline.
    with blank Bytes; product compilation proves the merged packet.
 3. A later-declared checkpointed one-Whole-parameter task helper proves
    seed/bootstrap identity, verification, and execution with exit code `3`.
-4. Multi-digit, negative, `dim`/name/general-Truth, multi-argument, delayed/descendant,
+4. Multi-digit, negative, name/`not dim`/general-Truth, multi-argument, delayed/descendant,
    missing-destination, erroring-parent, and missing-world sources prove
    literal, caller-state, delimiter, and priority boundaries.
 5. The rebuilt seed must pass the full release gate, including four-way seed
@@ -104,9 +106,10 @@ discipline.
 This ADR covers only an ordinary total-Whole `weave ` with a root line exactly
 `together:` followed immediately by a four-space
 `spawn call target digit into destination` line, where `digit` is one ASCII
-decimal character. It does not claim positive two-digit coverage beyond ADR-123
-or exact-`bright` Truth coverage beyond ADR-124, signed, leading-zero,
-three-or-more-digit, or negative Whole literals, general atoms, multiple
+decimal character. It does not claim positive two-digit coverage beyond ADR-123,
+exact-`bright` Truth coverage beyond ADR-124, or exact-`dim` Truth coverage
+beyond ADR-125; signed, leading-zero, three-or-more-digit, or negative Whole
+literals, general atoms, multiple
 arguments, full nested parsing, later nursery children,
 blank-line tolerance, task identity, destination validation, header parsing,
 effect/result/signature validation, resource/ownership policy, scheduler
@@ -120,6 +123,7 @@ seed-native multi-file elaboration.
 - [ADR-121](ADR-121-barp-seed-speak-root-nursery-zero-argument-spawn-unknown-call-pilot.md)
 - [ADR-123](ADR-123-barp-seed-speak-root-nursery-two-digit-positive-whole-spawn-unknown-call-pilot.md)
 - [ADR-124](ADR-124-barp-seed-speak-root-nursery-bright-truth-spawn-unknown-call-pilot.md)
+- [ADR-125](ADR-125-barp-seed-speak-root-nursery-dim-truth-spawn-unknown-call-pilot.md)
 - [Delivery report](DELIVERY_REPORT-2026-08-14-BARP-ROOT-NURSERY-SINGLE-DIGIT-WHOLE-SPAWN-UNKNOWN-CALL-SPEAK.md)
 - [BARP design](../Current%20state/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md)
 - [BARP validation matrix](../Current%20state/BARP-VALIDATION-MATRIX.md)

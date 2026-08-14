@@ -108,15 +108,20 @@ SPEAK pilot is deliberately bounded; it has no full diagnostic parity claim.
    identity, and packaged consumer verification pass.
 9. **Completed (ADR-124; release verified):** the
    `AE-SEED-011` witness adds only the immediate four-space
-   `spawn call target bright into destination` child. `dim`, names, general
-   Truth expressions, multi-argument forms, and all M7 semantic legality remain
-   with the full compiler.
-10. Select one broader `AE-SEED-011` or `AE-SEED-013` shape only after
+   `spawn call target bright into destination` child. ADR-125 separately scopes
+   exact `dim`; names, general Truth expressions, multi-argument forms, and all
+   M7 semantic legality remain with the full compiler.
+10. **Completed (ADR-125; release verified):** the
+    `AE-SEED-011` witness adds only the immediate four-space
+    `spawn call target dim into destination` child. `bright` remains ADR-124;
+    names, `not dim`, general Truth expressions, multi-argument forms, and all
+    M7 semantic legality remain with the full compiler.
+11. Select one broader `AE-SEED-011` or `AE-SEED-013` shape only after
    documenting its false-positive boundary and valid-source corpus.
-11. Design seed-native multi-file elaboration as a separate forge ABI decision;
+12. Design seed-native multi-file elaboration as a separate forge ABI decision;
    host elaboration plus seed emission remains the product contract until that
    design is proven.
-12. Never remove the dual-compare oracle or convert a seed line-state witness
+13. Never remove the dual-compare oracle or convert a seed line-state witness
    into an unbounded parser/type checker by accretion.
 
 ## Fork boundaries
