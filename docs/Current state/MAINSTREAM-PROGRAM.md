@@ -85,12 +85,19 @@ SPEAK pilot is deliberately bounded; it has no full diagnostic parity claim.
    header parsing, terminality, target effects/results, arguments, resources,
    and general M4 call legality to the full compiler; full release, seed
    identity, and packaged consumer verification pass.
-6. Select one broader `AE-SEED-011` or `AE-SEED-013` shape only after
+6. **Completed (ADR-121):** the
+   `AE-SEED-011` witness covers only an ordinary total-Whole root `together:`
+   with an immediate four-space zero-argument
+   `spawn call target into destination` child. It leaves M7 nesting, task
+   identity, arguments, destination, effects/results, resource policy, and
+   scheduling to the full compiler; full release, seed identity, and packaged
+   consumer verification pass.
+7. Select one broader `AE-SEED-011` or `AE-SEED-013` shape only after
    documenting its false-positive boundary and valid-source corpus.
-7. Design seed-native multi-file elaboration as a separate forge ABI decision;
+8. Design seed-native multi-file elaboration as a separate forge ABI decision;
    host elaboration plus seed emission remains the product contract until that
    design is proven.
-8. Never remove the dual-compare oracle or convert a seed line-state witness
+9. Never remove the dual-compare oracle or convert a seed line-state witness
    into an unbounded parser/type checker by accretion.
 
 ## Fork boundaries

@@ -100,6 +100,11 @@ are present; complete M4 legality remains with the full compiler.
 adds canonical root forward-call target
 witnesses only under a literal erroring-Whole header marker; complete M4 header,
 terminality, target-effect, and call legality remain with the full compiler.
+[ADR-121](docs/historical%20docs/ADR-121-barp-seed-speak-root-nursery-zero-argument-spawn-unknown-call-pilot.md)
+adds a literal ordinary total-Whole root
+nursery witness only for an immediate zero-argument
+`spawn call target into destination` child; M7 task, destination, nesting,
+resource, and scheduler legality remain with the full compiler.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

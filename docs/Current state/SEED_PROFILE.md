@@ -42,8 +42,10 @@ exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` /
 exact `choose not dim:` nested yield, canonical total-Whole direct
 bind/root-yield/root-revise/root-speak unknown-call forms, canonical root-handle
 unknown-call forms only when fixed `into` / `otherwise error into` delimiters
-leave a destination suffix, and canonical erroring-Whole root-forward
-unknown-call forms only under a literal `-> Whole raises Whole:` header marker
+leave a destination suffix, canonical erroring-Whole root-forward unknown-call
+forms only under a literal `-> Whole raises Whole:` header marker, and literal
+ordinary total-Whole root-nursery zero-argument spawn unknown-call forms only
+when an immediate four-space child is `spawn call target into destination`
 (origin `seed-speak`); full SPEAK conformance
 matrix remains residual.
 

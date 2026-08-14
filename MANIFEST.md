@@ -85,7 +85,14 @@ extends the same target-header witness to a
 canonical erroring-Whole root `forward call target` form. It requires the
 literal `-> Whole raises Whole:` header marker and next-space/end-of-line target
 boundary, but does not validate the full header, terminality, target effect or
-result, arguments, resources, ownership, or general M4 call semantics.
+result, arguments, resources, or general M4 call semantics.
+[ADR-121](docs/historical%20docs/ADR-121-barp-seed-speak-root-nursery-zero-argument-spawn-unknown-call-pilot.md)
+extends the witness to an ordinary total-Whole
+root `together:` followed immediately by a four-space zero-argument
+`spawn call target into destination` line. It requires the first target
+delimiter to be literal ` into ` with a destination suffix, but does not
+validate M7 nesting, task identity, arguments, destination legality, effect,
+result, resource, ownership, or scheduler policy.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated
