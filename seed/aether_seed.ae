@@ -571,9 +571,19 @@ weave compile [borrow source: Text] -> Bytes:
           choose same v127 1:
             choose same v28 2:
               choose same v128 0:
+                revise v42 <- dim
                 revise v102 <- "bind "
                 revise v15 <- seek borrow v99 borrow v102 0
                 choose same v15 0:
+                  revise v42 <- bright
+                otherwise:
+                  revise v102 <- "revise "
+                  revise v15 <- seek borrow v99 borrow v102 0
+                  choose same v15 0:
+                    revise v42 <- bright
+                  otherwise:
+                    revise v30 <- 0
+                choose same v42 bright:
                   revise v102 <- " <- call "
                   revise v15 <- seek borrow v99 borrow v102 0
                   choose less -1 v15:

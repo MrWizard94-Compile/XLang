@@ -28,18 +28,21 @@ it is not a current status source or authorization.
 1. **BARP ADR-116 — release verified.** The bounded AE-SEED-011 seed-SPEAK
    witness covers canonical zero-argument direct bind and root-yield calls and
    has passed the full release gate. See [ADR-116](../historical%20docs/ADR-116-barp-seed-speak-zero-argument-unknown-call-pilot.md).
-2. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
+2. **BARP ADR-117 — release verified.** The bounded AE-SEED-011 seed-SPEAK
+   witness covers canonical root `revise name <- call target` forms with the
+   established next-space or exact end-of-line target boundary. See [ADR-117](../historical%20docs/ADR-117-barp-seed-speak-revise-unknown-call-pilot.md).
+3. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
    AE-SEED-013 shape with an explicit false-positive boundary, or separately
    design seed-native multi-file elaboration. Do not infer parser/type-checker
    authority from the existing line-state witnesses.
-3. **Mainstream language/library vertical.** Select one controlled generic,
+4. **Mainstream language/library vertical.** Select one controlled generic,
    data-model, effect, or standard-library ergonomics increment only after its
    grammar, seed, verifier, VM, authoring, compatibility, and limit design are
    written and accepted.
-4. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
+5. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
    fixtures, and offline project workflows before expanding surface area merely
    for feature count.
-5. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
+6. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
    M24i are available for a next scoped ADR, threat-model update, validation
    matrix, and release proof. Neither is an automatic expansion of current
    authority.

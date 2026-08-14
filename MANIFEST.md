@@ -64,7 +64,11 @@ extends the same canonical ordinary-Whole `AE-SEED-011` witness to exact
 end-of-line zero-argument `bind … <- call name` and root `yield call name`
 forms. It still checks only target-header existence, preserves declared-later
 valid calls and missing-world priority, and does not create a call parser or
-full diagnostic-parity claim.
+full diagnostic-parity claim. [ADR-117](docs/historical%20docs/ADR-117-barp-seed-speak-revise-unknown-call-pilot.md)
+extends the same bounded `AE-SEED-011` witness to canonical root
+`revise name <- call target` forms with argument-bearing or exact end-of-line
+zero-argument tails. It does not validate the destination, signature, type,
+effect, ownership, or general call semantics.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

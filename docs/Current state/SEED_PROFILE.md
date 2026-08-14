@@ -31,7 +31,7 @@ multi-file natively). LSP diagnostics are product-primary (ADR-058); hover/defin
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
 project format, LSP format, product structural weave/statement/record ops, and seed
 rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
-oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115:** seed
+oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117:** seed
 SPEAKs structured `AETHER_SEED_ERROR` for empty source, missing world, missing main,
 raw multi-module import, and bounded lexical ASCII-tab / top-level `fn ` conditions
 plus canonical reserved-task prefixes and canonical top-level task bodies without
@@ -39,8 +39,8 @@ an exact indented `checkpoint` statement, plus a Text literal or exact
 `yield bright` / `yield dim` returned from a canonical ordinary `Whole` weave,
 canonical `choose same` / `choose less` /
 exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` /
-exact `choose not dim:` nested yield, and canonical direct unknown-call forms
-(origin `seed-speak`); full SPEAK conformance
+exact `choose not dim:` nested yield, and canonical direct bind/root-yield/root-revise
+unknown-call forms (origin `seed-speak`); full SPEAK conformance
 matrix remains residual.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
@@ -145,12 +145,14 @@ lines or exact `choose bright:` / `choose dim:` / `choose not bright:` /
 product path retains its wider host
 fail-closed `AE-SEED-013` preflight. These pilots change no accepted valid
 source, AETH bytes, task runtime semantics, forge authority, or full
-diagnostic-parity claim. ADR-110/111 separately recognize one canonical
-ordinary-Whole `bind … <- call target value` or root `yield call target value`
-statement whose `target` has no canonical top-level declaration header
-(ordinary, export, host, foreign, or task); they permit forward ordinary headers
-and the normal product path merges their exact seed packet. This does not form a
-general seed name binder or approve call-kind legality.
+diagnostic-parity claim. ADR-110/111/116/117 separately recognize canonical
+ordinary-Whole `bind … <- call target`, root `yield call target`, or root
+`revise name <- call target` statements whose `target` has no canonical
+top-level declaration header (ordinary, export, host, foreign, or task); they
+permit forward ordinary headers, argument-bearing and exact end-of-line
+zero-argument targets, and the normal product path merges their exact seed
+packet. This does not form a general seed name binder, destination validator, or
+call-kind approval.
 
 ## Required shape
 

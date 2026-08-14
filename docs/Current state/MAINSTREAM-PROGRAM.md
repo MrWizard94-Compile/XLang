@@ -64,12 +64,16 @@ SPEAK pilot is deliberately bounded; it has no full diagnostic parity claim.
    covers `bind … <- call name` and root `yield call name` only when `name` is
    the exact end-of-line target in a canonical ordinary `Whole` weave; the full
    release gate, four-way seed identity, and packaged consumer verification pass.
-2. Select one broader `AE-SEED-013` branch shape only after documenting its
-   false-positive boundary and valid-source corpus.
-3. Design seed-native multi-file elaboration as a separate forge ABI decision;
+2. **Completed (ADR-117):** the `AE-SEED-011` witness covers canonical root
+   `revise name <- call target` forms with the existing opaque target scan and
+   exact next-space/end-of-line tail boundary; full release, seed identity, and
+   packaged consumer verification pass.
+3. Select one broader `AE-SEED-011` or `AE-SEED-013` shape only after
+   documenting its false-positive boundary and valid-source corpus.
+4. Design seed-native multi-file elaboration as a separate forge ABI decision;
    host elaboration plus seed emission remains the product contract until that
    design is proven.
-4. Never remove the dual-compare oracle or convert a seed line-state witness
+5. Never remove the dual-compare oracle or convert a seed line-state witness
    into an unbounded parser/type checker by accretion.
 
 ## Fork boundaries

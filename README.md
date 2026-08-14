@@ -70,12 +70,12 @@ or exact `yield bright` / `yield dim` literal returned from a canonical ordinary
 recognizes only a nested `yield` below canonical `choose same`, `choose less`,
   exact `choose bright:` / `choose dim:`, or exact unary-literal `choose not
   bright:` / `choose not dim:` in such a weave;
-and its AE-SEED-011 portion recognizes one canonical direct `bind … <- call`
-or root `yield call` whose target has no matching top-level declaration header
-(ordinary, export, host, foreign, or task), including an exact end-of-line
-zero-argument target. It establishes target existence only; call-kind legality
-remains with the full compiler. Neither changes accepted valid source nor claims
-full diagnostic parity. See
+and its AE-SEED-011 portion recognizes canonical direct `bind … <- call`, root
+`yield call`, or root `revise name <- call` forms whose target has no matching
+top-level declaration header (ordinary, export, host, foreign, or task),
+including an exact end-of-line zero-argument target. It establishes target
+existence only; destination and call-kind legality remain with the full compiler.
+Neither changes accepted valid source nor claims full diagnostic parity. See
 [ADR-110](docs/historical%20docs/ADR-110-barp-seed-speak-unknown-call-pilot.md) and
 [ADR-111](docs/historical%20docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md),
 [ADR-112](docs/historical%20docs/ADR-112-barp-seed-speak-less-choose-yield-pilot.md), and
@@ -84,6 +84,8 @@ full diagnostic parity. See
 [ADR-115](docs/historical%20docs/ADR-115-barp-seed-speak-whole-truth-yield-pilot.md).
 [ADR-116](docs/historical%20docs/ADR-116-barp-seed-speak-zero-argument-unknown-call-pilot.md)
 adds exact end-of-line zero-argument direct-call target witnesses.
+[ADR-117](docs/historical%20docs/ADR-117-barp-seed-speak-revise-unknown-call-pilot.md)
+adds canonical root revise-call target witnesses with the same bounded tail rules.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

@@ -70,6 +70,12 @@
 | BARP-SPEAK-066 | Text literal containing a zero-argument bind-call-shaped sequence | Does not trigger the pilot; seed artifact verifies |
 | BARP-SPEAK-067 | Missing `world` plus an otherwise canonical zero-argument unknown call | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-068 | Product-path canonical zero-argument unknown-call packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
+| BARP-SPEAK-069 | Canonical ordinary `Whole` root `revise result <- call nope 41` with no matching top-level declaration header | Seed SPEAK `AE-SEED-011`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-070 | Canonical ordinary `Whole` root `revise result <- call nope` with an end-of-line zero-argument target and no declaration header | Seed SPEAK `AE-SEED-011`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-071 | Canonical root revise calls to ordinary weaves declared after the call, for argument-bearing and zero-argument tails | Does not trigger the pilot; seed artifact verifies, matches bootstrap, and exits with the expected result |
+| BARP-SPEAK-072 | Text literal containing a revise-call-shaped sequence | Does not trigger the pilot; seed artifact verifies |
+| BARP-SPEAK-073 | Missing `world` plus an otherwise canonical root revise-call unknown target | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-074 | Product-path canonical root revise-call unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
 
 ## Boundary
 
