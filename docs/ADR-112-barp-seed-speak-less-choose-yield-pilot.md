@@ -29,8 +29,9 @@ the existing product preflight boundary.
    `yield ` causes exactly one `aether.seed-error/v1` packet with
    `AE-SEED-013`, `origin: "seed-speak"`, stable position `1:1`, and blank
    Bytes output.
-3. The packet message names the shared bounded comparison-choose witness rather
-   than incorrectly naming only the `same` form.
+3. At adoption, the packet message named the shared bounded comparison-choose
+   witness rather than incorrectly naming only the `same` form. ADR-113
+   generalizes that shared wording to the truth-choose family.
 4. Product compilation retains ADR-070's pre-forge `host-preflight` origin for
    this invalid source. This decision improves direct seed forge diagnosis; it
    does not reorder or relax the safety check.

@@ -16,8 +16,9 @@ The checked-in Aether seed's bounded line-state scan now recognizes a canonical
 ordinary-Whole `choose less` branch as well as ADR-109's canonical `choose same`
 branch. If a deeper source line begins with `yield `, direct forge emits exactly
 one `aether.seed-error/v1` packet with `AE-SEED-013`, `origin: seed-speak`,
-position `1:1`, and blank Bytes. Its shared message accurately names the
-comparison-choose witness.
+position `1:1`, and blank Bytes. At this delivery its shared message named the
+comparison-choose witness; ADR-113 later generalized that wording to the
+truth-choose family.
 
 ADR-070 remains authoritative on the product path: the same invalid source is
 rejected before forge with `AE-SEED-013`, `origin: host-preflight`. A valid

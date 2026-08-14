@@ -31,13 +31,14 @@ multi-file natively). LSP diagnostics are product-primary (ADR-058); hover/defin
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
 project format, LSP format, product structural weave/statement/record ops, and seed
 rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
-oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112:** seed
+oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112/113:** seed
 SPEAKs structured `AETHER_SEED_ERROR` for empty source, missing world, missing main,
 raw multi-module import, and bounded lexical ASCII-tab / top-level `fn ` conditions
 plus canonical reserved-task prefixes and canonical top-level task bodies without
 an exact indented `checkpoint` statement, plus a Text literal returned from a
-canonical ordinary `Whole` weave, a canonical `choose same` / `choose less`
-nested yield, and canonical direct unknown-call forms (origin `seed-speak`); full SPEAK conformance
+canonical ordinary `Whole` weave, canonical `choose same` / `choose less` /
+exact `choose bright:` / exact `choose dim:` nested yield, and canonical direct
+unknown-call forms (origin `seed-speak`); full SPEAK conformance
 matrix remains residual.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
@@ -134,9 +135,10 @@ ADR-106 adds a bounded direct-forge task diagnostic pilot: before normal
 compilation, the seed recognizes canonical top-level task headers and requires
 an exact indented `checkpoint` statement before the next top-level line or end
 of source. ADR-108 separately recognizes only an indented `yield "..."` line in
-a canonical ordinary `weave … -> Whole:` body. ADR-109/112 separately recognize
-only a nested `yield` below canonical `choose same` / `choose less` lines in
-that same bounded ordinary-Whole context; the normal product path retains its wider host
+a canonical ordinary `weave … -> Whole:` body. ADR-109/112/113 separately recognize
+only a nested `yield` below canonical `choose same` / `choose less` lines or
+exact `choose bright:` / `choose dim:` lines in that same bounded ordinary-Whole
+context; the normal product path retains its wider host
 fail-closed `AE-SEED-013` preflight. These pilots change no accepted valid
 source, AETH bytes, task runtime semantics, forge authority, or full
 diagnostic-parity claim. ADR-110/111 separately recognize one canonical

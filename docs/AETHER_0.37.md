@@ -8,7 +8,7 @@
 **Design:** [M25 local package publication](DESIGN-M25-LOCAL-PACKAGE-PUBLICATION.md)
 **Validation:** [M25 validation matrix](M25-VALIDATION-MATRIX.md)
 **Security review:** [0.37 local-package threat model](THREAT_MODEL-0.37-LOCAL-PACKAGES.md)
-**Post-contract diagnostic maturity:** [ADR-108](ADR-108-barp-seed-speak-whole-text-yield-pilot.md), [ADR-109](ADR-109-barp-seed-speak-truth-choose-yield-pilot.md), [ADR-110](ADR-110-barp-seed-speak-unknown-call-pilot.md), [ADR-111](ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md), and [ADR-112](ADR-112-barp-seed-speak-less-choose-yield-pilot.md) update the checked-in seed's bounded direct-forge diagnostic behavior; none is an M25 protocol or version change.
+**Post-contract diagnostic maturity:** [ADR-108](ADR-108-barp-seed-speak-whole-text-yield-pilot.md), [ADR-109](ADR-109-barp-seed-speak-truth-choose-yield-pilot.md), [ADR-110](ADR-110-barp-seed-speak-unknown-call-pilot.md), [ADR-111](ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md), [ADR-112](ADR-112-barp-seed-speak-less-choose-yield-pilot.md), and [ADR-113](ADR-113-barp-seed-speak-literal-truth-choose-yield-pilot.md) update the checked-in seed's bounded direct-forge diagnostic behavior; none is an M25 protocol or version change.
 
 ## What changed
 

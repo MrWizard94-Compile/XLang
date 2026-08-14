@@ -47,6 +47,12 @@
 | BARP-SPEAK-043 | `choose less` that revises then reaches a root-level `yield` | Does not trigger the nested-yield pilot; seed artifact verifies and matches bootstrap |
 | BARP-SPEAK-044 | Missing `world` plus an otherwise canonical invalid `choose less` yield | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-045 | Product-path canonical `choose less` nested-yield diagnostic packet | `AE-SEED-013`, `origin: host-preflight`; ADR-070 retains the broader pre-forge safety boundary |
+| BARP-SPEAK-046 | Canonical ordinary `weave … -> Whole:` with exact `choose bright:` and a deeper branch `yield` | Seed SPEAK `AE-SEED-013`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-047 | Canonical ordinary `weave … -> Whole:` with exact `choose dim:` and a deeper branch `yield` | Seed SPEAK `AE-SEED-013`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-048 | Exact `choose bright:` / `choose dim:` that revise then reach a root-level `yield` | Does not trigger the literal nested-yield pilot; seed artifact verifies, matches bootstrap, and exits with the expected result |
+| BARP-SPEAK-049 | Valid bare Truth variable or `choose not dim:` branch that revises then reaches a root-level `yield` | Does not trigger the literal pilot; seed artifact verifies and matches bootstrap |
+| BARP-SPEAK-050 | Missing `world` plus an otherwise canonical literal Truth invalid yield | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-051 | Product-path canonical literal Truth nested-yield diagnostic packet | `AE-SEED-013`, `origin: host-preflight`; ADR-070 retains the broader pre-forge safety boundary |
 
 ## Boundary
 

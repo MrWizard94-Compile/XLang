@@ -537,9 +537,9 @@ fn barp_adr112_seed_speaks_canonical_less_choose_yield() {
     );
     assert!(
         direct.stdout.contains(
-            "\"message\":\"yield is not allowed inside a canonical comparison choose branch\""
+            "\"message\":\"yield is not allowed inside a canonical truth choose branch\""
         ),
-        "expected the comparison-choose diagnostic message, got: {}",
+        "expected the truth-choose diagnostic message, got: {}",
         direct.stdout
     );
     assert_eq!(
@@ -581,6 +581,114 @@ fn barp_adr112_seed_speaks_canonical_less_choose_yield() {
         seeded, bootstrap,
         "root-yield less-choose source must retain seed/bootstrap identity"
     );
+}
+
+#[test]
+fn barp_adr113_seed_speaks_canonical_literal_truth_choose_yield() {
+    for condition in ["bright", "dim"] {
+        let invalid = format!(
+            "world w\n\nweave main [] -> Whole:\n  choose {condition}:\n    yield 42\n  otherwise:\n    yield -1\n"
+        );
+
+        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, &invalid)
+            .expect("canonical literal-truth source must reach the seed forge");
+        assert!(
+            direct.stdout.contains("\"code\":\"AE-SEED-013\""),
+            "expected a seed-native AE-SEED-013 packet for {condition}, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct.stdout.contains("\"origin\":\"seed-speak\""),
+            "expected seed-speak origin for {condition}, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct.stdout.contains(
+                "\"message\":\"yield is not allowed inside a canonical truth choose branch\""
+            ),
+            "expected the truth-choose diagnostic message for {condition}, got: {}",
+            direct.stdout
+        );
+        assert_eq!(
+            direct.stdout.matches("AETHER_SEED_ERROR:").count(),
+            1,
+            "canonical {condition} source must emit exactly one packet: {}",
+            direct.stdout
+        );
+        match direct.value {
+            InvocationValue::Bytes(bytes) => assert!(
+                bytes.is_empty(),
+                "canonical {condition} SPEAK must return blank Bytes, got {} bytes",
+                bytes.len()
+            ),
+            other => panic!("canonical {condition} SPEAK must return Bytes, got {other:?}"),
+        }
+
+        let product = compile_product_bytecode(&invalid)
+            .expect_err("canonical literal-truth nested yield must fail product compilation");
+        assert!(
+            product.to_string().contains("AE-SEED-013"),
+            "expected AE-SEED-013 for {condition}, got {product}"
+        );
+        let packets = product_error_packets(&invalid);
+        assert_eq!(packets.len(), 1);
+        assert_eq!(packets[0].code, "AE-SEED-013");
+        assert_eq!(packets[0].origin, "host-preflight");
+    }
+
+    for (condition, branch_value, otherwise_value, expected_exit) in
+        [("bright", 42, -1, 42), ("dim", -1, 42, 42)]
+    {
+        let valid = format!(
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  choose {condition}:\n    revise result <- {branch_value}\n  otherwise:\n    revise result <- {otherwise_value}\n  yield result\n"
+        );
+        let bootstrap = compile_to_bytecode(&valid)
+            .expect("root-yield literal-truth source must bootstrap")
+            .bytecode;
+        let seeded = bytes(
+            forge_bytecode(SEED_COMPILER_ARTIFACT, &valid)
+                .expect("root-yield literal-truth source must forge through the seed"),
+        );
+        verify_bytecode(&seeded).expect("root-yield literal-truth seed artifact must verify");
+        assert_eq!(
+            seeded, bootstrap,
+            "root-yield {condition} source must retain seed/bootstrap identity"
+        );
+        assert_eq!(
+            run_bytecode(&seeded)
+                .expect("root-yield literal-truth seed artifact must run")
+                .exit_code,
+            expected_exit
+        );
+    }
+
+    for (name, source) in [
+        (
+            "bare Truth variable",
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  bind flag <- bright\n  choose flag:\n    revise result <- 42\n  otherwise:\n    revise result <- -1\n  yield result\n",
+        ),
+        (
+            "not Truth expression",
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  choose not dim:\n    revise result <- 42\n  otherwise:\n    revise result <- -1\n  yield result\n",
+        ),
+    ] {
+        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, source)
+            .expect("nonliteral Truth source must reach the seed forge");
+        assert!(
+            !direct.stdout.contains("AETHER_SEED_ERROR:"),
+            "{name} must remain outside the literal pilot: {}",
+            direct.stdout
+        );
+        let seeded = bytes(direct);
+        verify_bytecode(&seeded).expect("nonliteral Truth source must forge verified AETH");
+        let bootstrap = compile_to_bytecode(source)
+            .expect("nonliteral Truth source must bootstrap")
+            .bytecode;
+        assert_eq!(
+            seeded, bootstrap,
+            "{name} must retain seed/bootstrap identity"
+        );
+    }
 }
 
 #[test]
