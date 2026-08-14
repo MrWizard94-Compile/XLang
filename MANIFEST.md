@@ -59,6 +59,12 @@ adds only exact `choose not bright:` / `choose not dim:` witnesses. ADR-070
 retains the broader product preflight. [ADR-115](docs/historical%20docs/ADR-115-barp-seed-speak-whole-truth-yield-pilot.md)
 adds only exact Whole-return `yield bright` / `yield dim` witnesses; broader
 result-type diagnostics remain host-classified.
+[ADR-116](docs/historical%20docs/ADR-116-barp-seed-speak-zero-argument-unknown-call-pilot.md)
+extends the same canonical ordinary-Whole `AE-SEED-011` witness to exact
+end-of-line zero-argument `bind … <- call name` and root `yield call name`
+forms. It still checks only target-header existence, preserves declared-later
+valid calls and missing-world priority, and does not create a call parser or
+full diagnostic-parity claim.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

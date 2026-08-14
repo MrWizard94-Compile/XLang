@@ -3743,7 +3743,7 @@ pub const fn forge_verify_merges_seed_speak() -> bool {
     true
 }
 
-/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113 / ADR-114 / ADR-115: seed.ae SPEAK pilot codes (subset of the
+/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113 / ADR-114 / ADR-115 / ADR-116: seed.ae SPEAK pilot codes (subset of the
 /// conformance matrix).
 #[must_use]
 pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
@@ -3819,13 +3819,22 @@ pub const fn seed_speak_emit_truth_choose_yield_pilot() -> bool {
     true
 }
 
-/// ADR-110/111: the checked-in seed line-scans one canonical ordinary `Whole`
+/// ADR-110/111/116: the checked-in seed line-scans one canonical ordinary `Whole`
 /// weave direct-call statement (`bind … <- call` or root `yield call`) and
-/// verifies its target against canonical top-level declaration headers. This is
-/// a bounded unknown-call witness, not name binding, signature, effect, or
-/// general call-diagnostic parity.
+/// verifies its target against canonical top-level declaration headers. The
+/// bounded witness accepts one-or-more Whole arguments (ADR-110/111) or an
+/// exact end-of-line zero-argument target (ADR-116). It is not name binding,
+/// signature, effect, or general call-diagnostic parity.
 #[must_use]
 pub const fn seed_speak_emit_unknown_call_pilot() -> bool {
+    true
+}
+
+/// ADR-116: canonical direct `bind … <- call name` and root `yield call name`
+/// forms with no arguments reach the same seed-side target-existence witness as
+/// the earlier argument-bearing forms. This is intentionally not a call parser.
+#[must_use]
+pub const fn seed_speak_emit_zero_arg_unknown_call_pilot() -> bool {
     true
 }
 

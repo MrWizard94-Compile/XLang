@@ -72,15 +72,18 @@ recognizes only a nested `yield` below canonical `choose same`, `choose less`,
   bright:` / `choose not dim:` in such a weave;
 and its AE-SEED-011 portion recognizes one canonical direct `bind … <- call`
 or root `yield call` whose target has no matching top-level declaration header
-(ordinary, export, host, foreign, or task). It establishes target existence
-only; call-kind legality remains with the full compiler. Neither changes
-accepted valid source nor claims full diagnostic parity. See
+(ordinary, export, host, foreign, or task), including an exact end-of-line
+zero-argument target. It establishes target existence only; call-kind legality
+remains with the full compiler. Neither changes accepted valid source nor claims
+full diagnostic parity. See
 [ADR-110](docs/historical%20docs/ADR-110-barp-seed-speak-unknown-call-pilot.md) and
 [ADR-111](docs/historical%20docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md),
 [ADR-112](docs/historical%20docs/ADR-112-barp-seed-speak-less-choose-yield-pilot.md), and
 [ADR-113](docs/historical%20docs/ADR-113-barp-seed-speak-literal-truth-choose-yield-pilot.md), and
 [ADR-114](docs/historical%20docs/ADR-114-barp-seed-speak-unary-literal-truth-choose-yield-pilot.md), and
 [ADR-115](docs/historical%20docs/ADR-115-barp-seed-speak-whole-truth-yield-pilot.md).
+[ADR-116](docs/historical%20docs/ADR-116-barp-seed-speak-zero-argument-unknown-call-pilot.md)
+adds exact end-of-line zero-argument direct-call target witnesses.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

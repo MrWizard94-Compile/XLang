@@ -11,7 +11,7 @@ direction; it does not replace the dated evidence in
 |---|---|
 | Product and CLI contract | [Aether 0.37](AETHER_0.37.md), [Architecture](ARCHITECTURE.md), [Forge contract](FORGE_CONTRACT.md) |
 | Language and authoring rules | [Aether 0.11 surface](AETHER_0.11.md), [Authoring protocol v8](AETHER_AUTHORING_PROTOCOL_v8.md), [Seed profile](SEED_PROFILE.md) |
-| Current status and order of work | [Progress report](PROGRESS_REPORT-FULL-PROJECT.md), [Roadmap](ROADMAP.md), [Core claims](CORE_CLAIMS.md), [North star](NORTH_STAR.md) |
+| Current status and order of work | [Progress report](PROGRESS_REPORT-FULL-PROJECT.md), [Roadmap](ROADMAP.md), [Mainstream program](MAINSTREAM-PROGRAM.md), [Core claims](CORE_CLAIMS.md), [North star](NORTH_STAR.md) |
 | BARP / seed authority reduction | [BARP design](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), [BARP validation matrix](BARP-VALIDATION-MATRIX.md) |
 | Local package lifecycle | [M25 matrix](M25-VALIDATION-MATRIX.md), [0.37 release notes](RELEASE_NOTES-0.37-LOCAL-PACKAGES.md), [package threat model](THREAT_MODEL-0.37-LOCAL-PACKAGES.md) |
 | Native and registry law forks | [Native authorization](HUMAN-AUTHORIZE-NATIVE.md), [native design](DESIGN-LAW-FORK-F-NATIVE.md), [M35a matrix](M35A-VALIDATION-MATRIX.md); [registry authorization](HUMAN-AUTHORIZE-REGISTRY.md), [registry design](DESIGN-LAW-FORK-F-REGISTRY.md), [M24a matrix](M24A-VALIDATION-MATRIX.md) |

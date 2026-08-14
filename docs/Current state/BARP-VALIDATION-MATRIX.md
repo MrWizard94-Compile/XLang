@@ -64,6 +64,12 @@
 | BARP-SPEAK-060 | `Truth`-return weave with exact `yield bright` / `yield dim`, plus a Whole `main` | Does not trigger the Whole-only pilot; seed artifact verifies, matches bootstrap, and exits with the expected result |
 | BARP-SPEAK-061 | Missing `world` plus an otherwise canonical Whole Truth-literal yield | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-062 | Product-path exact Whole Truth-literal yield packet | `AE-SEED-010`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
+| BARP-SPEAK-063 | Canonical ordinary `Whole` `bind result <- call nope` with an end-of-line zero-argument target and no declaration header | Seed SPEAK `AE-SEED-011`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-064 | Canonical ordinary `Whole` root `yield call nope` with an end-of-line zero-argument target and no declaration header | Seed SPEAK `AE-SEED-011`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-065 | Canonical zero-argument bind/root-yield call to an ordinary weave declared after the call | Does not trigger the pilot; seed artifact verifies, matches bootstrap, and exits with the expected result |
+| BARP-SPEAK-066 | Text literal containing a zero-argument bind-call-shaped sequence | Does not trigger the pilot; seed artifact verifies |
+| BARP-SPEAK-067 | Missing `world` plus an otherwise canonical zero-argument unknown call | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-068 | Product-path canonical zero-argument unknown-call packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
 
 ## Boundary
 

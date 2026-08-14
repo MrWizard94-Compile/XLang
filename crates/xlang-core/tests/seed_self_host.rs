@@ -870,6 +870,123 @@ fn barp_adr115_seed_speaks_canonical_whole_truth_literal_yield() {
 }
 
 #[test]
+fn barp_adr116_seed_speaks_canonical_zero_argument_unknown_calls() {
+    for (form, source) in [
+        (
+            "bind",
+            "world w\n\nweave main [] -> Whole:\n  bind result <- call nope\n  yield result\n",
+        ),
+        (
+            "root yield",
+            "world w\n\nweave main [] -> Whole:\n  yield call nope\n",
+        ),
+    ] {
+        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, source)
+            .expect("canonical zero-argument unknown call must reach the seed forge");
+        assert!(
+            direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+            "expected a seed-native AE-SEED-011 packet for {form}, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct.stdout.contains("\"origin\":\"seed-speak\""),
+            "expected seed-speak origin for {form}, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct.stdout.contains(
+                "\"message\":\"canonical direct call target does not name a top-level declared weave\""
+            ),
+            "expected the unknown-call message for {form}, got: {}",
+            direct.stdout
+        );
+        assert_eq!(
+            direct.stdout.matches("AETHER_SEED_ERROR:").count(),
+            1,
+            "canonical zero-argument {form} source must emit exactly one packet: {}",
+            direct.stdout
+        );
+        match direct.value {
+            InvocationValue::Bytes(bytes) => assert!(
+                bytes.is_empty(),
+                "canonical zero-argument {form} SPEAK must return blank Bytes, got {} bytes",
+                bytes.len()
+            ),
+            other => {
+                panic!("canonical zero-argument {form} SPEAK must return Bytes, got {other:?}")
+            }
+        }
+
+        let product = compile_product_bytecode(source)
+            .expect_err("canonical zero-argument unknown call must fail product compilation");
+        assert!(
+            product.to_string().contains("AE-SEED-011"),
+            "expected AE-SEED-011 for {form}, got {product}"
+        );
+        let packets = product_error_packets(source);
+        assert_eq!(packets.len(), 1);
+        assert_eq!(packets[0].code, "AE-SEED-011");
+        assert_eq!(packets[0].origin, "seed-speak");
+    }
+
+    for (form, body) in [
+        ("bind", "bind result <- call helper\n  yield result"),
+        ("root yield", "yield call helper"),
+    ] {
+        let valid = format!(
+            "world w\n\nweave main [] -> Whole:\n  {body}\n\nweave helper [] -> Whole:\n  yield 42\n"
+        );
+        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, &valid)
+            .expect("declared zero-argument call must reach the seed forge");
+        assert!(
+            !direct.stdout.contains("AETHER_SEED_ERROR:"),
+            "declared zero-argument {form} call must remain outside the pilot: {}",
+            direct.stdout
+        );
+        let seeded = bytes(direct);
+        verify_bytecode(&seeded).expect("declared zero-argument call seed artifact must verify");
+        let bootstrap = compile_to_bytecode(&valid)
+            .expect("declared zero-argument call source must bootstrap")
+            .bytecode;
+        assert_eq!(
+            seeded, bootstrap,
+            "declared zero-argument {form} call must retain seed/bootstrap identity"
+        );
+        assert_eq!(
+            run_bytecode(&seeded)
+                .expect("declared zero-argument call seed artifact must run")
+                .exit_code,
+            42
+        );
+    }
+
+    let literal =
+        "world w\n\nweave main [] -> Whole:\n  speak \"bind result <- call nope\"\n  yield 0\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, literal)
+        .expect("call-shaped Text literal must reach the seed forge");
+    assert!(
+        !direct.stdout.contains("AETHER_SEED_ERROR:"),
+        "call-shaped Text literal must remain outside the zero-argument pilot: {}",
+        direct.stdout
+    );
+    verify_bytecode(&bytes(direct)).expect("call-shaped Text literal artifact must verify");
+
+    let missing_world = "weave main [] -> Whole:\n  bind result <- call nope\n  yield result\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, missing_world)
+        .expect("missing-world zero-argument source must reach the seed forge");
+    assert!(
+        direct.stdout.contains("\"code\":\"AE-SEED-006\""),
+        "missing world must retain higher-priority AE-SEED-006, got: {}",
+        direct.stdout
+    );
+    assert!(
+        !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+        "missing world must suppress the lower-priority zero-argument pilot: {}",
+        direct.stdout
+    );
+}
+
+#[test]
 fn barp_phase3a_product_path_rejects_odd_indent_with_ae_seed_code() {
     let source = "world w\n\nweave main [] -> Whole:\n yield 1\n";
     let error = compile_product_bytecode(source).expect_err("odd indent must fail closed");
@@ -943,6 +1060,10 @@ fn barp_adr072_product_seed_error_packet_abi() {
     assert!(
         aether_core::seed_speak_emit_task_checkpoint_pilot(),
         "ADR-106: exact task-checkpoint seed SPEAK pilot"
+    );
+    assert!(
+        aether_core::seed_speak_emit_zero_arg_unknown_call_pilot(),
+        "ADR-116: zero-argument unknown-call seed SPEAK pilot"
     );
     let empty = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield 1\n");
     assert!(empty.is_empty());
