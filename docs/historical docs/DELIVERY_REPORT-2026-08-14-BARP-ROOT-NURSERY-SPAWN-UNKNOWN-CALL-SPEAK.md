@@ -8,10 +8,11 @@ turning the seed into an M7 parser, task checker, or scheduler.
 **Scope:** ADR-121 direct-seed root-nursery zero-argument spawn unknown-target diagnostic authority reduction
 **Rule IDs:** CONST-COMPLETE-001, CONST-DEP-001, CONST-DONE-001, CONST-GATE-001, DOC-SYNC-001, ENG-WARN-001, RND-INVAR-001, SEC-INPUT-001, TEST-BEHAVIOR-001
 
-**Later scoped extension:** At this delivery's release gate, all argument-bearing
+**Later scoped extensions:** At this delivery's release gate, all argument-bearing
 children remained outside the witness. ADR-122 later adds only one immediate
-single-digit decimal-Whole argument shape; all broader argument forms remain
-outside the seed scanner.
+single-digit decimal-Whole argument shape, and ADR-123 later adds only one
+immediate positive two-digit decimal-Whole shape; all broader argument forms
+remain outside the seed scanner.
 
 ## Implemented behavior
 

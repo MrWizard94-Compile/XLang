@@ -56,18 +56,26 @@ it is not a current status source or authorization.
 7. **BARP ADR-122 — release verified.**
    The bounded AE-SEED-011 witness additionally covers only an immediate
    four-space `spawn call target digit into destination` child when `digit` is
-   exactly one ASCII decimal character. Multi-digit, signed, general atom, and
-   multi-argument forms plus M7 semantic legality remain full-compiler
-   responsibilities. See [ADR-122](../historical%20docs/ADR-122-barp-seed-speak-root-nursery-single-digit-whole-spawn-unknown-call-pilot.md).
-8. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
+   exactly one ASCII decimal character. The separately bounded positive-two-digit
+   form is now ADR-123; signed, general atom, and multi-argument forms plus M7
+   semantic legality remain full-compiler responsibilities. See [ADR-122](../historical%20docs/ADR-122-barp-seed-speak-root-nursery-single-digit-whole-spawn-unknown-call-pilot.md).
+8. **BARP ADR-123 — release verified.**
+   The bounded AE-SEED-011 witness additionally covers only an immediate
+   four-space `spawn call target digits into destination` child when `digits`
+   is exactly two ASCII decimal characters with a nonzero first digit (`10`–`99`).
+   Signed, leading-zero, three-or-more-digit, general atom, and multi-argument
+   forms plus M7 semantic legality remain full-compiler responsibilities. Full
+   release, seed identity, and packaged consumer verification pass. See
+   [ADR-123](../historical%20docs/ADR-123-barp-seed-speak-root-nursery-two-digit-positive-whole-spawn-unknown-call-pilot.md).
+9. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
    AE-SEED-013 shape with an explicit false-positive boundary, or separately
    design seed-native multi-file elaboration. Do not infer parser/type-checker
    authority from the existing line-state witnesses.
-9. **Mainstream language/library vertical.** Select one controlled generic,
+10. **Mainstream language/library vertical.** Select one controlled generic,
    data-model, effect, or standard-library ergonomics increment only after its
    grammar, seed, verifier, VM, authoring, compatibility, and limit design are
    written and accepted.
-10. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
+11. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
    fixtures, and offline project workflows before expanding surface area merely
    for feature count.
 11. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond

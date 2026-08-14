@@ -110,6 +110,11 @@ adds only the adjacent one-digit decimal-Whole child form
 `spawn call target digit into destination`; general arguments, task identity,
 destination, nesting, resource, and scheduler legality remain with the full
 compiler.
+[ADR-123](docs/historical%20docs/ADR-123-barp-seed-speak-root-nursery-two-digit-positive-whole-spawn-unknown-call-pilot.md)
+adds only the adjacent positive two-digit decimal-Whole child form
+`spawn call target digits into destination` for `10` through `99`; complete
+Whole syntax/range handling, general arguments, task identity, destination,
+nesting, resource, and scheduler legality remain with the full compiler.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

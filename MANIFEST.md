@@ -99,6 +99,13 @@ extends only that immediate root-nursery witness to
 decimal character and the next byte starts literal ` into `. It does not parse
 general arguments or validate M7 task identity, destination legality, nesting,
 effect/result, signature, resource, ownership, or scheduler policy.
+[ADR-123](docs/historical%20docs/ADR-123-barp-seed-speak-root-nursery-two-digit-positive-whole-spawn-unknown-call-pilot.md)
+extends only that same immediate root-nursery witness to
+`spawn call target digits into destination`, where `digits` is exactly two ASCII
+decimal characters with a nonzero first digit and the next byte starts literal
+` into `. It does not parse Whole values or general arguments, or validate M7
+task identity, destination legality, nesting, effect/result, signature,
+resource, ownership, or scheduler policy.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

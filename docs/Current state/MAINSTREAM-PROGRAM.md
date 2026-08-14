@@ -94,16 +94,24 @@ SPEAK pilot is deliberately bounded; it has no full diagnostic parity claim.
    consumer verification pass.
 7. **Completed (ADR-122):** the `AE-SEED-011` witness adds only the
    immediate four-space `spawn call target digit into destination` child when
-   `digit` is exactly one ASCII decimal Whole literal. Multi-digit, signed,
-   general, and multi-argument forms plus all M7 semantic legality remain with
-   the full compiler; full release, seed identity, and packaged consumer
-   verification pass.
-8. Select one broader `AE-SEED-011` or `AE-SEED-013` shape only after
+   `digit` is exactly one ASCII decimal Whole literal. The separately bounded
+   positive-two-digit form is now ADR-123; signed, general, and multi-argument
+   forms plus all M7 semantic legality otherwise remain with the full compiler;
+   full release, seed identity, and
+   packaged consumer verification pass.
+8. **Completed (ADR-123):** the
+   `AE-SEED-011` witness adds only the immediate four-space
+   `spawn call target digits into destination` child when `digits` is exactly
+   two ASCII decimal characters with a nonzero first digit (`10`–`99`). Signed,
+   leading-zero, three-or-more-digit, general, and multi-argument forms plus
+   all M7 semantic legality remain with the full compiler; full release, seed
+   identity, and packaged consumer verification pass.
+9. Select one broader `AE-SEED-011` or `AE-SEED-013` shape only after
    documenting its false-positive boundary and valid-source corpus.
-9. Design seed-native multi-file elaboration as a separate forge ABI decision;
+10. Design seed-native multi-file elaboration as a separate forge ABI decision;
    host elaboration plus seed emission remains the product contract until that
    design is proven.
-10. Never remove the dual-compare oracle or convert a seed line-state witness
+11. Never remove the dual-compare oracle or convert a seed line-state witness
    into an unbounded parser/type checker by accretion.
 
 ## Fork boundaries

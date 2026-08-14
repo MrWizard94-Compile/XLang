@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-122 canonical root-nursery single-digit Whole spawn unknown-target seed-SPEAK pilot — targeted red/green, direct, valid-source, lexical/caller-state/delimiter/priority boundaries, product/self-host, and tracker PASS; full release gate, four-way seed identity, 436-file package plus `SHA-256SUMS`, and consumer verification PASS
+**Current delivery verification:** ADR-123 canonical root-nursery positive two-digit Whole spawn unknown-target seed-SPEAK pilot — targeted red/green, direct, lexical-endpoint, valid-source, lexical/caller-state/delimiter/priority boundaries, product/self-host, tracker, and full release gate PASS
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -105,8 +105,8 @@ Verified AETH
 | Matrices | M* / M19E / M23 / M35A / M24A validation matrices |
 | Constitution | Project Level-4 pointer → pack AGENTS.md Section 0 |
 
-**Latest full-gate stamp:** 2026-08-14 ADR-122 delivery — **GATE PASS mode=release** (includes full-quality suite, package, and consumer verification)
-**Latest release-verified seed identity:** `F72DA6E65D06158729D3F4DD5E2689D698EA1E23B97F0F3F83B54BFE987D61C4`
+**Latest full-gate stamp:** 2026-08-14 ADR-123 delivery — **GATE PASS mode=release** (pack v5.0.1; 353 Markdown files / 1,395 local links; full-quality suite, four-way seed identity, package, and consumer verification)
+**Latest release-verified seed identity:** `C993C6F5BB0967BB900E574B7B0671A6419243CA2993951EFACEE67594796AAD`
 
 ---
 
@@ -116,12 +116,12 @@ The 0.36 package contract (M19e) remains the executable language baseline. M25
 now advances the toolchain package to 0.37 with a local package ecosystem step;
 BARP and M32 work remain **independence and infrastructure maturity**:
 
-### 5.1 BARP highlights (ADR-043 → 122; ADR-122 release verified)
+### 5.1 BARP highlights (ADR-043 → 123; ADR-123 release verified)
 
 - Product-default CLI toolchain; bootstrap recovery only  
 - Multi-source envelope + multi-file host forge + unit digests  
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
-- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal or exact Truth-literal yield, 011 detects canonical total-Whole direct-bind/root-yield/root-revise/root-speak target existence, delimiter-bounded root-handle target existence, literal-erroring-header root-forward target existence, and literal total-root-nursery immediate zero-argument or single-digit Whole spawn target existence across declared top-level weave headers (the handle form requires fixed `into` / `otherwise error into` delimiters that leave a destination suffix; the forward form requires `-> Whole raises Whole:`; the nursery forms require root `together:` plus immediate `spawn call target into destination` or `spawn call target digit into destination` with one ASCII decimal `digit`), and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
+- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal or exact Truth-literal yield, 011 detects canonical total-Whole direct-bind/root-yield/root-revise/root-speak target existence, delimiter-bounded root-handle target existence, literal-erroring-header root-forward target existence, and literal total-root-nursery immediate zero-argument, single-digit Whole, or positive two-digit Whole spawn target existence across declared top-level weave headers (the handle form requires fixed `into` / `otherwise error into` delimiters that leave a destination suffix; the forward form requires `-> Whole raises Whole:`; the nursery forms require root `together:` plus immediate `spawn call target into destination`, `spawn call target digit into destination` with one ASCII decimal `digit`, or `spawn call target digits into destination` with exactly two ASCII decimal characters and a nonzero first digit), and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
 - Forge SPEAK capture on failure and verify merge  
 - Yield-in-truth-choose fail-closed (AE-SEED-013)  
 - Task checkpoint required (AE-SEED-015)  
@@ -174,22 +174,25 @@ installed package. M25 adds no network/resolver/signing/guest authority.
 | `b5305cf` | ADR-090–093 forge SPEAK capture, native exe, multi-level certs, checkpoints |
 | `f03e310` | ADR-086–089 SPEAK matrix, LLVM object, root certs, task reserve |
 
-**Current implementation:** ADR-122 extends the direct `AE-SEED-011`
+**Current release-verified implementation:** ADR-123 extends the direct `AE-SEED-011`
 seed-SPEAK witness to an ordinary total-Whole root `together:` line only when
-its immediately following four-space child is the single-digit Whole
-`spawn call target digit into destination` form with a destination suffix. It
-preserves ADR-121 zero-argument behavior and keeps multi-digit, negative, Truth,
+its immediately following four-space child is the positive two-digit Whole
+`spawn call target digits into destination` form with a nonzero first digit and
+a destination suffix. It preserves ADR-121 zero-argument and ADR-122 one-digit
+behavior while keeping leading-zero, signed, three-or-more-digit, Truth,
 general, and multi-argument forms outside the new witness. A later-declared
 checkpointed one-Whole task target remains seed/bootstrap-identical, verified,
-and executable; erroring-parent and missing-world priority boundaries remain
-outside or above the scanner. Product forge preserves the exact seed packet with
-`origin: seed-speak`; full M7 nesting, task identity, argument, destination,
-effect/result, resource, ownership, and scheduler diagnostics remain with the
-full compiler. Targeted red/green, direct, valid, boundary, priority,
-product/self-host, and tracker evidence pass. The 2026-08-14 full zero-warning
-release gate, four-way seed identity, 436-file technical-preview package plus
-`SHA-256SUMS`, and independent consumer verification pass. The full seed SPEAK
-conformance matrix and seed-native multi-file remain residual.
+and executable; non-task-target, erroring-parent, and missing-world priority
+boundaries remain outside or above the scanner. Product forge preserves the
+exact seed packet with `origin: seed-speak`; full M7 nesting, task identity,
+argument, destination, effect/result, resource, ownership, and scheduler
+diagnostics remain with the full compiler. Targeted red/green, direct, endpoint,
+valid, boundary, priority, product/self-host, and tracker evidence pass. The
+2026-08-14 zero-warning release gate also passes with four-way seed identity
+`C993C6F5BB0967BB900E574B7B0671A6419243CA2993951EFACEE67594796AAD`, a
+438-file technical-preview package plus `SHA-256SUMS`, and independent consumer
+verification. The full seed SPEAK conformance matrix and seed-native multi-file
+remain residual.
 
 ---
 
@@ -227,7 +230,7 @@ conformance matrix and seed-native multi-file remain residual.
 
 Ordered for dependency honesty (`CONST-DEP-001`):
 
-1. **BARP:** select one broader `AE-SEED-011` or `AE-SEED-013` form or a separate seed-native multi-file forge ABI design
+1. **BARP:** select one broader `AE-SEED-011` or `AE-SEED-013` form with an explicit false-positive boundary and valid-source corpus, or separately design seed-native multi-file forge ABI work
 2. **M32 evidence operation:** collect a human-declared pinned local baseline and candidate report under one M32b profile before any scoped performance-improvement claim
 3. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility
 4. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite

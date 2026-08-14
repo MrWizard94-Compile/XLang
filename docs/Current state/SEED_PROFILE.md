@@ -46,10 +46,13 @@ leave a destination suffix, canonical erroring-Whole root-forward unknown-call
  forms only under a literal `-> Whole raises Whole:` header marker, literal
  ordinary total-Whole root-nursery zero-argument spawn unknown-call forms only
  when an immediate four-space child is `spawn call target into destination`, and
- literal ordinary total-Whole root-nursery single-digit Whole spawn unknown-call
- forms only when that immediate child is
- `spawn call target digit into destination` with one ASCII decimal `digit`
- (origin `seed-speak`); full SPEAK conformance
+literal ordinary total-Whole root-nursery single-digit Whole spawn unknown-call
+forms only when that immediate child is
+`spawn call target digit into destination` with one ASCII decimal `digit`
+and literal ordinary total-Whole root-nursery positive two-digit Whole spawn
+unknown-call forms only when that immediate child is
+`spawn call target digits into destination` with exactly two ASCII decimal
+characters and a nonzero first digit (origin `seed-speak`); full SPEAK conformance
 matrix remains residual.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
