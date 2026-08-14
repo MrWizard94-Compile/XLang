@@ -3743,7 +3743,7 @@ pub const fn forge_verify_merges_seed_speak() -> bool {
     true
 }
 
-/// ADR-098 / ADR-102 / ADR-103 / ADR-106: seed.ae SPEAK pilot codes (subset of the
+/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110: seed.ae SPEAK pilot codes (subset of the
 /// conformance matrix).
 #[must_use]
 pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
@@ -3753,7 +3753,10 @@ pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
         "AE-SEED-005",
         "AE-SEED-006",
         "AE-SEED-007",
+        "AE-SEED-010",
+        "AE-SEED-011",
         "AE-SEED-012",
+        "AE-SEED-013",
         "AE-SEED-014",
         "AE-SEED-015",
     ]
@@ -3786,6 +3789,33 @@ pub const fn seed_speak_emit_reserved_task_pilot() -> bool {
 /// bounded diagnostic pilot, not task-parser parity.
 #[must_use]
 pub const fn seed_speak_emit_task_checkpoint_pilot() -> bool {
+    true
+}
+
+/// ADR-108: the checked-in seed line-scans canonical ordinary `weave` bodies
+/// that return `Whole` and rejects an indented `yield "..."` statement. This is
+/// a bounded Text-literal result pilot, not general type-diagnostic parity.
+#[must_use]
+pub const fn seed_speak_emit_whole_text_yield_pilot() -> bool {
+    true
+}
+
+/// ADR-109: the checked-in seed line-scans canonical ordinary `weave` bodies
+/// that return `Whole` and rejects a `yield` nested under `choose same ...:`.
+/// This is a bounded truth-choose control-flow witness, not general parser or
+/// control-flow diagnostic parity.
+#[must_use]
+pub const fn seed_speak_emit_truth_choose_yield_pilot() -> bool {
+    true
+}
+
+/// ADR-110/111: the checked-in seed line-scans one canonical ordinary `Whole`
+/// weave direct-call statement (`bind … <- call` or root `yield call`) and
+/// verifies its target against canonical top-level declaration headers. This is
+/// a bounded unknown-call witness, not name binding, signature, effect, or
+/// general call-diagnostic parity.
+#[must_use]
+pub const fn seed_speak_emit_unknown_call_pilot() -> bool {
     true
 }
 
@@ -3994,13 +4024,19 @@ mod product_task_frame_surface_tests {
         assert!(seed_speak_emit_lexical_edge_pilot());
         assert!(seed_speak_emit_reserved_task_pilot());
         assert!(seed_speak_emit_task_checkpoint_pilot());
+        assert!(seed_speak_emit_whole_text_yield_pilot());
+        assert!(seed_speak_emit_truth_choose_yield_pilot());
+        assert!(seed_speak_emit_unknown_call_pilot());
         let pilots = seed_speak_emit_pilot_codes();
         assert!(pilots.contains(&"AE-SEED-003"));
         assert!(pilots.contains(&"AE-SEED-004"));
         assert!(pilots.contains(&"AE-SEED-005"));
         assert!(pilots.contains(&"AE-SEED-006"));
         assert!(pilots.contains(&"AE-SEED-007"));
+        assert!(pilots.contains(&"AE-SEED-010"));
+        assert!(pilots.contains(&"AE-SEED-011"));
         assert!(pilots.contains(&"AE-SEED-012"));
+        assert!(pilots.contains(&"AE-SEED-013"));
         assert!(pilots.contains(&"AE-SEED-014"));
         assert!(pilots.contains(&"AE-SEED-015"));
         let assert_seed_packet = |source: &str, expected_code: &str| {
@@ -4100,7 +4136,31 @@ weave main [] -> Whole:\n\
             "AE-SEED-015",
         );
         assert_seed_packet(
-            "weave main [] -> Whole:\n  timeout 1\n  yield 0\n",
+            "world w\n\nweave main [] -> Whole:\n  yield \"text\"\n",
+            "AE-SEED-010",
+        );
+        assert_seed_packet(
+            "world w\n\nweave main [] -> Whole:\n  bind x <- 7\n  choose same x 7:\n    yield 42\n  otherwise:\n    yield -1\n",
+            "AE-SEED-013",
+        );
+        assert_seed_packet(
+            "world w\n\nweave main [] -> Whole:\n  bind x <- call nope 1\n  yield x\n",
+            "AE-SEED-011",
+        );
+        assert_seed_packet(
+            "world w\n\nweave main [] -> Whole:\n  yield call nope 1\n",
+            "AE-SEED-011",
+        );
+        assert_seed_packet(
+            "weave main [] -> Whole:\n  choose same 1 1:\n    yield 42\n  otherwise:\n    yield -1\n",
+            "AE-SEED-006",
+        );
+        assert_seed_packet(
+            "weave main [] -> Whole:\n  bind x <- call nope 1\n  yield x\n",
+            "AE-SEED-006",
+        );
+        assert_seed_packet(
+            "weave main [] -> Whole:\n  yield call nope 1\n",
             "AE-SEED-006",
         );
 
@@ -4133,6 +4193,156 @@ weave main [] -> Whole:\n\
             panic!("reserved literal must forge to bytecode")
         };
         verify_bytecode(&bytecode).expect("reserved literal artifact verifies");
+
+        let text_return = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nweave decorate [] -> Text:\n  yield \"text\"\n\nweave main [] -> Whole:\n  yield 0\n",
+        )
+        .expect("forge Text-return literal");
+        assert!(
+            try_parse_seed_speak_error_packet(&text_return.stdout).is_none(),
+            "a Text weave literal must not trip the Whole-result pilot: {}",
+            text_return.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = text_return.value else {
+            panic!("Text-return literal must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("Text-return literal artifact verifies");
+
+        let speak_yield_text = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nweave main [] -> Whole:\n  speak \"yield text\"\n  yield 0\n",
+        )
+        .expect("forge speak yield text");
+        assert!(
+            try_parse_seed_speak_error_packet(&speak_yield_text.stdout).is_none(),
+            "a speak Text literal must not trip the Whole-result pilot: {}",
+            speak_yield_text.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = speak_yield_text.value else {
+            panic!("speak yield text must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("speak yield text artifact verifies");
+
+        let revise_then_root_yield = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nweave main [] -> Whole:\n  bind mutable result <- 7\n  choose same result 7:\n    revise result <- 42\n  otherwise:\n    revise result <- -1\n  yield result\n",
+        )
+        .expect("truth choose with root yield");
+        assert!(
+            try_parse_seed_speak_error_packet(&revise_then_root_yield.stdout).is_none(),
+            "root yield must not trip the nested truth-choose pilot: {}",
+            revise_then_root_yield.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = revise_then_root_yield.value else {
+            panic!("root-yield truth choose must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("root-yield truth choose artifact verifies");
+
+        let resource_choose_yield = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world w\n\nweave main [] -> Whole:\n  bind memory <- arena 32\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 0\n  choose allocate access memory move values 1 into values:\n    choose append move values 7 into values:\n      choose at borrow values 0 into observed:\n        yield observed\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n",
+        )
+        .expect("resource choose yield");
+        assert!(
+            try_parse_seed_speak_error_packet(&resource_choose_yield.stdout).is_none(),
+            "resource choose yields must not trip the truth-choose pilot: {}",
+            resource_choose_yield.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = resource_choose_yield.value else {
+            panic!("resource choose yield must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("resource choose yield artifact verifies");
+
+        let forward_declared_call = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nweave main [] -> Whole:\n  bind result <- call helper 41\n  yield result\n\nweave helper [value: Whole] -> Whole:\n  yield sum value 1\n",
+        )
+        .expect("forward declared call");
+        assert!(
+            try_parse_seed_speak_error_packet(&forward_declared_call.stdout).is_none(),
+            "a canonical top-level forward declaration must satisfy the call pilot: {}",
+            forward_declared_call.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = forward_declared_call.value else {
+            panic!("forward declared call must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("forward declared call artifact verifies");
+
+        let root_yield_forward_declared_call = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nweave main [] -> Whole:\n  yield call helper 41\n\nweave helper [value: Whole] -> Whole:\n  yield sum value 1\n",
+        )
+        .expect("root-yield forward declared call");
+        assert!(
+            try_parse_seed_speak_error_packet(&root_yield_forward_declared_call.stdout).is_none(),
+            "a root-yield forward declaration must not trip the unknown-call pilot: {}",
+            root_yield_forward_declared_call.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = root_yield_forward_declared_call.value else {
+            panic!("root-yield forward declared call must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("root-yield forward call artifact verifies");
+
+        let host_declared_call = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nhost weave whole_inc [value: Whole] -> Whole\n\nweave main [] -> Whole:\n  bind result <- call whole_inc 41\n  yield result\n",
+        )
+        .expect("host declared call");
+        assert!(
+            try_parse_seed_speak_error_packet(&host_declared_call.stdout).is_none(),
+            "a declared host weave must not trip the unknown-call pilot: {}",
+            host_declared_call.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = host_declared_call.value else {
+            panic!("host declared call must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("host declared call artifact verifies");
+
+        let root_yield_host_declared_call = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nhost weave whole_inc [value: Whole] -> Whole\n\nweave main [] -> Whole:\n  yield call whole_inc 41\n",
+        )
+        .expect("root-yield host declared call");
+        assert!(
+            try_parse_seed_speak_error_packet(&root_yield_host_declared_call.stdout).is_none(),
+            "a root-yield declared host weave must not trip the unknown-call pilot: {}",
+            root_yield_host_declared_call.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = root_yield_host_declared_call.value else {
+            panic!("root-yield host declared call must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("root-yield host call artifact verifies");
+
+        let call_text_literal = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nweave main [] -> Whole:\n  speak \"bind x <- call nope 1\"\n  yield 0\n",
+        )
+        .expect("call-shaped text literal");
+        assert!(
+            try_parse_seed_speak_error_packet(&call_text_literal.stdout).is_none(),
+            "a call-shaped Text literal must not trip the unknown-call pilot: {}",
+            call_text_literal.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = call_text_literal.value else {
+            panic!("call-shaped Text literal must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("call-shaped Text literal artifact verifies");
+
+        let root_yield_call_text_literal = forge_bytecode(
+            SEED_COMPILER_ARTIFACT,
+            "world t\n\nweave main [] -> Whole:\n  speak \"yield call nope 1\"\n  yield 0\n",
+        )
+        .expect("root-yield call-shaped text literal");
+        assert!(
+            try_parse_seed_speak_error_packet(&root_yield_call_text_literal.stdout).is_none(),
+            "a root-yield call-shaped Text literal must not trip the unknown-call pilot: {}",
+            root_yield_call_text_literal.stdout
+        );
+        let InvocationValue::Bytes(bytecode) = root_yield_call_text_literal.value else {
+            panic!("root-yield call-shaped Text literal must forge to bytecode")
+        };
+        verify_bytecode(&bytecode).expect("root-yield call-shaped Text literal artifact verifies");
 
         let nested_checkpoint = forge_bytecode(
             SEED_COMPILER_ARTIFACT,

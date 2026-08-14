@@ -31,12 +31,13 @@ multi-file natively). LSP diagnostics are product-primary (ADR-058); hover/defin
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
 project format, LSP format, product structural weave/statement/record ops, and seed
 rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
-oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106:** seed
+oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108:** seed
 SPEAKs structured `AETHER_SEED_ERROR` for empty source, missing world, missing main,
 raw multi-module import, and bounded lexical ASCII-tab / top-level `fn ` conditions
 plus canonical reserved-task prefixes and canonical top-level task bodies without
-an exact indented `checkpoint` statement (origin `seed-speak`); full SPEAK
-conformance matrix remains residual.
+an exact indented `checkpoint` statement, plus a Text literal returned from a
+canonical ordinary `Whole` weave (origin `seed-speak`); full SPEAK conformance
+matrix remains residual.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in
 [AETHER_0.11.md](AETHER_0.11.md): shallow prefix expressions, exact indentation,
@@ -128,11 +129,21 @@ for the prior seed surface.
 M25 in package 0.37 is host-only local package tooling. It changes no source
 form, AETH byte, seed input, seed artifact, or seed-emission proof obligation.
 
-ADR-106 adds only a bounded direct-forge diagnostic pilot: before normal
+ADR-106 adds a bounded direct-forge task diagnostic pilot: before normal
 compilation, the seed recognizes canonical top-level task headers and requires
 an exact indented `checkpoint` statement before the next top-level line or end
-of source. This changes no accepted valid source, AETH bytes, task runtime
-semantics, forge authority, or full diagnostic-parity claim.
+of source. ADR-108 separately recognizes only an indented `yield "..."` line in
+a canonical ordinary `weave … -> Whole:` body. ADR-109 separately recognizes
+only a nested `yield` below a canonical `choose same` line in that same bounded
+ordinary-Whole context; the normal product path retains its wider host
+fail-closed `AE-SEED-013` preflight. These pilots change no accepted valid
+source, AETH bytes, task runtime semantics, forge authority, or full
+diagnostic-parity claim. ADR-110/111 separately recognize one canonical
+ordinary-Whole `bind … <- call target value` or root `yield call target value`
+statement whose `target` has no canonical top-level declaration header
+(ordinary, export, host, foreign, or task); they permit forward ordinary headers
+and the normal product path merges their exact seed packet. This does not form a
+general seed name binder or approve call-kind legality.
 
 ## Required shape
 

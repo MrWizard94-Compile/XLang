@@ -509,6 +509,9 @@ fn barp_adr070_product_rejects_yield_in_truth_choose() {
         message.contains("truth-condition choose"),
         "expected truth-choose hint, got {message}"
     );
+    let packets = product_error_packets(source);
+    assert_eq!(packets[0].code, "AE-SEED-013");
+    assert_eq!(packets[0].origin, "host-preflight");
     // Resource choose may still yield (M2) — product must accept.
     let resource = "world w\n\nweave main [] -> Whole:\n  bind memory <- arena 32\n  bind mutable values <- buffer Whole\n  bind mutable observed <- 0\n  choose allocate access memory move values 1 into values:\n    choose append move values 7 into values:\n      choose at borrow values 0 into observed:\n        yield observed\n      otherwise:\n        yield -3\n    otherwise:\n      yield -2\n  otherwise:\n    yield -1\n";
     let ok =
@@ -607,7 +610,12 @@ fn barp_adr072_product_seed_error_packet_abi() {
     let typed = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield \"x\"\n");
     assert_eq!(typed.len(), 1);
     assert_eq!(typed[0].code, "AE-SEED-010");
-    assert_eq!(typed[0].origin, "host-classify");
+    assert_eq!(typed[0].origin, "seed-speak");
+
+    let truth_typed = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield bright\n");
+    assert_eq!(truth_typed.len(), 1);
+    assert_eq!(truth_typed[0].code, "AE-SEED-010");
+    assert_eq!(truth_typed[0].origin, "host-classify");
 }
 
 #[test]
@@ -671,14 +679,27 @@ fn barp_phase3c_classifies_type_and_unknown_weave_product_failures() {
         "expected AE-SEED-010, got {type_err}"
     );
 
-    let unknown = compile_product_bytecode(
-        "world w\n\nweave main [] -> Whole:\n  bind x <- call nope 1\n  yield x\n",
-    )
-    .expect_err("unknown weave must fail product path");
+    let unknown_source = "world w\n\nweave main [] -> Whole:\n  bind x <- call nope 1\n  yield x\n";
+    let unknown =
+        compile_product_bytecode(unknown_source).expect_err("unknown weave must fail product path");
     assert!(
         unknown.to_string().contains("AE-SEED-011"),
         "expected AE-SEED-011, got {unknown}"
     );
+    let unknown_packets = product_error_packets(unknown_source);
+    assert_eq!(unknown_packets[0].code, "AE-SEED-011");
+    assert_eq!(unknown_packets[0].origin, "seed-speak");
+
+    let root_yield_unknown_source = "world w\n\nweave main [] -> Whole:\n  yield call nope 1\n";
+    let root_yield_unknown = compile_product_bytecode(root_yield_unknown_source)
+        .expect_err("unknown root-yield weave must fail product path");
+    assert!(
+        root_yield_unknown.to_string().contains("AE-SEED-011"),
+        "expected AE-SEED-011, got {root_yield_unknown}"
+    );
+    let root_yield_unknown_packets = product_error_packets(root_yield_unknown_source);
+    assert_eq!(root_yield_unknown_packets[0].code, "AE-SEED-011");
+    assert_eq!(root_yield_unknown_packets[0].origin, "seed-speak");
 
     let unbound =
         compile_product_bytecode("world w\n\nweave main [] -> Whole:\n  yield missing_name\n")

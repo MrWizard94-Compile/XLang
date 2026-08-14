@@ -268,6 +268,91 @@ weave compile [borrow source: Text] -> Bytes:
     revise v18 <- 0
     revise v40 <- dim
     revise v127 <- 0
+    revise v128 <- 0
+    revise v129 <- 0
+    while same v40 dim:
+      revise v21 <- seek borrow v68 "\n" v18
+      choose same v21 -1:
+        revise v21 <- v5
+        revise v40 <- bright
+      otherwise:
+        revise v30 <- 0
+      revise v99 <- cut borrow v68 v18 v21
+      revise v18 <- sum v21 1
+      revise v29 <- measure borrow v99
+      revise v28 <- 0
+      revise v31 <- glyph borrow v99 v28
+      revise v42 <- same v31 32
+      while same v42 bright:
+        revise v28 <- sum v28 1
+        revise v31 <- glyph borrow v99 v28
+        revise v42 <- same v31 32
+      revise v99 <- cut borrow v99 v28 v29
+      revise v29 <- measure borrow v99
+      choose less 0 v29:
+        choose same v28 0:
+          revise v127 <- 0
+          revise v129 <- 0
+          revise v102 <- "weave "
+          revise v15 <- seek borrow v99 borrow v102 0
+          choose same v15 0:
+            revise v102 <- "-> Whole:"
+            revise v15 <- seek borrow v99 borrow v102 0
+            choose less -1 v15:
+              revise v129 <- 1
+            otherwise:
+              revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
+        otherwise:
+          choose same v129 1:
+            choose same v127 1:
+              choose less v28 v128:
+                revise v127 <- 0
+              otherwise:
+                choose same v28 v128:
+                  choose same borrow v99 "otherwise:":
+                    revise v30 <- 0
+                  otherwise:
+                    revise v127 <- 0
+                otherwise:
+                  revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+            choose same v127 1:
+              choose less v128 v28:
+                revise v102 <- "yield "
+                revise v15 <- seek borrow v99 borrow v102 0
+                choose same v15 0:
+                  speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-013\",\"message\":\"yield is not allowed inside a canonical choose same branch\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+                  revise v131 <- 1
+                  revise v40 <- bright
+                otherwise:
+                  revise v30 <- 0
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+            choose same v127 0:
+              revise v102 <- "choose same "
+              revise v15 <- seek borrow v99 borrow v102 0
+              choose same v15 0:
+                revise v127 <- 1
+                revise v128 <- v28
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
+      otherwise:
+        revise v30 <- 0
+  otherwise:
+    revise v30 <- 0
+  choose same v131 0:
+    revise v18 <- 0
+    revise v40 <- dim
+    revise v127 <- 0
     revise v129 <- 0
     while same v40 dim:
       revise v21 <- seek borrow v68 "\n" v18
@@ -332,6 +417,245 @@ weave compile [borrow source: Text] -> Bytes:
           revise v30 <- 0
       otherwise:
         revise v30 <- 0
+  otherwise:
+    revise v30 <- 0
+  choose same v131 0:
+    revise v18 <- 0
+    revise v40 <- dim
+    revise v127 <- 0
+    while same v40 dim:
+      revise v21 <- seek borrow v68 "\n" v18
+      choose same v21 -1:
+        revise v21 <- v5
+        revise v40 <- bright
+      otherwise:
+        revise v30 <- 0
+      revise v99 <- cut borrow v68 v18 v21
+      revise v18 <- sum v21 1
+      revise v29 <- measure borrow v99
+      revise v28 <- 0
+      revise v31 <- glyph borrow v99 v28
+      revise v42 <- same v31 32
+      while same v42 bright:
+        revise v28 <- sum v28 1
+        revise v31 <- glyph borrow v99 v28
+        revise v42 <- same v31 32
+      revise v99 <- cut borrow v99 v28 v29
+      revise v29 <- measure borrow v99
+      choose less 0 v29:
+        choose same v28 0:
+          revise v127 <- 0
+          revise v102 <- "weave "
+          revise v15 <- seek borrow v99 borrow v102 0
+          choose same v15 0:
+            revise v102 <- "-> Whole:"
+            revise v15 <- seek borrow v99 borrow v102 0
+            choose less -1 v15:
+              revise v127 <- 1
+            otherwise:
+              revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
+        otherwise:
+          choose same v127 1:
+            revise v102 <- "yield \""
+            revise v15 <- seek borrow v99 borrow v102 0
+            choose same v15 0:
+              speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-010\",\"message\":\"Whole weave cannot yield a Text literal\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+              revise v131 <- 1
+              revise v40 <- bright
+            otherwise:
+              revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
+      otherwise:
+        revise v30 <- 0
+  otherwise:
+    revise v30 <- 0
+  choose same v131 0:
+    revise v18 <- 0
+    revise v40 <- dim
+    revise v127 <- 0
+    revise v128 <- 0
+    revise v126 <- ""
+    while same v40 dim:
+      revise v21 <- seek borrow v68 "\n" v18
+      choose same v21 -1:
+        revise v21 <- v5
+        revise v40 <- bright
+      otherwise:
+        revise v30 <- 0
+      revise v99 <- cut borrow v68 v18 v21
+      revise v18 <- sum v21 1
+      revise v29 <- measure borrow v99
+      revise v28 <- 0
+      revise v31 <- glyph borrow v99 v28
+      revise v42 <- same v31 32
+      while same v42 bright:
+        revise v28 <- sum v28 1
+        revise v31 <- glyph borrow v99 v28
+        revise v42 <- same v31 32
+      revise v99 <- cut borrow v99 v28 v29
+      revise v29 <- measure borrow v99
+      choose less 0 v29:
+        choose same v28 0:
+          revise v127 <- 0
+          revise v102 <- "weave "
+          revise v15 <- seek borrow v99 borrow v102 0
+          choose same v15 0:
+            revise v102 <- "-> Whole:"
+            revise v15 <- seek borrow v99 borrow v102 0
+            choose less -1 v15:
+              revise v127 <- 1
+            otherwise:
+              revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
+        otherwise:
+          choose same v127 1:
+            choose same v28 2:
+              choose same v128 0:
+                revise v102 <- "bind "
+                revise v15 <- seek borrow v99 borrow v102 0
+                choose same v15 0:
+                  revise v102 <- " <- call "
+                  revise v15 <- seek borrow v99 borrow v102 0
+                  choose less -1 v15:
+                    revise v130 <- sum v15 9
+                    revise v123 <- seek borrow v99 " " v130
+                    choose less v130 v123:
+                      revise v126 <- cut borrow v99 v130 v123
+                      revise v128 <- 1
+                      revise v40 <- bright
+                    otherwise:
+                      revise v30 <- 0
+                  otherwise:
+                    revise v30 <- 0
+                otherwise:
+                  revise v30 <- 0
+              otherwise:
+                revise v30 <- 0
+              choose same v128 0:
+                revise v102 <- "yield call "
+                revise v15 <- seek borrow v99 borrow v102 0
+                choose same v15 0:
+                  revise v130 <- sum v15 11
+                  revise v123 <- seek borrow v99 " " v130
+                  choose less v130 v123:
+                    revise v126 <- cut borrow v99 v130 v123
+                    revise v128 <- 1
+                    revise v40 <- bright
+                  otherwise:
+                    revise v30 <- 0
+                otherwise:
+                  revise v30 <- 0
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
+      otherwise:
+        revise v30 <- 0
+  otherwise:
+    revise v30 <- 0
+  choose same v131 0:
+    choose same v128 1:
+      revise v18 <- 0
+      revise v40 <- dim
+      revise v129 <- 0
+      while same v40 dim:
+        revise v21 <- seek borrow v68 "\n" v18
+        choose same v21 -1:
+          revise v21 <- v5
+          revise v40 <- bright
+        otherwise:
+          revise v30 <- 0
+        revise v99 <- cut borrow v68 v18 v21
+        revise v18 <- sum v21 1
+        revise v29 <- measure borrow v99
+        revise v28 <- 0
+        revise v31 <- glyph borrow v99 v28
+        revise v42 <- same v31 32
+        while same v42 bright:
+          revise v28 <- sum v28 1
+          revise v31 <- glyph borrow v99 v28
+          revise v42 <- same v31 32
+        revise v99 <- cut borrow v99 v28 v29
+        revise v29 <- measure borrow v99
+        choose less 0 v29:
+          choose same v28 0:
+            choose same v129 0:
+              revise v102 <- "weave "
+              revise v102 <- join borrow v102 borrow v126
+              revise v102 <- join borrow v102 " "
+              revise v15 <- seek borrow v99 borrow v102 0
+              choose same v15 0:
+                revise v129 <- 1
+                revise v40 <- bright
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+            choose same v129 0:
+              revise v102 <- "export weave "
+              revise v102 <- join borrow v102 borrow v126
+              revise v102 <- join borrow v102 " "
+              revise v15 <- seek borrow v99 borrow v102 0
+              choose same v15 0:
+                revise v129 <- 1
+                revise v40 <- bright
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+            choose same v129 0:
+              revise v102 <- "host weave "
+              revise v102 <- join borrow v102 borrow v126
+              revise v102 <- join borrow v102 " "
+              revise v15 <- seek borrow v99 borrow v102 0
+              choose same v15 0:
+                revise v129 <- 1
+                revise v40 <- bright
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+            choose same v129 0:
+              revise v102 <- "foreign weave "
+              revise v102 <- join borrow v102 borrow v126
+              revise v102 <- join borrow v102 " "
+              revise v15 <- seek borrow v99 borrow v102 0
+              choose same v15 0:
+                revise v129 <- 1
+                revise v40 <- bright
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+            choose same v129 0:
+              revise v102 <- "task weave "
+              revise v102 <- join borrow v102 borrow v126
+              revise v102 <- join borrow v102 " "
+              revise v15 <- seek borrow v99 borrow v102 0
+              choose same v15 0:
+                revise v129 <- 1
+                revise v40 <- bright
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+          otherwise:
+            revise v30 <- 0
+        otherwise:
+          revise v30 <- 0
+      choose same v129 0:
+        speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-011\",\"message\":\"canonical direct call target does not name a top-level declared weave\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+        revise v131 <- 1
+      otherwise:
+        revise v30 <- 0
+    otherwise:
+      revise v30 <- 0
   otherwise:
     revise v30 <- 0
   revise v6 <- 0

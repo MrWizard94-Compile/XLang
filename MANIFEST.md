@@ -37,10 +37,16 @@ frames and adds no host effect, task handle, timeout, manual cancellation, or
 parallel execution. See [docs/AETHER_0.36.md](docs/AETHER_0.36.md).
 Post-0.36 BARP maturity keeps that package contract unchanged while reducing
 direct-seed diagnostic residual: the checked-in seed SPEAK pilot covers
-AE-SEED-003/004/005/006/007/012/014/015, including a canonical task-body scan
-that requires an exact indented `checkpoint` statement. It changes no accepted
-valid source, AETH schema, VM behavior, host authority, or full-diagnostic
-parity claim. See [docs/ADR-106-barp-seed-speak-checkpoint-pilot.md](docs/ADR-106-barp-seed-speak-checkpoint-pilot.md).
+AE-SEED-003/004/005/006/007/010/011/012/013/014/015, including a canonical task-body
+scan that requires an exact indented `checkpoint` statement, a canonical
+ordinary-Whole weave scan for `yield "..."`, and a canonical `choose same`
+nested-yield witness. ADR-110/111 add a two-pass canonical direct-call witness
+for `bind … <- call` and root `yield call` forms that recognizes a missing target
+across declared top-level weave headers while preserving ordinary forward
+declarations. It changes no accepted valid source, AETH schema, VM behavior,
+host authority, or full-diagnostic parity claim. See
+[docs/ADR-110-barp-seed-speak-unknown-call-pilot.md](docs/ADR-110-barp-seed-speak-unknown-call-pilot.md)
+and [docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md](docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md).
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

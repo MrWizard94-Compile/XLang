@@ -8,6 +8,7 @@
 **Design:** [M25 local package publication](DESIGN-M25-LOCAL-PACKAGE-PUBLICATION.md)
 **Validation:** [M25 validation matrix](M25-VALIDATION-MATRIX.md)
 **Security review:** [0.37 local-package threat model](THREAT_MODEL-0.37-LOCAL-PACKAGES.md)
+**Post-contract diagnostic maturity:** [ADR-108](ADR-108-barp-seed-speak-whole-text-yield-pilot.md), [ADR-109](ADR-109-barp-seed-speak-truth-choose-yield-pilot.md), [ADR-110](ADR-110-barp-seed-speak-unknown-call-pilot.md), and [ADR-111](ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md) update the checked-in seed's bounded direct-forge diagnostic behavior; none is an M25 protocol or version change.
 
 ## What changed
 
@@ -35,9 +36,11 @@ project units declared by that manifest:
     <declared unit paths only>
 ```
 
-M25 is toolchain-only. It does not change Aether source syntax, AETH bytes,
-the seed compiler, verifier rules, VM semantics, workspace/project schemas, or
-guest capabilities.
+M25 itself is toolchain-only. It does not change Aether source syntax, AETH
+bytes, the seed compiler interface, verifier rules, VM semantics,
+workspace/project schemas, or guest capabilities. Separately, post-contract
+BARP diagnostic pilots can update the checked-in seed without changing M25's
+package protocol or these language/runtime boundaries.
 
 ## Identity and acceptance
 
@@ -95,7 +98,7 @@ publication never replaces a conflicting cached identity.
 | Existing Aether source | Unchanged; package operations do not compile or reinterpret guest source. |
 | AETH v4–v12 inputs | Unchanged verifier/VM compatibility behavior. |
 | Existing project/workspace files | Unchanged schemas and commands; package use remains an explicit workspace step. |
-| Seed artifact | Unchanged; M25 has no source or bytecode surface. |
+| Seed artifact | M25 itself has no seed interface or bytecode surface; the current checked-in seed also includes separately documented BARP diagnostic pilots. |
 | F-REGISTRY | Separate law-fork functionality; M25 performs no fetch, URL handling, signature trust, or resolver action. |
 
 ## Explicit non-goals

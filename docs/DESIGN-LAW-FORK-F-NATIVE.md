@@ -1,8 +1,8 @@
 # Law fork F-NATIVE — optional native / machine-code backend
 
-**Status:** Design decision package — **authorized** 2026-08-10; product pilot ADR-059  
-**Date:** 2026-08-05  
-**Decision records:** [ADR-037](ADR-037-f-native-law-fork.md), [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md)  
+**Status:** Design decision package — **authorized** 2026-08-10; bounded F-NATIVE implemented through M35j / ADR-059–099
+**Date:** 2026-08-11
+**Decision records:** [ADR-037](ADR-037-f-native-law-fork.md), [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md), [ADR-059](ADR-059-f-native-authorized-m35a-aeth-to-c.md)–[ADR-099](ADR-099-m35j-native-cross-compile-target-matrix.md)
 **Threat draft:** [THREAT_MODEL-v4-NATIVE-BACKEND.md](THREAT_MODEL-v4-NATIVE-BACKEND.md)  
 **Rule IDs:** `CONST-DEP-001`, `DOC-ADR-001`, `SEC-INPUT-001`, `RND-INVAR-001`, `CONST-CONTRACT-001`
 
@@ -14,23 +14,24 @@ Decide whether Aether may ever emit or run **native machine code** in addition t
 (or instead of) the Aether VM, under what authority boundaries, and how that
 interacts with CLM-010 (“source is not translated to another language”).
 
-This document is **not** an implement go. Product code requires:
+This document authorized the bounded M35a–j product work. Any **new** native
+scope beyond that authorized boundary still requires:
 
 1. Human residual-risk acceptance via [HUMAN-AUTHORIZE-NATIVE.md](HUMAN-AUTHORIZE-NATIVE.md)  
 2. ADR-037 status flip to implementable  
 3. A vertical-slice design (e.g. M35) with matrix + dual-compare plan  
 
-## 2. Default law today (if fork is rejected)
+## 2. Invariants retained by the accepted fork
 
 | Rule | Default |
 | --- | --- |
-| Execution | Verified AETH on the **Aether VM** only |
+| Execution | Verified AETH on the **Aether VM** by default; native is explicit opt-in |
 | Lowering | Source → AETH only (seed or bootstrap) |
 | CLM-010 | No transpile of Aether source to C/Rust/JS/LLVM IR as a product compiler |
 | Performance path | VM improvements, optional future **AETH-level** JIT *if* separately ADRed and still not “source transpile” |
 
-Rejecting F-NATIVE keeps the cleanest verify-before-run story and the strongest
-local-first “one artifact format” claim.
+The accepted fork retains the verify-before-run story: native lowering begins
+only after verified AETH, and the VM remains the reference semantics.
 
 ## 3. If fork is accepted — allowed product shape
 
@@ -87,17 +88,21 @@ deploy path.
 | N4 | Seed path may never emit native; bootstrap/native split honesty required |
 | N5 | `unsafe` / platform ABIs expand beyond current deny-by-default culture |
 
-## 6. First implementable slice (only after authorize)
+## 6. First implementable slice (implemented historical boundary)
 
-**Not in this package.** Candidate later vertical (M35-class):
+The original M35-class vertical is implemented and expanded through M35j:
 
-1. `aether compile --native-object` (name TBD) from **verified** AETH only  
-2. Whole-only pure programs (no host I/O, no foreign) dual-run VM vs native exit code  
-3. Explicit non-goals: no FFI, no nursery, no grant I/O in v1 native slice  
+1. `aether compile --native-object` lowers **verified** AETH only.
+2. Whole-only pure programs dual-run VM versus native exit behavior.
+3. The M35a–j portfolio adds verified AETH→C, object, LLVM IR/object, native
+   executable, hermetic toolchain probing, and the closed `--native-exe --target`
+   matrix without changing the VM-default product path.
+4. M14 host I/O, M21 foreign, nursery/task, and resourceful programs remain
+   outside the native lower subset unless a future scoped ADR proves them.
 
 ## 7. Stop conditions
 
-- Implementing native without HUMAN-AUTHORIZE-NATIVE phrase  
+- Implementing native scope beyond authorized M35a–j without a renewed named human authorization and scoped ADR
 - Marketing “Aether compiles to LLVM” without “verified AETH intermediate”  
 - Dropping VM as reference semantics  
 

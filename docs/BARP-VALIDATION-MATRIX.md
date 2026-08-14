@@ -21,6 +21,28 @@
 | BARP-SPEAK-017 | `checkpointed`, `checkpoint later`, or `speak "checkpoint"` inside a task | Does not satisfy the pilot; Seed SPEAK `AE-SEED-015` |
 | BARP-SPEAK-018 | Reserved task surface plus a missing task checkpoint | Existing higher-priority seed pilot remains `AE-SEED-014` |
 | BARP-SPEAK-019 | Product-path missing/typo checkpoint diagnostic packet | `AE-SEED-015`, `origin: host-preflight` |
+| BARP-SPEAK-020 | Canonical ordinary `weave … -> Whole:` with an indented `yield "…"` line | Seed SPEAK `AE-SEED-010`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-021 | Valid `weave … -> Text:` with an indented `yield "…"` line | Does not trigger the Whole-result pilot; seed emits verified AETH |
+| BARP-SPEAK-022 | Missing `world` plus an otherwise canonical Whole Text-literal yield | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-023 | Product-path canonical Whole Text-literal yield diagnostic packet | `AE-SEED-010`, `origin: seed-speak`; forge packet merge preserves this exact bounded witness |
+| BARP-SPEAK-024 | Product-path Whole Truth-literal yield diagnostic packet | `AE-SEED-010`, `origin: host-classify`; the broader type family remains outside the pilot |
+| BARP-SPEAK-025 | Canonical ordinary `weave … -> Whole:` with `choose same …:` and an indented branch `yield` | Seed SPEAK `AE-SEED-013`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-026 | `choose same` that revises then reaches a root-level `yield` | Does not trigger the nested-yield pilot; seed emits verified AETH |
+| BARP-SPEAK-027 | Resource `choose allocate` / `append` / `at` with permitted nested yields | Does not trigger the truth-condition pilot; seed emits verified AETH |
+| BARP-SPEAK-028 | Missing `world` plus an otherwise canonical invalid `choose same` yield | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-029 | Product-path canonical truth-choose nested-yield diagnostic packet | `AE-SEED-013`, `origin: host-preflight`; the full product safety preflight remains in force |
+| BARP-SPEAK-030 | Canonical ordinary `Whole` `bind … <- call nope 1` with no matching top-level declaration header | Seed SPEAK `AE-SEED-011`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-031 | Canonical ordinary `Whole` call to a matching top-level ordinary weave declared after the call | Does not trigger the pilot; seed emits verified AETH |
+| BARP-SPEAK-032 | Text literal containing call-shaped characters | Does not trigger the pilot; seed emits verified AETH |
+| BARP-SPEAK-033 | Missing `world` plus an otherwise canonical unknown call | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-034 | Product-path canonical unknown-call diagnostic packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves this exact bounded witness |
+| BARP-SPEAK-035 | Canonical ordinary `Whole` call to a matching top-level `host weave` declaration | Does not trigger the pilot; seed emits verified AETH and leaves host call semantics to the full compiler |
+| BARP-SPEAK-036 | Canonical ordinary `Whole` root `yield call nope 1` with no matching top-level declaration header | Seed SPEAK `AE-SEED-011`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-037 | Canonical ordinary `Whole` root `yield call helper 41` with a matching ordinary weave declared after the call | Does not trigger the pilot; seed emits verified AETH |
+| BARP-SPEAK-038 | Canonical ordinary `Whole` root `yield call whole_inc 41` with a matching `host weave` declaration | Does not trigger the pilot; seed emits verified AETH and leaves host call semantics to the full compiler |
+| BARP-SPEAK-039 | Text literal containing root-yield-call-shaped characters | Does not trigger the pilot; seed emits verified AETH |
+| BARP-SPEAK-040 | Missing `world` plus an otherwise canonical root-yield unknown call | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-041 | Product-path canonical root-yield unknown-call diagnostic packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves this exact bounded witness |
 
 ## Boundary
 
