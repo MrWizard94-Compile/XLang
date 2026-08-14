@@ -3743,7 +3743,7 @@ pub const fn forge_verify_merges_seed_speak() -> bool {
     true
 }
 
-/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113 / ADR-114 / ADR-115 / ADR-116 / ADR-117: seed.ae SPEAK pilot codes (subset of the
+/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113 / ADR-114 / ADR-115 / ADR-116 / ADR-117 / ADR-118: seed.ae SPEAK pilot codes (subset of the
 /// conformance matrix).
 #[must_use]
 pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
@@ -3819,13 +3819,14 @@ pub const fn seed_speak_emit_truth_choose_yield_pilot() -> bool {
     true
 }
 
-/// ADR-110/111/116/117: the checked-in seed line-scans canonical ordinary
+/// ADR-110/111/116/117/118: the checked-in seed line-scans canonical ordinary
 /// `Whole` weave direct-call statements (`bind … <- call`, root `yield call`,
-/// or root `revise … <- call`) and verifies their target against canonical
-/// top-level declaration headers. The bounded witness accepts one-or-more Whole
-/// arguments (ADR-110/111/117) or an exact end-of-line zero-argument target
-/// (ADR-116/117). It is not name binding, destination validation, signature,
-/// effect, or general call-diagnostic parity.
+/// root `revise … <- call`, or root `speak call`) and verifies their target
+/// against canonical top-level declaration headers. The bounded witness accepts
+/// one-or-more Whole arguments (ADR-110/111/117/118) or an exact end-of-line
+/// zero-argument target (ADR-116/117/118). It is not name binding, destination
+/// validation, Text-result validation, signature, effect, or general
+/// call-diagnostic parity.
 #[must_use]
 pub const fn seed_speak_emit_unknown_call_pilot() -> bool {
     true
@@ -3844,6 +3845,15 @@ pub const fn seed_speak_emit_zero_arg_unknown_call_pilot() -> bool {
 /// is intentionally not a statement parser or a destination/type/effect check.
 #[must_use]
 pub const fn seed_speak_emit_revise_unknown_call_pilot() -> bool {
+    true
+}
+
+/// ADR-118: canonical root `speak call target` forms reach the same seed-side
+/// target-existence witness as direct bind, root yield, and root revise forms.
+/// This is intentionally not an expression parser or a Text-result/type/effect
+/// check.
+#[must_use]
+pub const fn seed_speak_emit_root_speak_unknown_call_pilot() -> bool {
     true
 }
 

@@ -86,7 +86,7 @@ When the seed compiler fails, SPEAK lines of the form:
     AETHER_SEED_ERROR:{"schema":"aether.seed-error/v1",...}
 
 are the preferred structured diagnostic channel. Host product preflights already
-emit the same line format. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117:** seed.ae SPEAKs
+emit the same line format. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117/118:** seed.ae SPEAKs
 AE-SEED-003/004/005/006/007/010/011/012/013/014/015 pilot codes (origin `seed-speak`);
 003 and 007 are bounded line-start lexical checks, 014 is a canonical-lowercase
 line-prefix guard for reserved task proposals, 015 is a canonical top-level
@@ -97,10 +97,10 @@ add only canonical ordinary-Whole `choose same` / `choose less` / exact
 `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact
 `choose not dim:` nested-yield witnesses for 013; the product preflight retains
 broader 013 coverage. Host merges SPEAK on
-forge **and** verify failure. ADR-110/111/116/117 add only canonical
-ordinary-Whole direct-bind, root-yield-call, and root-revise-call
+forge **and** verify failure. ADR-110/111/116/117/118 add only canonical
+ordinary-Whole direct-bind, root-yield-call, root-revise-call, and root-speak-call
 target-existence checks against canonical top-level declaration headers
 (ordinary, export, host, foreign, or task), including forward ordinary headers
 and exact end-of-line zero-argument targets; this is not general name binding,
-destination validation, or call-kind approval. Full seed SPEAK matrix remains residual
+destination validation, Text-result validation, or call-kind approval. Full seed SPEAK matrix remains residual
 (`seed_speak_emit_conformance_complete() == false`).

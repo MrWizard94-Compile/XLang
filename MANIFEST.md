@@ -69,6 +69,11 @@ extends the same bounded `AE-SEED-011` witness to canonical root
 `revise name <- call target` forms with argument-bearing or exact end-of-line
 zero-argument tails. It does not validate the destination, signature, type,
 effect, ownership, or general call semantics.
+[ADR-118](docs/historical%20docs/ADR-118-barp-seed-speak-root-speak-unknown-call-pilot.md)
+extends the same target-header witness to canonical root `speak call target`
+forms with argument-bearing or exact end-of-line zero-argument tails. It does
+not validate Text result, arguments, signature, type, effect, ownership, or
+general call semantics.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

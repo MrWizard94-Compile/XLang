@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-117 canonical root revise-call unknown-target seed-SPEAK pilot — targeted red/green, direct, valid-source, boundary, priority, product/self-host, release-package, and consumer verification PASS
+**Current delivery verification:** ADR-118 canonical root speak-call unknown-target seed-SPEAK pilot — targeted red/green, direct, valid-source, boundary, priority, product/self-host, release-package, and consumer verification PASS
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -105,8 +105,8 @@ Verified AETH
 | Matrices | M* / M19E / M23 / M35A / M24A validation matrices |
 | Constitution | Project Level-4 pointer → pack AGENTS.md Section 0 |
 
-**Latest full-gate stamp:** 2026-08-14 ADR-117 delivery — **GATE PASS mode=release** (includes full-quality suite, package, and consumer verification)
-**Seed identity:** `7F0878AA0E86162A8E6D4C911853A9037DB5A2DFD036646682C69A0F8ADE21A5`
+**Latest full-gate stamp:** 2026-08-14 ADR-118 delivery — **GATE PASS mode=release** (includes full-quality suite, package, and consumer verification)
+**Seed identity:** `10121380A4747A67C2811C0350574894B1A9EE39F0B5807150007C57EFDE7CCB`
 
 ---
 
@@ -116,12 +116,12 @@ The 0.36 package contract (M19e) remains the executable language baseline. M25
 now advances the toolchain package to 0.37 with a local package ecosystem step;
 BARP and M32 work remain **independence and infrastructure maturity**:
 
-### 5.1 BARP highlights (ADR-043 → 117)
+### 5.1 BARP highlights (ADR-043 → 118)
 
 - Product-default CLI toolchain; bootstrap recovery only  
 - Multi-source envelope + multi-file host forge + unit digests  
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
-- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal or exact Truth-literal yield, 011 detects canonical direct-bind/root-yield/root-revise target existence across declared top-level weave headers for argument-bearing and exact end-of-line zero-argument calls, and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
+- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal or exact Truth-literal yield, 011 detects canonical direct-bind/root-yield/root-revise/root-speak target existence across declared top-level weave headers for argument-bearing and exact end-of-line zero-argument calls, and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
 - Forge SPEAK capture on failure and verify merge  
 - Yield-in-truth-choose fail-closed (AE-SEED-013)  
 - Task checkpoint required (AE-SEED-015)  
@@ -174,18 +174,17 @@ installed package. M25 adds no network/resolver/signing/guest authority.
 | `b5305cf` | ADR-090–093 forge SPEAK capture, native exe, multi-level certs, checkpoints |
 | `f03e310` | ADR-086–089 SPEAK matrix, LLVM object, root certs, task reserve |
 
-**Current implementation:** ADR-117 extends the direct `AE-SEED-011`
-seed-SPEAK witness to canonical ordinary-Whole root `revise name <- call target`
-lines for argument-bearing and exact end-of-line zero-argument forms. It
-preserves existing bind/root-yield behavior, call-shaped Text literal
-non-matches, declared-later targets, and missing-world priority. Product forge
-preserves the exact seed packet with `origin: seed-speak`; destination
-validation and broader call diagnostics remain with the full compiler. Targeted
-red/green, direct, valid, boundary, priority, and product/self-host evidence
-passes; the full zero-warning release gate, seed self-host proof, four-way seed
-identity, package integrity, and independent consumer verification also pass.
-The full seed SPEAK conformance matrix and seed-native multi-file remain
-residual.
+**Current implementation:** ADR-118 extends the direct `AE-SEED-011`
+seed-SPEAK witness to canonical ordinary-Whole root `speak call target` lines
+for argument-bearing and exact end-of-line zero-argument forms. It preserves
+existing bind/root-yield/root-revise behavior, call-shaped Text literal
+non-matches, declared-later Text-result targets, and missing-world priority.
+Product forge preserves the exact seed packet with `origin: seed-speak`; Text
+result validation and broader call diagnostics remain with the full compiler.
+Targeted red/green, direct, valid, boundary, priority, and product/self-host
+evidence passes. The full zero-warning release gate, four-way seed identity,
+package integrity, and independent consumer verification also pass. The full
+seed SPEAK conformance matrix and seed-native multi-file remain residual.
 
 ---
 
@@ -223,7 +222,7 @@ residual.
 
 Ordered for dependency honesty (`CONST-DEP-001`):
 
-1. **BARP:** select one broader `AE-SEED-011` or `AE-SEED-013` form or a separate seed-native multi-file forge ABI design after ADR-117 release verification
+1. **BARP:** select one broader `AE-SEED-011` or `AE-SEED-013` form or a separate seed-native multi-file forge ABI design
 2. **M32 evidence operation:** collect a human-declared pinned local baseline and candidate report under one M32b profile before any scoped performance-improvement claim
 3. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility
 4. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite
