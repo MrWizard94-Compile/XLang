@@ -3743,7 +3743,7 @@ pub const fn forge_verify_merges_seed_speak() -> bool {
     true
 }
 
-/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113: seed.ae SPEAK pilot codes (subset of the
+/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113 / ADR-114: seed.ae SPEAK pilot codes (subset of the
 /// conformance matrix).
 #[must_use]
 pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
@@ -3800,11 +3800,11 @@ pub const fn seed_speak_emit_whole_text_yield_pilot() -> bool {
     true
 }
 
-/// ADR-109/112/113: the checked-in seed line-scans canonical ordinary `weave`
-/// bodies that return `Whole` and rejects a `yield` nested under `choose same
-/// ...:`, `choose less ...:`, `choose bright:`, or `choose dim:`. This is a
-/// bounded truth-choose control-flow witness, not general parser or control-flow
-/// diagnostic parity.
+/// ADR-109/112/113/114: the checked-in seed line-scans canonical ordinary
+/// `weave` bodies that return `Whole` and rejects a `yield` nested under
+/// `choose same ...:`, `choose less ...:`, `choose bright:`, `choose dim:`,
+/// `choose not bright:`, or `choose not dim:`. This is a bounded truth-choose
+/// control-flow witness, not general parser or control-flow diagnostic parity.
 #[must_use]
 pub const fn seed_speak_emit_truth_choose_yield_pilot() -> bool {
     true
@@ -4157,6 +4157,14 @@ weave main [] -> Whole:\n\
             "AE-SEED-013",
         );
         assert_seed_packet(
+            "world w\n\nweave main [] -> Whole:\n  choose not bright:\n    yield 42\n  otherwise:\n    yield -1\n",
+            "AE-SEED-013",
+        );
+        assert_seed_packet(
+            "world w\n\nweave main [] -> Whole:\n  choose not dim:\n    yield 42\n  otherwise:\n    yield -1\n",
+            "AE-SEED-013",
+        );
+        assert_seed_packet(
             "world w\n\nweave main [] -> Whole:\n  bind x <- call nope 1\n  yield x\n",
             "AE-SEED-011",
         );
@@ -4178,6 +4186,14 @@ weave main [] -> Whole:\n\
         );
         assert_seed_packet(
             "weave main [] -> Whole:\n  choose dim:\n    yield 42\n  otherwise:\n    yield -1\n",
+            "AE-SEED-006",
+        );
+        assert_seed_packet(
+            "weave main [] -> Whole:\n  choose not bright:\n    yield 42\n  otherwise:\n    yield -1\n",
+            "AE-SEED-006",
+        );
+        assert_seed_packet(
+            "weave main [] -> Whole:\n  choose not dim:\n    yield 42\n  otherwise:\n    yield -1\n",
             "AE-SEED-006",
         );
         assert_seed_packet(

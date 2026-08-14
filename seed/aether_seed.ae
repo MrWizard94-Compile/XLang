@@ -369,6 +369,22 @@ weave compile [borrow source: Text] -> Bytes:
                 revise v30 <- 0
             otherwise:
               revise v30 <- 0
+            choose same v127 0:
+              choose same borrow v99 "choose not bright:":
+                revise v127 <- 1
+                revise v128 <- v28
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
+            choose same v127 0:
+              choose same borrow v99 "choose not dim:":
+                revise v127 <- 1
+                revise v128 <- v28
+              otherwise:
+                revise v30 <- 0
+            otherwise:
+              revise v30 <- 0
           otherwise:
             revise v30 <- 0
       otherwise:

@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-113 exact literal Truth nested-yield seed-SPEAK pilot — targeted and full product/self-host/release evidence PASS; approved Constitution scanner correction remains verified with contextual review completed
+**Current delivery verification:** ADR-114 exact unary literal Truth nested-yield seed-SPEAK pilot — targeted and full product/self-host/release evidence PASS; approved Constitution scanner correction remains verified with contextual review completed
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -34,7 +34,7 @@ comparison surface.
 
 ### 2.2 Product toolchain (BARP)
 
-Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–113):
+Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–114):
 
 | Capability | Authority |
 | --- | --- |
@@ -105,8 +105,8 @@ Verified AETH
 | Matrices | M* / M19E / M23 / M35A / M24A validation matrices |
 | Constitution | Project Level-4 pointer → pack AGENTS.md Section 0 |
 
-**Latest full-gate stamp:** 2026-08-14 ADR-113 delivery — **GATE PASS mode=release** (includes full-quality suite)
-**Seed identity:** `2360EF2AA9B2700AF07A8FEAF907E795E07922403352ACCFE46AF321CDB815DB`
+**Latest full-gate stamp:** 2026-08-14 ADR-114 delivery — **GATE PASS mode=release** (includes full-quality suite)
+**Seed identity:** `374374A22D78690BE86E39DE15CB09F24B93A2439FCEE701C6D686E992BAB6EB`
 
 ---
 
@@ -116,12 +116,12 @@ The 0.36 package contract (M19e) remains the executable language baseline. M25
 now advances the toolchain package to 0.37 with a local package ecosystem step;
 BARP and M32 work remain **independence and infrastructure maturity**:
 
-### 5.1 BARP highlights (ADR-043 → 113)
+### 5.1 BARP highlights (ADR-043 → 114)
 
 - Product-default CLI toolchain; bootstrap recovery only  
 - Multi-source envelope + multi-file host forge + unit digests  
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
-- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal yield, 011 detects one canonical direct-bind/root-yield-call target-existence witness across declared top-level weave headers with ordinary-forward-header support, and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` nested yield (dual-compare rebuild)
+- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal yield, 011 detects one canonical direct-bind/root-yield-call target-existence witness across declared top-level weave headers with ordinary-forward-header support, and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
 - Forge SPEAK capture on failure and verify merge  
 - Yield-in-truth-choose fail-closed (AE-SEED-013)  
 - Task checkpoint required (AE-SEED-015)  
@@ -174,15 +174,16 @@ installed package. M25 adds no network/resolver/signing/guest authority.
 | `b5305cf` | ADR-090–093 forge SPEAK capture, native exe, multi-level certs, checkpoints |
 | `f03e310` | ADR-086–089 SPEAK matrix, LLVM object, root certs, task reserve |
 
-**Current implementation:** ADR-113 extends the direct `AE-SEED-013`
-seed-SPEAK witness to exact ordinary-Whole `choose bright:` and `choose dim:`
-branches with a deeper `yield`. It preserves `choose same` / `choose less`,
-resource `choose`, bare Truth-variable, and `not` expression boundaries,
-missing-world priority, valid root-yield literal artifacts, and ADR-070's
-broader product `host-preflight` safety boundary. Targeted and release-gate
-evidence passes, including bootstrap/product/forge/check-in proof. It leaves
-M32a/M32b as local methodology only, not a performance claim. The full seed
-SPEAK conformance matrix and seed-native multi-file remain residual.
+**Current implementation:** ADR-114 extends the direct `AE-SEED-013`
+seed-SPEAK witness to exact ordinary-Whole `choose not bright:` and `choose not
+dim:` branches with a deeper `yield`. It preserves `choose same` / `choose
+less`, exact non-unary literals, resource `choose`, unary Truth-variable and
+nested-unary expression boundaries, missing-world priority, valid root-yield
+unary-literal artifacts, and ADR-070's broader product `host-preflight` safety
+boundary. Targeted and release-gate evidence passes, including
+bootstrap/product/forge/check-in proof. It leaves M32a/M32b as local
+methodology only, not a performance claim. The full seed SPEAK conformance
+matrix and seed-native multi-file remain residual.
 
 ---
 
@@ -260,8 +261,9 @@ pwsh -File tools\aether-gate.ps1 -Mode release
 | [DELIVERY_REPORT-2026-08-11-BARP-ROOT-YIELD-UNKNOWN-CALL-SPEAK.md](DELIVERY_REPORT-2026-08-11-BARP-ROOT-YIELD-UNKNOWN-CALL-SPEAK.md) | ADR-111 root-yield seed diagnostic delivery / current verification status |
 | [DELIVERY_REPORT-2026-08-13-BARP-LESS-CHOOSE-SPEAK.md](DELIVERY_REPORT-2026-08-13-BARP-LESS-CHOOSE-SPEAK.md) | ADR-112 less-choose seed diagnostic delivery / current verification status |
 | [DELIVERY_REPORT-2026-08-14-BARP-LITERAL-TRUTH-CHOOSE-SPEAK.md](DELIVERY_REPORT-2026-08-14-BARP-LITERAL-TRUTH-CHOOSE-SPEAK.md) | ADR-113 literal-Truth seed diagnostic delivery / current verification status |
+| [DELIVERY_REPORT-2026-08-14-BARP-UNARY-LITERAL-TRUTH-CHOOSE-SPEAK.md](DELIVERY_REPORT-2026-08-14-BARP-UNARY-LITERAL-TRUTH-CHOOSE-SPEAK.md) | ADR-114 unary-literal Truth seed diagnostic delivery / current verification status |
 | [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) | This audit stamp |
-| ADRs 043–113 | Maturity decision trail |
+| ADRs 043–114 | Maturity decision trail |
 
 ---
 
