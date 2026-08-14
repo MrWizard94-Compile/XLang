@@ -75,7 +75,9 @@ and its AE-SEED-011 portion recognizes canonical direct `bind … <- call`, root
 root `handle call` forms whose target has no matching
 top-level declaration header (ordinary, export, host, foreign, or task),
 including an exact end-of-line zero-argument target. It establishes target
-existence only; destination, Text result, and call-kind legality remain with the full compiler.
+existence only. A separate literal `-> Whole raises Whole:` header state covers
+canonical root `forward call` targets; destination, Text result, header,
+terminality, effect, and call-kind legality remain with the full compiler.
 Neither changes accepted valid source nor claims full diagnostic parity. See
 [ADR-110](docs/historical%20docs/ADR-110-barp-seed-speak-unknown-call-pilot.md) and
 [ADR-111](docs/historical%20docs/ADR-111-barp-seed-speak-root-yield-unknown-call-pilot.md),
@@ -94,6 +96,10 @@ to the full compiler.
 adds canonical root handle-call target
 witnesses only when the required `into` and `otherwise error into` delimiters
 are present; complete M4 legality remains with the full compiler.
+[ADR-120](docs/historical%20docs/ADR-120-barp-seed-speak-root-forward-unknown-call-pilot.md)
+adds canonical root forward-call target
+witnesses only under a literal erroring-Whole header marker; complete M4 header,
+terminality, target-effect, and call legality remain with the full compiler.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

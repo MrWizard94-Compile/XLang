@@ -88,6 +88,13 @@
 | BARP-SPEAK-084 | Root `handle call nope` with no `into` / `otherwise error into` tail | Does not trigger the bounded unknown-target pilot; full syntax diagnostics retain authority |
 | BARP-SPEAK-085 | Missing `world` plus an otherwise canonical root handle-call unknown target | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-086 | Product-path canonical root handle-call unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
+| BARP-SPEAK-087 | Canonical erroring `Whole` root `forward call nope 41` and zero-argument `forward call nope`, each under a literal `-> Whole raises Whole:` header marker with no matching top-level declaration header | Seed SPEAK `AE-SEED-011`, schema `aether.seed-error/v1`, `origin: seed-speak`, position `1:1`, blank Bytes result |
+| BARP-SPEAK-088 | Canonical root forward calls to later-declared `raises Whole` weaves, for argument-bearing and zero-argument tails | Does not trigger the pilot; seed artifact verifies, matches bootstrap, and exits with the expected result |
+| BARP-SPEAK-089 | Erroring-weave `speak` Text literal containing a forward-call-shaped sequence | Does not trigger the forward pilot; seed artifact verifies |
+| BARP-SPEAK-090 | Root `forward call nope` under a total `-> Whole:` caller | Does not trigger the erroring-caller pilot; full M4 semantic diagnostics retain authority |
+| BARP-SPEAK-091 | Erroring-Whole root `forward call` with no target | Does not trigger the bounded unknown-target pilot; full syntax diagnostics retain authority |
+| BARP-SPEAK-092 | Missing `world` plus an otherwise canonical erroring-Whole root forward-call unknown target | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-093 | Product-path canonical root forward-call unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
 
 ## Boundary
 

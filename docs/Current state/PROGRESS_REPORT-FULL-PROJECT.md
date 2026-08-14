@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-119 canonical root handle-call unknown-target seed-SPEAK pilot — targeted red/green, direct, valid-source, literal/incomplete-tail/priority boundaries, product/self-host, full release-package, and consumer verification PASS
+**Current delivery verification:** ADR-120 canonical root forward-call unknown-target seed-SPEAK pilot — targeted red/green, direct, valid-source, literal/total-caller/incomplete-prefix/priority boundaries, product/self-host, and tracker PASS; full release gate, four-way seed identity, 432-file package plus `SHA-256SUMS`, and consumer verification PASS
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -105,8 +105,8 @@ Verified AETH
 | Matrices | M* / M19E / M23 / M35A / M24A validation matrices |
 | Constitution | Project Level-4 pointer → pack AGENTS.md Section 0 |
 
-**Latest full-gate stamp:** 2026-08-14 ADR-119 delivery — **GATE PASS mode=release** (includes full-quality suite, package, and consumer verification)
-**Seed identity:** `21B15C463D7DBB0D91C43012D6DB85BC11C97CCCCA89FBCC679845D439A1F31F`
+**Latest full-gate stamp:** 2026-08-14 ADR-120 delivery — **GATE PASS mode=release** (includes full-quality suite, package, and consumer verification)
+**Seed identity:** `5CF25004F6C8CD9CB6AE12AADD1A3FED8EE2512A3549E63D615F255EC9584CAA`
 
 ---
 
@@ -116,12 +116,12 @@ The 0.36 package contract (M19e) remains the executable language baseline. M25
 now advances the toolchain package to 0.37 with a local package ecosystem step;
 BARP and M32 work remain **independence and infrastructure maturity**:
 
-### 5.1 BARP highlights (ADR-043 → 119; ADR-119 release verified)
+### 5.1 BARP highlights (ADR-043 → 120; ADR-120 release verified)
 
 - Product-default CLI toolchain; bootstrap recovery only  
 - Multi-source envelope + multi-file host forge + unit digests  
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
-- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal or exact Truth-literal yield, 011 detects canonical direct-bind/root-yield/root-revise/root-speak target existence plus delimiter-bounded root-handle target existence across declared top-level weave headers (the handle form requires fixed `into` / `otherwise error into` delimiters that leave a destination suffix), and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
+- Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal or exact Truth-literal yield, 011 detects canonical total-Whole direct-bind/root-yield/root-revise/root-speak target existence, delimiter-bounded root-handle target existence, and literal-erroring-header root-forward target existence across declared top-level weave headers (the handle form requires fixed `into` / `otherwise error into` delimiters that leave a destination suffix; the forward form requires `-> Whole raises Whole:`), and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
 - Forge SPEAK capture on failure and verify merge  
 - Yield-in-truth-choose fail-closed (AE-SEED-013)  
 - Task checkpoint required (AE-SEED-015)  
@@ -174,19 +174,20 @@ installed package. M25 adds no network/resolver/signing/guest authority.
 | `b5305cf` | ADR-090–093 forge SPEAK capture, native exe, multi-level certs, checkpoints |
 | `f03e310` | ADR-086–089 SPEAK matrix, LLVM object, root certs, task reserve |
 
-**Current implementation:** ADR-119 extends the direct `AE-SEED-011`
-seed-SPEAK witness to canonical ordinary-Whole root
-`handle call target ... into success otherwise error into code` lines only when
-both fixed delimiters leave a destination suffix. It preserves existing
-bind/root-yield/root-revise/root-speak behavior, handle-call-shaped Text literal
-non-matches, incomplete-tail non-matches, declared-later `raises Whole` targets,
-and missing-world priority. Product forge preserves the exact seed packet with
-`origin: seed-speak`; M4 effect, result, argument, destination, terminality,
-and broader call diagnostics remain with the full compiler. Targeted red/green,
-direct, valid, boundary, priority, product/self-host, and tracker evidence pass.
-The full zero-warning release gate, four-way seed identity, 430-file package
-integrity, and independent consumer verification pass. The full seed SPEAK
-conformance matrix and seed-native multi-file remain residual.
+**Current implementation:** ADR-120 extends the direct `AE-SEED-011`
+seed-SPEAK witness to canonical erroring-Whole root `forward call target` lines
+only when the caller header contains the literal `-> Whole raises Whole:` marker.
+It preserves the total-caller scanner and existing direct-call behavior,
+forward-shaped Text literal non-matches, total-caller non-matches,
+incomplete-prefix non-matches, declared-later `raises Whole` targets, and
+missing-world priority. Product forge preserves the exact seed packet with
+`origin: seed-speak`; full header parsing, terminality, target effects/results,
+arguments, resources, and broader M4 diagnostics remain with the full compiler.
+Targeted red/green, direct, valid, boundary, priority, product/self-host, and
+tracker evidence pass. The 2026-08-14 full zero-warning release gate, four-way
+seed identity, 432-file technical-preview package plus `SHA-256SUMS`, and
+independent consumer verification pass. The full seed SPEAK conformance matrix
+and seed-native multi-file remain residual.
 
 ---
 

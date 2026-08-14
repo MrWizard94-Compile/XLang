@@ -80,6 +80,12 @@ canonical root `handle call target ... into success otherwise error into code`
 only when both fixed delimiters leave a nonempty destination suffix. It does not
 validate effects, result, arguments, destinations, terminality, ownership, or
 general M4 call semantics.
+[ADR-120](docs/historical%20docs/ADR-120-barp-seed-speak-root-forward-unknown-call-pilot.md)
+extends the same target-header witness to a
+canonical erroring-Whole root `forward call target` form. It requires the
+literal `-> Whole raises Whole:` header marker and next-space/end-of-line target
+boundary, but does not validate the full header, terminality, target effect or
+result, arguments, resources, ownership, or general M4 call semantics.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

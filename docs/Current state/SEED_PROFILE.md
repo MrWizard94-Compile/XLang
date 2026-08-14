@@ -31,7 +31,7 @@ multi-file natively). LSP diagnostics are product-primary (ADR-058); hover/defin
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
 project format, LSP format, product structural weave/statement/record ops, and seed
 rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
-oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117/118/119:** seed
+oracle, and residual nested body-list structural AST only. **ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117/118/119/120:** seed
 SPEAKs structured `AETHER_SEED_ERROR` for empty source, missing world, missing main,
 raw multi-module import, and bounded lexical ASCII-tab / top-level `fn ` conditions
 plus canonical reserved-task prefixes and canonical top-level task bodies without
@@ -39,10 +39,12 @@ an exact indented `checkpoint` statement, plus a Text literal or exact
 `yield bright` / `yield dim` returned from a canonical ordinary `Whole` weave,
 canonical `choose same` / `choose less` /
 exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` /
-exact `choose not dim:` nested yield, canonical direct bind/root-yield/root-revise/root-speak
-unknown-call forms, and canonical root-handle unknown-call forms only when fixed
-`into` / `otherwise error into` delimiters leave a destination suffix (origin
-`seed-speak`); full SPEAK conformance
+exact `choose not dim:` nested yield, canonical total-Whole direct
+bind/root-yield/root-revise/root-speak unknown-call forms, canonical root-handle
+unknown-call forms only when fixed `into` / `otherwise error into` delimiters
+leave a destination suffix, and canonical erroring-Whole root-forward
+unknown-call forms only under a literal `-> Whole raises Whole:` header marker
+(origin `seed-speak`); full SPEAK conformance
 matrix remains residual.
 
 Here, *canonical* means the Aether 0.11 grammar and formatting constraints in

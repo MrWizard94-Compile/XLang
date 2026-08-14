@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064–072; bounded pilot increments through ADR-119); ADR-119 release verified; residual recovery bootstrap
-**Date:** 2026-08-14 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-119; ADR-119 release verified)
-**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-119](../historical%20docs/ADR-119-barp-seed-speak-root-handle-unknown-call-pilot.md)
+**Status:** Active program — product-default toolchain (ADR-064–072; bounded pilot increments through ADR-120); ADR-120 release verified; residual recovery bootstrap
+**Date:** 2026-08-14 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-120; ADR-120 release verified)
+**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-120](../historical%20docs/ADR-120-barp-seed-speak-root-forward-unknown-call-pilot.md)
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -202,7 +202,7 @@ Product project/workspace compile returns seed bytes via
 | Structural top-level weaves | **Product path** (ADR-065/068 replace/insert/delete) |
 | Structural statements/records | **Product path** weave-body + primitive records (ADR-069) |
 | Nested body lists | **Product path** choose/while `whenBright`/`whenDim`/`body` (ADR-071) |
-| Seed-error packets | **Host packet ABI** `aether.seed-error/v1` (ADR-072); seed SPEAK pilot 003/004/005/006/007/010/011/012/013/014/015, with bounded lexical 003/007, line-aware canonical reserved-task 014, exact task-checkpoint 015, canonical ordinary-Whole Text-literal / exact Truth-literal yield 010, canonical ordinary-Whole direct bind/root-yield/root-revise/root-speak target existence across declared top-level weave headers for argument-bearing and exact end-of-line zero-argument calls plus canonical root-handle target existence only when fixed `into` / `otherwise error into` delimiters leave a destination suffix 011, and canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested-yield 013 detection (ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117/118/119); full matrix residual |
+| Seed-error packets | **Host packet ABI** `aether.seed-error/v1` (ADR-072); seed SPEAK pilot 003/004/005/006/007/010/011/012/013/014/015, with bounded lexical 003/007, line-aware canonical reserved-task 014, exact task-checkpoint 015, canonical ordinary-Whole Text-literal / exact Truth-literal yield 010, canonical total-Whole direct bind/root-yield/root-revise/root-speak target existence across declared top-level weave headers for argument-bearing and exact end-of-line zero-argument calls plus canonical root-handle target existence only when fixed `into` / `otherwise error into` delimiters leave a destination suffix and canonical erroring-Whole root-forward target existence only when the literal `-> Whole raises Whole:` header marker is present 011, and canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested-yield 013 detection (ADR-094/098/102/103/106/108/109/110/111/112/113/114/115/116/117/118/119/120); full matrix residual |
 | Yield-in-truth-choose | **Product fail-closed** `AE-SEED-013` (ADR-070); direct seed has only the ADR-109/112/113/114 canonical `choose same` / `choose less` / exact literal and unary-literal Truth witnesses; multi-module choose+revise supported |
 | Seed rebuild | **Product compile** (ADR-067); `--bootstrap` oracle only |
 | Lib unit project verify | **Product seed probe** (ADR-052) |

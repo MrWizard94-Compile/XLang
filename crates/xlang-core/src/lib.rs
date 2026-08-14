@@ -3743,7 +3743,7 @@ pub const fn forge_verify_merges_seed_speak() -> bool {
     true
 }
 
-/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113 / ADR-114 / ADR-115 / ADR-116 / ADR-117 / ADR-118 / ADR-119: seed.ae SPEAK pilot codes (subset of the
+/// ADR-098 / ADR-102 / ADR-103 / ADR-106 / ADR-108 / ADR-109 / ADR-110 / ADR-111 / ADR-112 / ADR-113 / ADR-114 / ADR-115 / ADR-116 / ADR-117 / ADR-118 / ADR-119 / ADR-120: seed.ae SPEAK pilot codes (subset of the
 /// conformance matrix).
 #[must_use]
 pub fn seed_speak_emit_pilot_codes() -> &'static [&'static str] {
@@ -3819,16 +3819,18 @@ pub const fn seed_speak_emit_truth_choose_yield_pilot() -> bool {
     true
 }
 
-/// ADR-110/111/116/117/118/119: the checked-in seed line-scans canonical
-/// ordinary `Whole` weave direct-call statements (`bind … <- call`, root
-/// `yield call`, root `revise … <- call`, root `speak call`, or root
-/// `handle call`) and verifies their target against canonical top-level
-/// declaration headers. The bounded witness accepts one-or-more Whole arguments
-/// (ADR-110/111/117/118/119) or an exact end-of-line zero-argument target
-/// (ADR-116/117/118); ADR-119 accepts a `handle call` target only when both
-/// literal `into` and `otherwise error into` delimiters leave a destination
-/// suffix. It is not name binding, destination or terminality validation,
-/// Text-result validation, signature, effect, or general call-diagnostic parity.
+/// ADR-110/111/116/117/118/119/120: the checked-in seed line-scans canonical
+/// direct-call statements: ordinary total-`Whole` root `bind … <- call`,
+/// `yield call`, `revise … <- call`, `speak call`, and `handle call`, plus an
+/// erroring-`Whole` root `forward call`. It verifies only their target against
+/// canonical top-level declaration headers. The bounded witness accepts
+/// one-or-more Whole arguments (ADR-110/111/117/118/119/120) or an exact
+/// end-of-line zero-argument target (ADR-116/117/118/120); ADR-119 accepts a
+/// `handle call` target only when both literal `into` and `otherwise error into`
+/// delimiters leave a destination suffix, while ADR-120 requires the caller's
+/// literal `-> Whole raises Whole:` header marker. It is not name binding,
+/// destination or terminality validation, full header parsing, Text-result
+/// validation, signature, effect, resource, or general call-diagnostic parity.
 #[must_use]
 pub const fn seed_speak_emit_unknown_call_pilot() -> bool {
     true
@@ -3866,6 +3868,15 @@ pub const fn seed_speak_emit_root_speak_unknown_call_pilot() -> bool {
 /// validator.
 #[must_use]
 pub const fn seed_speak_emit_root_handle_unknown_call_pilot() -> bool {
+    true
+}
+
+/// ADR-120: canonical root `forward call target` forms under the literal
+/// erroring-Whole header marker reach the same seed-side target-existence
+/// witness as the total-caller direct forms. This is intentionally not a full
+/// header, terminality, effect, argument, result, or resource validator.
+#[must_use]
+pub const fn seed_speak_emit_root_forward_unknown_call_pilot() -> bool {
     true
 }
 

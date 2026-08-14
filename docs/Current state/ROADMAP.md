@@ -41,18 +41,24 @@ it is not a current status source or authorization.
    fixed `into` and `otherwise error into` delimiters leave a destination suffix.
    M4 effect, result, argument, destination, terminality, and general call
    legality remain full-compiler responsibilities. See [ADR-119](../historical%20docs/ADR-119-barp-seed-speak-root-handle-unknown-call-pilot.md).
-5. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
+5. **BARP ADR-120 — release verified.** The bounded
+   AE-SEED-011 seed-SPEAK witness covers canonical erroring-Whole root
+   `forward call target` only under a literal `-> Whole raises Whole:` caller
+   header marker and the established next-space/end-of-line target boundary.
+   Full header parsing, terminality, target effect/result, argument, resource,
+   and general M4 call legality remain full-compiler responsibilities. See [ADR-120](../historical%20docs/ADR-120-barp-seed-speak-root-forward-unknown-call-pilot.md).
+6. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
    AE-SEED-013 shape with an explicit false-positive boundary, or separately
    design seed-native multi-file elaboration. Do not infer parser/type-checker
    authority from the existing line-state witnesses.
-6. **Mainstream language/library vertical.** Select one controlled generic,
+7. **Mainstream language/library vertical.** Select one controlled generic,
    data-model, effect, or standard-library ergonomics increment only after its
    grammar, seed, verifier, VM, authoring, compatibility, and limit design are
    written and accepted.
-7. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
+8. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
    fixtures, and offline project workflows before expanding surface area merely
    for feature count.
-8. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
+9. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
    M24i are available for a next scoped ADR, threat-model update, validation
    matrix, and release proof. Neither is an automatic expansion of current
    authority.
