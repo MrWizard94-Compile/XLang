@@ -1233,6 +1233,153 @@ fn barp_adr118_seed_speaks_canonical_root_speak_unknown_calls() {
 }
 
 #[test]
+fn barp_adr119_seed_speaks_canonical_root_handle_unknown_calls() {
+    for (form, source) in [
+        (
+            "argument-bearing",
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  bind mutable code <- 0\n  handle call nope 41 into result otherwise error into code\n",
+        ),
+        (
+            "zero-argument",
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  bind mutable code <- 0\n  handle call nope into result otherwise error into code\n",
+        ),
+    ] {
+        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, source)
+            .expect("canonical root handle unknown call must reach the seed forge");
+        assert!(
+            direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+            "expected a seed-native AE-SEED-011 packet for {form} root handle, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct.stdout.contains("\"origin\":\"seed-speak\""),
+            "expected seed-speak origin for {form} root handle, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct
+                .stdout
+                .contains("\"schema\":\"aether.seed-error/v1\""),
+            "expected seed error schema for {form} root handle, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct.stdout.contains("\"line\":1,\"column\":1"),
+            "expected 1:1 seed-SPEAK position for {form} root handle, got: {}",
+            direct.stdout
+        );
+        assert!(
+            direct.stdout.contains(
+                "\"message\":\"canonical direct call target does not name a top-level declared weave\""
+            ),
+            "expected the unknown-call message for {form} root handle, got: {}",
+            direct.stdout
+        );
+        assert_eq!(
+            direct.stdout.matches("AETHER_SEED_ERROR:").count(),
+            1,
+            "canonical {form} root handle source must emit exactly one packet: {}",
+            direct.stdout
+        );
+        match direct.value {
+            InvocationValue::Bytes(bytes) => assert!(
+                bytes.is_empty(),
+                "canonical {form} root handle SPEAK must return blank Bytes, got {} bytes",
+                bytes.len()
+            ),
+            other => panic!("canonical {form} root handle SPEAK must return Bytes, got {other:?}"),
+        }
+
+        let product = compile_product_bytecode(source)
+            .expect_err("canonical root handle unknown call must fail product compilation");
+        assert!(
+            product.to_string().contains("AE-SEED-011"),
+            "expected AE-SEED-011 for {form} root handle, got {product}"
+        );
+        let packets = product_error_packets(source);
+        assert_eq!(packets.len(), 1);
+        assert_eq!(packets[0].schema, SEED_ERROR_PACKET_SCHEMA);
+        assert_eq!(packets[0].code, "AE-SEED-011");
+        assert_eq!(packets[0].line, 1);
+        assert_eq!(packets[0].column, 1);
+        assert_eq!(packets[0].origin, "seed-speak");
+    }
+
+    for (form, main_call, helper) in [
+        (
+            "argument-bearing",
+            "handle call helper 41 into result otherwise error into code",
+            "weave helper [value: Whole] -> Whole raises Whole:\n  yield sum value 1",
+        ),
+        (
+            "zero-argument",
+            "handle call helper into result otherwise error into code",
+            "weave helper [] -> Whole raises Whole:\n  yield 42",
+        ),
+    ] {
+        let valid = format!(
+            "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  bind mutable code <- 0\n  {main_call}\n\n{helper}\n"
+        );
+        let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, &valid)
+            .expect("declared root handle call must reach the seed forge");
+        assert!(
+            !direct.stdout.contains("AETHER_SEED_ERROR:"),
+            "declared {form} root handle call must remain outside the pilot: {}",
+            direct.stdout
+        );
+        let seeded = bytes(direct);
+        verify_bytecode(&seeded).expect("declared root handle-call seed artifact must verify");
+        let bootstrap = compile_to_bytecode(&valid)
+            .expect("declared root handle-call source must bootstrap")
+            .bytecode;
+        assert_eq!(
+            seeded, bootstrap,
+            "declared {form} root handle call must retain seed/bootstrap identity"
+        );
+        assert_eq!(
+            run_bytecode(&seeded)
+                .expect("declared root handle-call seed artifact must run")
+                .exit_code,
+            42
+        );
+    }
+
+    let literal = "world w\n\nweave main [] -> Whole:\n  speak \"handle call nope into result otherwise error into code\"\n  yield 0\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, literal)
+        .expect("root handle call-shaped Text literal must reach the seed forge");
+    assert!(
+        !direct.stdout.contains("AETHER_SEED_ERROR:"),
+        "root handle call-shaped Text literal must remain outside the pilot: {}",
+        direct.stdout
+    );
+    verify_bytecode(&bytes(direct))
+        .expect("root handle call-shaped Text literal artifact must verify");
+
+    let incomplete = "world w\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  bind mutable code <- 0\n  handle call nope\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, incomplete)
+        .expect("incomplete root handle source must reach the seed forge");
+    assert!(
+        !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+        "incomplete root handle tail must remain outside the pilot: {}",
+        direct.stdout
+    );
+
+    let missing_world = "weave main [] -> Whole:\n  bind mutable result <- 0\n  bind mutable code <- 0\n  handle call nope into result otherwise error into code\n";
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, missing_world)
+        .expect("missing-world root handle-call source must reach the seed forge");
+    assert!(
+        direct.stdout.contains("\"code\":\"AE-SEED-006\""),
+        "missing world must retain higher-priority AE-SEED-006, got: {}",
+        direct.stdout
+    );
+    assert!(
+        !direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+        "missing world must suppress the lower-priority root handle-call pilot: {}",
+        direct.stdout
+    );
+}
+
+#[test]
 fn barp_phase3a_product_path_rejects_odd_indent_with_ae_seed_code() {
     let source = "world w\n\nweave main [] -> Whole:\n yield 1\n";
     let error = compile_product_bytecode(source).expect_err("odd indent must fail closed");
@@ -1318,6 +1465,10 @@ fn barp_adr072_product_seed_error_packet_abi() {
     assert!(
         aether_core::seed_speak_emit_root_speak_unknown_call_pilot(),
         "ADR-118: root speak-call unknown-call seed SPEAK pilot"
+    );
+    assert!(
+        aether_core::seed_speak_emit_root_handle_unknown_call_pilot(),
+        "ADR-119: root handle-call unknown-call seed SPEAK pilot"
     );
     let empty = product_error_packets("world w\n\nweave main [] -> Whole:\n  yield 1\n");
     assert!(empty.is_empty());

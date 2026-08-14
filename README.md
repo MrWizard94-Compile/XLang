@@ -71,7 +71,8 @@ recognizes only a nested `yield` below canonical `choose same`, `choose less`,
   exact `choose bright:` / `choose dim:`, or exact unary-literal `choose not
   bright:` / `choose not dim:` in such a weave;
 and its AE-SEED-011 portion recognizes canonical direct `bind … <- call`, root
-`yield call`, root `revise name <- call`, or root `speak call` forms whose target has no matching
+`yield call`, root `revise name <- call`, root `speak call`, or delimiter-bounded
+root `handle call` forms whose target has no matching
 top-level declaration header (ordinary, export, host, foreign, or task),
 including an exact end-of-line zero-argument target. It establishes target
 existence only; destination, Text result, and call-kind legality remain with the full compiler.
@@ -89,6 +90,10 @@ adds canonical root revise-call target witnesses with the same bounded tail rule
 [ADR-118](docs/historical%20docs/ADR-118-barp-seed-speak-root-speak-unknown-call-pilot.md)
 adds canonical root speak-call target witnesses while leaving Text-result legality
 to the full compiler.
+[ADR-119](docs/historical%20docs/ADR-119-barp-seed-speak-root-handle-unknown-call-pilot.md)
+adds canonical root handle-call target
+witnesses only when the required `into` and `otherwise error into` delimiters
+are present; complete M4 legality remains with the full compiler.
 
 ```aether
 weave leaf [value: Whole] -> Whole raises Whole:

@@ -74,6 +74,12 @@ extends the same target-header witness to canonical root `speak call target`
 forms with argument-bearing or exact end-of-line zero-argument tails. It does
 not validate Text result, arguments, signature, type, effect, ownership, or
 general call semantics.
+[ADR-119](docs/historical%20docs/ADR-119-barp-seed-speak-root-handle-unknown-call-pilot.md)
+extends the same target-header witness to a
+canonical root `handle call target ... into success otherwise error into code`
+only when both fixed delimiters leave a nonempty destination suffix. It does not
+validate effects, result, arguments, destinations, terminality, ownership, or
+general M4 call semantics.
 Package 0.37 adds M25 transparent local source-package publication. `aether pkg`
 packs only a complete locked `aether.project/v1` manifest and its declared
 units; verifies the raw project digest, every file digest, a domain-separated

@@ -82,6 +82,12 @@
 | BARP-SPEAK-078 | Root speak Text literal containing a speak-call-shaped sequence | Does not trigger the pilot; seed artifact verifies |
 | BARP-SPEAK-079 | Missing `world` plus an otherwise canonical root speak-call unknown target | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-080 | Product-path canonical root speak-call unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
+| BARP-SPEAK-081 | Canonical ordinary `Whole` root `handle call nope 41 into result otherwise error into code` and zero-argument `handle call nope into result otherwise error into code`, each with no matching top-level declaration header | Seed SPEAK `AE-SEED-011`, `origin: seed-speak`, blank Bytes result |
+| BARP-SPEAK-082 | Canonical root handle calls to later-declared `raises Whole` weaves, for argument-bearing and zero-argument tails | Does not trigger the pilot; seed artifact verifies, matches bootstrap, and exits with the expected result |
+| BARP-SPEAK-083 | Root speak Text literal containing a complete handle-call-shaped sequence | Does not trigger the handle pilot; seed artifact verifies |
+| BARP-SPEAK-084 | Root `handle call nope` with no `into` / `otherwise error into` tail | Does not trigger the bounded unknown-target pilot; full syntax diagnostics retain authority |
+| BARP-SPEAK-085 | Missing `world` plus an otherwise canonical root handle-call unknown target | Existing higher-priority seed pilot remains `AE-SEED-006` |
+| BARP-SPEAK-086 | Product-path canonical root handle-call unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
 
 ## Boundary
 
