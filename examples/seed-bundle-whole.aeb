@@ -1,0 +1,13 @@
+aether.seed-bundle/v1
+entry src/main.ae
+unit lib/math.ae 72
+world math
+export weave double [n: Whole] -> Whole:
+  yield product n 2
+
+unit src/main.ae 134
+world app
+import unit "lib/math.ae" as math
+weave main [] -> Whole:
+  bind twice <- call math.double 21
+  yield call math.double twice

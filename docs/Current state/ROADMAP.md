@@ -94,18 +94,23 @@ it is not a current status source or authorization.
     rejected on the product path rather than accepted. This is an integrity
     correction, not full M23 eligibility or diagnostic parity. See
     [ADR-127](../historical%20docs/ADR-127-barp-seed-speak-root-comptime-bind-unknown-call-pilot.md).
-13. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
+13. **BARP ADR-128 — release verified.** The
+   bounded `aether.seed-bundle/v1` profile sends exactly one pure Whole library
+   and one entry directly to seed `compile_bundle`; the seed owns the frame and
+   one-edge elaboration. It does not make general M11/M22 seed-native. See
+   [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md).
+14. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
    AE-SEED-013 shape with an explicit false-positive boundary, or separately
-   design seed-native multi-file elaboration. Do not infer parser/type-checker
-   authority from the existing line-state witnesses.
-14. **Mainstream language/library vertical.** Select one controlled generic,
+   design a new bounded seed-native multi-file profile. Do not infer general
+   parser/type-checker or graph-resolver authority from SBP-001.
+15. **Mainstream language/library vertical.** Select one controlled generic,
    data-model, effect, or standard-library ergonomics increment only after its
    grammar, seed, verifier, VM, authoring, compatibility, and limit design are
    written and accepted.
-15. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
+16. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
    fixtures, and offline project workflows before expanding surface area merely
    for feature count.
-16. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
+17. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
    M24i are available for a next scoped ADR, threat-model update, validation
    matrix, and release proof. Neither is an automatic expansion of current
    authority.
@@ -114,11 +119,12 @@ it is not a current status source or authorization.
 
 The active program is [BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md).
 Current direct seed-SPEAK packets cover a deliberately bounded subset of
-AE-SEED-003/004/005/006/007/010/011/012/013/014/015. The residual is not a
-missing feature claim: full seed diagnostic conformance and seed-native
-multi-file elaboration remain unproven. The product multi-file contract remains
-host elaboration plus seed emission until a separate forge ABI design proves
-otherwise.
+AE-SEED-003/004/005/006/007/010/011/012/013/014/015. ADR-128 separately proves
+one exact two-unit source-bundle profile, not general seed-native multi-file
+elaboration. The residual is not a missing feature claim: full seed diagnostic
+conformance and general seed-native module graphs remain unproven. The product
+multi-file contract remains host elaboration plus seed emission outside the
+explicit bundle ABI.
 
 ## Law-fork boundary
 

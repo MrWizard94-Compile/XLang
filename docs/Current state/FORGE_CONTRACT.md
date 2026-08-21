@@ -7,14 +7,15 @@ capabilities to artifacts.
 ## Command
 
     aether forge <compiler-artifact> <source-file> --output <artifact-file>
+    aether forge-bundle <compiler-artifact> <bundle-file> --output <artifact-file>
 
 All paths are local filesystem paths. The command does not call model or network
 services, a shell, or another compiler.
 
 ## Required Compiler Artifact
 
-The compiler artifact must first pass normal supported AETH v4, v5, v6, v7, v8,
-v9, v10, or v11 verification. That includes
+The compiler artifact must first pass normal supported AETH v4 through v12
+verification. That includes
 the required runnable weave `main [] -> Whole:`. The forge bridge then locates a
 named weave `compile` and requires this exact type and ownership shape:
 
@@ -28,12 +29,12 @@ artifact, or unsupported AETH version is rejected before the weave executes.
 ## Invocation Sequence
 
 1. Read the compiler artifact and source file locally.
-2. Verify the compiler artifact as supported AETH v4 through v11.
+2. Verify the compiler artifact as supported AETH v4 through v12.
 3. Check the compile weave ABI.
 4. Invoke compile with the complete source file as one bounded Text argument.
 5. Preserve any compiler weave stdout as diagnostic text on standard error.
 6. Require the returned value to be Bytes.
-7. Verify those Bytes as a complete supported AETH v4 through v11 artifact.
+7. Verify those Bytes as a complete supported AETH v4 through v12 artifact.
 8. Confirm the output directory exists and write the verified artifact.
 
 The host never parses, transforms, or generates the supplied source during forge
@@ -78,6 +79,30 @@ Product multi-file compilation uses the host multi-unit path:
 Seed does **not** natively parse multi-source envelopes
 (`seed_native_multi_module_elaboration() == false`). A future seed-native
 multi-file ABI would require a new forge weave signature and Seed Profile claim.
+
+## Bounded seed-native source-bundle path (ADR-128 / SBP-001)
+
+`aether forge-bundle` is a separate closed ABI, not an extension of ordinary
+`forge`. The verified compiler must expose:
+
+```aether
+weave compile_bundle [borrow bundle: Text] -> Bytes:
+```
+
+It receives exactly one caller-selected `aether.seed-bundle/v1` Text file. On
+this path, the host does not decode the framing, resolve an import, collect an
+export, mangle a name, or rewrite source. The seed validates and elaborates the
+exact two-unit profile: one ASCII/LF pure Whole library followed by the named
+entry, each at most 16,384 scalars; total source at most 32,768 scalars; total
+wire input at most 33,280 scalars. Profile failure SPEAKs `AE-SEED-016` and
+returns no runnable artifact.
+
+The profile does not alter the general M11/M22 multi-source rule above:
+`seed_native_multi_module_elaboration() == false` remains true, and ordinary
+projects, workspaces, raw imports, and `aether.multi-source/v1` use the
+host-elaborated route. See [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
+[SBP-001](../historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md), and
+[the SBP threat model](THREAT_MODEL-SBP-001-SEED-BUNDLE.md).
 
 ## Seed SPEAK diagnostic contract (ADR-082/086/090/094/098/102/103/106/108/109/110/111/112/113/114/115)
 

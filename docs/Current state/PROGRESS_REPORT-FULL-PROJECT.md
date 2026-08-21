@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-127 M23 comptime-call source-order integrity — direct seed/product/bootstrap/valid-source/boundary evidence, four-way seed identity, and full release gate PASS (2026-08-21)
+**Current delivery verification:** ADR-128 bounded seed-native Whole-library bundle — direct seed/product/bootstrap/forged artifact/hostile-input evidence, four-way seed identity, and full release gate PASS (2026-08-21)
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -34,7 +34,7 @@ comparison surface.
 
 ### 2.2 Product toolchain (BARP)
 
-Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–127):
+Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–128):
 
 | Capability | Authority |
 | --- | --- |
@@ -43,6 +43,7 @@ Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTR
 | LSP diagnostics / symbols / hover / definition / format | Product-primary |
 | Structural edits | Product weave/body/record paths |
 | Multi-module / multi-source | Host elaborate + seed emit + unit digests |
+| SBP-001 bounded bundle | Seed owns one exact framed library→entry import profile; no host elaborator on this route and no general multi-module claim |
 | Diagnostics | `AE-SEED-*` preflights + SPEAK packets; bounded seed pilot 003/004/005/006/007/010/011/012/013/014/015 |
 | Bootstrap residual | Dual-compare oracle, recovery flags, full `aether.ast/v8` |
 
@@ -116,10 +117,13 @@ The 0.36 package contract (M19e) remains the executable language baseline. M25
 now advances the toolchain package to 0.37 with a local package ecosystem step;
 BARP and M32 work remain **independence and infrastructure maturity**:
 
-### 5.1 BARP highlights (ADR-043 → 126; ADR-126 release verified)
+### 5.1 BARP highlights (ADR-043 → 128; ADR-128 release verified)
 
 - Product-default CLI toolchain; bootstrap recovery only  
 - Multi-source envelope + multi-file host forge + unit digests  
+- ADR-128 SBP-001 exact two-unit source bundle: verified seed `compile_bundle`
+  owns frame parsing, one-edge elaboration, path mangling, and call rewrite;
+  general M11/M22 remains host elaborate + seed emit (release verified)
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
 - Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal or exact Truth-literal yield, 011 detects canonical total-Whole direct-bind/root-yield/root-revise/root-speak target existence, delimiter-bounded root-handle target existence, literal-erroring-header root-forward target existence, and literal total-root-nursery immediate zero-argument, single-digit Whole, positive two-digit Whole, or exact-bright Truth spawn target existence across declared top-level weave headers (the handle form requires fixed `into` / `otherwise error into` delimiters that leave a destination suffix; the forward form requires `-> Whole raises Whole:`; the nursery forms require root `together:` plus immediate `spawn call target into destination`, `spawn call target digit into destination` with one ASCII decimal `digit`, `spawn call target digits into destination` with exactly two ASCII decimal characters and a nonzero first digit, or `spawn call target bright into destination`), and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
 - ADR-125 additionally recognizes only the immediate exact-`dim` Truth child `spawn call target dim into destination`; full release, seed identity, and packaged consumer verification pass. Exact empty Text is separately ADR-126.
@@ -214,7 +218,21 @@ pack v5.0.1, 357 Markdown files / 1,427 local links, four-way seed identity
 verification. Full seed SPEAK conformance and seed-native multi-file remain
 residual.
 
-**Current release-verified implementation:** ADR-126 extends the
+**Current release-verified implementation:** ADR-128 adds a separate,
+scalar-framed two-unit source-bundle route to the verified seed
+`compile_bundle` weave. The profile parses one pure Whole library and one entry
+inside Aether code, validates the exact import edge and source boundaries,
+rewrites the qualified helper calls to the established M11 mangled name, and
+matches the bootstrap M11 elaboration reference byte-for-byte. It runs to exit
+84 and its external `forge-bundle` invocation produces the same verified
+artifact. It adds no general module-graph, resolver, package, source syntax,
+AETH, VM, or guest-capability claim. Hostile framing, paths, worlds, imports,
+calls, Text, and resource forms reject with one `AE-SEED-016` seed-SPEAK packet.
+The full release gate passed four-way seed identity
+`0E328A6BAA0A838562649AC2119477D98CD4BFEE2E3B5B619D79E419147CB26C`,
+packaging, consumer verification, and the unlisted-file probe.
+
+**Earlier release-verified implementation:** ADR-126 extends the
 same direct `AE-SEED-011` witness only to the exact empty-Text
 `spawn call target "" into destination` form, with a nonempty destination
 suffix. It preserves the ADR-124 `bright`, ADR-125 `dim`, and prior Whole
@@ -238,7 +256,7 @@ consumer verification.
 | Seed self-host | **High** | Byte-identical multi-generation |
 | Product vs bootstrap independence | **High** | Default product; residual oracle documented |
 | Diagnostics honesty | **Medium–High** | Host strong; seed SPEAK pilot expanding |
-| Multi-module | **Medium** | Host elaborate works; not seed-native |
+| Multi-module | **Medium** | Host elaborate works; one exact seed-native two-unit profile does not establish general seed-native modules |
 | Native lower | **Medium** | Useful pilot; host-dependent |
 | Registry | **Medium** | Offline + signed + lite CA; not full PKI |
 | Task concurrency | **Medium** | M19e solid; no handles/timeouts/parallel |
@@ -257,7 +275,7 @@ consumer verification.
 - Full RFC 5280 X.509 DER  
 - Bundled hermetic cross-compile sysroot  
 - Claiming seed SPEAK complete for every AE-SEED code  
-- Claiming seed-native multi-file forge  
+- Claiming general seed-native multi-file forge
 
 ---
 
@@ -265,7 +283,7 @@ consumer verification.
 
 Ordered for dependency honesty (`CONST-DEP-001`):
 
-1. **BARP:** select one broader `AE-SEED-011` or `AE-SEED-013` form with an explicit false-positive boundary, or a separate seed-native multi-file forge ABI design
+1. **BARP:** select one broader `AE-SEED-011` or `AE-SEED-013` form with an explicit false-positive boundary, or a separately designed next bounded seed-native multi-file profile
 2. **M32 evidence operation:** collect a human-declared pinned local baseline and candidate report under one M32b profile before any scoped performance-improvement claim
 3. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility
 4. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite
@@ -308,8 +326,9 @@ pwsh -File tools\aether-gate.ps1 -Mode release
 | [DELIVERY_REPORT-2026-08-14-BARP-UNARY-LITERAL-TRUTH-CHOOSE-SPEAK.md](../historical%20docs/DELIVERY_REPORT-2026-08-14-BARP-UNARY-LITERAL-TRUTH-CHOOSE-SPEAK.md) | ADR-114 unary-literal Truth seed diagnostic delivery / current verification status |
 | [DELIVERY_REPORT-2026-08-14-BARP-WHOLE-TRUTH-YIELD-SPEAK.md](../historical%20docs/DELIVERY_REPORT-2026-08-14-BARP-WHOLE-TRUTH-YIELD-SPEAK.md) | ADR-115 Whole Truth-literal yield seed diagnostic delivery / current verification status |
 | [DELIVERY_REPORT-2026-08-21-BARP-M23-COMPTIME-CALL-SOURCE-ORDER-SPEAK.md](../historical%20docs/DELIVERY_REPORT-2026-08-21-BARP-M23-COMPTIME-CALL-SOURCE-ORDER-SPEAK.md) | ADR-127 source-order integrity delivery / final release evidence |
+| [DELIVERY_REPORT-2026-08-21-BARP-SEED-NATIVE-WHOLE-LIBRARY-BUNDLE-PROFILE.md](../historical%20docs/DELIVERY_REPORT-2026-08-21-BARP-SEED-NATIVE-WHOLE-LIBRARY-BUNDLE-PROFILE.md) | ADR-128 bounded seed-native bundle delivery / final release evidence |
 | [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) | This audit stamp |
-| ADRs 043–127 | Maturity decision trail |
+| ADRs 043–128 | Maturity decision trail |
 
 ---
 

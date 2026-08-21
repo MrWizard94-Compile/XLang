@@ -49,14 +49,16 @@ pub use authoring::{
 pub use modules::{
     compile_product_multi_source_envelope, compile_product_multi_unit, compile_project_entry,
     compile_project_entry_with_packages, compile_project_modules,
-    compile_project_modules_with_packages, decode_multi_source_envelope, elaborate_in_memory_units,
-    elaborate_project_entry, elaborate_project_entry_with_packages, elaborate_project_modules,
-    elaborate_project_modules_with_packages, encode_multi_source_envelope, mangle_weave,
-    multi_module_authority_note, product_multi_source_unit_digests_api,
-    product_multi_source_unit_surface, product_multi_source_unit_surface_api, run_project_tests,
-    run_project_tests_with_grants, source_requires_project_modules, validate_lib_module_source,
-    MultiSourceEnvelopeSurface, MultiSourceUnitSurface, ProjectTestReport, ProjectTestResult,
-    MULTI_SOURCE_ENVELOPE_SCHEMA,
+    compile_project_modules_with_packages, decode_multi_source_envelope, decode_seed_bundle,
+    elaborate_in_memory_units, elaborate_project_entry, elaborate_project_entry_with_packages,
+    elaborate_project_modules, elaborate_project_modules_with_packages,
+    encode_multi_source_envelope, encode_seed_bundle, mangle_weave, multi_module_authority_note,
+    product_multi_source_unit_digests_api, product_multi_source_unit_surface,
+    product_multi_source_unit_surface_api, run_project_tests, run_project_tests_with_grants,
+    source_requires_project_modules, validate_lib_module_source, MultiSourceEnvelopeSurface,
+    MultiSourceUnitSurface, ProjectTestReport, ProjectTestResult, SeedBundle,
+    MULTI_SOURCE_ENVELOPE_SCHEMA, SEED_BUNDLE_MAX_TOTAL_SCALARS, SEED_BUNDLE_MAX_UNITS,
+    SEED_BUNDLE_MAX_UNIT_SCALARS, SEED_BUNDLE_MAX_WIRE_SCALARS, SEED_BUNDLE_SCHEMA,
 };
 pub use native::{
     f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
@@ -2771,8 +2773,11 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 ///
 /// **ADR-078:** multi-source forge envelopes (`aether.multi-source/v1`) are
 /// accepted on the product path via host elaborate + seed emit (not seed-native
-/// multi-file parse). Seed SPEAK stdout is scanned for `AETHER_SEED_ERROR` packets
-/// when forge returns (diagnostic merge); seed-binary emit remains residual.
+/// multi-file parse). **ADR-128:** the separate bounded
+/// `aether.seed-bundle/v1` profile goes directly to seed `compile_bundle`; it
+/// does not broaden the host-elaborated M11/M22 contract. Seed SPEAK stdout is
+/// scanned for `AETHER_SEED_ERROR` packets when forge returns (diagnostic merge);
+/// seed-binary diagnostic conformance remains residual.
 pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> {
     debug_assert!(
         seed_interprets_m23_comptime_calls_natively(),
@@ -2782,6 +2787,12 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         product_path_forges_before_bootstrap_validate(),
         "BARP Phase 2 requires forge-first product emission"
     );
+    // ADR-128: a bounded scalar-framed source bundle is an explicit second seed
+    // forge ABI. Do this before normal source preflights because its payload
+    // legitimately contains M11 `import unit` syntax that the seed resolves.
+    if seed_native_whole_library_bundle_profile() && looks_like_seed_bundle(source) {
+        return compile_product_seed_bundle(source);
+    }
     // ADR-078: product multi-source envelope → host multi-unit forge.
     if product_multi_source_forge_envelope() && looks_like_multi_source_envelope(source) {
         return modules::compile_product_multi_source_envelope(source).map_err(|error| {
@@ -2837,7 +2848,34 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
             }
         }
     }
-    let forged = forge_bytecode(SEED_COMPILER_ARTIFACT, source).map_err(|error| {
+    forge_product_seed_entry("compile", source)
+}
+
+/// ADR-128 product route for a bounded seed-native Whole-library source bundle.
+///
+/// The source bundle reaches the verified seed `compile_bundle` weave unchanged.
+/// It is intentionally separate from general M11/M22 host elaboration; callers
+/// needing an arbitrary module graph continue to use the established project or
+/// v1 multi-source route.
+pub fn compile_product_seed_bundle(bundle: &str) -> Result<Vec<u8>, CompilerError> {
+    debug_assert!(
+        seed_native_whole_library_bundle_profile(),
+        "ADR-128: bounded seed-native bundle profile must remain enabled"
+    );
+    debug_assert!(
+        !product_seed_bundle_invokes_host_elaborator(),
+        "ADR-128: bundle production route must not use host module elaboration"
+    );
+    forge_product_seed_entry("compile_bundle", bundle)
+}
+
+fn forge_product_seed_entry(weave_name: &str, input: &str) -> Result<Vec<u8>, CompilerError> {
+    let forged = match weave_name {
+        "compile" => forge_bytecode(SEED_COMPILER_ARTIFACT, input),
+        "compile_bundle" => forge_bundle_bytecode(SEED_COMPILER_ARTIFACT, input),
+        _ => unreachable!("only closed seed forge entries are callable"),
+    }
+    .map_err(|error| {
         // ADR-090: forge errors may include seed SPEAK stdout for packet merge.
         let detail = error.to_string();
         CompilerError::new(
@@ -2892,6 +2930,10 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
 fn looks_like_multi_source_envelope(source: &str) -> bool {
     let trimmed = source.trim_start();
     trimmed.starts_with('{') && trimmed.contains(modules::MULTI_SOURCE_ENVELOPE_SCHEMA)
+}
+
+fn looks_like_seed_bundle(source: &str) -> bool {
+    source.starts_with(modules::SEED_BUNDLE_SCHEMA)
 }
 
 /// BARP ADR-055: structured **product** diagnostic collection (seed path).
@@ -3540,6 +3582,22 @@ pub const fn host_elaborates_modules_seed_emits() -> bool {
 /// BARP ADR-056 honesty: seed does **not** natively elaborate multi-module graphs.
 #[must_use]
 pub const fn seed_native_multi_module_elaboration() -> bool {
+    false
+}
+
+/// ADR-128: the seed natively elaborates the deliberately bounded SBP-001
+/// two-unit Whole-library profile through its separate `compile_bundle` ABI.
+///
+/// This must never be used to overstate the general M11/M22 tracker above.
+#[must_use]
+pub const fn seed_native_whole_library_bundle_profile() -> bool {
+    true
+}
+
+/// ADR-128 authority witness: production seed-bundle compilation does not call
+/// host module parsing, graph resolution, namespace mangling, or elaboration.
+#[must_use]
+pub const fn product_seed_bundle_invokes_host_elaborator() -> bool {
     false
 }
 
@@ -5568,19 +5626,42 @@ pub fn invoke_bytecode_with_grants(
     )
 }
 
-/// Invokes the fixed compiler ABI used by `aether forge`.
+/// Invokes the ordinary fixed compiler ABI used by `aether forge`.
 ///
 /// The compiler artifact must expose `compile [borrow source: Text] -> Bytes` and
 /// retain a valid runnable `main` weave. The host passes only the source text and
 /// writes the returned bytes after independently verifying them.
 pub fn forge_bytecode(compiler: &[u8], source: &str) -> Result<InvocationOutput, BytecodeError> {
+    forge_bytecode_entry(compiler, "compile", "source", source)
+}
+
+/// Invokes the ADR-128 bounded seed-bundle compiler ABI.
+///
+/// The compiler artifact must expose `compile_bundle [borrow bundle: Text] ->
+/// Bytes`. The host treats the bundle as opaque Text: it neither decodes nor
+/// elaborates its units before the verified compiler receives it.
+pub fn forge_bundle_bytecode(
+    compiler: &[u8],
+    bundle: &str,
+) -> Result<InvocationOutput, BytecodeError> {
+    forge_bytecode_entry(compiler, "compile_bundle", "bundle", bundle)
+}
+
+fn forge_bytecode_entry(
+    compiler: &[u8],
+    weave_name: &str,
+    parameter_name: &str,
+    input: &str,
+) -> Result<InvocationOutput, BytecodeError> {
     verify_bytecode(compiler)?;
     let artifact = parse_artifact(compiler)?;
     let function_index = artifact
         .functions
         .iter()
-        .position(|function| function.name == "compile")
-        .ok_or_else(|| BytecodeError::new(0, "artifact has no weave named compile"))?;
+        .position(|function| function.name == weave_name)
+        .ok_or_else(|| {
+            BytecodeError::new(0, format!("artifact has no weave named {weave_name}"))
+        })?;
     let function = &artifact.functions[function_index];
     if function.parameters.len() != 1
         || function.parameters[0] != (ValueType::Text, ParameterMode::Borrow)
@@ -5588,14 +5669,16 @@ pub fn forge_bytecode(compiler: &[u8], source: &str) -> Result<InvocationOutput,
     {
         return Err(BytecodeError::new(
             0,
-            "compiler weave must have signature [borrow source: Text] -> Bytes",
+            format!(
+                "compiler weave {weave_name} must have signature [borrow {parameter_name}: Text] -> Bytes"
+            ),
         ));
     }
     invoke_artifact(
         &artifact,
         function_index,
-        "compile",
-        &[InvocationValue::Text(source.to_owned())],
+        weave_name,
+        &[InvocationValue::Text(input.to_owned())],
     )
 }
 
@@ -18666,6 +18749,29 @@ mod tests {
         let error = forge_bytecode(&compiler, "world supplied\n")
             .expect_err("forge must reject an owned Text compiler parameter");
         assert!(error.message.contains("[borrow source: Text] -> Bytes"));
+    }
+
+    #[test]
+    fn forge_bundle_rejects_a_compiler_weave_without_the_required_borrowed_text_abi() {
+        let source = "world forge\n\nweave compile_bundle [bundle: Text] -> Bytes:\n  bind artifact <- bytes \"\"\n  yield move artifact\n\nweave main [] -> Whole:\n  yield 0\n";
+        let compiler = compile_to_bytecode(source)
+            .expect("invalid bundle ABI fixture should compile as general Aether")
+            .bytecode;
+        let error = forge_bundle_bytecode(&compiler, "aether.seed-bundle/v1\n")
+            .expect_err("bundle forge must reject an owned Text compiler parameter");
+        assert!(
+            error.message.contains("[borrow bundle: Text] -> Bytes"),
+            "expected bundle ABI error, got {error}"
+        );
+
+        let missing = compile_to_bytecode(
+            "world forge\n\nweave compile [borrow source: Text] -> Bytes:\n  bind artifact <- bytes \"\"\n  yield move artifact\n\nweave main [] -> Whole:\n  yield 0\n",
+        )
+        .expect("ordinary compiler fixture should compile")
+        .bytecode;
+        let missing_error = forge_bundle_bytecode(&missing, "aether.seed-bundle/v1\n")
+            .expect_err("bundle forge must require the explicitly named entry");
+        assert!(missing_error.message.contains("compile_bundle"));
     }
 
     #[test]

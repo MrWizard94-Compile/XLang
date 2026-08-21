@@ -1,7 +1,7 @@
 # Aether Seed Profile
 
 Status: normative seed-emission profile for package **0.37.0** (canonical 0.11
-surface plus documented later bounded semantics), 2026-08-08.
+surface plus documented later bounded semantics), 2026-08-21.
 
 This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
 It covers the documented canonical Aether 0.11 source surface and the later
@@ -25,9 +25,12 @@ without bootstrap AST rewrite (default format remains full bootstrap canonical;
 ADR-053/054). `structure --product` emits `aether.product-structure/v1` without
 bootstrap AST (ADR-054). Project verify validates lib units via product seed
 probes (ADR-052). Host-facing product diagnostics are [`product_diagnostics`]
-with `AE-SEED-001`–`012` (ADR-055); raw `import unit` is `AE-SEED-012` — multi-module
-product path is host elaborate + seed emit (ADR-056; seed does not elaborate
-multi-file natively). LSP diagnostics are product-primary (ADR-058); hover/definition
+with `AE-SEED-001`–`012` (ADR-055); raw `import unit` is `AE-SEED-012` — general
+multi-module product path is host elaborate + seed emit (ADR-056; seed does not
+elaborate multi-file natively). The separate ADR-128 `aether.seed-bundle/v1`
+profile sends one bounded two-unit Text directly to the seed `compile_bundle`
+weave, which parses and elaborates only that profile; it does not change the
+general false multi-module tracker. LSP diagnostics are product-primary (ADR-058); hover/definition
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
  project format, LSP format, product structural weave/statement/record ops, and seed
  rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
@@ -133,6 +136,14 @@ The profile does not silently expand that language surface.
     task loop back edges, and computes the exact main-plus-largest-task-nursery
     capacity header. The active-cancel, capacity, loop, and forward-task corpus
     matches bootstrap byte-for-byte.
+19. Exposes the separate ADR-128 forge ABI
+    `weave compile_bundle [borrow bundle: Text] -> Bytes:`. It seed-parses and
+    elaborates one exact ASCII/LF two-unit source bundle (pure Whole library
+    followed by one main entry) with scalar framing and no host module
+    elaborator. The documented canonical bundle matches the established M11
+    bootstrap elaboration artifact byte-for-byte. This does **not** claim
+    seed-native general M11/M22: `seed_native_multi_module_elaboration()`
+    remains false.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
@@ -152,6 +163,19 @@ for the prior seed surface.
 
 M25 in package 0.37 is host-only local package tooling. It changes no source
 form, AETH byte, seed input, seed artifact, or seed-emission proof obligation.
+
+ADR-128 adds the bounded source-bundle profile inside the seed artifact without
+changing the package language or AETH contract. It is intentionally a second
+named forge weave, not a relaxed raw-source parser: ordinary source with
+`import unit` still fails `AE-SEED-012`, while a framed
+`aether.seed-bundle/v1` input reaches `compile_bundle`. The seed accepts exactly
+one pure Whole library then the named entry, each no more than 16,384 scalars,
+with no more than 32,768 payload scalars or 33,280 wire scalars. It validates
+the frame, source identity paths, worlds, exact import, one export, one main,
+and qualified helper calls before assembling and compiling one source. See
+[ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
+[SBP-001](../historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md),
+and [the threat model](THREAT_MODEL-SBP-001-SEED-BUNDLE.md).
 
 ADR-106 adds a bounded direct-forge task diagnostic pilot: before normal
 compilation, the seed recognizes canonical top-level task headers and requires
@@ -206,6 +230,10 @@ A Seed Profile program must contain:
 The forge-facing compiler shape used by the seed itself remains:
 
       weave compile [borrow source: Text] -> Bytes:
+
+The bounded bundle profile adds this separate required compiler entry:
+
+      weave compile_bundle [borrow bundle: Text] -> Bytes:
 
 Input programs are not required to declare `compile`. Weave indices in the
 emitted artifact follow declaration order (0-based). Every weave body is
@@ -384,6 +412,11 @@ All three SHA-256 digests must match. The regression tests also forge:
     `examples/task-frame-capacity.ae`, and `examples/task-loop.ae`) plus a
     forward-declared task fixture dual-compare as v12 and run with their
     documented exits/capacities.
+15. The SBP-001 canonical bundle (`examples/seed-bundle-whole.aeb`) uses the
+    distinct seed `compile_bundle` ABI, verifies, exits 84, and matches Rust
+    bootstrap compilation of the established M11 elaboration reference;
+    hostile framing, path, world, import, call, Text, and resource-form cases
+    fail with one `AE-SEED-016` seed-SPEAK packet.
 
 ## Authority
 
@@ -391,4 +424,6 @@ All three SHA-256 digests must match. The regression tests also forge:
 - Historical base language: [AETHER_0.11.md](AETHER_0.11.md)
 - Host forge ABI: [FORGE_CONTRACT.md](FORGE_CONTRACT.md)
 - Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
+- SBP-001 validation: [SBP-VALIDATION-MATRIX.md](SBP-VALIDATION-MATRIX.md)
+- SBP-001 threat model: [THREAT_MODEL-SBP-001-SEED-BUNDLE.md](THREAT_MODEL-SBP-001-SEED-BUNDLE.md)
 - Product gate: [../MANIFEST.md](../../MANIFEST.md)

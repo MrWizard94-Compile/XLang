@@ -61,6 +61,18 @@ capability. See
 [docs/AETHER_0.11.md](docs/Current%20state/AETHER_0.11.md),
 [docs/AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md), and [docs/SEED_PROFILE.md](docs/Current%20state/SEED_PROFILE.md).
 
+ADR-128 adds a separate, bounded seed-native source-bundle profile:
+`aether.seed-bundle/v1` carries exactly one pure Whole library and one entry
+unit to seed `compile_bundle [borrow bundle: Text] -> Bytes`. The verified seed
+owns framing, import matching, name mangling, and call rewriting; the product
+route does not call the host module elaborator. It is **not** general seed-native
+M11/M22: ordinary project/workspace module graphs remain host-elaborated then
+seed-emitted. Use `aether compile examples\seed-bundle-whole.aeb --output <artifact.aeth>`
+or `aether forge-bundle <compiler.aeth> <bundle.aeb> --output <artifact.aeth>`. See
+[ADR-128](docs/historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
+[the SBP validation matrix](docs/Current%20state/SBP-VALIDATION-MATRIX.md), and
+[the SBP threat model](docs/Current%20state/THREAT_MODEL-SBP-001-SEED-BUNDLE.md).
+
 BARP's bounded direct-seed diagnostic pilot now SPEAKs
 AE-SEED-003/004/005/006/007/010/011/012/013/014/015. Its task-checkpoint portion
 recognizes only canonical top-level task headers and exact indented

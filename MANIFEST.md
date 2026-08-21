@@ -13,7 +13,9 @@ for the documented seed surface. Rust bootstrap remains recovery/oracle AST
 (`--bootstrap`, dual-compare, full `aether.ast/v8`) for
 including multi-weave arenas / resourceful total spawn callees
 (`examples/spawn-arena.ae`), M19e task frames, and the M21 foreign weave pilot.
-Multi-module and workspace build elaborate then seed-compile.
+Multi-module and workspace build elaborate then seed-compile. ADR-128 adds one
+separate, exact two-unit source-bundle profile that seed-elaborates internally;
+it does not change the general M11/M22 host-elaboration contract.
 For M23 source, the bootstrap validates the restricted pure call; the seed
 interprets raw `comptime bind <- call` under the D2a body subset and emits
 `COMPTIME_WHOLE` without a materialization rewrite. The product artifact is
@@ -160,7 +162,8 @@ strictly checkpointed v12 successor.
 This manifest is the executable Aether 0.37 product contract (0.11 core language,
 M9–M23/M19a–M19e/M20/M20b/M17b–M17d/M21 pilot/M22 tooling plus RTP-001,
 PKG-001, and M25 local source packages with bounded task-frame semantics and
-honest seed limits), plus the post-0.36 M32a/M32b verified-execution evidence
+honest seed limits), plus the post-0.37 SBP-001 bounded seed-native
+two-unit-source profile and post-0.36 M32a/M32b verified-execution evidence
 tooling. M32a/M32b has no language or
 artifact effect. This manifest intentionally does not promote long-range
 research directions to implemented behavior. The
@@ -288,6 +291,18 @@ ADR-127 additionally makes the checked-in seed enforce the canonical root
 forward-target boundary directly: a nonempty target with no prior ordinary
 top-level `weave target [` header emits one seed-SPEAK `AE-SEED-011` packet on
 the product path. It does not claim full M23 diagnostic or eligibility parity.
+
+ADR-128 adds the distinct `aether.seed-bundle/v1` forge ABI
+`compile_bundle [borrow bundle: Text] -> Bytes`. It accepts exactly one
+ASCII/LF pure Whole library and one entry unit under scalar framing; the seed
+checks the frame, exact import edge, worlds, source profile, path mangle, and
+qualified calls before assembling one source for its existing `compile` weave.
+The production route transports opaque bundle Text and does not call a host
+decoder or M11 elaborator. It has no language, AETH, VM, guest-capability,
+project-schema, resolver, package, or network expansion. General M11/M22 remains
+host elaborate + seed emit; see [ADR-128](docs/historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
+[SBP-001](docs/historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md), and
+[the threat model](docs/Current%20state/THREAT_MODEL-SBP-001-SEED-BUNDLE.md).
 
 RTP-001 (package 0.34) is an implementation-only VM change. Runtime `Text`
 stores cached ASCII provenance; ASCII `measure`, `glyph`, `cut`, and `seek` use
@@ -440,6 +455,7 @@ operation vocabulary, and compatibility policy are in
 | **Seed product API** | `compile_with_seed` / `product_diagnostics` / `product_surface_symbols` — never bootstrap |
 | **Structural product edits** | Top-level weave + weave-body statements + nested choose/while body lists + primitive records without bootstrap base AST (ADR-065/068/069/071) |
 | **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
+| **SBP-001 seed bundle** | Exact two-unit `aether.seed-bundle/v1`: one pure Whole library + one main entry, framed bounded Text sent directly to seed `compile_bundle`; no host elaborator and no general module claim (ADR-128) |
 | **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; full `aether.ast/v8`; dual-compare tests/gate |
 | **Product seed-error packets** | SPEAK protocol + forge SPEAK merge (ADR-082–094/098/102/103/106); seed pilot 003/004/005/006/007/012/014/015, bounded lexical 003/007 plus canonical reserved-task prefixes 014 and exact task-checkpoint 015 detection; full matrix residual |
 | **Multi-source forge** | Product multi-file host path + unit digests (ADR-075–086/094/098); seed-native residual |
@@ -449,7 +465,7 @@ operation vocabulary, and compatibility policy are in
 | **Task model** | ADR-081 design; surface/inventory (ADR-085/093/097); reserved 014; checkpoint required 015 (ADR-101) |
 | **F-NATIVE M35a/b** | `compile --native-c` — verified AETH → ISO C pure Whole + locals/arithmetic (ADR-059/062); VM remains default |
 | **F-REGISTRY M24a** | `registry pin-local` / `verify-cache` — offline digest pins only (ADR-060); no network |
-| **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes` |
+| **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes`; SBP-001 additionally requires `compile_bundle [borrow bundle: Text] -> Bytes` |
 
 The seed artifact is checked in at `seed/aether_seed.aeth` and embedded as
 `SEED_COMPILER_ARTIFACT` for offline deterministic product builds.
@@ -522,7 +538,9 @@ aether project build <project-file> --output <artifact.aeth>
 
 `project build` elaborates the main unit’s import DAG, dual-compares
 bootstrap≡seed AETH bytes, and writes the seed artifact. Single-file `compile`
-remains seed-hosted and rejects raw `import unit` (use project build). See
+remains seed-hosted and rejects raw `import unit` (use project build), except
+for the separately framed ADR-128 `aether.seed-bundle/v1` profile, which uses
+seed `compile_bundle` rather than the general module path. See
 [docs/DESIGN-M11-LANGUAGE-MODULES.md](docs/historical%20docs/DESIGN-M11-LANGUAGE-MODULES.md),
 [docs/DESIGN-M9-PROJECT-TOOLING.md](docs/historical%20docs/DESIGN-M9-PROJECT-TOOLING.md), and
 [docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md](docs/historical%20docs/DESIGN-M10-MULTI-UNIT-PROJECTS.md).
@@ -557,6 +575,7 @@ pwsh -NoProfile -File .\dist\aether-0.37.0-tp\verify-preview.ps1
 ```
 
 Current local-package threat model: [docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md).
+Current bounded seed-bundle threat model: [docs/THREAT_MODEL-SBP-001-SEED-BUNDLE.md](docs/Current%20state/THREAT_MODEL-SBP-001-SEED-BUNDLE.md).
 
 Historical 0.12 pure-surface freeze: [docs/THREAT_MODEL-TECHNICAL-PREVIEW.md](docs/historical%20docs/THREAT_MODEL-TECHNICAL-PREVIEW.md).
 Capable host I/O threat model (M14): [docs/THREAT_MODEL-v2-CAPABLE-HOST.md](docs/Current%20state/THREAT_MODEL-v2-CAPABLE-HOST.md).

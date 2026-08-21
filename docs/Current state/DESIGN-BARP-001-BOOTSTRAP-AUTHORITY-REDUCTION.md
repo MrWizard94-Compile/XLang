@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064–072; bounded pilot increments through ADR-127); ADR-127 release verified; residual recovery bootstrap
-**Date:** 2026-08-21 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-127 source-order integrity)
-**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-127](../historical%20docs/ADR-127-barp-seed-speak-root-comptime-bind-unknown-call-pilot.md)
+**Status:** Active program — product-default toolchain (ADR-064–072; bounded increments through ADR-128); ADR-127 and ADR-128 release verified; residual recovery bootstrap
+**Date:** 2026-08-21 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-127 and SBP-001)
+**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md)
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -48,7 +48,7 @@ Bootstrap remains **required** only for residual roles (ADR-065–071 reduced fu
 | LSP format | **Product** LF+accept (ADR-064) |
 | LSP hover/definition | **Product-surface** local (ADR-066); import path text scan |
 | Product diagnostics API | [`product_diagnostics`] (ADR-055) |
-| Multi-module | Host elaborate + seed emit; seed-native multi-file **false** (ADR-056) |
+| Multi-module | Host elaborate + seed emit; general seed-native multi-file **false** (ADR-056). ADR-128 is a separate exact two-unit seed-native profile, not a general exception. |
 
 **Primary product emission** is seed forge without bootstrap pre-gate or
 product dual-compare gate. Bootstrap remains dual-compare **oracle**, recovery
@@ -155,6 +155,20 @@ product diagnostics; not full seed-internal error packets).
 
 Contract + honesty trackers; seed-native multi-file elaboration remains false.
 
+### ADR-128 — bounded seed-native Whole-library bundle (**release verified**)
+
+The separate `aether.seed-bundle/v1` profile carries exactly one library and one
+entry source as bounded scalar-framed Text to seed
+`compile_bundle [borrow bundle: Text] -> Bytes`. The seed validates framing,
+paths, distinct worlds, one exact import, one exported pure Whole helper, and
+qualified calls; it applies the established M11 mangle and compiles the resulting
+single-world source. The product path supplies opaque Text and never invokes the
+host M11 elaborator. The profile is capability-closed and retains
+`seed_native_multi_module_elaboration() == false` for general projects,
+workspaces, and multi-source envelopes. See [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
+[SBP-001](../historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md),
+and [the SBP matrix](SBP-VALIDATION-MATRIX.md).
+
 ### ADR-057 — Structural-edit product base gate (**complete** 2026-08-10)
 
 When both product and bootstrap reject base source, prefer product AE-SEED.
@@ -197,7 +211,7 @@ Product project/workspace compile returns seed bytes via
 | Product project format | **`project format --product`** (ADR-054) |
 | Product structure | **`structure --product`** envelope (ADR-054) |
 | Product diagnostics API | **`product_diagnostics`** (ADR-055) |
-| Multi-module | Host elaborate + seed emit (ADR-056); seed-native = false |
+| Multi-module | Host elaborate + seed emit (ADR-056); general seed-native = false. SBP-001 is a distinct exact two-unit seed profile (ADR-128). |
 | LSP diagnostics / hover / def | **Product primary** (ADR-058/066) |
 | Structural top-level weaves | **Product path** (ADR-065/068 replace/insert/delete) |
 | Structural statements/records | **Product path** weave-body + primitive records (ADR-069) |

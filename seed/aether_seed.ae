@@ -4072,5 +4072,802 @@ weave compile [borrow source: Text] -> Bytes:
     revise v30 <- 0
   yield move v46
 
+weave bundle_ascii_lf [borrow value: Text] -> Truth:
+  bind mutable result <- bright
+  bind mutable length <- measure borrow value
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  while less cursor length:
+    revise code <- glyph borrow value cursor
+    choose same code 10:
+      revise result <- result
+    otherwise:
+      choose less code 32:
+        revise result <- dim
+      otherwise:
+        choose less code 127:
+          revise result <- result
+        otherwise:
+          revise result <- dim
+    revise cursor <- sum cursor 1
+  yield result
+
+weave bundle_safe_identifier [borrow value: Text] -> Truth:
+  bind mutable result <- bright
+  bind mutable length <- measure borrow value
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  choose same length 0:
+    revise result <- dim
+  otherwise:
+    revise cursor <- 0
+  while less cursor length:
+    revise code <- glyph borrow value cursor
+    choose same cursor 0:
+      choose less code 97:
+        revise result <- dim
+      otherwise:
+        choose less code 123:
+          revise result <- result
+        otherwise:
+          revise result <- dim
+    otherwise:
+      choose same code 95:
+        revise result <- result
+      otherwise:
+        choose less code 48:
+          choose less code 97:
+            revise result <- dim
+          otherwise:
+            choose less code 123:
+              revise result <- result
+            otherwise:
+              revise result <- dim
+        otherwise:
+          choose less code 58:
+            revise result <- result
+          otherwise:
+            choose less code 97:
+              revise result <- dim
+            otherwise:
+              choose less code 123:
+                revise result <- result
+              otherwise:
+                revise result <- dim
+    revise cursor <- sum cursor 1
+  yield result
+
+weave bundle_safe_path [borrow value: Text] -> Truth:
+  bind mutable result <- bright
+  bind mutable length <- measure borrow value
+  bind mutable stem_end <- 0
+  bind mutable last_index <- 0
+  bind mutable first_code <- 0
+  bind mutable last_code <- 0
+  bind mutable suffix <- ""
+  bind mutable doubled <- -1
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  choose less length 4:
+    revise result <- dim
+  otherwise:
+    revise stem_end <- difference length 3
+    revise suffix <- cut borrow value stem_end length
+    choose same borrow suffix ".ae":
+      revise result <- result
+    otherwise:
+      revise result <- dim
+  choose result:
+    revise first_code <- glyph borrow value 0
+    revise last_index <- difference stem_end 1
+    revise last_code <- glyph borrow value last_index
+    revise doubled <- seek borrow value "//" 0
+    choose same first_code 47:
+      revise result <- dim
+    otherwise:
+      choose same last_code 47:
+        revise result <- dim
+      otherwise:
+        choose same doubled -1:
+          revise result <- result
+        otherwise:
+          revise result <- dim
+  otherwise:
+    revise cursor <- cursor
+  while less cursor stem_end:
+    revise code <- glyph borrow value cursor
+    choose same code 47:
+      revise result <- result
+    otherwise:
+      choose same code 95:
+        revise result <- result
+      otherwise:
+        choose less code 48:
+          choose less code 97:
+            revise result <- dim
+          otherwise:
+            choose less code 123:
+              revise result <- result
+            otherwise:
+              revise result <- dim
+        otherwise:
+          choose less code 58:
+            revise result <- result
+          otherwise:
+            choose less code 97:
+              revise result <- dim
+            otherwise:
+              choose less code 123:
+                revise result <- result
+              otherwise:
+                revise result <- dim
+    revise cursor <- sum cursor 1
+  yield result
+
+weave bundle_decimal_1to5 [borrow value: Text] -> Truth:
+  bind mutable result <- bright
+  bind mutable length <- measure borrow value
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  choose same length 0:
+    revise result <- dim
+  otherwise:
+    choose less 5 length:
+      revise result <- dim
+    otherwise:
+      revise result <- result
+  while less cursor length:
+    revise code <- glyph borrow value cursor
+    choose less code 48:
+      revise result <- dim
+    otherwise:
+      choose less code 58:
+        revise result <- result
+      otherwise:
+        revise result <- dim
+    revise cursor <- sum cursor 1
+  yield result
+
+weave bundle_world [borrow value: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable length <- measure borrow value
+  bind mutable line_end <- seek borrow value "\n" 0
+  bind mutable prefix <- "world "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable prefix_at <- -1
+  bind mutable valid <- dim
+  choose less -1 line_end:
+    revise prefix_at <- seek borrow value borrow prefix 0
+    choose same prefix_at 0:
+      choose less prefix_length line_end:
+        revise output <- cut borrow value prefix_length line_end
+        revise valid <- call bundle_safe_identifier borrow output
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise output <- borrow output
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave bundle_mangle [borrow path: Text, borrow name: Text] -> Text:
+  bind mutable output <- "m_"
+  bind mutable length <- measure borrow path
+  bind mutable stem_end <- difference length 3
+  bind mutable cursor <- 0
+  bind mutable next <- 0
+  bind mutable code <- 0
+  bind mutable character <- ""
+  while less cursor stem_end:
+    revise next <- sum cursor 1
+    revise code <- glyph borrow path cursor
+    choose same code 47:
+      revise output <- join borrow output "_"
+    otherwise:
+      revise character <- cut borrow path cursor next
+      revise output <- join borrow output borrow character
+    revise cursor <- next
+  revise output <- join borrow output "_"
+  revise output <- join borrow output borrow name
+  yield move output
+
+weave bundle_pure_whole_source [borrow value: Text] -> Truth:
+  bind mutable forbidden <- seek borrow value "arena " 0
+  bind mutable permitted <- dim
+  choose same forbidden -1:
+    revise forbidden <- seek borrow value "buffer " 0
+    choose same forbidden -1:
+      revise forbidden <- seek borrow value "allocate " 0
+      choose same forbidden -1:
+        revise forbidden <- seek borrow value "release " 0
+        choose same forbidden -1:
+          revise forbidden <- seek borrow value "access " 0
+          choose same forbidden -1:
+            revise forbidden <- seek borrow value "handle " 0
+            choose same forbidden -1:
+              revise forbidden <- seek borrow value "raise " 0
+              choose same forbidden -1:
+                revise forbidden <- seek borrow value "forward " 0
+                choose same forbidden -1:
+                  revise forbidden <- seek borrow value "spawn " 0
+                  choose same forbidden -1:
+                    revise forbidden <- seek borrow value "together" 0
+                  otherwise:
+                    revise forbidden <- forbidden
+                otherwise:
+                  revise forbidden <- forbidden
+              otherwise:
+                revise forbidden <- forbidden
+            otherwise:
+              revise forbidden <- forbidden
+          otherwise:
+            revise forbidden <- forbidden
+        otherwise:
+          revise forbidden <- forbidden
+      otherwise:
+        revise forbidden <- forbidden
+    otherwise:
+      revise forbidden <- forbidden
+  otherwise:
+    revise forbidden <- forbidden
+  choose same forbidden -1:
+    revise permitted <- bright
+  otherwise:
+    revise permitted <- dim
+  yield permitted
+
+weave bundle_rewrite_calls [borrow value: Text, borrow alias: Text, borrow helper: Text, borrow mangled: Text] -> Text:
+  bind mutable output <- ""
+  bind mutable length <- measure borrow value
+  bind mutable cursor <- 0
+  bind mutable found <- -1
+  bind mutable target_start <- 0
+  bind mutable target_end <- 0
+  bind mutable space_at <- -1
+  bind mutable newline_at <- -1
+  bind mutable prefix <- ""
+  bind mutable target <- ""
+  bind mutable call_prefix <- "call "
+  bind mutable call_length <- measure borrow call_prefix
+  bind mutable failed <- dim
+  bind mutable saw_call <- dim
+  while less cursor length:
+    revise found <- seek borrow value borrow call_prefix cursor
+    choose same found -1:
+      revise prefix <- cut borrow value cursor length
+      revise output <- join borrow output borrow prefix
+      revise cursor <- length
+    otherwise:
+      revise prefix <- cut borrow value cursor found
+      revise output <- join borrow output borrow prefix
+      revise target_start <- sum found call_length
+      revise space_at <- seek borrow value " " target_start
+      revise newline_at <- seek borrow value "\n" target_start
+      choose same space_at -1:
+        choose same newline_at -1:
+          revise target_end <- length
+        otherwise:
+          revise target_end <- newline_at
+      otherwise:
+        choose same newline_at -1:
+          revise target_end <- space_at
+        otherwise:
+          choose less space_at newline_at:
+            revise target_end <- space_at
+          otherwise:
+            revise target_end <- newline_at
+      revise target <- cut borrow value target_start target_end
+      revise prefix <- join borrow alias "."
+      revise prefix <- join borrow prefix borrow helper
+      choose same borrow target borrow prefix:
+        revise output <- join borrow output borrow call_prefix
+        revise output <- join borrow output borrow mangled
+        revise cursor <- target_end
+        revise saw_call <- bright
+      otherwise:
+        revise failed <- bright
+        revise cursor <- length
+  choose failed:
+    revise output <- "!"
+  otherwise:
+    choose saw_call:
+      revise output <- borrow output
+    otherwise:
+      revise output <- "!"
+  yield move output
+
+weave bundle_elaborate [borrow bundle: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable valid <- bright
+  bind mutable magic <- "aether.seed-bundle/v1"
+  bind mutable magic_length <- measure borrow magic
+  bind mutable bundle_length <- measure borrow bundle
+  bind mutable cursor <- 0
+  bind mutable line_end <- -1
+  bind mutable header <- ""
+  bind mutable header_length <- 0
+  bind mutable prefix_at <- -1
+  bind mutable entry_prefix <- "entry "
+  bind mutable entry_prefix_length <- measure borrow entry_prefix
+  bind mutable unit_prefix <- "unit "
+  bind mutable unit_prefix_length <- measure borrow unit_prefix
+  bind mutable import_left <- "import "
+  bind mutable import_right <- "unit \""
+  bind mutable import_prefix <- join borrow import_left borrow import_right
+  bind mutable import_prefix_length <- measure borrow import_prefix
+  bind mutable entry_path <- ""
+  bind mutable lib_path <- ""
+  bind mutable entry_unit_path <- ""
+  bind mutable count_text <- ""
+  bind mutable scalar_count <- 0
+  bind mutable payload_start <- 0
+  bind mutable payload_end <- 0
+  bind mutable delimiter <- 0
+  bind mutable separator_at <- -1
+  bind mutable lib_source <- ""
+  bind mutable entry_source <- ""
+  bind mutable lib_length <- 0
+  bind mutable entry_length <- 0
+  bind mutable lib_ascii <- dim
+  bind mutable entry_ascii <- dim
+  bind mutable lib_pure <- dim
+  bind mutable entry_pure <- dim
+  bind mutable lib_world <- "!"
+  bind mutable entry_world <- "!"
+  bind mutable lib_world_end <- -1
+  bind mutable entry_world_end <- -1
+  bind mutable export_prefix <- "export weave "
+  bind mutable export_prefix_length <- measure borrow export_prefix
+  bind mutable export_start <- 0
+  bind mutable lib_export_start <- 0
+  bind mutable export_open <- -1
+  bind mutable export_line_end <- -1
+  bind mutable helper <- ""
+  bind mutable helper_valid <- dim
+  bind mutable mangled <- ""
+  bind mutable quote_at <- -1
+  bind mutable import_line_end <- -1
+  bind mutable alias <- ""
+  bind mutable alias_valid <- dim
+  bind mutable main_header <- "weave main [] -> Whole:"
+  bind mutable main_header_length <- measure borrow main_header
+  bind mutable main_start <- 0
+  bind mutable main_line_end <- -1
+  bind mutable source_tail <- ""
+  bind mutable lib_tail <- ""
+  bind mutable rewritten <- "!"
+  bind mutable marker <- -1
+  bind mutable next_marker <- -1
+  bind mutable text_quote <- "\""
+  bind mutable quote_after_import <- -1
+  bind mutable result_marker <- "!"
+  bind mutable result_code <- 0
+  bind mutable expected_tail <- "\" as "
+  bind mutable expected_tail_length <- measure borrow expected_tail
+  bind mutable tail_end <- 0
+  bind mutable imported_path <- ""
+  bind mutable combined <- ""
+  bind mutable newline <- "\n"
+  bind mutable space <- " "
+  bind mutable start_after_prefix <- 0
+  bind mutable path_end <- -1
+  bind mutable suffix <- ""
+  bind mutable next_unit_start <- 0
+  bind mutable second_header_start <- 0
+  bind mutable second_count_start <- 0
+  bind mutable no_import <- -1
+  bind mutable no_call <- -1
+  bind mutable no_export <- -1
+  bind mutable no_weave <- -1
+  bind mutable no_task <- -1
+  bind mutable arrow_at <- -1
+  bind mutable header_tail <- ""
+  bind mutable header_tail_expected <- " -> Whole:"
+  bind mutable forbidden <- -1
+  bind mutable first_line_end <- -1
+  bind mutable entry_after_import <- ""
+  bind mutable after_main <- 0
+  bind mutable lib_suffix_start <- 0
+  bind mutable ascii_code <- 0
+  bind mutable blank <- ""
+  choose less bundle_length 33281:
+    choose less bundle_length 1:
+      revise valid <- dim
+    otherwise:
+      revise line_end <- seek borrow bundle borrow newline 0
+      choose same line_end magic_length:
+        revise prefix_at <- seek borrow bundle borrow magic 0
+        choose same prefix_at 0:
+          revise cursor <- sum magic_length 1
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise line_end <- seek borrow bundle borrow newline cursor
+    choose less -1 line_end:
+      revise header <- cut borrow bundle cursor line_end
+      revise header_length <- measure borrow header
+      revise prefix_at <- seek borrow header borrow entry_prefix 0
+      choose same prefix_at 0:
+        revise entry_path <- cut borrow header entry_prefix_length header_length
+      otherwise:
+        revise valid <- dim
+      revise valid <- call bundle_safe_path borrow entry_path
+      revise cursor <- sum line_end 1
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise cursor <- cursor
+  choose valid:
+    revise line_end <- seek borrow bundle borrow newline cursor
+    choose less -1 line_end:
+      revise header <- cut borrow bundle cursor line_end
+      revise header_length <- measure borrow header
+      revise prefix_at <- seek borrow header borrow unit_prefix 0
+      choose same prefix_at 0:
+        revise start_after_prefix <- unit_prefix_length
+        revise path_end <- seek borrow header borrow space start_after_prefix
+        choose less start_after_prefix path_end:
+          revise lib_path <- cut borrow header start_after_prefix path_end
+          revise second_count_start <- sum path_end 1
+          revise count_text <- cut borrow header second_count_start header_length
+          revise helper_valid <- call bundle_safe_path borrow lib_path
+          revise alias_valid <- call bundle_decimal_1to5 borrow count_text
+          choose helper_valid:
+            choose alias_valid:
+              revise scalar_count <- number borrow count_text
+            otherwise:
+              revise valid <- dim
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+      choose less scalar_count 16385:
+        revise payload_start <- sum line_end 1
+        revise payload_end <- sum payload_start scalar_count
+        choose less payload_end bundle_length:
+          revise delimiter <- glyph borrow bundle payload_end
+          choose same delimiter 10:
+            revise lib_source <- cut borrow bundle payload_start payload_end
+            revise lib_length <- measure borrow lib_source
+            choose less 0 lib_length:
+              choose less lib_length 16385:
+                revise cursor <- sum payload_end 1
+              otherwise:
+                revise valid <- dim
+            otherwise:
+              revise valid <- dim
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise cursor <- cursor
+  choose valid:
+    revise second_header_start <- cursor
+    revise line_end <- seek borrow bundle borrow newline cursor
+    choose less -1 line_end:
+      revise header <- cut borrow bundle cursor line_end
+      revise header_length <- measure borrow header
+      revise prefix_at <- seek borrow header borrow unit_prefix 0
+      choose same prefix_at 0:
+        revise start_after_prefix <- unit_prefix_length
+        revise path_end <- seek borrow header borrow space start_after_prefix
+        choose less start_after_prefix path_end:
+          revise entry_unit_path <- cut borrow header start_after_prefix path_end
+          revise second_count_start <- sum path_end 1
+          revise count_text <- cut borrow header second_count_start header_length
+          revise helper_valid <- call bundle_safe_path borrow entry_unit_path
+          revise alias_valid <- call bundle_decimal_1to5 borrow count_text
+          choose helper_valid:
+            choose alias_valid:
+              revise scalar_count <- number borrow count_text
+            otherwise:
+              revise valid <- dim
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+      choose less scalar_count 16385:
+        revise payload_start <- sum line_end 1
+        revise payload_end <- sum payload_start scalar_count
+        choose less payload_end bundle_length:
+          revise delimiter <- glyph borrow bundle payload_end
+          choose same delimiter 10:
+            revise entry_source <- cut borrow bundle payload_start payload_end
+            revise entry_length <- measure borrow entry_source
+            choose less 0 entry_length:
+              choose less entry_length 16385:
+                revise cursor <- sum payload_end 1
+              otherwise:
+                revise valid <- dim
+            otherwise:
+              revise valid <- dim
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise cursor <- cursor
+  choose valid:
+    choose same cursor bundle_length:
+      choose same borrow entry_path borrow entry_unit_path:
+        choose same borrow entry_path borrow lib_path:
+          revise valid <- dim
+        otherwise:
+          revise lib_ascii <- call bundle_ascii_lf borrow lib_source
+          revise entry_ascii <- call bundle_ascii_lf borrow entry_source
+          choose lib_ascii:
+            choose entry_ascii:
+              revise valid <- bright
+            otherwise:
+              revise valid <- dim
+          otherwise:
+            revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise lib_world <- call bundle_world borrow lib_source
+    revise entry_world <- call bundle_world borrow entry_source
+    choose same borrow lib_world "!":
+      revise valid <- dim
+    otherwise:
+      choose same borrow entry_world "!":
+        revise valid <- dim
+      otherwise:
+        choose same borrow lib_world borrow entry_world:
+          revise valid <- dim
+        otherwise:
+          revise valid <- bright
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise lib_world_end <- seek borrow lib_source borrow newline 0
+    revise export_start <- sum lib_world_end 1
+    revise lib_export_start <- export_start
+    revise prefix_at <- seek borrow lib_source borrow export_prefix export_start
+    choose same prefix_at export_start:
+      revise export_open <- seek borrow lib_source "[" export_start
+      revise export_line_end <- seek borrow lib_source borrow newline export_start
+      revise lib_suffix_start <- sum export_start export_prefix_length
+      choose less lib_suffix_start export_open:
+        choose less export_open export_line_end:
+          revise tail_end <- difference export_open 1
+          revise helper <- cut borrow lib_source lib_suffix_start tail_end
+          revise helper_valid <- call bundle_safe_identifier borrow helper
+          revise arrow_at <- seek borrow lib_source borrow header_tail_expected export_open
+          revise header_tail <- cut borrow lib_source arrow_at export_line_end
+          choose helper_valid:
+            choose same borrow header_tail borrow header_tail_expected:
+              revise valid <- bright
+            otherwise:
+              revise valid <- dim
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise no_import <- seek borrow lib_source borrow import_prefix 0
+    revise no_call <- seek borrow lib_source "call " 0
+    revise text_quote <- "\""
+    revise quote_at <- seek borrow lib_source borrow text_quote 0
+    revise no_weave <- seek borrow lib_source "\nweave " 0
+    revise no_export <- seek borrow lib_source "\nexport weave " export_start
+    revise no_task <- seek borrow lib_source "task " 0
+    revise forbidden <- seek borrow lib_source "record " 0
+    choose same no_import -1:
+      choose same no_call -1:
+        choose same quote_at -1:
+          choose same no_weave -1:
+            choose same no_export -1:
+              choose same no_task -1:
+                choose same forbidden -1:
+                  revise forbidden <- seek borrow lib_source "shape " 0
+                  choose same forbidden -1:
+                    revise forbidden <- seek borrow lib_source "host " 0
+                    choose same forbidden -1:
+                      revise forbidden <- seek borrow lib_source "foreign " 0
+                      choose same forbidden -1:
+                        choose same borrow helper "main":
+                          revise valid <- dim
+                        otherwise:
+                          revise valid <- bright
+                      otherwise:
+                        revise valid <- dim
+                    otherwise:
+                      revise valid <- dim
+                  otherwise:
+                    revise valid <- dim
+                otherwise:
+                  revise valid <- dim
+              otherwise:
+                revise valid <- dim
+            otherwise:
+              revise valid <- dim
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise entry_world_end <- seek borrow entry_source borrow newline 0
+    revise export_start <- sum entry_world_end 1
+    revise prefix_at <- seek borrow entry_source borrow import_prefix export_start
+    choose same prefix_at export_start:
+      revise start_after_prefix <- sum export_start import_prefix_length
+      revise quote_at <- seek borrow entry_source borrow text_quote start_after_prefix
+      revise import_line_end <- seek borrow entry_source borrow newline export_start
+      choose less start_after_prefix quote_at:
+        choose less quote_at import_line_end:
+          revise imported_path <- cut borrow entry_source start_after_prefix quote_at
+          revise tail_end <- sum quote_at expected_tail_length
+          revise suffix <- cut borrow entry_source quote_at tail_end
+          choose same borrow imported_path borrow lib_path:
+            choose same borrow suffix borrow expected_tail:
+              revise alias <- cut borrow entry_source tail_end import_line_end
+              revise alias_valid <- call bundle_safe_identifier borrow alias
+              choose alias_valid:
+                revise main_start <- sum import_line_end 1
+                revise main_line_end <- seek borrow entry_source borrow newline main_start
+                choose less -1 main_line_end:
+                  revise header_tail <- cut borrow entry_source main_start main_line_end
+                  choose same borrow header_tail borrow main_header:
+                    revise valid <- bright
+                  otherwise:
+                    revise valid <- dim
+                otherwise:
+                  revise valid <- dim
+              otherwise:
+                revise valid <- dim
+            otherwise:
+              revise valid <- dim
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise after_main <- sum import_line_end 1
+    revise quote_after_import <- seek borrow entry_source borrow text_quote after_main
+    revise no_export <- seek borrow entry_source "export " 0
+    revise no_task <- seek borrow entry_source "task " 0
+    revise after_main <- sum main_line_end 1
+    revise no_weave <- seek borrow entry_source "\nweave " after_main
+    revise after_main <- sum import_line_end 1
+    revise no_import <- seek borrow entry_source borrow import_prefix after_main
+    revise forbidden <- seek borrow entry_source "record " 0
+    choose same quote_after_import -1:
+      choose same no_export -1:
+        choose same no_task -1:
+          choose same no_weave -1:
+            choose same no_import -1:
+              choose same forbidden -1:
+                revise forbidden <- seek borrow entry_source "shape " 0
+                choose same forbidden -1:
+                  revise forbidden <- seek borrow entry_source "host " 0
+                  choose same forbidden -1:
+                    revise forbidden <- seek borrow entry_source "foreign " 0
+                    choose same forbidden -1:
+                      choose same borrow alias "main":
+                        revise valid <- dim
+                      otherwise:
+                        choose same borrow alias "world":
+                          revise valid <- dim
+                        otherwise:
+                          choose same borrow alias "call":
+                            revise valid <- dim
+                          otherwise:
+                            revise valid <- bright
+                    otherwise:
+                      revise valid <- dim
+                  otherwise:
+                    revise valid <- dim
+                otherwise:
+                  revise valid <- dim
+              otherwise:
+                revise valid <- dim
+            otherwise:
+              revise valid <- dim
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise lib_pure <- call bundle_pure_whole_source borrow lib_source
+    revise entry_pure <- call bundle_pure_whole_source borrow entry_source
+    choose lib_pure:
+      choose entry_pure:
+        revise valid <- bright
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise mangled <- call bundle_mangle borrow lib_path borrow helper
+    revise lib_suffix_start <- sum lib_export_start export_prefix_length
+    revise tail_end <- measure borrow helper
+    revise lib_suffix_start <- sum lib_suffix_start tail_end
+    revise lib_tail <- cut borrow lib_source lib_suffix_start lib_length
+    revise after_main <- sum import_line_end 1
+    revise entry_after_import <- cut borrow entry_source after_main entry_length
+    revise rewritten <- call bundle_rewrite_calls borrow entry_after_import borrow alias borrow helper borrow mangled
+    choose same borrow rewritten "!":
+      revise valid <- dim
+    otherwise:
+      revise valid <- bright
+  otherwise:
+    revise valid <- dim
+  choose valid:
+    revise combined <- "world "
+    revise combined <- join borrow combined borrow entry_world
+    revise combined <- join borrow combined "\n\n"
+    revise combined <- join borrow combined "weave "
+    revise combined <- join borrow combined borrow mangled
+    revise combined <- join borrow combined borrow lib_tail
+    revise combined <- join borrow combined "\n"
+    revise combined <- join borrow combined borrow rewritten
+    revise output <- borrow combined
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave compile_bundle [borrow bundle: Text] -> Bytes:
+  bind mutable output <- bytes ""
+  bind elaborated <- call bundle_elaborate borrow bundle
+  bind first <- glyph borrow elaborated 0
+  bind mutable failed <- same first 33
+  choose failed:
+    speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-016\",\"message\":\"seed bundle profile rejected\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+  otherwise:
+    revise output <- call compile borrow elaborated
+  yield move output
+
 weave main [] -> Whole:
   yield 0

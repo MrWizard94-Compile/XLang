@@ -13,6 +13,7 @@ flowchart LR
     Check["aether check"] --> Bootstrap["Rust bootstrap AST"]
     SeedSrc["seed/aether_seed.ae"] -->|"compile (product ADR-067)"| SeedArtFile["seed/aether_seed.aeth"]
     Forge["aether forge"] -->|"verify + invoke"| SeedArt
+    BundleForge["aether forge-bundle"] -->|"verify + invoke compile_bundle"| SeedArt
     SeedArt --> Candidate["candidate AETH Bytes"]
     Candidate -->|"verify before write"| Forge
 ~~~
@@ -41,12 +42,23 @@ and [ADR-107](../historical%20docs/ADR-107-m25-local-package-publication.md). It
 filesystem protocol only; it has no source, AETH, seed, VM, or guest-authority
 effect.
 
+ADR-128 adds one separate, bounded seed-native source-bundle route. A caller
+may supply one `aether.seed-bundle/v1` file to default `compile` or the explicit
+`forge-bundle` command. The host carries its opaque Text to the verified seed
+`compile_bundle` weave; the seed alone validates the two-unit frame, import
+edge, names, and source profile before producing one compiled source. The route
+does not invoke host M11/M22 elaboration and grants no file, resolver, network,
+or callback authority to seed code. It remains a two-unit profile, not a general
+seed-native module graph. See [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md)
+and [the SBP threat model](THREAT_MODEL-SBP-001-SEED-BUNDLE.md).
+
 Current product capabilities include verifier-first AETH v11/v12 emission,
 seed-hosted compilation, bounded resources/effects/nurseries, grant-mediated
 host I/O, the narrow foreign pilot, offline project/workspace tooling with
 optional local workspace locks, transparent local source-package publication,
 deterministic checkpointed task frames, and
-versioned structural authoring v8. M23 adds
+versioned structural authoring v8, and the ADR-128 bounded source-bundle
+profile. M23 adds
 a deliberately narrow pure-Whole helper-call form at comptime; it does not add
 an AETH instruction or runtime authority. General effects, OS-thread parallelism, generic type parameters,
 C-header ingestion, arbitrary-node structural edits, a general or bundled

@@ -1,8 +1,9 @@
 use aether_core::{
     apply_edit_cli_trusts_product_accept, bootstrap_is_recovery_oracle_only,
     check_product_base_gate, compile_product_bytecode, compile_product_multi_source_envelope,
-    compile_to_bytecode, compile_with_seed, compile_with_seed_invokes_bootstrap,
-    compile_with_seed_product_authoritative, encode_multi_source_envelope, forge_bytecode,
+    compile_product_seed_bundle, compile_to_bytecode, compile_with_seed,
+    compile_with_seed_invokes_bootstrap, compile_with_seed_product_authoritative,
+    elaborate_in_memory_units, encode_multi_source_envelope, encode_seed_bundle, forge_bytecode,
     host_elaborates_modules_seed_emits, lib_module_validates_via_product_seed,
     lsp_product_diagnostics_primary, lsp_product_surface_hover_definition,
     multi_module_product_choose_revise_supported, product_cli_check_without_bootstrap,
@@ -15,16 +16,18 @@ use aether_core::{
     product_seed_rebuild_without_bootstrap, product_structure_without_bootstrap,
     product_surface_symbols, product_surface_symbols_without_bootstrap, run_bytecode,
     seed_internal_error_packets, seed_interprets_m23_comptime_calls_natively,
-    seed_native_multi_module_elaboration, seed_product_diagnostics_phase3c,
-    seed_product_diagnostics_subset, seed_product_preflight_phase3b,
-    structural_edit_accepts_via_product_seed, structural_edit_product_base_gate,
-    structural_edit_product_statement_and_record_ops, structural_edit_product_top_level_weave_ops,
-    structural_edit_product_weave_replace, verify_bytecode, InvocationOutput, InvocationValue,
-    SEED_COMPILER_ARTIFACT, SEED_ERROR_PACKET_SCHEMA,
+    seed_native_multi_module_elaboration, seed_native_whole_library_bundle_profile,
+    seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
+    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
+    structural_edit_product_base_gate, structural_edit_product_statement_and_record_ops,
+    structural_edit_product_top_level_weave_ops, structural_edit_product_weave_replace,
+    verify_bytecode, InvocationOutput, InvocationValue, ProjectUnitRole, SEED_COMPILER_ARTIFACT,
+    SEED_ERROR_PACKET_SCHEMA,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
 const CHECKED_IN_SEED_ARTIFACT: &[u8] = include_bytes!("../../../seed/aether_seed.aeth");
+const SEED_BUNDLE_WHOLE_FIXTURE: &str = include_str!("../../../examples/seed-bundle-whole.aeb");
 
 const MULTI_WEAVE_SOURCE: &str = concat!(
     "world demo\n",
@@ -3015,6 +3018,228 @@ fn barp_adr075_multi_source_envelope_product_forge() {
             .exit_code,
         42
     );
+}
+
+#[test]
+fn barp_adr128_seed_native_whole_library_bundle_matches_bootstrap_and_rejects_out_of_profile() {
+    assert!(seed_native_whole_library_bundle_profile());
+    assert!(
+        !seed_native_multi_module_elaboration(),
+        "ADR-128 must not overstate general M11/M22 seed authority"
+    );
+    assert!(
+        !aether_core::product_seed_bundle_invokes_host_elaborator(),
+        "ADR-128 production bundle route must not invoke host module elaboration"
+    );
+
+    let library = "world math\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n";
+    let entry = "world app\nimport unit \"lib/math.ae\" as math\nweave main [] -> Whole:\n  bind twice <- call math.double 21\n  yield call math.double twice";
+    let units = [
+        ("lib/math.ae".to_owned(), library.to_owned()),
+        ("src/main.ae".to_owned(), entry.to_owned()),
+    ];
+    let bundle = encode_seed_bundle("src/main.ae", &units).expect("frame seed bundle");
+    assert_eq!(
+        bundle, SEED_BUNDLE_WHOLE_FIXTURE,
+        "the shipped SBP-001 fixture must remain canonical scalar-framed source"
+    );
+    let decoded = aether_core::decode_seed_bundle(&bundle).expect("decode independent frame");
+    assert_eq!(decoded.entry_path, "src/main.ae");
+    assert_eq!(decoded.units, units);
+
+    let direct = compile_product_seed_bundle(&bundle).expect("seed-native bundle compile");
+    let auto = compile_product_bytecode(&bundle).expect("auto-detected seed bundle compile");
+    assert_eq!(direct, auto, "explicit and automatic bundle routes agree");
+    verify_bytecode(&direct).expect("seed-native bundle artifact verifies");
+    assert_eq!(
+        run_bytecode(&direct)
+            .expect("seed-native bundle runs")
+            .exit_code,
+        84
+    );
+
+    let expected_source = elaborate_in_memory_units(
+        &[
+            (
+                "lib/math.ae".to_owned(),
+                library.to_owned(),
+                ProjectUnitRole::Lib,
+            ),
+            (
+                "src/main.ae".to_owned(),
+                entry.to_owned(),
+                ProjectUnitRole::Main,
+            ),
+        ],
+        "src/main.ae",
+    )
+    .expect("independent bootstrap reference elaboration");
+    let bootstrap = compile_to_bytecode(&expected_source)
+        .expect("bootstrap reference compiles")
+        .bytecode;
+    assert_eq!(
+        direct, bootstrap,
+        "ADR-128 canonical bundle is byte-identical to the established M11 elaboration oracle"
+    );
+
+    let malformed = bundle.replacen("unit lib/math.ae 72\n", "unit lib/math.ae 0\n", 1);
+    let malformed_error = compile_product_seed_bundle(&malformed)
+        .expect_err("zero-sized library payload must fail closed in the seed profile");
+    assert!(
+        malformed_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {malformed_error}"
+    );
+    let malformed_packets = product_error_packets(&malformed);
+    assert_eq!(malformed_packets.len(), 1);
+    assert_eq!(malformed_packets[0].code, "AE-SEED-016");
+    assert_eq!(malformed_packets[0].origin, "seed-speak");
+
+    let overdeclared = bundle.replacen("unit lib/math.ae 72\n", "unit lib/math.ae 16385\n", 1);
+    let overdeclared_error = compile_product_seed_bundle(&overdeclared)
+        .expect_err("an over-limit scalar count must fail before source extraction");
+    assert!(
+        overdeclared_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {overdeclared_error}"
+    );
+    let overdeclared_packets = product_error_packets(&overdeclared);
+    assert_eq!(overdeclared_packets.len(), 1);
+    assert_eq!(overdeclared_packets[0].code, "AE-SEED-016");
+    assert_eq!(overdeclared_packets[0].origin, "seed-speak");
+
+    let oversized_wire = format!(
+        "{}\n{}",
+        aether_core::SEED_BUNDLE_SCHEMA,
+        "x".repeat(aether_core::SEED_BUNDLE_MAX_WIRE_SCALARS + 1)
+    );
+    let oversized_wire_error = compile_product_seed_bundle(&oversized_wire)
+        .expect_err("an oversized wire payload must fail before frame extraction");
+    assert!(
+        oversized_wire_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {oversized_wire_error}"
+    );
+    let oversized_wire_packets = product_error_packets(&oversized_wire);
+    assert_eq!(oversized_wire_packets.len(), 1);
+    assert_eq!(oversized_wire_packets[0].code, "AE-SEED-016");
+    assert_eq!(oversized_wire_packets[0].origin, "seed-speak");
+
+    let wrong_import_entry = entry.replacen("lib/math.ae", "lib/other.ae", 1);
+    let wrong_import_bundle = encode_seed_bundle(
+        "src/main.ae",
+        &[
+            ("lib/math.ae".to_owned(), library.to_owned()),
+            ("src/main.ae".to_owned(), wrong_import_entry),
+        ],
+    )
+    .expect("frame opaque wrong-import source");
+    let wrong_import_error = compile_product_bytecode(&wrong_import_bundle)
+        .expect_err("the seed must reject an import that does not name the bundled library");
+    assert!(
+        wrong_import_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {wrong_import_error}"
+    );
+    let wrong_import_packets = product_error_packets(&wrong_import_bundle);
+    assert_eq!(wrong_import_packets.len(), 1);
+    assert_eq!(wrong_import_packets[0].code, "AE-SEED-016");
+    assert_eq!(wrong_import_packets[0].origin, "seed-speak");
+
+    let unsafe_path_bundle = bundle.replacen("unit lib/math.ae 72\n", "unit ../math.ae 72\n", 1);
+    let unsafe_path_error = compile_product_bytecode(&unsafe_path_bundle)
+        .expect_err("unsafe source identity paths must fail closed in the seed profile");
+    assert!(
+        unsafe_path_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {unsafe_path_error}"
+    );
+
+    let wrong_order_bundle = format!(
+        "{}\nentry src/main.ae\nunit src/main.ae {}\n{}\nunit lib/math.ae {}\n{}\n",
+        aether_core::SEED_BUNDLE_SCHEMA,
+        entry.chars().count(),
+        entry,
+        library.chars().count(),
+        library
+    );
+    let wrong_order_error = compile_product_bytecode(&wrong_order_bundle)
+        .expect_err("the entry unit must be the second and final bundle unit");
+    assert!(
+        wrong_order_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {wrong_order_error}"
+    );
+
+    let duplicate_world_entry = entry.replacen("world app", "world math", 1);
+    let duplicate_world_bundle = encode_seed_bundle(
+        "src/main.ae",
+        &[
+            ("lib/math.ae".to_owned(), library.to_owned()),
+            ("src/main.ae".to_owned(), duplicate_world_entry),
+        ],
+    )
+    .expect("frame duplicate-world bundle");
+    let duplicate_world_error = compile_product_bytecode(&duplicate_world_bundle)
+        .expect_err("duplicate source worlds must fail closed in the seed profile");
+    assert!(
+        duplicate_world_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {duplicate_world_error}"
+    );
+
+    let unknown_call_entry = entry.replacen("math.double twice", "math.private twice", 1);
+    let unknown_call_bundle = encode_seed_bundle(
+        "src/main.ae",
+        &[
+            ("lib/math.ae".to_owned(), library.to_owned()),
+            ("src/main.ae".to_owned(), unknown_call_entry),
+        ],
+    )
+    .expect("frame unknown-call bundle");
+    let unknown_call_error = compile_product_bytecode(&unknown_call_bundle)
+        .expect_err("calls outside the one exported helper must fail closed");
+    assert!(
+        unknown_call_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {unknown_call_error}"
+    );
+
+    let forbidden_library =
+        "world math\nexport weave double [n: Whole] -> Whole:\n  speak \"forbidden\"\n  yield product n 2\n";
+    let forbidden_bundle = encode_seed_bundle(
+        "src/main.ae",
+        &[
+            ("lib/math.ae".to_owned(), forbidden_library.to_owned()),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame forbidden bundle");
+    let forbidden_error = compile_product_bytecode(&forbidden_bundle)
+        .expect_err("Text literals in the bounded library profile must fail closed");
+    assert!(
+        forbidden_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {forbidden_error}"
+    );
+    let forbidden_packets = product_error_packets(&forbidden_bundle);
+    assert_eq!(forbidden_packets.len(), 1);
+    assert_eq!(forbidden_packets[0].code, "AE-SEED-016");
+    assert_eq!(forbidden_packets[0].origin, "seed-speak");
+
+    let forbidden_resource_library = "world math\nexport weave double [n: Whole] -> Whole:\n  bind memory <- arena 8\n  yield product n 2\n";
+    let forbidden_resource_bundle = encode_seed_bundle(
+        "src/main.ae",
+        &[
+            (
+                "lib/math.ae".to_owned(),
+                forbidden_resource_library.to_owned(),
+            ),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame resource-forbidden bundle");
+    let forbidden_resource_error = compile_product_bytecode(&forbidden_resource_bundle)
+        .expect_err("resource forms in the bounded pure profile must fail closed");
+    assert!(
+        forbidden_resource_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle error, got {forbidden_resource_error}"
+    );
+    let forbidden_resource_packets = product_error_packets(&forbidden_resource_bundle);
+    assert_eq!(forbidden_resource_packets.len(), 1);
+    assert_eq!(forbidden_resource_packets[0].code, "AE-SEED-016");
+    assert_eq!(forbidden_resource_packets[0].origin, "seed-speak");
 }
 
 #[test]
