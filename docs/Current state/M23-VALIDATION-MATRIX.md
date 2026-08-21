@@ -17,7 +17,7 @@
 | N4 | Callee with nested `call` | AE-COMPTIME-001 |
 | N5 | Callee with `choose`/`while` (M23) | AE-COMPTIME-001 |
 | N6 | Runtime name as call arg | AE-COMPTIME-001 |
-| N7 | Forward callee (declared after) | AE-COMPTIME-001 |
+| N7 | Forward callee (declared after) | Bootstrap `AE-COMPTIME-001`; canonical product root source now emits one seed-SPEAK `AE-SEED-011` source-order packet (ADR-127) |
 | N8 | Non-Whole param/result | AE-COMPTIME-001 |
 | N9 | Arithmetic overflow in callee | AE-COMPTIME-002 |
 | H1 | Prior `examples/comptime.ae` / `comptime-chain.ae` | Unchanged seed dual-compare |
@@ -30,6 +30,7 @@
 - [x] DOC-SYNC 0.33
 - [x] Delivery report
 - [x] BARP Phase 1: seed-native raw M23 (ADR-043; no materialization bridge)
+- [x] ADR-127 product-path source-order correction for the canonical forward-callee boundary
 
 ---
 

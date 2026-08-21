@@ -88,18 +88,24 @@ it is not a current status source or authorization.
     expansion. Nonempty/escaped Text, Bytes, names, multi-argument forms, and M7
     semantic legality remain full-compiler responsibilities. See
     [ADR-126](../historical%20docs/ADR-126-barp-seed-speak-root-nursery-empty-text-spawn-unknown-call-pilot.md).
-12. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
+12. **BARP ADR-127 — release verified.**
+    The seed M23 evaluator now bounds its ordinary-header lookup to the source
+    prefix before the canonical root comptime call, so a forward target is
+    rejected on the product path rather than accepted. This is an integrity
+    correction, not full M23 eligibility or diagnostic parity. See
+    [ADR-127](../historical%20docs/ADR-127-barp-seed-speak-root-comptime-bind-unknown-call-pilot.md).
+13. **BARP next design selection (current).** Choose exactly one broader AE-SEED-011 or
    AE-SEED-013 shape with an explicit false-positive boundary, or separately
    design seed-native multi-file elaboration. Do not infer parser/type-checker
    authority from the existing line-state witnesses.
-13. **Mainstream language/library vertical.** Select one controlled generic,
+14. **Mainstream language/library vertical.** Select one controlled generic,
    data-model, effect, or standard-library ergonomics increment only after its
    grammar, seed, verifier, VM, authoring, compatibility, and limit design are
    written and accepted.
-14. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
+15. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
    fixtures, and offline project workflows before expanding surface area merely
    for feature count.
-15. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
+16. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
    M24i are available for a next scoped ADR, threat-model update, validation
    matrix, and release proof. Neither is an automatic expansion of current
    authority.

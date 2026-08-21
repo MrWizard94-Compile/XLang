@@ -2681,9 +2681,7 @@ fn barp_adr127_seed_speaks_canonical_root_comptime_bind_unknown_calls() {
             "zero-argument root comptime bind SPEAK must return blank Bytes, got {} bytes",
             bytes.len()
         ),
-        other => panic!(
-            "zero-argument root comptime bind SPEAK must return Bytes, got {other:?}"
-        ),
+        other => panic!("zero-argument root comptime bind SPEAK must return Bytes, got {other:?}"),
     }
     let packets = product_error_packets(zero_argument);
     assert_eq!(packets.len(), 1);
@@ -2699,8 +2697,7 @@ fn barp_adr127_seed_speaks_canonical_root_comptime_bind_unknown_calls() {
         direct.stdout
     );
     let seeded = bytes(direct);
-    verify_bytecode(&seeded)
-        .expect("declared root comptime-bind seed artifact must verify");
+    verify_bytecode(&seeded).expect("declared root comptime-bind seed artifact must verify");
     let bootstrap = compile_to_bytecode(valid)
         .expect("declared root comptime-bind source must bootstrap")
         .bytecode;
@@ -2755,12 +2752,13 @@ fn barp_adr127_seed_speaks_canonical_root_comptime_bind_unknown_calls() {
     };
 
     for (boundary, statement) in [
-        ("a non-call comptime expression", "comptime bind result <- sum 1 2"),
+        (
+            "a non-call comptime expression",
+            "comptime bind result <- sum 1 2",
+        ),
         ("a missing call target", "comptime bind result <- call"),
     ] {
-        let source = format!(
-            "world w\n\nweave main [] -> Whole:\n  {statement}\n  yield result\n"
-        );
+        let source = format!("world w\n\nweave main [] -> Whole:\n  {statement}\n  yield result\n");
         assert_no_comptime_bind_pilot(&source, boundary);
     }
 
@@ -2768,7 +2766,10 @@ fn barp_adr127_seed_speaks_canonical_root_comptime_bind_unknown_calls() {
     assert_no_comptime_bind_pilot(nested, "nested comptime bind");
 
     let text_literal = "world w\n\nweave main [] -> Whole:\n  speak \"comptime bind result <- call nope 3\"\n  yield 0\n";
-    assert_no_comptime_bind_pilot(text_literal, "Text literal containing a comptime-bind call shape");
+    assert_no_comptime_bind_pilot(
+        text_literal,
+        "Text literal containing a comptime-bind call shape",
+    );
 
     let task = "world w\n\ntask weave worker [] -> Whole:\n  checkpoint\n  comptime bind result <- call nope 3\n  yield result\n\nweave main [] -> Whole:\n  bind mutable result <- 0\n  together:\n    spawn call worker into result\n  yield result\n";
     assert_no_comptime_bind_pilot(task, "task comptime bind");
@@ -2777,15 +2778,56 @@ fn barp_adr127_seed_speaks_canonical_root_comptime_bind_unknown_calls() {
     assert_no_comptime_bind_pilot(erroring_parent, "erroring comptime-bind parent");
 
     let forward_declared = "world w\n\nweave main [] -> Whole:\n  comptime bind result <- call triple 14\n  yield result\n\nweave triple [value: Whole] -> Whole:\n  yield product value 3\n";
-    assert_no_comptime_bind_pilot(forward_declared, "forward-declared comptime target");
-    let product = compile_product_bytecode(forward_declared)
-        .expect_err("forward-declared comptime target must retain full M23 authority");
+    let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, forward_declared)
+        .expect("forward-declared comptime target must reach the seed forge");
     assert!(
-        !product.to_string().contains("AE-SEED-011"),
-        "forward-declared comptime target must not be classified as the new unknown-call witness, got {product}"
+        direct.stdout.contains("\"code\":\"AE-SEED-011\""),
+        "forward-declared comptime target must emit AE-SEED-011, got: {}",
+        direct.stdout
+    );
+    assert!(
+        direct.stdout.contains(
+            "\"message\":\"canonical comptime call target must name a prior top-level declared weave\""
+        ),
+        "forward-declared comptime target must emit the source-order message, got: {}",
+        direct.stdout
+    );
+    assert_eq!(
+        direct.stdout.matches("AETHER_SEED_ERROR:").count(),
+        1,
+        "forward-declared comptime target must emit exactly one packet: {}",
+        direct.stdout
+    );
+    match direct.value {
+        InvocationValue::Bytes(bytes) => assert!(
+            bytes.is_empty(),
+            "forward-declared comptime target SPEAK must return blank Bytes, got {} bytes",
+            bytes.len()
+        ),
+        other => panic!("forward-declared comptime target SPEAK must return Bytes, got {other:?}"),
+    }
+    let product = compile_product_bytecode(forward_declared)
+        .expect_err("forward-declared comptime target must fail product compilation");
+    assert!(
+        product.to_string().contains("AE-SEED-011"),
+        "forward-declared comptime target must retain source-order AE-SEED-011, got {product}"
+    );
+    let packets = product_error_packets(forward_declared);
+    assert_eq!(packets.len(), 1);
+    assert_eq!(packets[0].schema, SEED_ERROR_PACKET_SCHEMA);
+    assert_eq!(packets[0].code, "AE-SEED-011");
+    assert_eq!(packets[0].line, 1);
+    assert_eq!(packets[0].column, 1);
+    assert_eq!(packets[0].origin, "seed-speak");
+    let bootstrap = compile_to_bytecode(forward_declared)
+        .expect_err("forward-declared comptime target must remain bootstrap-invalid");
+    assert!(
+        bootstrap.to_string().contains("AE-COMPTIME-001"),
+        "bootstrap must retain its M23 source-order diagnostic, got {bootstrap}"
     );
 
-    let missing_world = "weave main [] -> Whole:\n  comptime bind result <- call nope 3\n  yield result\n";
+    let missing_world =
+        "weave main [] -> Whole:\n  comptime bind result <- call nope 3\n  yield result\n";
     let direct = forge_bytecode(SEED_COMPILER_ARTIFACT, missing_world)
         .expect("missing-world comptime-bind source must reach the seed forge");
     assert!(

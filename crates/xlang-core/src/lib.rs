@@ -9869,7 +9869,6 @@ fn resource_outcome_scopes(
             let ResourceBindingState::Table {
                 arena: Some(region),
                 allocated: true,
-                layout: _,
                 ..
             } = &original.resource
             else {

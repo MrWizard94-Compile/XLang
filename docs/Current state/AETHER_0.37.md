@@ -19,6 +19,13 @@ adds only the adjacent exact empty-`Text` nursery-call witness
 does not change M25, Aether surface syntax, AETH, verifier, VM, or capability
 contracts.
 
+[ADR-127](../historical%20docs/ADR-127-barp-seed-speak-root-comptime-bind-unknown-call-pilot.md)
+corrects product-path M23 source-order integrity: a canonical root
+`comptime bind ... <- call target` may name only a prior ordinary `weave`
+header. It adds one bounded seed-SPEAK rejection for the forward-target case
+while leaving M25, language syntax, AETH, verifier, VM, and capability contracts
+unchanged.
+
 ## What changed
 
 Package 0.37 adds a closed, local-only lifecycle for publishing one locked

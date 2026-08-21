@@ -284,6 +284,11 @@ control-flow, or nested-call authority, and folds to existing `COMPTIME_WHOLE`
 [docs/AETHER_0.33.md](docs/historical%20docs/AETHER_0.33.md), [ADR-039](docs/historical%20docs/ADR-039-m23-comptime-pure-calls.md),
 and [ADR-043](docs/historical%20docs/ADR-043-bootstrap-authority-reduction.md).
 
+ADR-127 additionally makes the checked-in seed enforce the canonical root
+forward-target boundary directly: a nonempty target with no prior ordinary
+top-level `weave target [` header emits one seed-SPEAK `AE-SEED-011` packet on
+the product path. It does not claim full M23 diagnostic or eligibility parity.
+
 RTP-001 (package 0.34) is an implementation-only VM change. Runtime `Text`
 stores cached ASCII provenance; ASCII `measure`, `glyph`, `cut`, and `seek` use
 byte positions that are exactly scalar positions, while non-ASCII values retain

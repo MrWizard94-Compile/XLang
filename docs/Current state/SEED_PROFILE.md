@@ -125,6 +125,9 @@ The profile does not silently expand that language surface.
     emission is forge-first (no bootstrap pre-validate; ADR-044); no
     materialization rewrite is applied
     (`seed_interprets_m23_comptime_calls_natively` is true; ADR-043 Phase 1).
+    ADR-127 makes the evaluator's ordinary-header lookup source-prefix bounded,
+    so a canonical root forward target fails directly instead of being accepted
+    by product emission.
 18. Parses `task weave` and `checkpoint`, emits v12 task flags,
     `frame_arena_capacity`, and `TASK_CHECKPOINT` (67), preserves verifier-safe
     task loop back edges, and computes the exact main-plus-largest-task-nursery
@@ -179,6 +182,13 @@ ordinary one-Text-parameter weave only as a valid-source boundary; task weave
 frames remain Whole/Truth-only. These are line-state target-existence witnesses,
 not Text parsing, name binding, signature, destination, resource, or scheduler
 validation.
+
+ADR-127 separately narrows the seed's existing M23 evaluator lookup to a prior
+top-level ordinary `weave target [` header for a canonical root, total,
+non-erroring `Whole` comptime call. A missing prior header emits one direct
+`AE-SEED-011` source-order packet only after no higher-priority seed packet has
+been emitted. This is not a general M23 header, type, purity, D2a, argument, or
+multi-file resolver.
 
 ## Required shape
 

@@ -127,6 +127,11 @@
 | BARP-SPEAK-123 | Immediate root nursery nonempty Text, Bytes, name, repeated argument, missing destination, delayed, descendant, wrong-parameter, or erroring-Whole-parent source | Does not trigger the exact-empty-Text bounded unknown-target pilot; existing seed failures or full M7 syntax/semantic diagnostics retain authority |
 | BARP-SPEAK-124 | Missing `world` plus an otherwise canonical exact-empty-Text root-nursery spawn unknown target | Existing higher-priority seed pilot remains `AE-SEED-006` |
 | BARP-SPEAK-125 | Product-path canonical exact-empty-Text root-nursery spawn unknown-target packet | `AE-SEED-011`, `origin: seed-speak`; forge packet merge preserves the bounded witness |
+| BARP-SPEAK-126 | Canonical ordinary total-Whole root `comptime bind result <- call nope 3` or exact end-of-line `call nope`, with no declaration header anywhere | The existing direct witness emits exactly one `AE-SEED-011`, `origin: seed-speak`, blank Bytes packet; the M23 source-order branch does not duplicate it |
+| BARP-SPEAK-127 | Earlier ordinary total-Whole M23 helper calls with one Whole argument and with no arguments | Seed forge and bootstrap are byte-identical, verify, and exit `42` |
+| BARP-SPEAK-128 | Canonical ordinary total-Whole root M23 call whose ordinary `weave target [` header appears only after the call | Direct seed forge emits exactly one source-order `AE-SEED-011` seed-SPEAK packet; product compilation rejects through packet merge; bootstrap remains `AE-COMPTIME-001` |
+| BARP-SPEAK-129 | Non-call, missing-target, nested, Text-literal, task, erroring-parent, or missing-world comptime-call-shaped input | Does not emit the ADR-127 source-order packet; prior lexical/semantic diagnostics retain authority, and missing world remains higher-priority `AE-SEED-006` |
+| BARP-SPEAK-130 | ADR-127 seed rebuild | Bootstrap, product, forge, and checked-in seed artifacts must be byte-identical before release verification |
 
 ## Boundary
 

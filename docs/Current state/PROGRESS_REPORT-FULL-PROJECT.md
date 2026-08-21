@@ -1,10 +1,10 @@
 # Aether / XLang — Comprehensive Project Progress Report
 
-**Date:** 2026-08-14
+**Date:** 2026-08-21
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-126 canonical root-nursery exact-empty-Text spawn unknown-target seed-SPEAK pilot — targeted red/green, direct, valid-source, predecessor/lexical/signature/caller-state/delimiter/priority boundaries, product/self-host, tracker, and full release gate PASS
+**Current delivery verification:** ADR-127 M23 comptime-call source-order integrity — direct seed/product/bootstrap/valid-source/boundary evidence, four-way seed identity, and full release gate PASS (2026-08-21)
 **Constitution:** AGENTS Constitution 5.0.1  
 
 ---
@@ -34,7 +34,7 @@ comparison surface.
 
 ### 2.2 Product toolchain (BARP)
 
-Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–116):
+Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–127):
 
 | Capability | Authority |
 | --- | --- |
@@ -307,8 +307,9 @@ pwsh -File tools\aether-gate.ps1 -Mode release
 | [DELIVERY_REPORT-2026-08-14-BARP-LITERAL-TRUTH-CHOOSE-SPEAK.md](../historical%20docs/DELIVERY_REPORT-2026-08-14-BARP-LITERAL-TRUTH-CHOOSE-SPEAK.md) | ADR-113 literal-Truth seed diagnostic delivery / current verification status |
 | [DELIVERY_REPORT-2026-08-14-BARP-UNARY-LITERAL-TRUTH-CHOOSE-SPEAK.md](../historical%20docs/DELIVERY_REPORT-2026-08-14-BARP-UNARY-LITERAL-TRUTH-CHOOSE-SPEAK.md) | ADR-114 unary-literal Truth seed diagnostic delivery / current verification status |
 | [DELIVERY_REPORT-2026-08-14-BARP-WHOLE-TRUTH-YIELD-SPEAK.md](../historical%20docs/DELIVERY_REPORT-2026-08-14-BARP-WHOLE-TRUTH-YIELD-SPEAK.md) | ADR-115 Whole Truth-literal yield seed diagnostic delivery / current verification status |
+| [DELIVERY_REPORT-2026-08-21-BARP-M23-COMPTIME-CALL-SOURCE-ORDER-SPEAK.md](../historical%20docs/DELIVERY_REPORT-2026-08-21-BARP-M23-COMPTIME-CALL-SOURCE-ORDER-SPEAK.md) | ADR-127 source-order integrity delivery / final release evidence |
 | [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) | This audit stamp |
-| ADRs 043–115 | Maturity decision trail |
+| ADRs 043–127 | Maturity decision trail |
 
 ---
 
