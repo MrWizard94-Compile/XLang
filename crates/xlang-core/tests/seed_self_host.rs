@@ -3,7 +3,8 @@ use aether_core::{
     check_product_base_gate, compile_product_bytecode, compile_product_multi_source_envelope,
     compile_product_seed_bundle, compile_to_bytecode, compile_with_seed,
     compile_with_seed_invokes_bootstrap, compile_with_seed_product_authoritative,
-    elaborate_in_memory_units, encode_multi_source_envelope, encode_seed_bundle, forge_bytecode,
+    decode_seed_bundle_chain, elaborate_in_memory_units, encode_multi_source_envelope,
+    encode_seed_bundle, encode_seed_bundle_chain, forge_bytecode,
     host_elaborates_modules_seed_emits, lib_module_validates_via_product_seed,
     lsp_product_diagnostics_primary, lsp_product_surface_hover_definition,
     multi_module_product_choose_revise_supported, product_cli_check_without_bootstrap,
@@ -17,17 +18,18 @@ use aether_core::{
     product_surface_symbols, product_surface_symbols_without_bootstrap, run_bytecode,
     seed_internal_error_packets, seed_interprets_m23_comptime_calls_natively,
     seed_native_multi_module_elaboration, seed_native_whole_library_bundle_profile,
-    seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
-    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
-    structural_edit_product_base_gate, structural_edit_product_statement_and_record_ops,
-    structural_edit_product_top_level_weave_ops, structural_edit_product_weave_replace,
-    verify_bytecode, InvocationOutput, InvocationValue, ProjectUnitRole, SEED_COMPILER_ARTIFACT,
-    SEED_ERROR_PACKET_SCHEMA,
+    seed_native_whole_library_chain_bundle_profile, seed_product_diagnostics_phase3c,
+    seed_product_diagnostics_subset, seed_product_preflight_phase3b,
+    structural_edit_accepts_via_product_seed, structural_edit_product_base_gate,
+    structural_edit_product_statement_and_record_ops, structural_edit_product_top_level_weave_ops,
+    structural_edit_product_weave_replace, verify_bytecode, InvocationOutput, InvocationValue,
+    ProjectUnitRole, SEED_COMPILER_ARTIFACT, SEED_ERROR_PACKET_SCHEMA,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
 const CHECKED_IN_SEED_ARTIFACT: &[u8] = include_bytes!("../../../seed/aether_seed.aeth");
 const SEED_BUNDLE_WHOLE_FIXTURE: &str = include_str!("../../../examples/seed-bundle-whole.aeb");
+const SEED_BUNDLE_CHAIN_FIXTURE: &str = include_str!("../../../examples/seed-bundle-chain.aeb");
 
 const MULTI_WEAVE_SOURCE: &str = concat!(
     "world demo\n",
@@ -3240,6 +3242,218 @@ fn barp_adr128_seed_native_whole_library_bundle_matches_bootstrap_and_rejects_ou
     assert_eq!(forbidden_resource_packets.len(), 1);
     assert_eq!(forbidden_resource_packets[0].code, "AE-SEED-016");
     assert_eq!(forbidden_resource_packets[0].origin, "seed-speak");
+}
+
+#[test]
+fn barp_adr129_seed_native_three_unit_chain_matches_bootstrap_and_rejects_out_of_profile() {
+    assert!(seed_native_whole_library_chain_bundle_profile());
+    assert!(
+        !seed_native_multi_module_elaboration(),
+        "ADR-129 must not overstate general M11/M22 seed authority"
+    );
+    assert!(
+        !aether_core::product_seed_bundle_invokes_host_elaborator(),
+        "ADR-129 production chain route must not invoke host module elaboration"
+    );
+
+    let foundation = "world base\nexport weave increment [n: Whole] -> Whole:\n  yield sum n 1";
+    let bridge = "world math\nimport unit \"lib/base.ae\" as base\nexport weave double_after_increment [n: Whole] -> Whole:\n  bind raised <- call base.increment n\n  yield product raised 2";
+    let entry = "world app\nimport unit \"lib/math.ae\" as math\nweave main [] -> Whole:\n  bind result <- call math.double_after_increment 41\n  yield result";
+    let units = [
+        ("lib/base.ae".to_owned(), foundation.to_owned()),
+        ("lib/math.ae".to_owned(), bridge.to_owned()),
+        ("src/main.ae".to_owned(), entry.to_owned()),
+    ];
+    let bundle = encode_seed_bundle_chain("src/main.ae", &units).expect("frame seed bundle chain");
+    assert_eq!(
+        bundle, SEED_BUNDLE_CHAIN_FIXTURE,
+        "the shipped SBP-002 fixture must remain canonical scalar-framed source"
+    );
+    let decoded = decode_seed_bundle_chain(&bundle).expect("decode independent chain frame");
+    assert_eq!(decoded.entry_path, "src/main.ae");
+    assert_eq!(decoded.units, units);
+
+    let direct = compile_product_seed_bundle(&bundle).expect("seed-native chain compile");
+    let auto = compile_product_bytecode(&bundle).expect("auto-detected seed bundle chain compile");
+    assert_eq!(direct, auto, "explicit and automatic chain routes agree");
+    verify_bytecode(&direct).expect("seed-native chain artifact verifies");
+    assert_eq!(
+        run_bytecode(&direct)
+            .expect("seed-native chain runs")
+            .exit_code,
+        84
+    );
+
+    let expected_source = elaborate_in_memory_units(
+        &[
+            (
+                "lib/base.ae".to_owned(),
+                foundation.to_owned(),
+                ProjectUnitRole::Lib,
+            ),
+            (
+                "lib/math.ae".to_owned(),
+                bridge.to_owned(),
+                ProjectUnitRole::Lib,
+            ),
+            (
+                "src/main.ae".to_owned(),
+                entry.to_owned(),
+                ProjectUnitRole::Main,
+            ),
+        ],
+        "src/main.ae",
+    )
+    .expect("independent bootstrap reference elaboration");
+    let bootstrap = compile_to_bytecode(&expected_source)
+        .expect("bootstrap reference compiles")
+        .bytecode;
+    assert_eq!(
+        direct, bootstrap,
+        "ADR-129 chain bundle is byte-identical to the established M11 elaboration oracle"
+    );
+
+    let malformed = bundle.replacen("unit lib/base.ae 70\n", "unit lib/base.ae 0\n", 1);
+    let malformed_error = compile_product_seed_bundle(&malformed)
+        .expect_err("zero-sized foundation payload must fail closed in the seed profile");
+    assert!(
+        malformed_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {malformed_error}"
+    );
+    let malformed_packets = product_error_packets(&malformed);
+    assert_eq!(malformed_packets.len(), 1);
+    assert_eq!(malformed_packets[0].code, "AE-SEED-016");
+    assert_eq!(malformed_packets[0].origin, "seed-speak");
+
+    let overdeclared = bundle.replacen("unit lib/base.ae 70\n", "unit lib/base.ae 16385\n", 1);
+    let overdeclared_error = compile_product_seed_bundle(&overdeclared)
+        .expect_err("an over-limit scalar count must fail before source extraction");
+    assert!(
+        overdeclared_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {overdeclared_error}"
+    );
+
+    let oversized_wire = format!("aether.seed-bundle/v2\n{}", "x".repeat(49_900));
+    assert!(
+        oversized_wire.chars().count() > 49_920,
+        "hostile v2 wire fixture must exceed the documented seed cap"
+    );
+    let oversized_wire_error = compile_product_seed_bundle(&oversized_wire).expect_err(
+        "an oversized v2 wire input must fail before header parsing or source assembly",
+    );
+    assert!(
+        oversized_wire_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {oversized_wire_error}"
+    );
+
+    let trailing_payload = format!("{bundle}trailing");
+    let trailing_payload_error = compile_product_seed_bundle(&trailing_payload)
+        .expect_err("a v2 frame with bytes beyond its exact third payload must fail closed");
+    assert!(
+        trailing_payload_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {trailing_payload_error}"
+    );
+
+    let wrong_bridge_import = bridge.replacen("lib/base.ae", "lib/other.ae", 1);
+    let wrong_bridge_bundle = encode_seed_bundle_chain(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), foundation.to_owned()),
+            ("lib/math.ae".to_owned(), wrong_bridge_import),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame opaque wrong bridge import");
+    let wrong_bridge_error = compile_product_bytecode(&wrong_bridge_bundle)
+        .expect_err("the bridge must import the bundled foundation path");
+    assert!(
+        wrong_bridge_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {wrong_bridge_error}"
+    );
+
+    let wrong_entry_import = entry.replacen("lib/math.ae", "lib/base.ae", 1);
+    let wrong_entry_bundle = encode_seed_bundle_chain(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), foundation.to_owned()),
+            ("lib/math.ae".to_owned(), bridge.to_owned()),
+            ("src/main.ae".to_owned(), wrong_entry_import),
+        ],
+    )
+    .expect("frame opaque wrong entry import");
+    let wrong_entry_error = compile_product_bytecode(&wrong_entry_bundle)
+        .expect_err("the entry must import the bundled bridge path");
+    assert!(
+        wrong_entry_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {wrong_entry_error}"
+    );
+
+    let wrong_order_bundle = encode_seed_bundle_chain(
+        "src/main.ae",
+        &[
+            ("lib/math.ae".to_owned(), bridge.to_owned()),
+            ("lib/base.ae".to_owned(), foundation.to_owned()),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame opaque wrong-order chain");
+    let wrong_order_error = compile_product_bytecode(&wrong_order_bundle)
+        .expect_err("the foundation must precede the bridge in the fixed chain");
+    assert!(
+        wrong_order_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {wrong_order_error}"
+    );
+
+    let duplicate_world_entry = entry.replacen("world app", "world math", 1);
+    let duplicate_world_bundle = encode_seed_bundle_chain(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), foundation.to_owned()),
+            ("lib/math.ae".to_owned(), bridge.to_owned()),
+            ("src/main.ae".to_owned(), duplicate_world_entry),
+        ],
+    )
+    .expect("frame duplicate-world chain");
+    let duplicate_world_error = compile_product_bytecode(&duplicate_world_bundle)
+        .expect_err("all three source worlds must be distinct");
+    assert!(
+        duplicate_world_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {duplicate_world_error}"
+    );
+
+    let private_bridge_call = bridge.replacen("base.increment n", "base.private n", 1);
+    let private_bridge_bundle = encode_seed_bundle_chain(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), foundation.to_owned()),
+            ("lib/math.ae".to_owned(), private_bridge_call),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame private bridge call");
+    let private_bridge_error = compile_product_bytecode(&private_bridge_bundle)
+        .expect_err("bridge calls outside the exported foundation helper must fail closed");
+    assert!(
+        private_bridge_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {private_bridge_error}"
+    );
+
+    let forbidden_bridge = "world math\nimport unit \"lib/base.ae\" as base\nexport weave double_after_increment [n: Whole] -> Whole:\n  bind memory <- arena 8\n  bind raised <- call base.increment n\n  yield product raised 2";
+    let forbidden_bridge_bundle = encode_seed_bundle_chain(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), foundation.to_owned()),
+            ("lib/math.ae".to_owned(), forbidden_bridge.to_owned()),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame resource-forbidden bridge");
+    let forbidden_bridge_error = compile_product_bytecode(&forbidden_bridge_bundle)
+        .expect_err("resource forms in the bounded chain profile must fail closed");
+    assert!(
+        forbidden_bridge_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle chain error, got {forbidden_bridge_error}"
+    );
 }
 
 #[test]

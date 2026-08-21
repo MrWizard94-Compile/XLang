@@ -5,7 +5,9 @@
 .DESCRIPTION
   Runs pack verify (when found), fmt, workspace Clippy with warnings denied,
   tests, example dual-compare, host-pilot run, project verification, and the
-  M25 local package pack/verify/publish/install lifecycle.
+  M25 local package pack/verify/publish/install lifecycle. It also proves the
+  closed ADR-128/129 seed-bundle profiles through both product and external
+  named-forge routes.
   -Mode full also rebuilds seed via bootstrap + forge and checks hash identity.
   -Mode release adds a release build, a version-derived local package, consumer
   verification, and a negative package-integrity check.
@@ -207,6 +209,45 @@ if ($hostText -notmatch "exited with 48\b") {
     Fail "host-pilot expected 'exited with 48' in output"
 }
 Write-Host "  host-pilot program exit 48 OK"
+
+# --- Closed seed-native bundle profiles ---
+# These are not general M11/M22 module compilation. Each caller-selected .aeb
+# frame is opaque to the product route and enters only the seed's compile_bundle
+# ABI. Exercise both default product compilation and the external named forge so
+# release proof covers the public transport boundary as well as seed_self_host.
+Write-Step "seed-native bundle profiles (ADR-128/129 product + named forge)"
+$bundleCompiler = Join-Path $RepoRoot "seed\aether_seed.aeth"
+$bundleFixtures = @(
+    @{ Name = "seed-bundle-whole"; ExpectedExit = 84 },
+    @{ Name = "seed-bundle-chain"; ExpectedExit = 84 }
+)
+foreach ($bundleFixture in $bundleFixtures) {
+    $bundleSource = Join-Path $examplesDir ("{0}.aeb" -f $bundleFixture.Name)
+    if (-not (Test-Path -LiteralPath $bundleSource -PathType Leaf)) {
+        Fail "missing bounded seed bundle fixture: $bundleSource"
+    }
+    $bundleProduct = Join-Path $outDir ("{0}.product.aeth" -f $bundleFixture.Name)
+    $bundleForged = Join-Path $outDir ("{0}.forged.aeth" -f $bundleFixture.Name)
+
+    cargo run -q -p aether-cli -- compile $bundleSource --output $bundleProduct
+    if ($LASTEXITCODE -ne 0) { Fail "product compile failed for $($bundleFixture.Name)" }
+    $bundleRunLog = Join-Path $outDir ("{0}.run.txt" -f $bundleFixture.Name)
+    cargo run -q -p aether-cli -- run $bundleProduct *>&1 | Tee-Object -FilePath $bundleRunLog | Out-Host
+    if ($LASTEXITCODE -ne 0) { Fail "product run failed for $($bundleFixture.Name)" }
+    $bundleRunText = Get-Content -LiteralPath $bundleRunLog -Raw
+    if ($bundleRunText -notmatch ("exited with {0}\b" -f $bundleFixture.ExpectedExit)) {
+        Fail "$($bundleFixture.Name) expected program exit $($bundleFixture.ExpectedExit)"
+    }
+
+    cargo run -q -p aether-cli -- forge-bundle $bundleCompiler $bundleSource --output $bundleForged
+    if ($LASTEXITCODE -ne 0) { Fail "named bundle forge failed for $($bundleFixture.Name)" }
+    $bundleProductHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundleProduct).Hash
+    $bundleForgedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundleForged).Hash
+    if ($bundleProductHash -ne $bundleForgedHash) {
+        Fail "$($bundleFixture.Name) product≠named-forge: product=$bundleProductHash forge=$bundleForgedHash"
+    }
+    Write-Host "  $($bundleFixture.Name): product ≡ named forge, program exit $($bundleFixture.ExpectedExit) OK"
+}
 
 # --- Project verify (single-unit + multi-unit) ---
 Write-Step "project verify examples/project"

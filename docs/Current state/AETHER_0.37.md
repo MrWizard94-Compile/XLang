@@ -27,14 +27,15 @@ while leaving M25, language syntax, AETH, verifier, VM, and capability contracts
 unchanged.
 
 [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md)
-adds a separately named, bounded seed-native source-bundle ABI:
-`compile_bundle [borrow bundle: Text] -> Bytes`. Its exact two-unit
-`aether.seed-bundle/v1` profile lets the seed parse one pure Whole library plus
-one entry and emit the established M11-compatible artifact without host source
-elaboration. It is not general seed-native M11/M22 and it does not change M25,
-language syntax, AETH, verifier, VM, project schema, or guest capabilities. See
-[the SBP validation matrix](SBP-VALIDATION-MATRIX.md) and
-[the SBP threat model](THREAT_MODEL-SBP-001-SEED-BUNDLE.md).
+and [ADR-129](../historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md)
+add separately versioned, bounded seed-native source-bundle profiles under
+`compile_bundle [borrow bundle: Text] -> Bytes`: v1 parses one pure Whole
+library plus one entry, while v2 parses one foundation library, one bridge
+library, and one entry in an exact transitive chain. Both emit established
+M11-compatible artifacts without host source elaboration. They are not general
+seed-native M11/M22 and do not change M25, language syntax, AETH, verifier, VM,
+project schema, or guest capabilities. See [the SBP validation matrix](SBP-VALIDATION-MATRIX.md)
+and [the SBP-002 threat model](THREAT_MODEL-SBP-002-SEED-CHAIN.md).
 
 ## What changed
 
@@ -125,7 +126,7 @@ publication never replaces a conflicting cached identity.
 | AETH v4–v12 inputs | Unchanged verifier/VM compatibility behavior. |
 | Existing project/workspace files | Unchanged schemas and commands; package use remains an explicit workspace step. |
 | Seed artifact | M25 itself has no seed interface or bytecode surface; the current checked-in seed also includes separately documented BARP diagnostic pilots. |
-| ADR-128 source bundle | Separate bounded `compile_bundle` ABI only; general projects/workspaces stay host-elaborated and seed-native multi-module remains false. |
+| ADR-128/129 source bundles | Separate bounded v1 library -> entry and v2 foundation -> bridge -> entry `compile_bundle` profiles only; general projects/workspaces stay host-elaborated and seed-native multi-module remains false. |
 | F-REGISTRY | Separate law-fork functionality; M25 performs no fetch, URL handling, signature trust, or resolver action. |
 
 ## Explicit non-goals

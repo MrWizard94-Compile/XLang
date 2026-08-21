@@ -1,8 +1,8 @@
-# SBP-001 validation matrix
+# SBP validation matrix
 
-**Status:** Release verified — ADR-128 acceptance matrix<br>
+**Status:** ADR-128 and ADR-129 release verified<br>
 **Date:** 2026-08-21<br>
-**Design:** [SBP-001](../historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md)
+**Designs:** [SBP-001](../historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md), [SBP-002](../historical%20docs/DESIGN-SBP-002-SEED-NATIVE-TRANSITIVE-CHAIN-PROFILE.md)
 
 | ID | Intended behavior / invariant | Evidence |
 | --- | --- | --- |
@@ -16,6 +16,11 @@
 | SBP-008 | No bundle result is written or run before normal AETH verifier acceptance. | Forge and CLI artifact-write tests; verifier regression suite. |
 | SBP-009 | Seed source, bootstrap rebuild, seed forge, and checked-in artifact remain byte-identical. | Seed self-host suite and release gate four-way identity. |
 | SBP-010 | No new host capability is available to guest seed code. | Forge ABI inspection, grant-free invocation tests, and threat-model/documentation review. |
+| SBP-011 | The existing named `compile_bundle [borrow bundle: Text] -> Bytes` ABI accepts the separately versioned v2 protocol without weakening v1. | v1 regression corpus, v2 direct product/named-forge test, and ABI tests. |
+| SBP-012 | v2 is exactly three scalar-framed units with safe unique paths, a final named entry, ASCII/LF payloads, and 16,384/49,152/49,920 scalar caps. | Source-opaque framing unit test and hostile seed frame cases. |
+| SBP-013 | A canonical foundation -> bridge -> entry bundle seed-elaborates both import edges, verifies, exits 84, and exactly matches independent M11/bootstrap output. | ADR-129 seed self-host integration test plus canonical fixture. |
+| SBP-014 | Wrong dependency order/import, duplicate world, private/unknown bridge call, overdeclared frame, and forbidden resource source all fail closed with one `AE-SEED-016` seed-SPEAK packet. | ADR-129 hostile-profile corpus. |
+| SBP-015 | v2 does not promote general seed-native modules and is exercised by product, named-forge, release, and isolated consumer paths. | General false tracker, route tracker, `aether-gate`, and preview-verifier coverage. |
 
 ## Release gate
 
@@ -23,12 +28,19 @@
 the implementation, seed regeneration, documentation synchronization, and
 pack verification.
 
-**2026-08-21 evidence:** PASS — the release gate completed pack integrity,
-current documentation links, formatter, warning-denied Clippy, full workspace
-and seed-self-host suites, 32-example seed/bootstrap identity, four-way seed
-identity, release packaging, consumer verification, and the unlisted-file
-tamper rejection probe.
+**ADR-128 evidence (2026-08-21):** PASS — the release gate completed pack
+integrity, current documentation links, formatter, warning-denied Clippy, full
+workspace and seed-self-host suites, 32-example seed/bootstrap identity,
+four-way seed identity, release packaging, consumer verification, and the
+unlisted-file tamper rejection probe.
+
+**ADR-129 evidence (2026-08-21):** PASS — the release gate completed pack
+integrity, current documentation links, formatter, warning-denied Clippy, the
+full workspace and 48-test seed-self-host suites, 32-example seed/bootstrap
+identity, four-way seed identity, v1/v2 product-to-named-forge proof, release
+packaging, independent consumer verification, and the unlisted-file tamper
+rejection probe.
 
 ---
 
-*End of SBP-001 validation matrix.*
+*End of SBP validation matrix.*

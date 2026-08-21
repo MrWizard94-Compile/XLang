@@ -4,9 +4,9 @@
 
 .DESCRIPTION
   Validates exact package membership and SHA-256SUMS, the release metadata and
-  CLI version, then exercises the shipped v11/v12, host, project, workspace,
-  authoring, M25 local-package, and path-confinement surfaces without a source
-  checkout.
+  CLI version, then exercises the shipped v11/v12, host, bounded seed-bundle,
+  project, workspace, authoring, M25 local-package, and path-confinement
+  surfaces without a source checkout.
 
 .PARAMETER PackageRoot
   Package directory containing aether.exe and RELEASE-METADATA.json. When
@@ -211,6 +211,8 @@ function Assert-RequiredPackageFiles([string]$Root, [string]$Version) {
         "examples/active-cancel.ae",
         "examples/task-frame-capacity.ae",
         "examples/task-loop.ae",
+        "examples/seed-bundle-whole.aeb",
+        "examples/seed-bundle-chain.aeb",
         "examples/project/aether.project.json",
         "examples/workspace/aether.workspace.json",
         "examples/package-publish/source/aether.project.json",
@@ -218,7 +220,9 @@ function Assert-RequiredPackageFiles([string]$Root, [string]$Version) {
         "docs/Current state/AETHER_AUTHORING_PROTOCOL_v8.md",
         "docs/Current state/CHANGELOG-0.37.md",
         "docs/Current state/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md",
-        "docs/Current state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md"
+        "docs/Current state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md",
+        "docs/Current state/SBP-VALIDATION-MATRIX.md",
+        "docs/Current state/THREAT_MODEL-SBP-002-SEED-CHAIN.md"
     )
     foreach ($relativePath in $requiredFiles) {
         $fullPath = Get-ConfinedPackagePath $Root $relativePath "required package path"
@@ -254,6 +258,37 @@ function Invoke-Example([string]$Executable, [string]$Root, [string]$WorkRoot, [
     }
 
     return [string]$runOutput
+}
+
+function Invoke-SeedBundleExample([string]$Executable, [string]$Root, [string]$WorkRoot, [string]$BundleRelativePath, [int]$ExpectedProgramExit, [string]$Version) {
+    $bundlePath = Get-ConfinedPackagePath $Root $BundleRelativePath "seed-bundle path"
+    $seedPath = Get-ConfinedPackagePath $Root "seed/aether_seed.aeth" "seed compiler path"
+    $stem = [System.IO.Path]::GetFileNameWithoutExtension($bundlePath)
+    $productArtifact = Join-Path $WorkRoot "$stem.product.aeth"
+    $forgedArtifact = Join-Path $WorkRoot "$stem.forged.aeth"
+
+    & $Executable compile $bundlePath --output $productArtifact | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Fail "product bundle compile failed for $BundleRelativePath"
+    }
+    $runOutput = & $Executable run $productArtifact 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        Fail "product bundle run failed for $BundleRelativePath"
+    }
+    $expectedLine = "Aether $Version exited with $ExpectedProgramExit"
+    if (-not $runOutput.Contains($expectedLine)) {
+        Fail "$BundleRelativePath expected '$expectedLine'"
+    }
+
+    & $Executable forge-bundle $seedPath $bundlePath --output $forgedArtifact | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Fail "named bundle forge failed for $BundleRelativePath"
+    }
+    $productHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $productArtifact).Hash
+    $forgedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $forgedArtifact).Hash
+    if ($productHash -ne $forgedHash) {
+        Fail "$BundleRelativePath product artifact differs from named forge output"
+    }
 }
 
 $Package = Resolve-PackageRoot
@@ -296,6 +331,11 @@ try {
     Write-Host "=== pure host pilot ===" -ForegroundColor Cyan
     [void](Invoke-Example $Executable $Package $workRoot "examples/host-pilot.ae" 48 ([string]$release.packageVersion))
     Write-Host "  host-pilot program exit 48 OK"
+
+    Write-Host "=== bounded seed-bundle profiles ===" -ForegroundColor Cyan
+    Invoke-SeedBundleExample $Executable $Package $workRoot "examples/seed-bundle-whole.aeb" 84 ([string]$release.packageVersion)
+    Invoke-SeedBundleExample $Executable $Package $workRoot "examples/seed-bundle-chain.aeb" 84 ([string]$release.packageVersion)
+    Write-Host "  v1 one-edge and v2 transitive-chain product/named-forge identity OK"
 
     Write-Host "=== v12 active-frame cancellation ===" -ForegroundColor Cyan
     [void](Invoke-Example $Executable $Package $workRoot "examples/active-cancel.ae" 9 ([string]$release.packageVersion))

@@ -50,15 +50,18 @@ pub use modules::{
     compile_product_multi_source_envelope, compile_product_multi_unit, compile_project_entry,
     compile_project_entry_with_packages, compile_project_modules,
     compile_project_modules_with_packages, decode_multi_source_envelope, decode_seed_bundle,
-    elaborate_in_memory_units, elaborate_project_entry, elaborate_project_entry_with_packages,
-    elaborate_project_modules, elaborate_project_modules_with_packages,
-    encode_multi_source_envelope, encode_seed_bundle, mangle_weave, multi_module_authority_note,
+    decode_seed_bundle_chain, elaborate_in_memory_units, elaborate_project_entry,
+    elaborate_project_entry_with_packages, elaborate_project_modules,
+    elaborate_project_modules_with_packages, encode_multi_source_envelope, encode_seed_bundle,
+    encode_seed_bundle_chain, mangle_weave, multi_module_authority_note,
     product_multi_source_unit_digests_api, product_multi_source_unit_surface,
     product_multi_source_unit_surface_api, run_project_tests, run_project_tests_with_grants,
     source_requires_project_modules, validate_lib_module_source, MultiSourceEnvelopeSurface,
     MultiSourceUnitSurface, ProjectTestReport, ProjectTestResult, SeedBundle,
-    MULTI_SOURCE_ENVELOPE_SCHEMA, SEED_BUNDLE_MAX_TOTAL_SCALARS, SEED_BUNDLE_MAX_UNITS,
-    SEED_BUNDLE_MAX_UNIT_SCALARS, SEED_BUNDLE_MAX_WIRE_SCALARS, SEED_BUNDLE_SCHEMA,
+    MULTI_SOURCE_ENVELOPE_SCHEMA, SEED_BUNDLE_CHAIN_MAX_TOTAL_SCALARS, SEED_BUNDLE_CHAIN_MAX_UNITS,
+    SEED_BUNDLE_CHAIN_MAX_WIRE_SCALARS, SEED_BUNDLE_CHAIN_SCHEMA, SEED_BUNDLE_MAX_TOTAL_SCALARS,
+    SEED_BUNDLE_MAX_UNITS, SEED_BUNDLE_MAX_UNIT_SCALARS, SEED_BUNDLE_MAX_WIRE_SCALARS,
+    SEED_BUNDLE_SCHEMA,
 };
 pub use native::{
     f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
@@ -2790,7 +2793,7 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
     // ADR-128: a bounded scalar-framed source bundle is an explicit second seed
     // forge ABI. Do this before normal source preflights because its payload
     // legitimately contains M11 `import unit` syntax that the seed resolves.
-    if seed_native_whole_library_bundle_profile() && looks_like_seed_bundle(source) {
+    if looks_like_seed_bundle(source) {
         return compile_product_seed_bundle(source);
     }
     // ADR-078: product multi-source envelope → host multi-unit forge.
@@ -2851,16 +2854,20 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
     forge_product_seed_entry("compile", source)
 }
 
-/// ADR-128 product route for a bounded seed-native Whole-library source bundle.
+/// ADR-128/129 product route for bounded seed-native Whole-library source bundles.
 ///
-/// The source bundle reaches the verified seed `compile_bundle` weave unchanged.
-/// It is intentionally separate from general M11/M22 host elaboration; callers
-/// needing an arbitrary module graph continue to use the established project or
-/// v1 multi-source route.
+/// The v1 one-edge and v2 transitive-chain bundle schemas reach the verified
+/// seed `compile_bundle` weave unchanged. They are intentionally separate from
+/// general M11/M22 host elaboration; callers needing an arbitrary module graph
+/// continue to use the established project or multi-source route.
 pub fn compile_product_seed_bundle(bundle: &str) -> Result<Vec<u8>, CompilerError> {
     debug_assert!(
         seed_native_whole_library_bundle_profile(),
-        "ADR-128: bounded seed-native bundle profile must remain enabled"
+        "ADR-128: bounded seed-native one-edge bundle profile must remain enabled"
+    );
+    debug_assert!(
+        seed_native_whole_library_chain_bundle_profile(),
+        "ADR-129: bounded seed-native chain bundle profile must remain enabled"
     );
     debug_assert!(
         !product_seed_bundle_invokes_host_elaborator(),
@@ -2934,6 +2941,7 @@ fn looks_like_multi_source_envelope(source: &str) -> bool {
 
 fn looks_like_seed_bundle(source: &str) -> bool {
     source.starts_with(modules::SEED_BUNDLE_SCHEMA)
+        || source.starts_with(modules::SEED_BUNDLE_CHAIN_SCHEMA)
 }
 
 /// BARP ADR-055: structured **product** diagnostic collection (seed path).
@@ -3591,6 +3599,16 @@ pub const fn seed_native_multi_module_elaboration() -> bool {
 /// This must never be used to overstate the general M11/M22 tracker above.
 #[must_use]
 pub const fn seed_native_whole_library_bundle_profile() -> bool {
+    true
+}
+
+/// ADR-129: the seed natively elaborates the deliberately bounded SBP-002
+/// three-unit foundation-to-bridge-to-entry profile through the same closed
+/// `compile_bundle` forge ABI.
+///
+/// This must never be used to overstate the general M11/M22 tracker.
+#[must_use]
+pub const fn seed_native_whole_library_chain_bundle_profile() -> bool {
     true
 }
 

@@ -771,11 +771,24 @@ pub const SEED_BUNDLE_SCHEMA: &str = "aether.seed-bundle/v1";
 /// ADR-128 deliberately proves one real library-to-entry edge, not a general graph.
 pub const SEED_BUNDLE_MAX_UNITS: usize = 2;
 
+/// ADR-129 seed-native three-unit transitive source-bundle schema.
+///
+/// This remains a closed profile: a foundation library, a bridge library that
+/// imports it, and one entry that imports the bridge. It is not a general M11
+/// or M22 graph resolver.
+pub const SEED_BUNDLE_CHAIN_SCHEMA: &str = "aether.seed-bundle/v2";
+
+/// ADR-129 deliberately proves one transitive library chain, not arbitrary graphs.
+pub const SEED_BUNDLE_CHAIN_MAX_UNITS: usize = 3;
+
 /// Bounded source payload per unit, counted as Unicode scalar values.
 pub const SEED_BUNDLE_MAX_UNIT_SCALARS: usize = 16_384;
 
 /// Bounded aggregate source payload, counted as Unicode scalar values.
 pub const SEED_BUNDLE_MAX_TOTAL_SCALARS: usize = 32_768;
+
+/// Bounded aggregate source payload for the three-unit ADR-129 chain.
+pub const SEED_BUNDLE_CHAIN_MAX_TOTAL_SCALARS: usize = 49_152;
 
 /// Bounded complete `aether.seed-bundle/v1` wire payload, including headers.
 ///
@@ -783,6 +796,12 @@ pub const SEED_BUNDLE_MAX_TOTAL_SCALARS: usize = 32_768;
 /// remaining small enough for the seed to reject oversized untrusted Text before
 /// extracting either source unit.
 pub const SEED_BUNDLE_MAX_WIRE_SCALARS: usize = 33_280;
+
+/// Bounded complete aether.seed-bundle/v2 wire payload, including headers.
+///
+/// The additional fixed header/path allowance is intentionally small and does
+/// not create an arbitrary-unit transport surface.
+pub const SEED_BUNDLE_CHAIN_MAX_WIRE_SCALARS: usize = 49_920;
 
 /// A structurally decoded seed bundle.
 ///
@@ -852,6 +871,65 @@ pub fn decode_seed_bundle(bundle: &str) -> Result<SeedBundle, ProjectError> {
         units.push((path, source));
     }
     validate_seed_bundle_frame(&entry_path, &units)?;
+    Ok(SeedBundle { entry_path, units })
+}
+
+/// Encode the ADR-129 three-unit transitive seed bundle without parsing source.
+///
+/// The host validates only bounded framing, safe source identity paths, and the
+/// fixed dependency order. The seed owns all Aether parsing and elaboration on
+/// the production route.
+pub fn encode_seed_bundle_chain(
+    entry_path: &str,
+    units: &[(String, String)],
+) -> Result<String, ProjectError> {
+    validate_seed_bundle_chain_frame(entry_path, units)?;
+    let mut bundle = format!("{SEED_BUNDLE_CHAIN_SCHEMA}\nentry {entry_path}\n");
+    for (path, source) in units {
+        let scalar_count = source.chars().count();
+        bundle.push_str(&format!("unit {path} {scalar_count}\n"));
+        bundle.push_str(source);
+        bundle.push('\n');
+    }
+    Ok(bundle)
+}
+
+/// Decode an ADR-129 three-unit transitive seed bundle without parsing source.
+///
+/// This framing utility is for deterministic authoring and independent tests;
+/// the product compile path sends the original Text directly to the seed.
+pub fn decode_seed_bundle_chain(bundle: &str) -> Result<SeedBundle, ProjectError> {
+    let total_scalars = bundle.chars().count();
+    if total_scalars > SEED_BUNDLE_CHAIN_MAX_WIRE_SCALARS {
+        return Err(module_error(
+            "AE-MOD-001",
+            "seed bundle chain exceeds its bounded wire-size limit",
+        ));
+    }
+
+    let mut cursor = 0_usize;
+    let magic = take_seed_bundle_line(bundle, &mut cursor)?;
+    if magic != SEED_BUNDLE_CHAIN_SCHEMA {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!("unsupported seed bundle chain schema {magic:?}"),
+        ));
+    }
+    let entry_line = take_seed_bundle_line(bundle, &mut cursor)?;
+    let entry_path = entry_line
+        .strip_prefix("entry ")
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| module_error("AE-MOD-001", "seed bundle chain requires entry <path>"))?
+        .to_owned();
+
+    let mut units = Vec::new();
+    while cursor < bundle.len() {
+        let header = take_seed_bundle_line(bundle, &mut cursor)?;
+        let (path, scalar_count) = parse_seed_bundle_unit_header(header)?;
+        let source = take_seed_bundle_scalars(bundle, &mut cursor, scalar_count)?;
+        units.push((path, source));
+    }
+    validate_seed_bundle_chain_frame(&entry_path, &units)?;
     Ok(SeedBundle { entry_path, units })
 }
 
@@ -936,6 +1014,95 @@ fn validate_seed_bundle_frame(
         return Err(module_error(
             "AE-MOD-006",
             "seed bundle entry path must name its final unit",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_seed_bundle_chain_frame(
+    entry_path: &str,
+    units: &[(String, String)],
+) -> Result<(), ProjectError> {
+    if units.len() != SEED_BUNDLE_CHAIN_MAX_UNITS {
+        return Err(module_error(
+            "AE-MOD-006",
+            "seed bundle chain profile requires exactly two libraries and one entry unit",
+        ));
+    }
+    validate_seed_bundle_path(entry_path)?;
+    let mut wire_scalars = SEED_BUNDLE_CHAIN_SCHEMA
+        .chars()
+        .count()
+        .checked_add(1)
+        .and_then(|value| value.checked_add("entry ".chars().count()))
+        .and_then(|value| value.checked_add(entry_path.chars().count()))
+        .and_then(|value| value.checked_add(1))
+        .ok_or_else(|| module_error("AE-MOD-001", "seed bundle chain wire-size overflow"))?;
+    let mut seen_paths = BTreeSet::new();
+    let mut total_scalars = 0_usize;
+    for (path, source) in units {
+        validate_seed_bundle_path(path)?;
+        if !seen_paths.insert(path) {
+            return Err(module_error(
+                "AE-MOD-005",
+                format!("seed bundle chain repeats unit path {path}"),
+            ));
+        }
+        let scalar_count = source.chars().count();
+        if scalar_count == 0 {
+            return Err(module_error(
+                "AE-MOD-001",
+                format!("seed bundle chain unit {path} is empty"),
+            ));
+        }
+        if scalar_count > SEED_BUNDLE_MAX_UNIT_SCALARS {
+            return Err(module_error(
+                "AE-MOD-001",
+                format!(
+                    "seed bundle chain unit {path} exceeds the {}-scalar limit",
+                    SEED_BUNDLE_MAX_UNIT_SCALARS
+                ),
+            ));
+        }
+        total_scalars = total_scalars.checked_add(scalar_count).ok_or_else(|| {
+            module_error(
+                "AE-MOD-001",
+                "seed bundle chain aggregate scalar count overflow",
+            )
+        })?;
+        let count_scalars = scalar_count.to_string().chars().count();
+        wire_scalars = wire_scalars
+            .checked_add("unit ".chars().count())
+            .and_then(|value| value.checked_add(path.chars().count()))
+            .and_then(|value| value.checked_add(1))
+            .and_then(|value| value.checked_add(count_scalars))
+            .and_then(|value| value.checked_add(1))
+            .and_then(|value| value.checked_add(scalar_count))
+            .and_then(|value| value.checked_add(1))
+            .ok_or_else(|| module_error("AE-MOD-001", "seed bundle chain wire-size overflow"))?;
+    }
+    if total_scalars > SEED_BUNDLE_CHAIN_MAX_TOTAL_SCALARS {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed bundle chain exceeds the {}-scalar aggregate limit",
+                SEED_BUNDLE_CHAIN_MAX_TOTAL_SCALARS
+            ),
+        ));
+    }
+    if wire_scalars > SEED_BUNDLE_CHAIN_MAX_WIRE_SCALARS {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed bundle chain exceeds the {}-scalar wire limit",
+                SEED_BUNDLE_CHAIN_MAX_WIRE_SCALARS
+            ),
+        ));
+    }
+    if units.last().map(|(path, _)| path.as_str()) != Some(entry_path) {
+        return Err(module_error(
+            "AE-MOD-006",
+            "seed bundle chain entry path must name its final unit",
         ));
     }
     Ok(())
@@ -1853,6 +2020,63 @@ mod tests {
             ],
         )
         .expect_err("wire framing must cap path-bearing untrusted bundle text");
+        assert_eq!(oversize.code, "AE-MOD-001");
+        assert!(oversize.message.contains("wire limit"));
+    }
+
+    #[test]
+    fn seed_bundle_chain_framing_is_scalar_exact_bounded_and_source_opaque() {
+        let units = [
+            ("lib/base.ae".to_owned(), "🙂".to_owned()),
+            ("lib/math.ae".to_owned(), "é".to_owned()),
+            ("src/main.ae".to_owned(), "z".to_owned()),
+        ];
+        let bundle = encode_seed_bundle_chain("src/main.ae", &units)
+            .expect("chain framing must not parse or reject opaque source text");
+        assert!(bundle.contains("unit lib/base.ae 1\n"));
+        assert!(bundle.contains("unit lib/math.ae 1\n"));
+        assert!(bundle.contains("unit src/main.ae 1\n"));
+        let decoded = decode_seed_bundle_chain(&bundle)
+            .expect("Unicode scalar chain framing must round-trip");
+        assert_eq!(decoded.entry_path, "src/main.ae");
+        assert_eq!(decoded.units, units);
+
+        let wrong_scalar_count = bundle.replacen("unit lib/base.ae 1\n", "unit lib/base.ae 2\n", 1);
+        let error = decode_seed_bundle_chain(&wrong_scalar_count)
+            .expect_err("a scalar count that crosses the LF separator must fail closed");
+        assert_eq!(error.code, "AE-MOD-001");
+
+        let wrong_count = encode_seed_bundle_chain(
+            "src/main.ae",
+            &[
+                ("lib/base.ae".to_owned(), "x".to_owned()),
+                ("src/main.ae".to_owned(), "y".to_owned()),
+            ],
+        )
+        .expect_err("chain framing must require its fixed three-unit shape");
+        assert_eq!(wrong_count.code, "AE-MOD-006");
+
+        let duplicate = encode_seed_bundle_chain(
+            "src/main.ae",
+            &[
+                ("lib/base.ae".to_owned(), "x".to_owned()),
+                ("lib/base.ae".to_owned(), "y".to_owned()),
+                ("src/main.ae".to_owned(), "z".to_owned()),
+            ],
+        )
+        .expect_err("chain framing must reject duplicate unit identities");
+        assert_eq!(duplicate.code, "AE-MOD-005");
+
+        let oversize_path = format!("{}.ae", "a".repeat(SEED_BUNDLE_CHAIN_MAX_WIRE_SCALARS));
+        let oversize = encode_seed_bundle_chain(
+            "src/main.ae",
+            &[
+                (oversize_path, "x".to_owned()),
+                ("lib/math.ae".to_owned(), "y".to_owned()),
+                ("src/main.ae".to_owned(), "z".to_owned()),
+            ],
+        )
+        .expect_err("chain framing must cap path-bearing untrusted bundle text");
         assert_eq!(oversize.code, "AE-MOD-001");
         assert!(oversize.message.contains("wire limit"));
     }

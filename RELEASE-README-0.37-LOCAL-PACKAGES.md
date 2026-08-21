@@ -11,6 +11,12 @@ published to an explicit local cache, and installed as a normal locked workspace
 project. M25 is not a remote package manager, dependency resolver, signature
 system, or guest capability.
 
+The package also ships two closed seed-native source-bundle profiles through
+`compile_bundle [borrow bundle: Text] -> Bytes`: v1 is one pure Whole library
+plus one entry, while v2 is one foundation library plus one bridge library plus
+one entry. They are not general module resolution; normal project/workspace
+graphs remain host-elaborated then seed-emitted.
+
 ## Quick start
 
 Open PowerShell in this package directory:
@@ -41,6 +47,21 @@ Add the installed directory deliberately to an `aether.workspace/v1` file and
 declare the normal M22 `depends_on` relationship before another package imports
 it. M25 never rewrites a workspace or resolves a package name automatically.
 
+## Bounded seed-bundle example
+
+The v2 fixture demonstrates a fixed transitive library chain. It is safe to
+compile directly or through the checked-in seed artifact's explicit named ABI:
+
+```powershell
+.\aether.exe compile .\examples\seed-bundle-chain.aeb --output .\seed-bundle-chain.aeth
+.\aether.exe run .\seed-bundle-chain.aeth
+.\aether.exe forge-bundle .\seed\aether_seed.aeth .\examples\seed-bundle-chain.aeb --output .\seed-bundle-chain-forged.aeth
+```
+
+Both artifacts are verified before write. The program reports exit 84, and the
+two artifacts must have identical SHA-256 values. Bundle paths are source
+identity only; no bundle-internal path is opened by the guest compiler.
+
 ## Verify this preview
 
 ```powershell
@@ -48,9 +69,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\verify-preview.ps1
 ```
 
 The verifier checks SHA-256SUMS and release metadata, starts the executable,
-validates seed/VM and project/workspace behavior, and exercises pack, verify,
-idempotent publish, cache verification, both install paths, and installed
-project verification in a temporary local directory.
+validates seed/VM and project/workspace behavior, both bounded bundle product
+and named-forge routes, and exercises pack, verify, idempotent publish, cache
+verification, both install paths, and installed project verification in a
+temporary local directory.
 
 ## Security and limits
 
@@ -73,6 +95,9 @@ file authority; host I/O remains operator-granted.
 - [M25 ADR](docs/historical%20docs/ADR-107-m25-local-package-publication.md)
 - [M25 validation matrix](docs/Current%20state/M25-VALIDATION-MATRIX.md)
 - [M25 threat model](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md)
+- [SBP validation matrix](docs/Current%20state/SBP-VALIDATION-MATRIX.md)
+- [SBP-002 transitive-chain ADR](docs/historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md)
+- [SBP-002 threat model](docs/Current%20state/THREAT_MODEL-SBP-002-SEED-CHAIN.md)
 - [Release notes](docs/Current%20state/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md)
 
 *Local preview package entry point for Aether 0.37.0.*

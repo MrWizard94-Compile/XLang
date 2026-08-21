@@ -1,0 +1,18 @@
+aether.seed-bundle/v2
+entry src/main.ae
+unit lib/base.ae 70
+world base
+export weave increment [n: Whole] -> Whole:
+  yield sum n 1
+unit lib/math.ae 165
+world math
+import unit "lib/base.ae" as base
+export weave double_after_increment [n: Whole] -> Whole:
+  bind raised <- call base.increment n
+  yield product raised 2
+unit src/main.ae 135
+world app
+import unit "lib/math.ae" as math
+weave main [] -> Whole:
+  bind result <- call math.double_after_increment 41
+  yield result

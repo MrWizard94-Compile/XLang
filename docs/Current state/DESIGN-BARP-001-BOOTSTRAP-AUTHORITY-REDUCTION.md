@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064–072; bounded increments through ADR-128); ADR-127 and ADR-128 release verified; residual recovery bootstrap
-**Date:** 2026-08-21 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-127 and SBP-001)
-**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md)
+**Status:** Active program — product-default toolchain (ADR-064–072; bounded increments through ADR-129); ADR-127–129 release verified; residual recovery bootstrap
+**Date:** 2026-08-21 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-127 and SBP-001/SBP-002)
+**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-129](../historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md)
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -48,7 +48,7 @@ Bootstrap remains **required** only for residual roles (ADR-065–071 reduced fu
 | LSP format | **Product** LF+accept (ADR-064) |
 | LSP hover/definition | **Product-surface** local (ADR-066); import path text scan |
 | Product diagnostics API | [`product_diagnostics`] (ADR-055) |
-| Multi-module | Host elaborate + seed emit; general seed-native multi-file **false** (ADR-056). ADR-128 is a separate exact two-unit seed-native profile, not a general exception. |
+| Multi-module | Host elaborate + seed emit; general seed-native multi-file **false** (ADR-056). ADR-128/129 are separate exact v1 two-unit and v2 transitive-three-unit profiles, not general exceptions. |
 
 **Primary product emission** is seed forge without bootstrap pre-gate or
 product dual-compare gate. Bootstrap remains dual-compare **oracle**, recovery
@@ -169,6 +169,22 @@ workspaces, and multi-source envelopes. See [ADR-128](../historical%20docs/ADR-1
 [SBP-001](../historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md),
 and [the SBP matrix](SBP-VALIDATION-MATRIX.md).
 
+### ADR-129 — bounded seed-native transitive library chain (**release verified**)
+
+The distinct `aether.seed-bundle/v2` profile preserves the same closed
+`compile_bundle [borrow bundle: Text] -> Bytes` ABI and proves exactly two
+seed-owned import edges: foundation library -> bridge library -> main entry.
+The seed validates the three scalar-framed ASCII/LF units, safe paths, distinct
+worlds, exact imports, one export per library, and qualified calls before it
+applies M11-compatible mangling/rewrite and compiles one source. The product
+route still supplies opaque Text and never invokes the host M11 elaborator.
+The profile is capability-closed and keeps
+`seed_native_multi_module_elaboration() == false` for ordinary projects,
+workspaces, and envelopes. It is not an arbitrary three-unit graph. See
+[ADR-129](../historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md),
+[SBP-002](../historical%20docs/DESIGN-SBP-002-SEED-NATIVE-TRANSITIVE-CHAIN-PROFILE.md),
+and [the SBP-002 threat model](THREAT_MODEL-SBP-002-SEED-CHAIN.md).
+
 ### ADR-057 — Structural-edit product base gate (**complete** 2026-08-10)
 
 When both product and bootstrap reject base source, prefer product AE-SEED.
@@ -211,7 +227,7 @@ Product project/workspace compile returns seed bytes via
 | Product project format | **`project format --product`** (ADR-054) |
 | Product structure | **`structure --product`** envelope (ADR-054) |
 | Product diagnostics API | **`product_diagnostics`** (ADR-055) |
-| Multi-module | Host elaborate + seed emit (ADR-056); general seed-native = false. SBP-001 is a distinct exact two-unit seed profile (ADR-128). |
+| Multi-module | Host elaborate + seed emit (ADR-056); general seed-native = false. SBP-001 is a distinct exact two-unit profile and SBP-002 an exact transitive-three-unit profile (ADR-128/129). |
 | LSP diagnostics / hover / def | **Product primary** (ADR-058/066) |
 | Structural top-level weaves | **Product path** (ADR-065/068 replace/insert/delete) |
 | Structural statements/records | **Product path** weave-body + primitive records (ADR-069) |
