@@ -1,0 +1,27 @@
+{
+  "schema": "aether.project/v1",
+  "name": "atlas_replay",
+  "version": "0.1.0",
+  "units": [
+    {
+      "path": "main.ae",
+      "role": "main"
+    },
+    {
+      "path": "resource_test.ae",
+      "role": "test"
+    }
+  ],
+  "lock": {
+    "units": [
+      {
+        "path": "main.ae",
+        "sha256": "e3c36a808664e1b0aa4cc04bbb903f16f52272fd8e1ce366f238ef5a01868771"
+      },
+      {
+        "path": "resource_test.ae",
+        "sha256": "803af6d8835afe6bf52e50b478e75a22a6512168578395269e94913c2149de3b"
+      }
+    ]
+  }
+}

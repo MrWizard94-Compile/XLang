@@ -1,0 +1,37 @@
+world atlas_operator
+
+host weave read_text [borrow path: Text] -> Text
+host weave write_text [borrow path: Text, borrow body: Text] -> Whole
+
+weave journal_fingerprint [borrow journal: Text] -> Whole:
+  bind length <- measure borrow journal
+  bind mutable cursor <- 0
+  bind mutable glyph_value <- 0
+  bind mutable folded <- 17
+  bind mutable scaled <- 0
+  while less cursor length:
+    revise glyph_value <- glyph borrow journal cursor
+    revise scaled <- product folded 17
+    revise folded <- sum scaled glyph_value
+    revise folded <- remainder folded 65521
+    revise cursor <- sum cursor 1
+  yield folded
+
+weave canonical_journal [borrow journal: Text] -> Whole:
+  bind expected <- "ATLAS/1\nPUT 0041 0007\nPUT 0043 0011\nPUT 0047 0013\nCOMMIT 0003\n"
+  bind mutable accepted <- 0
+  choose same borrow journal borrow expected:
+    revise accepted <- 1
+  yield accepted
+
+weave main [] -> Whole:
+  bind input_path <- "atlas.journal"
+  bind output_path <- "atlas.receipt"
+  bind journal <- call read_text borrow input_path
+  bind accepted <- call canonical_journal borrow journal
+  bind score <- call journal_fingerprint borrow journal
+  bind rendered <- render score
+  bind mutable receipt <- "ATLAS-REJECTED"
+  choose same accepted 1:
+    revise receipt <- join "ATLAS-ACCEPTED " borrow rendered
+  yield call write_text borrow output_path borrow receipt

@@ -1,0 +1,27 @@
+{
+  "schema": "aether.project/v1",
+  "name": "atlas_fault",
+  "version": "0.1.0",
+  "units": [
+    {
+      "path": "main.ae",
+      "role": "main"
+    },
+    {
+      "path": "task_success_test.ae",
+      "role": "test"
+    }
+  ],
+  "lock": {
+    "units": [
+      {
+        "path": "main.ae",
+        "sha256": "22f4965d73ff03f884dfeca1a6bdd55d32d27fac64b95d1a6cd2a82ce539c22f"
+      },
+      {
+        "path": "task_success_test.ae",
+        "sha256": "75c27826726a1307791576112ed7fb36e437cc2fadf0e98002758428d3f49796"
+      }
+    ]
+  }
+}

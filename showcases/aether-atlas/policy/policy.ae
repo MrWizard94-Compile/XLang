@@ -1,0 +1,17 @@
+world atlas_policy
+
+import unit "fingerprint.ae" from package protocol as proto
+import unit "journal.ae" from package protocol as journal
+
+export weave classify_frame [borrow frame: Bytes] -> Whole:
+  bind length <- extent borrow frame
+  bind folded <- call proto.byte_fingerprint borrow frame
+  yield call proto.mix3 length folded 37
+
+export weave classify_journal [borrow source: Text] -> Whole:
+  bind journal_score <- call journal.replay_journal borrow source
+  bind prepared <- call proto.mix3 journal_score 71 19
+  bind mutable result <- -200
+  choose less -100 journal_score:
+    revise result <- prepared
+  yield result

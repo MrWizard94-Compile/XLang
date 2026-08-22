@@ -1,0 +1,12 @@
+world atlas_audit
+
+import unit "policy.ae" from package policy as policy
+
+weave main [] -> Whole:
+  bind valid <- "ATLAS/1\nPUT 0041 0007\nPUT 0043 0011\nPUT 0047 0013\nCOMMIT 0003\n"
+  bind corrupt <- "ATLAS/1\nPUT 0041 0007\nPXT 0043 0011\nPUT 0047 0013\nCOMMIT 0003\n"
+  bind accepted <- call policy.classify_journal borrow valid
+  bind rejected <- call policy.classify_journal borrow corrupt
+  bind accepted_delta <- difference accepted 4268542
+  bind rejected_delta <- difference rejected -200
+  yield sum accepted_delta rejected_delta

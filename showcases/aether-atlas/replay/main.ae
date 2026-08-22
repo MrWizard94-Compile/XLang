@@ -1,0 +1,148 @@
+world atlas_replay
+
+import unit "fingerprint.ae" from package protocol as proto
+import unit "journal.ae" from package protocol as journal
+import unit "policy.ae" from package policy as policy
+
+record replay_receipt [label: Text, frame: Bytes, page_bytes: Whole]
+
+shape event_slot:
+  sequence Whole
+  key Whole
+  amount Whole
+
+weave slot_width [fields: Whole] -> Whole:
+  bind width <- product fields 8
+  yield width
+
+weave left_segment [key: Whole, amount: Whole] -> Whole:
+  yield call proto.mix3 key amount 1
+
+weave right_segment [key: Whole, amount: Whole] -> Whole:
+  yield call proto.mix3 key amount 2
+
+weave main [] -> Whole:
+  comptime bind field_count <- product 1 3
+  comptime bind slot_bytes <- call slot_width field_count
+  comptime bind page_bytes <- product slot_bytes 4
+  bind journal_source <- "ATLAS/1\nPUT 0041 0007\nPUT 0043 0011\nPUT 0047 0013\nCOMMIT 0003\n"
+  bind event_one_text <- cut borrow journal_source 8 21
+  bind event_two_text <- cut borrow journal_source 22 35
+  bind event_three_text <- cut borrow journal_source 36 49
+  bind event_one <- call journal.parse_event borrow event_one_text
+  bind event_two <- call journal.parse_event borrow event_two_text
+  bind event_three <- call journal.parse_event borrow event_three_text
+  bind first_key <- quotient event_one 10000
+  bind second_key <- quotient event_two 10000
+  bind third_key <- quotient event_three 10000
+  bind first_amount <- remainder event_one 10000
+  bind second_amount <- remainder event_two 10000
+  bind third_amount <- remainder event_three 10000
+  bind receipt <- make replay_receipt "atlas-replay" bytes "010000000200000003000000" page_bytes
+  bind label <- field borrow receipt label
+  bind frame <- field borrow receipt frame
+  bind journal_score <- call policy.classify_journal borrow journal_source
+  bind frame_score <- call policy.classify_frame borrow frame
+  bind memory <- arena 512
+  bind mutable columns <- table event_slot layout columns
+  bind mutable rows <- table event_slot layout rows
+  bind mutable queue <- buffer Whole
+  bind mutable left <- 0
+  bind mutable right <- 0
+  bind mutable observed <- 0
+  bind mutable loaded_amount <- 0
+  bind mutable loaded_key <- 0
+  bind mutable final_score <- 0
+  speak borrow label
+  release label
+  choose allocate access memory move columns field_count into columns:
+    choose allocate access memory move rows field_count into rows:
+      choose allocate access memory move queue field_count into queue:
+        choose append move queue event_one into queue:
+          choose append move queue event_two into queue:
+            choose append move queue event_three into queue:
+              together:
+                spawn call left_segment first_key first_amount into left
+                spawn call right_segment second_key third_amount into right
+              choose store move columns 0 sequence 1 into columns:
+                choose store move columns 0 key first_key into columns:
+                  choose store move columns 0 amount first_amount into columns:
+                    choose store move columns 1 sequence 2 into columns:
+                      choose store move columns 1 key second_key into columns:
+                        choose store move columns 1 amount second_amount into columns:
+                          choose store move columns 2 sequence 3 into columns:
+                            choose store move columns 2 key third_key into columns:
+                              choose store move columns 2 amount third_amount into columns:
+                                choose store move rows 0 sequence 1 into rows:
+                                  choose store move rows 0 key first_key into rows:
+                                    choose store move rows 0 amount first_amount into rows:
+                                      choose store move rows 1 sequence 2 into rows:
+                                        choose store move rows 1 key second_key into rows:
+                                          choose store move rows 1 amount second_amount into rows:
+                                            choose store move rows 2 sequence 3 into rows:
+                                              choose store move rows 2 key third_key into rows:
+                                                choose store move rows 2 amount third_amount into rows:
+                                                  choose at borrow queue 1 into observed:
+                                                    choose load borrow columns 2 amount into loaded_amount:
+                                                      choose load borrow rows 1 key into loaded_key:
+                                                        revise final_score <- sum journal_score frame_score
+                                                        revise final_score <- sum final_score left
+                                                        revise final_score <- sum final_score right
+                                                        revise final_score <- sum final_score observed
+                                                        revise final_score <- sum final_score loaded_amount
+                                                        revise final_score <- sum final_score loaded_key
+                                                        yield final_score
+                                                      otherwise:
+                                                        yield -17
+                                                    otherwise:
+                                                      yield -16
+                                                  otherwise:
+                                                    yield -15
+                                                otherwise:
+                                                  yield -14
+                                              otherwise:
+                                                yield -13
+                                            otherwise:
+                                              yield -12
+                                          otherwise:
+                                            yield -11
+                                        otherwise:
+                                          yield -10
+                                      otherwise:
+                                        yield -9
+                                    otherwise:
+                                      yield -8
+                                  otherwise:
+                                    yield -7
+                                otherwise:
+                                  yield -6
+                              otherwise:
+                                yield -5
+                            otherwise:
+                              yield -4
+                          otherwise:
+                            yield -3
+                        otherwise:
+                          yield -2
+                      otherwise:
+                        yield -1
+                    otherwise:
+                      yield -18
+                  otherwise:
+                    yield -19
+                otherwise:
+                  yield -20
+              otherwise:
+                yield -21
+            otherwise:
+              yield -22
+          otherwise:
+            yield -23
+        otherwise:
+          yield -24
+      otherwise:
+        yield -25
+    otherwise:
+      yield -26
+  otherwise:
+    yield -27

@@ -1,0 +1,25 @@
+world atlas_protocol
+
+export weave mix3 [first: Whole, second: Whole, third: Whole] -> Whole:
+  bind mixed <- product first 31
+  bind mixed_with_second <- sum mixed second
+  yield sum mixed_with_second third
+
+export weave byte_fingerprint [borrow frame: Bytes] -> Whole:
+  bind length <- extent borrow frame
+  bind mutable cursor <- 0
+  bind mutable octet_value <- 0
+  bind mutable folded <- 17
+  bind mutable scaled <- 0
+  while less cursor length:
+    revise octet_value <- octet borrow frame cursor
+    revise scaled <- product folded 17
+    revise folded <- sum scaled octet_value
+    revise folded <- remainder folded 65521
+    revise cursor <- sum cursor 1
+  yield folded
+
+export weave receipt [count: Whole, fingerprint: Whole] -> Bytes:
+  bind count_bytes <- pack32 count
+  bind fingerprint_bytes <- pack32 fingerprint
+  yield fuse move count_bytes move fingerprint_bytes

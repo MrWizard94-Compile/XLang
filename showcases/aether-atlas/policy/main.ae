@@ -1,0 +1,4 @@
+world atlas_policy_package
+
+weave main [] -> Whole:
+  yield 0

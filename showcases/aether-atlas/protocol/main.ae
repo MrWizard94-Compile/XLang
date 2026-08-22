@@ -1,0 +1,4 @@
+world atlas_protocol_package
+
+weave main [] -> Whole:
+  yield 0

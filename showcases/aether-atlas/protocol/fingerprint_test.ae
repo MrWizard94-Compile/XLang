@@ -1,0 +1,8 @@
+world atlas_protocol_test
+
+import unit "fingerprint.ae" as proto
+
+weave main [] -> Whole:
+  bind frame <- bytes "010203"
+  bind actual <- call proto.byte_fingerprint borrow frame
+  yield difference actual 18326

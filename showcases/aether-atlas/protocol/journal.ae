@@ -1,0 +1,168 @@
+world atlas_journal
+
+weave journal_mix3 [first: Whole, second: Whole, third: Whole] -> Whole:
+  bind mixed <- product first 31
+  bind mixed_with_second <- sum mixed second
+  yield sum mixed_with_second third
+
+export weave whole_matches [actual: Whole, expected: Whole] -> Whole:
+  bind mutable matched <- 0
+  choose same actual expected:
+    revise matched <- 1
+  yield matched
+
+export weave text_matches [borrow actual: Text, borrow expected: Text] -> Whole:
+  bind mutable matched <- 0
+  choose same borrow actual borrow expected:
+    revise matched <- 1
+  yield matched
+
+export weave accepted_event [value: Whole] -> Whole:
+  bind mutable accepted <- 0
+  choose less -1 value:
+    revise accepted <- 1
+  yield accepted
+
+export weave digits4 [borrow text: Text] -> Whole:
+  bind length <- measure borrow text
+  bind mutable cursor <- 0
+  bind mutable glyph_value <- 0
+  bind mutable valid <- 1
+  bind mutable length_ok <- 0
+  choose same length 4:
+    revise length_ok <- 1
+  while less cursor length:
+    revise glyph_value <- glyph borrow text cursor
+    choose less glyph_value 48:
+      revise valid <- 0
+    choose less 57 glyph_value:
+      revise valid <- 0
+    revise cursor <- sum cursor 1
+  yield product length_ok valid
+
+export weave decimal4 [borrow text: Text] -> Whole:
+  bind first_glyph <- glyph borrow text 0
+  bind second_glyph <- glyph borrow text 1
+  bind third_glyph <- glyph borrow text 2
+  bind fourth_glyph <- glyph borrow text 3
+  bind first <- difference first_glyph 48
+  bind second <- difference second_glyph 48
+  bind third <- difference third_glyph 48
+  bind fourth <- difference fourth_glyph 48
+  bind tens0 <- product first 10
+  bind tens1 <- sum tens0 second
+  bind tens2 <- product tens1 10
+  bind tens3 <- sum tens2 third
+  bind tens4 <- product tens3 10
+  yield sum tens4 fourth
+
+export weave parse_event [borrow line: Text] -> Whole:
+  bind length <- measure borrow line
+  bind command <- cut borrow line 0 3
+  bind first_gap <- cut borrow line 3 4
+  bind key_text <- cut borrow line 4 8
+  bind second_gap <- cut borrow line 8 9
+  bind amount_text <- cut borrow line 9 13
+  bind length_ok <- call whole_matches length 13
+  bind command_ok <- call text_matches borrow command "PUT"
+  bind first_gap_ok <- call text_matches borrow first_gap " "
+  bind second_gap_ok <- call text_matches borrow second_gap " "
+  bind key_ok <- call digits4 borrow key_text
+  bind amount_ok <- call digits4 borrow amount_text
+  bind checks0 <- product length_ok command_ok
+  bind checks1 <- product checks0 first_gap_ok
+  bind checks2 <- product checks1 second_gap_ok
+  bind checks3 <- product checks2 key_ok
+  bind checks4 <- product checks3 amount_ok
+  bind key <- call decimal4 borrow key_text
+  bind amount <- call decimal4 borrow amount_text
+  bind scaled_key <- product key 10000
+  bind encoded <- sum scaled_key amount
+  bind mutable result <- -1
+  choose same checks4 1:
+    revise result <- encoded
+  yield result
+
+export weave parse_commit [borrow line: Text] -> Whole:
+  bind length <- measure borrow line
+  bind command <- cut borrow line 0 6
+  bind gap <- cut borrow line 6 7
+  bind count_text <- cut borrow line 7 11
+  bind length_ok <- call whole_matches length 11
+  bind command_ok <- call text_matches borrow command "COMMIT"
+  bind gap_ok <- call text_matches borrow gap " "
+  bind count_ok <- call digits4 borrow count_text
+  bind checks0 <- product length_ok command_ok
+  bind checks1 <- product checks0 gap_ok
+  bind checks2 <- product checks1 count_ok
+  bind count <- call decimal4 borrow count_text
+  bind mutable result <- -1
+  choose same checks2 1:
+    revise result <- count
+  yield result
+
+export weave text_fingerprint [borrow journal: Text] -> Whole:
+  bind length <- measure borrow journal
+  bind mutable cursor <- 0
+  bind mutable glyph_value <- 0
+  bind mutable folded <- 17
+  bind mutable scaled <- 0
+  while less cursor length:
+    revise glyph_value <- glyph borrow journal cursor
+    revise scaled <- product folded 17
+    revise folded <- sum scaled glyph_value
+    revise folded <- remainder folded 65521
+    revise cursor <- sum cursor 1
+  yield folded
+
+export weave replay_journal [borrow journal: Text] -> Whole:
+  bind length <- measure borrow journal
+  bind header <- cut borrow journal 0 8
+  bind event_one_text <- cut borrow journal 8 21
+  bind break_one <- cut borrow journal 21 22
+  bind event_two_text <- cut borrow journal 22 35
+  bind break_two <- cut borrow journal 35 36
+  bind event_three_text <- cut borrow journal 36 49
+  bind break_three <- cut borrow journal 49 50
+  bind commit_text <- cut borrow journal 50 61
+  bind break_four <- cut borrow journal 61 62
+  bind header_ok <- call text_matches borrow header "ATLAS/1\n"
+  bind length_ok <- call whole_matches length 62
+  bind break_one_ok <- call text_matches borrow break_one "\n"
+  bind break_two_ok <- call text_matches borrow break_two "\n"
+  bind break_three_ok <- call text_matches borrow break_three "\n"
+  bind break_four_ok <- call text_matches borrow break_four "\n"
+  bind event_one <- call parse_event borrow event_one_text
+  bind event_two <- call parse_event borrow event_two_text
+  bind event_three <- call parse_event borrow event_three_text
+  bind commit <- call parse_commit borrow commit_text
+  bind event_one_ok <- call accepted_event event_one
+  bind event_two_ok <- call accepted_event event_two
+  bind event_three_ok <- call accepted_event event_three
+  bind commit_ok <- call whole_matches commit 3
+  bind checks0 <- product header_ok length_ok
+  bind checks1 <- product checks0 break_one_ok
+  bind checks2 <- product checks1 break_two_ok
+  bind checks3 <- product checks2 break_three_ok
+  bind checks4 <- product checks3 break_four_ok
+  bind checks5 <- product checks4 event_one_ok
+  bind checks6 <- product checks5 event_two_ok
+  bind checks7 <- product checks6 event_three_ok
+  bind checks8 <- product checks7 commit_ok
+  bind first_key <- quotient event_one 10000
+  bind second_key <- quotient event_two 10000
+  bind third_key <- quotient event_three 10000
+  bind first_amount <- remainder event_one 10000
+  bind second_amount <- remainder event_two 10000
+  bind third_amount <- remainder event_three 10000
+  bind key_sum0 <- sum first_key second_key
+  bind key_sum <- sum key_sum0 third_key
+  bind amount_sum0 <- sum first_amount second_amount
+  bind amount_sum <- sum amount_sum0 third_amount
+  bind frame_fingerprint <- call text_fingerprint borrow journal
+  bind state_score <- call journal_mix3 key_sum amount_sum commit
+  bind score <- call journal_mix3 state_score frame_fingerprint 97
+  bind mutable result <- -100
+  choose same checks8 1:
+    revise result <- score
+  yield result

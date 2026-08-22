@@ -1,0 +1,19 @@
+{
+  "schema": "aether.project/v1",
+  "name": "atlas_operator",
+  "version": "0.1.0",
+  "units": [
+    {
+      "path": "main.ae",
+      "role": "main"
+    }
+  ],
+  "lock": {
+    "units": [
+      {
+        "path": "main.ae",
+        "sha256": "77cb26810c61c5c39192e2a2ba71bf7787603c53d8e654f715fb737d8458319d"
+      }
+    ]
+  }
+}

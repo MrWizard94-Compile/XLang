@@ -1,0 +1,27 @@
+{
+  "schema": "aether.project/v1",
+  "name": "atlas_policy",
+  "version": "0.1.0",
+  "units": [
+    {
+      "path": "main.ae",
+      "role": "main"
+    },
+    {
+      "path": "policy.ae",
+      "role": "lib"
+    }
+  ],
+  "lock": {
+    "units": [
+      {
+        "path": "main.ae",
+        "sha256": "8f8ca2d849f6ddae23945bb5a3fd3dee9204b167f510aa6b5432c0807b92e2fc"
+      },
+      {
+        "path": "policy.ae",
+        "sha256": "625ddacaa62c2ce6fb84b2668b1c50a6f772708c946b9af1f60e58cc4592b829"
+      }
+    ]
+  }
+}

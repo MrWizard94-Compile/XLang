@@ -1,0 +1,27 @@
+world atlas_replay_resource_test
+
+shape test_slot:
+  value Whole
+
+weave worker [] -> Whole:
+  yield 5
+
+weave main [] -> Whole:
+  bind memory <- arena 128
+  bind mutable slots <- table test_slot layout rows
+  bind mutable worker_value <- 0
+  bind mutable loaded <- 0
+  bind mutable total <- 0
+  choose allocate access memory move slots 1 into slots:
+    choose store move slots 0 value 7 into slots:
+      together:
+        spawn call worker into worker_value
+      choose load borrow slots 0 value into loaded:
+        revise total <- sum worker_value loaded
+        yield difference total 12
+      otherwise:
+        yield -3
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1

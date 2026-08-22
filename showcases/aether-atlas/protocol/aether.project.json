@@ -1,0 +1,51 @@
+{
+  "schema": "aether.project/v1",
+  "name": "atlas_protocol",
+  "version": "0.1.0",
+  "units": [
+    {
+      "path": "main.ae",
+      "role": "main"
+    },
+    {
+      "path": "fingerprint.ae",
+      "role": "lib"
+    },
+    {
+      "path": "journal.ae",
+      "role": "lib"
+    },
+    {
+      "path": "fingerprint_test.ae",
+      "role": "test"
+    },
+    {
+      "path": "journal_test.ae",
+      "role": "test"
+    }
+  ],
+  "lock": {
+    "units": [
+      {
+        "path": "main.ae",
+        "sha256": "42e6b2aa4cc4b6b9bffe519ad4a869ef54b9904e4d524775186b760a72f96e2e"
+      },
+      {
+        "path": "fingerprint.ae",
+        "sha256": "b153f3c9a2d5748227d4e61a72e346d2edc4e8404b8cc4f448845c29e6f52f9b"
+      },
+      {
+        "path": "journal.ae",
+        "sha256": "fe32560a0fe81fb9eac3e8e946a91ab4c5ad035ed1063d441ddfc086cb594c55"
+      },
+      {
+        "path": "fingerprint_test.ae",
+        "sha256": "60c3fbd908bb4d624e5b7cae5e1391800c2b46acef4ecc3c293652d4f4d2004e"
+      },
+      {
+        "path": "journal_test.ae",
+        "sha256": "4eafbed4266904451474a3b012182cb7c8127966a21b20ab22e55fa5853d7ac8"
+      }
+    ]
+  }
+}

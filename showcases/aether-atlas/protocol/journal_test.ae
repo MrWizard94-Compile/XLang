@@ -1,0 +1,12 @@
+world atlas_journal_test
+
+import unit "journal.ae" as journal
+
+weave main [] -> Whole:
+  bind fixture <- "ATLAS/1\nPUT 0041 0007\nPUT 0043 0011\nPUT 0047 0013\nCOMMIT 0003\n"
+  bind corrupt <- "ATLAS/1\nPUT 0041 0007\nPXT 0043 0011\nPUT 0047 0013\nCOMMIT 0003\n"
+  bind actual <- call journal.replay_journal borrow fixture
+  bind rejected <- call journal.replay_journal borrow corrupt
+  bind valid_delta <- difference actual 137692
+  bind rejected_delta <- difference rejected -100
+  yield sum valid_delta rejected_delta

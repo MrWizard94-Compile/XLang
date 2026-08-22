@@ -1,0 +1,36 @@
+world atlas_fault
+
+record sweep_snapshot [label: Text, payload: Bytes]
+
+task weave sweep [] -> Whole:
+  bind label <- "atlas-sweep"
+  bind payload <- bytes "a1b2c3d4"
+  bind snapshot <- make sweep_snapshot move label move payload
+  bind snapshot_label <- field borrow snapshot label
+  bind label_extent <- measure borrow snapshot_label
+  bind memory <- arena 64
+  bind mutable values <- buffer Whole
+  choose allocate access memory move values 2 into values:
+    checkpoint
+    choose append move values label_extent into values:
+      yield label_extent
+    otherwise:
+      yield -2
+  otherwise:
+    yield -1
+
+weave reject_corruption [] -> Whole raises Whole:
+  raise 91
+
+weave supervise [] -> Whole raises Whole:
+  bind mutable sweep_result <- 0
+  bind mutable fault_code <- 0
+  together:
+    spawn call sweep into sweep_result
+    spawn call reject_corruption into fault_code
+  yield sweep_result
+
+weave main [] -> Whole:
+  bind mutable recovered <- 0
+  bind mutable failure <- 0
+  handle call supervise into recovered otherwise error into failure

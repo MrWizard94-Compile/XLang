@@ -1,0 +1,15 @@
+world atlas_fault_task_test
+
+task weave scan [] -> Whole:
+  bind mutable current <- 0
+  while less current 3:
+    checkpoint
+    revise current <- sum current 1
+  checkpoint
+  yield current
+
+weave main [] -> Whole:
+  bind mutable result <- 0
+  together:
+    spawn call scan into result
+  yield difference result 3

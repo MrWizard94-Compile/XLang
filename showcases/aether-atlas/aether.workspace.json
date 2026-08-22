@@ -1,0 +1,91 @@
+{
+  "schema": "aether.workspace/v1",
+  "name": "aether_atlas",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "name": "protocol",
+      "path": "protocol",
+      "depends_on": []
+    },
+    {
+      "name": "policy",
+      "path": "policy",
+      "depends_on": [
+        "protocol"
+      ]
+    },
+    {
+      "name": "audit",
+      "path": "audit",
+      "depends_on": [
+        "policy",
+        "protocol"
+      ]
+    },
+    {
+      "name": "replay",
+      "path": "replay",
+      "depends_on": [
+        "protocol",
+        "policy"
+      ]
+    },
+    {
+      "name": "operator",
+      "path": "operator",
+      "depends_on": []
+    },
+    {
+      "name": "fault",
+      "path": "fault",
+      "depends_on": []
+    }
+  ],
+  "lock": {
+    "packages": [
+      {
+        "name": "fault",
+        "path": "fault",
+        "project_name": "atlas_fault",
+        "project_version": "0.1.0",
+        "project_sha256": "abd9975402bccd5942c1f2cb02ee10447a3fd6c6123ec4c022c6aa5622928734"
+      },
+      {
+        "name": "operator",
+        "path": "operator",
+        "project_name": "atlas_operator",
+        "project_version": "0.1.0",
+        "project_sha256": "b98c1777b219f1071bfb835f8e3f2f7b7cc58f9d87afae9ab62f84f80241444e"
+      },
+      {
+        "name": "protocol",
+        "path": "protocol",
+        "project_name": "atlas_protocol",
+        "project_version": "0.1.0",
+        "project_sha256": "40f909a498808048b9b26022f41de7044f6e9bb6594b5f0126ed397db3ca1e3c"
+      },
+      {
+        "name": "policy",
+        "path": "policy",
+        "project_name": "atlas_policy",
+        "project_version": "0.1.0",
+        "project_sha256": "81a8fe12ef618bbbd10f4e9915a3c216e640fc26ad1cc713cc6a8507808e2db5"
+      },
+      {
+        "name": "audit",
+        "path": "audit",
+        "project_name": "atlas_audit",
+        "project_version": "0.1.0",
+        "project_sha256": "3bbc5d528d0e573277768b892dd63c99bb549e603083c8638d2618a2e37540ae"
+      },
+      {
+        "name": "replay",
+        "path": "replay",
+        "project_name": "atlas_replay",
+        "project_version": "0.1.0",
+        "project_sha256": "a9d463c89d662970a84c198af46e1543e5811dcb373749f34d9db439764e40e7"
+      }
+    ]
+  }
+}

@@ -17,6 +17,15 @@ Source without task frames emits v11; valid M19e task source emits v12.
 [docs/CORE_CLAIMS.md](docs/Current%20state/CORE_CLAIMS.md) · **Current delta:**
 [docs/AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md)
 
+## Executable systems showcase
+
+[Aether Atlas](showcases/aether-atlas/README.md) is a bounded deterministic
+offline journal-recovery system written primarily in Aether. It composes
+locked packages, source parsing, records, resources, table layouts, nurseries,
+task-frame cancellation, explicit host grants, local package publication, and
+reproducibility evidence without claiming ambient I/O, networking, crypto, or
+general-purpose storage semantics that the current language does not provide.
+
 **Current bounded task-frame behavior:**
 [M19e active-frame cancellation](docs/historical%20docs/DESIGN-M19E-T-RX-ACTIVE-FRAME-CANCEL.md) /
 [ADR-042](docs/historical%20docs/ADR-042-m19e-active-frame-cancel.md). Package 0.36 accepts
