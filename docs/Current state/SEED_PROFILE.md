@@ -27,10 +27,11 @@ bootstrap AST (ADR-054). Project verify validates lib units via product seed
 probes (ADR-052). Host-facing product diagnostics are [`product_diagnostics`]
 with `AE-SEED-001`–`012` (ADR-055); raw `import unit` is `AE-SEED-012` — general
 multi-module product path is host elaborate + seed emit (ADR-056; seed does not
-elaborate multi-file natively). The separate ADR-128/129
-`aether.seed-bundle/v1` and `/v2` profiles send bounded two-unit and exact
-three-unit transitive Text directly to seed `compile_bundle`; they do not change
-the general false multi-module tracker. LSP diagnostics are product-primary (ADR-058); hover/definition
+elaborate multi-file natively). The separate ADR-128/129/130
+`aether.seed-bundle/v1`, `/v2`, and `/v3` profiles send bounded two-unit, exact
+three-unit transitive, and exact four-unit two-leaf-fan-in Text directly to seed
+`compile_bundle`; they do not change the general false multi-module tracker. LSP
+diagnostics are product-primary (ADR-058); hover/definition
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
  project format, LSP format, product structural weave/statement/record ops, and seed
  rebuild use the product seed path; bootstrap is recovery (`--bootstrap`), dual-compare
@@ -136,11 +137,12 @@ The profile does not silently expand that language surface.
     task loop back edges, and computes the exact main-plus-largest-task-nursery
     capacity header. The active-cancel, capacity, loop, and forward-task corpus
     matches bootstrap byte-for-byte.
-19. Exposes the separate ADR-128/129 forge ABI
+19. Exposes the separate ADR-128/129/130 forge ABI
     `weave compile_bundle [borrow bundle: Text] -> Bytes:`. It seed-parses and
     elaborates either one exact ASCII/LF two-unit source bundle (pure Whole
     library followed by one main entry) or one exact transitive three-unit
-    foundation -> bridge -> main bundle, with scalar framing and no host module
+    foundation -> bridge -> main bundle, or one exact four-unit left leaf + right
+    leaf -> merge -> main fan-in bundle, with scalar framing and no host module
     elaborator. The documented canonical bundles match established M11 bootstrap
     elaboration artifacts byte-for-byte. This does **not** claim seed-native
     general M11/M22: `seed_native_multi_module_elaboration()` remains false.
@@ -164,19 +166,21 @@ for the prior seed surface.
 M25 in package 0.37 is host-only local package tooling. It changes no source
 form, AETH byte, seed input, seed artifact, or seed-emission proof obligation.
 
-ADR-128/129 add bounded source-bundle profiles inside the seed artifact without
-changing the package language or AETH contract. They are intentionally a second
-named forge weave, not relaxed raw-source parsing: ordinary source with
-`import unit` still fails `AE-SEED-012`, while framed v1/v2 input reaches
+ADR-128/129/130 add bounded source-bundle profiles inside the seed artifact
+without changing the package language or AETH contract. They are intentionally a
+second named forge weave, not relaxed raw-source parsing: ordinary source with
+`import unit` still fails `AE-SEED-012`, while framed v1/v2/v3 input reaches
 `compile_bundle`. v1 accepts exactly one pure Whole library then named entry,
 each no more than 16,384 scalars, 32,768 payload scalars total, and 33,280 wire
 scalars. v2 accepts exactly foundation -> bridge -> named entry, each no more
-than 16,384 scalars, 49,152 payload scalars total, and 49,920 wire scalars.
-The seed validates frames, source identities, worlds, exact imports, exports,
-mains, and qualified helper calls before assembly. See
-[ADR-129](../historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md),
-[SBP-002](../historical%20docs/DESIGN-SBP-002-SEED-NATIVE-TRANSITIVE-CHAIN-PROFILE.md),
-and [the v2 threat model](THREAT_MODEL-SBP-002-SEED-CHAIN.md).
+than 16,384 scalars, 49,152 payload scalars total, and 49,920 wire scalars. v3
+accepts exactly left pure Whole leaf + right pure Whole leaf -> merge -> named
+entry, each no more than 16,384 scalars, 65,536 payload scalars total, and
+66,560 wire scalars. The seed validates frames, source identities, worlds,
+exact imports, exports, mains, and qualified helper calls before assembly. See
+[ADR-130](../historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md),
+[SBP-003](../historical%20docs/DESIGN-SBP-003-SEED-NATIVE-FANIN-PROFILE.md),
+and [the v3 threat model](THREAT_MODEL-SBP-003-SEED-FANIN.md).
 
 ADR-106 adds a bounded direct-forge task diagnostic pilot: before normal
 compilation, the seed recognizes canonical top-level task headers and requires
@@ -413,12 +417,13 @@ All three SHA-256 digests must match. The regression tests also forge:
     `examples/task-frame-capacity.ae`, and `examples/task-loop.ae`) plus a
     forward-declared task fixture dual-compare as v12 and run with their
     documented exits/capacities.
-15. The SBP-001 canonical bundle (`examples/seed-bundle-whole.aeb`) and SBP-002
-    transitive-chain bundle (`examples/seed-bundle-chain.aeb`) use the distinct
+15. The SBP-001 canonical bundle (`examples/seed-bundle-whole.aeb`), SBP-002
+    transitive-chain bundle (`examples/seed-bundle-chain.aeb`), and SBP-003
+    two-leaf-fan-in bundle (`examples/seed-bundle-fanin.aeb`) use the distinct
     seed `compile_bundle` ABI, verify, exit 84, and match Rust bootstrap
     compilation of their established M11 elaboration references. Hostile frame,
-    path, world, import, order, call, Text, and resource-form cases fail with
-    one `AE-SEED-016` seed-SPEAK packet.
+    path, world, import, order, alias, call, Text, and resource-form cases fail
+    with one `AE-SEED-016` seed-SPEAK packet.
 
 ## Authority
 
@@ -429,4 +434,5 @@ All three SHA-256 digests must match. The regression tests also forge:
 - SBP validation: [SBP-VALIDATION-MATRIX.md](SBP-VALIDATION-MATRIX.md)
 - SBP-001 threat model: [THREAT_MODEL-SBP-001-SEED-BUNDLE.md](THREAT_MODEL-SBP-001-SEED-BUNDLE.md)
 - SBP-002 threat model: [THREAT_MODEL-SBP-002-SEED-CHAIN.md](THREAT_MODEL-SBP-002-SEED-CHAIN.md)
+- SBP-003 threat model: [THREAT_MODEL-SBP-003-SEED-FANIN.md](THREAT_MODEL-SBP-003-SEED-FANIN.md)
 - Product gate: [../MANIFEST.md](../../MANIFEST.md)

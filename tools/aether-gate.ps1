@@ -6,7 +6,7 @@
   Runs pack verify (when found), fmt, workspace Clippy with warnings denied,
   tests, example dual-compare, host-pilot run, project verification, and the
   M25 local package pack/verify/publish/install lifecycle. It also proves the
-  closed ADR-128/129 seed-bundle profiles through both product and external
+  closed ADR-128/129/130 seed-bundle profiles through both product and external
   named-forge routes.
   -Mode full also rebuilds seed via bootstrap + forge and checks hash identity.
   -Mode release adds a release build, a version-derived local package, consumer
@@ -215,11 +215,12 @@ Write-Host "  host-pilot program exit 48 OK"
 # frame is opaque to the product route and enters only the seed's compile_bundle
 # ABI. Exercise both default product compilation and the external named forge so
 # release proof covers the public transport boundary as well as seed_self_host.
-Write-Step "seed-native bundle profiles (ADR-128/129 product + named forge)"
+Write-Step "seed-native bundle profiles (ADR-128/129/130 product + named forge)"
 $bundleCompiler = Join-Path $RepoRoot "seed\aether_seed.aeth"
 $bundleFixtures = @(
     @{ Name = "seed-bundle-whole"; ExpectedExit = 84 },
-    @{ Name = "seed-bundle-chain"; ExpectedExit = 84 }
+    @{ Name = "seed-bundle-chain"; ExpectedExit = 84 },
+    @{ Name = "seed-bundle-fanin"; ExpectedExit = 84 }
 )
 foreach ($bundleFixture in $bundleFixtures) {
     $bundleSource = Join-Path $examplesDir ("{0}.aeb" -f $bundleFixture.Name)

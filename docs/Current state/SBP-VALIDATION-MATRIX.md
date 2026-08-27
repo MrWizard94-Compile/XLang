@@ -1,8 +1,8 @@
 # SBP validation matrix
 
-**Status:** ADR-128 and ADR-129 release verified<br>
-**Date:** 2026-08-21<br>
-**Designs:** [SBP-001](../historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md), [SBP-002](../historical%20docs/DESIGN-SBP-002-SEED-NATIVE-TRANSITIVE-CHAIN-PROFILE.md)
+**Status:** ADR-128, ADR-129, and ADR-130 release verified<br>
+**Date:** 2026-08-26<br>
+**Designs:** [SBP-001](../historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md), [SBP-002](../historical%20docs/DESIGN-SBP-002-SEED-NATIVE-TRANSITIVE-CHAIN-PROFILE.md), [SBP-003](../historical%20docs/DESIGN-SBP-003-SEED-NATIVE-FANIN-PROFILE.md)
 
 | ID | Intended behavior / invariant | Evidence |
 | --- | --- | --- |
@@ -21,6 +21,11 @@
 | SBP-013 | A canonical foundation -> bridge -> entry bundle seed-elaborates both import edges, verifies, exits 84, and exactly matches independent M11/bootstrap output. | ADR-129 seed self-host integration test plus canonical fixture. |
 | SBP-014 | Wrong dependency order/import, duplicate world, private/unknown bridge call, overdeclared frame, and forbidden resource source all fail closed with one `AE-SEED-016` seed-SPEAK packet. | ADR-129 hostile-profile corpus. |
 | SBP-015 | v2 does not promote general seed-native modules and is exercised by product, named-forge, release, and isolated consumer paths. | General false tracker, route tracker, `aether-gate`, and preview-verifier coverage. |
+| SBP-016 | The existing named `compile_bundle [borrow bundle: Text] -> Bytes` ABI accepts the separately versioned v3 protocol without weakening v1 or v2. | v1/v2 regression corpora, v3 direct product/named-forge test, and ABI tests. |
+| SBP-017 | v3 is exactly four scalar-framed units in left, right, merge, entry source order with safe unique paths, distinct worlds, ASCII/LF payloads, and 16,384/65,536/66,560 scalar caps. | Source-opaque v3 framing unit test and hostile seed-frame cases. |
+| SBP-018 | A canonical left leaf + right leaf -> merge -> entry bundle seed-elaborates all three fixed import edges, verifies, exits 84, and exactly matches independent M11/bootstrap output. | ADR-130 seed self-host integration test plus `examples/seed-bundle-fanin.aeb`. |
+| SBP-019 | Wrong merge import order, alias collision, duplicate world, private helper call, overdeclared/trailing frame, and forbidden resource source all fail closed with one `AE-SEED-016` seed-SPEAK packet. | ADR-130 hostile-profile corpus. |
+| SBP-020 | v3 does not promote general seed-native modules and is covered by product, named-forge, release, and isolated consumer paths. | General false tracker, route tracker, `aether-gate`, and preview-verifier coverage. |
 
 ## Release gate
 
@@ -40,6 +45,16 @@ full workspace and 48-test seed-self-host suites, 32-example seed/bootstrap
 identity, four-way seed identity, v1/v2 product-to-named-forge proof, release
 packaging, independent consumer verification, and the unlisted-file tamper
 rejection probe.
+
+**ADR-130 release evidence (2026-08-26):** PASS — the canonical v3 fixture
+round-trips through source-opaque scalar framing, product compile, named forge,
+verifier, VM exit 84, and independent M11/bootstrap artifact identity. The
+hostile-profile corpus rejects malformed frames, graph order, aliases, calls,
+worlds, and resource forms with `AE-SEED-016`. The full release gate passed:
+pack integrity, current documentation links, formatter, warning-denied Clippy,
+full workspace/49-test seed-self-host suites, 32-example identity, four-way
+seed identity, v1/v2/v3 named-forge proof, a 462-file package, independent
+consumer verification, and unlisted-file tamper rejection.
 
 ---
 

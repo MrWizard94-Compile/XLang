@@ -3,13 +3,13 @@ use aether_core::{
     check_product_base_gate, compile_product_bytecode, compile_product_multi_source_envelope,
     compile_product_seed_bundle, compile_to_bytecode, compile_with_seed,
     compile_with_seed_invokes_bootstrap, compile_with_seed_product_authoritative,
-    decode_seed_bundle_chain, elaborate_in_memory_units, encode_multi_source_envelope,
-    encode_seed_bundle, encode_seed_bundle_chain, forge_bytecode,
-    host_elaborates_modules_seed_emits, lib_module_validates_via_product_seed,
-    lsp_product_diagnostics_primary, lsp_product_surface_hover_definition,
-    multi_module_product_choose_revise_supported, product_cli_check_without_bootstrap,
-    product_default_cli_toolchain, product_diagnostic_abi, product_diagnostics,
-    product_error_packets, product_format_without_bootstrap,
+    decode_seed_bundle_chain, decode_seed_bundle_fanin, elaborate_in_memory_units,
+    encode_multi_source_envelope, encode_seed_bundle, encode_seed_bundle_chain,
+    encode_seed_bundle_fanin, forge_bytecode, host_elaborates_modules_seed_emits,
+    lib_module_validates_via_product_seed, lsp_product_diagnostics_primary,
+    lsp_product_surface_hover_definition, multi_module_product_choose_revise_supported,
+    product_cli_check_without_bootstrap, product_default_cli_toolchain, product_diagnostic_abi,
+    product_diagnostics, product_error_packets, product_format_without_bootstrap,
     product_multi_module_invokes_bootstrap, product_multi_source_forge_envelope,
     product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
     product_project_format_without_bootstrap, product_rejects_yield_in_truth_choose,
@@ -18,18 +18,20 @@ use aether_core::{
     product_surface_symbols, product_surface_symbols_without_bootstrap, run_bytecode,
     seed_internal_error_packets, seed_interprets_m23_comptime_calls_natively,
     seed_native_multi_module_elaboration, seed_native_whole_library_bundle_profile,
-    seed_native_whole_library_chain_bundle_profile, seed_product_diagnostics_phase3c,
-    seed_product_diagnostics_subset, seed_product_preflight_phase3b,
-    structural_edit_accepts_via_product_seed, structural_edit_product_base_gate,
-    structural_edit_product_statement_and_record_ops, structural_edit_product_top_level_weave_ops,
-    structural_edit_product_weave_replace, verify_bytecode, InvocationOutput, InvocationValue,
-    ProjectUnitRole, SEED_COMPILER_ARTIFACT, SEED_ERROR_PACKET_SCHEMA,
+    seed_native_whole_library_chain_bundle_profile, seed_native_whole_library_fanin_bundle_profile,
+    seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
+    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
+    structural_edit_product_base_gate, structural_edit_product_statement_and_record_ops,
+    structural_edit_product_top_level_weave_ops, structural_edit_product_weave_replace,
+    verify_bytecode, InvocationOutput, InvocationValue, ProjectUnitRole, SEED_COMPILER_ARTIFACT,
+    SEED_ERROR_PACKET_SCHEMA,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
 const CHECKED_IN_SEED_ARTIFACT: &[u8] = include_bytes!("../../../seed/aether_seed.aeth");
 const SEED_BUNDLE_WHOLE_FIXTURE: &str = include_str!("../../../examples/seed-bundle-whole.aeb");
 const SEED_BUNDLE_CHAIN_FIXTURE: &str = include_str!("../../../examples/seed-bundle-chain.aeb");
+const SEED_BUNDLE_FANIN_FIXTURE: &str = include_str!("../../../examples/seed-bundle-fanin.aeb");
 
 const MULTI_WEAVE_SOURCE: &str = concat!(
     "world demo\n",
@@ -3453,6 +3455,231 @@ fn barp_adr129_seed_native_three_unit_chain_matches_bootstrap_and_rejects_out_of
     assert!(
         forbidden_bridge_error.to_string().contains("AE-SEED-016"),
         "expected seed bundle chain error, got {forbidden_bridge_error}"
+    );
+}
+
+#[test]
+fn barp_adr130_seed_native_four_unit_fanin_matches_bootstrap_and_rejects_out_of_profile() {
+    assert!(seed_native_whole_library_fanin_bundle_profile());
+    assert!(
+        !seed_native_multi_module_elaboration(),
+        "ADR-130 must not overstate general M11/M22 seed authority"
+    );
+    assert!(
+        !aether_core::product_seed_bundle_invokes_host_elaborator(),
+        "ADR-130 production fan-in route must not invoke host module elaboration"
+    );
+
+    let left = "world base\nexport weave increment [n: Whole] -> Whole:\n  yield sum n 1";
+    let right = "world scale\nexport weave double [n: Whole] -> Whole:\n  yield product n 2";
+    let merge = "world combine\nimport unit \"lib/base.ae\" as base\nimport unit \"lib/scale.ae\" as scale\nexport weave double_after_increment [n: Whole] -> Whole:\n  bind raised <- call base.increment n\n  yield call scale.double raised";
+    let entry = "world app\nimport unit \"lib/combine.ae\" as combine\nweave main [] -> Whole:\n  bind result <- call combine.double_after_increment 41\n  yield result";
+    let units = [
+        ("lib/base.ae".to_owned(), left.to_owned()),
+        ("lib/scale.ae".to_owned(), right.to_owned()),
+        ("lib/combine.ae".to_owned(), merge.to_owned()),
+        ("src/main.ae".to_owned(), entry.to_owned()),
+    ];
+    let bundle = encode_seed_bundle_fanin("src/main.ae", &units).expect("frame seed bundle fan-in");
+    assert_eq!(
+        bundle, SEED_BUNDLE_FANIN_FIXTURE,
+        "the shipped SBP-003 fixture must remain canonical scalar-framed source"
+    );
+    let decoded = decode_seed_bundle_fanin(&bundle).expect("decode independent fan-in frame");
+    assert_eq!(decoded.entry_path, "src/main.ae");
+    assert_eq!(decoded.units, units);
+
+    let direct = compile_product_seed_bundle(&bundle).expect("seed-native fan-in compile");
+    let auto = compile_product_bytecode(&bundle).expect("auto-detected seed bundle fan-in compile");
+    assert_eq!(direct, auto, "explicit and automatic fan-in routes agree");
+    verify_bytecode(&direct).expect("seed-native fan-in artifact verifies");
+    assert_eq!(
+        run_bytecode(&direct)
+            .expect("seed-native fan-in runs")
+            .exit_code,
+        84
+    );
+
+    let expected_source = elaborate_in_memory_units(
+        &[
+            (
+                "lib/base.ae".to_owned(),
+                left.to_owned(),
+                ProjectUnitRole::Lib,
+            ),
+            (
+                "lib/scale.ae".to_owned(),
+                right.to_owned(),
+                ProjectUnitRole::Lib,
+            ),
+            (
+                "lib/combine.ae".to_owned(),
+                merge.to_owned(),
+                ProjectUnitRole::Lib,
+            ),
+            (
+                "src/main.ae".to_owned(),
+                entry.to_owned(),
+                ProjectUnitRole::Main,
+            ),
+        ],
+        "src/main.ae",
+    )
+    .expect("independent bootstrap reference elaboration");
+    let bootstrap = compile_to_bytecode(&expected_source)
+        .expect("bootstrap reference compiles")
+        .bytecode;
+    assert_eq!(
+        direct, bootstrap,
+        "ADR-130 fan-in bundle is byte-identical to the established M11 elaboration oracle"
+    );
+
+    let malformed = bundle.replacen("unit lib/base.ae 70\n", "unit lib/base.ae 0\n", 1);
+    let malformed_error = compile_product_seed_bundle(&malformed)
+        .expect_err("zero-sized left-leaf payload must fail closed in the seed profile");
+    assert!(
+        malformed_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {malformed_error}"
+    );
+    let malformed_packets = product_error_packets(&malformed);
+    assert_eq!(malformed_packets.len(), 1);
+    assert_eq!(malformed_packets[0].code, "AE-SEED-016");
+    assert_eq!(malformed_packets[0].origin, "seed-speak");
+
+    let overdeclared = bundle.replacen("unit lib/base.ae 70\n", "unit lib/base.ae 16385\n", 1);
+    let overdeclared_error = compile_product_seed_bundle(&overdeclared)
+        .expect_err("an over-limit scalar count must fail before source extraction");
+    assert!(
+        overdeclared_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {overdeclared_error}"
+    );
+
+    let oversized_wire = format!("aether.seed-bundle/v3\n{}", "x".repeat(66_600));
+    assert!(
+        oversized_wire.chars().count() > 66_560,
+        "hostile v3 wire fixture must exceed the documented seed cap"
+    );
+    let oversized_wire_error = compile_product_seed_bundle(&oversized_wire).expect_err(
+        "an oversized v3 wire input must fail before header parsing or source assembly",
+    );
+    assert!(
+        oversized_wire_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {oversized_wire_error}"
+    );
+
+    let trailing_payload = format!("{bundle}trailing");
+    let trailing_payload_error = compile_product_seed_bundle(&trailing_payload)
+        .expect_err("a v3 frame with bytes beyond its exact fourth payload must fail closed");
+    assert!(
+        trailing_payload_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {trailing_payload_error}"
+    );
+
+    let wrong_merge_import = merge.replacen("lib/scale.ae", "lib/base.ae", 1);
+    let wrong_merge_bundle = encode_seed_bundle_fanin(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), left.to_owned()),
+            ("lib/scale.ae".to_owned(), right.to_owned()),
+            ("lib/combine.ae".to_owned(), wrong_merge_import),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame opaque wrong second merge import");
+    let wrong_merge_error = compile_product_bytecode(&wrong_merge_bundle)
+        .expect_err("the merge must import the bundled right-leaf path second");
+    assert!(
+        wrong_merge_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {wrong_merge_error}"
+    );
+
+    let alias_collision_merge = merge.replacen("as scale", "as base", 1);
+    let alias_collision_bundle = encode_seed_bundle_fanin(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), left.to_owned()),
+            ("lib/scale.ae".to_owned(), right.to_owned()),
+            ("lib/combine.ae".to_owned(), alias_collision_merge),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame opaque alias-collision merge");
+    let alias_collision_error = compile_product_bytecode(&alias_collision_bundle)
+        .expect_err("two merge imports must use distinct aliases");
+    assert!(
+        alias_collision_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {alias_collision_error}"
+    );
+
+    let wrong_order_bundle = encode_seed_bundle_fanin(
+        "src/main.ae",
+        &[
+            ("lib/scale.ae".to_owned(), right.to_owned()),
+            ("lib/base.ae".to_owned(), left.to_owned()),
+            ("lib/combine.ae".to_owned(), merge.to_owned()),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame opaque wrong-order fan-in");
+    let wrong_order_error = compile_product_bytecode(&wrong_order_bundle)
+        .expect_err("the left leaf must precede the right leaf in the fixed fan-in order");
+    assert!(
+        wrong_order_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {wrong_order_error}"
+    );
+
+    let duplicate_world_entry = entry.replacen("world app", "world combine", 1);
+    let duplicate_world_bundle = encode_seed_bundle_fanin(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), left.to_owned()),
+            ("lib/scale.ae".to_owned(), right.to_owned()),
+            ("lib/combine.ae".to_owned(), merge.to_owned()),
+            ("src/main.ae".to_owned(), duplicate_world_entry),
+        ],
+    )
+    .expect("frame duplicate-world fan-in");
+    let duplicate_world_error = compile_product_bytecode(&duplicate_world_bundle)
+        .expect_err("all four source worlds must be distinct");
+    assert!(
+        duplicate_world_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {duplicate_world_error}"
+    );
+
+    let private_merge_call = merge.replacen("scale.double raised", "scale.private raised", 1);
+    let private_merge_bundle = encode_seed_bundle_fanin(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), left.to_owned()),
+            ("lib/scale.ae".to_owned(), right.to_owned()),
+            ("lib/combine.ae".to_owned(), private_merge_call),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame private merge call");
+    let private_merge_error = compile_product_bytecode(&private_merge_bundle)
+        .expect_err("merge calls outside exported leaf helpers must fail closed");
+    assert!(
+        private_merge_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {private_merge_error}"
+    );
+
+    let forbidden_merge = "world combine\nimport unit \"lib/base.ae\" as base\nimport unit \"lib/scale.ae\" as scale\nexport weave double_after_increment [n: Whole] -> Whole:\n  bind memory <- arena 8\n  bind raised <- call base.increment n\n  yield call scale.double raised";
+    let forbidden_merge_bundle = encode_seed_bundle_fanin(
+        "src/main.ae",
+        &[
+            ("lib/base.ae".to_owned(), left.to_owned()),
+            ("lib/scale.ae".to_owned(), right.to_owned()),
+            ("lib/combine.ae".to_owned(), forbidden_merge.to_owned()),
+            ("src/main.ae".to_owned(), entry.to_owned()),
+        ],
+    )
+    .expect("frame resource-forbidden merge");
+    let forbidden_merge_error = compile_product_bytecode(&forbidden_merge_bundle)
+        .expect_err("resource forms in the bounded fan-in profile must fail closed");
+    assert!(
+        forbidden_merge_error.to_string().contains("AE-SEED-016"),
+        "expected seed bundle fan-in error, got {forbidden_merge_error}"
     );
 }
 

@@ -213,6 +213,7 @@ function Assert-RequiredPackageFiles([string]$Root, [string]$Version) {
         "examples/task-loop.ae",
         "examples/seed-bundle-whole.aeb",
         "examples/seed-bundle-chain.aeb",
+        "examples/seed-bundle-fanin.aeb",
         "examples/project/aether.project.json",
         "examples/workspace/aether.workspace.json",
         "examples/package-publish/source/aether.project.json",
@@ -222,7 +223,8 @@ function Assert-RequiredPackageFiles([string]$Root, [string]$Version) {
         "docs/Current state/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md",
         "docs/Current state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md",
         "docs/Current state/SBP-VALIDATION-MATRIX.md",
-        "docs/Current state/THREAT_MODEL-SBP-002-SEED-CHAIN.md"
+        "docs/Current state/THREAT_MODEL-SBP-002-SEED-CHAIN.md",
+        "docs/Current state/THREAT_MODEL-SBP-003-SEED-FANIN.md"
     )
     foreach ($relativePath in $requiredFiles) {
         $fullPath = Get-ConfinedPackagePath $Root $relativePath "required package path"
@@ -335,7 +337,8 @@ try {
     Write-Host "=== bounded seed-bundle profiles ===" -ForegroundColor Cyan
     Invoke-SeedBundleExample $Executable $Package $workRoot "examples/seed-bundle-whole.aeb" 84 ([string]$release.packageVersion)
     Invoke-SeedBundleExample $Executable $Package $workRoot "examples/seed-bundle-chain.aeb" 84 ([string]$release.packageVersion)
-    Write-Host "  v1 one-edge and v2 transitive-chain product/named-forge identity OK"
+    Invoke-SeedBundleExample $Executable $Package $workRoot "examples/seed-bundle-fanin.aeb" 84 ([string]$release.packageVersion)
+    Write-Host "  v1 one-edge, v2 transitive-chain, and v3 fan-in product/named-forge identity OK"
 
     Write-Host "=== v12 active-frame cancellation ===" -ForegroundColor Cyan
     [void](Invoke-Example $Executable $Package $workRoot "examples/active-cancel.ae" 9 ([string]$release.packageVersion))

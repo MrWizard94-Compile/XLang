@@ -11,11 +11,12 @@ published to an explicit local cache, and installed as a normal locked workspace
 project. M25 is not a remote package manager, dependency resolver, signature
 system, or guest capability.
 
-The package also ships two closed seed-native source-bundle profiles through
+The package also ships three closed seed-native source-bundle profiles through
 `compile_bundle [borrow bundle: Text] -> Bytes`: v1 is one pure Whole library
-plus one entry, while v2 is one foundation library plus one bridge library plus
-one entry. They are not general module resolution; normal project/workspace
-graphs remain host-elaborated then seed-emitted.
+plus one entry; v2 is one foundation library plus one bridge library plus one
+entry; and v3 is two pure Whole leaves plus one merge library plus one entry.
+They are not general module resolution; normal project/workspace graphs remain
+host-elaborated then seed-emitted.
 
 ## Quick start
 
@@ -49,13 +50,13 @@ it. M25 never rewrites a workspace or resolves a package name automatically.
 
 ## Bounded seed-bundle example
 
-The v2 fixture demonstrates a fixed transitive library chain. It is safe to
+The v3 fixture demonstrates a fixed two-leaf library fan-in. It is safe to
 compile directly or through the checked-in seed artifact's explicit named ABI:
 
 ```powershell
-.\aether.exe compile .\examples\seed-bundle-chain.aeb --output .\seed-bundle-chain.aeth
-.\aether.exe run .\seed-bundle-chain.aeth
-.\aether.exe forge-bundle .\seed\aether_seed.aeth .\examples\seed-bundle-chain.aeb --output .\seed-bundle-chain-forged.aeth
+.\aether.exe compile .\examples\seed-bundle-fanin.aeb --output .\seed-bundle-fanin.aeth
+.\aether.exe run .\seed-bundle-fanin.aeth
+.\aether.exe forge-bundle .\seed\aether_seed.aeth .\examples\seed-bundle-fanin.aeb --output .\seed-bundle-fanin-forged.aeth
 ```
 
 Both artifacts are verified before write. The program reports exit 84, and the
@@ -69,7 +70,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\verify-preview.ps1
 ```
 
 The verifier checks SHA-256SUMS and release metadata, starts the executable,
-validates seed/VM and project/workspace behavior, both bounded bundle product
+validates seed/VM and project/workspace behavior, all bounded bundle product
 and named-forge routes, and exercises pack, verify, idempotent publish, cache
 verification, both install paths, and installed project verification in a
 temporary local directory.
@@ -96,8 +97,8 @@ file authority; host I/O remains operator-granted.
 - [M25 validation matrix](docs/Current%20state/M25-VALIDATION-MATRIX.md)
 - [M25 threat model](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md)
 - [SBP validation matrix](docs/Current%20state/SBP-VALIDATION-MATRIX.md)
-- [SBP-002 transitive-chain ADR](docs/historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md)
-- [SBP-002 threat model](docs/Current%20state/THREAT_MODEL-SBP-002-SEED-CHAIN.md)
+- [SBP-003 fan-in ADR](docs/historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md)
+- [SBP-003 threat model](docs/Current%20state/THREAT_MODEL-SBP-003-SEED-FANIN.md)
 - [Release notes](docs/Current%20state/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md)
 
 *Local preview package entry point for Aether 0.37.0.*

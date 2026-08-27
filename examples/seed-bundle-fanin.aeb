@@ -1,0 +1,23 @@
+aether.seed-bundle/v3
+entry src/main.ae
+unit lib/base.ae 70
+world base
+export weave increment [n: Whole] -> Whole:
+  yield sum n 1
+unit lib/scale.ae 72
+world scale
+export weave double [n: Whole] -> Whole:
+  yield product n 2
+unit lib/combine.ae 212
+world combine
+import unit "lib/base.ae" as base
+import unit "lib/scale.ae" as scale
+export weave double_after_increment [n: Whole] -> Whole:
+  bind raised <- call base.increment n
+  yield call scale.double raised
+unit src/main.ae 144
+world app
+import unit "lib/combine.ae" as combine
+weave main [] -> Whole:
+  bind result <- call combine.double_after_increment 41
+  yield result

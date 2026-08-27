@@ -80,7 +80,7 @@ Seed does **not** natively parse multi-source envelopes
 (`seed_native_multi_module_elaboration() == false`). A future seed-native
 multi-file ABI would require a new forge weave signature and Seed Profile claim.
 
-## Bounded seed-native source-bundle paths (ADR-128/129 / SBP-001/002)
+## Bounded seed-native source-bundle paths (ADR-128/129/130 / SBP-001/002/003)
 
 `aether forge-bundle` is a separate closed ABI, not an extension of ordinary
 `forge`. The verified compiler must expose:
@@ -93,19 +93,25 @@ It receives exactly one caller-selected versioned bundle Text file. On this
 path, the host does not decode framing, resolve an import, collect an export,
 mangle a name, or rewrite source. The seed validates and elaborates either the
 exact v1 two-unit ASCII/LF pure Whole library -> named entry profile (16,384
-scalars per unit, 32,768 total source, 33,280 total wire), or the exact v2
+scalars per unit, 32,768 total source, 33,280 total wire), the exact v2
 three-unit foundation -> bridge -> named entry profile (16,384 scalars per
-unit, 49,152 total source, 49,920 total wire). v2 has two fixed transitive
-import edges; it is not an arbitrary three-unit graph. Profile failure SPEAKs
-`AE-SEED-016` and returns no runnable artifact.
+unit, 49,152 total source, 49,920 total wire), or the exact v3 four-unit left
+leaf + right leaf -> merge -> named entry profile (16,384 scalars per unit,
+65,536 total source, 66,560 total wire). v2 has two fixed transitive import
+edges; v3 has three fixed edges, two of which form the merge fan-in. Neither is
+an arbitrary module graph. Profile failure SPEAKs `AE-SEED-016` and returns no
+runnable artifact.
 
 The profile does not alter the general M11/M22 multi-source rule above:
 `seed_native_multi_module_elaboration() == false` remains true, and ordinary
 projects, workspaces, raw imports, and `aether.multi-source/v1` use the
 host-elaborated route. See [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
 [ADR-129](../historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md),
-[SBP-002](../historical%20docs/DESIGN-SBP-002-SEED-NATIVE-TRANSITIVE-CHAIN-PROFILE.md), and
-[the SBP-002 threat model](THREAT_MODEL-SBP-002-SEED-CHAIN.md).
+[ADR-130](../historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md),
+[SBP-002](../historical%20docs/DESIGN-SBP-002-SEED-NATIVE-TRANSITIVE-CHAIN-PROFILE.md),
+[SBP-003](../historical%20docs/DESIGN-SBP-003-SEED-NATIVE-FANIN-PROFILE.md),
+[the SBP-002 threat model](THREAT_MODEL-SBP-002-SEED-CHAIN.md), and
+[the SBP-003 threat model](THREAT_MODEL-SBP-003-SEED-FANIN.md).
 
 ## Seed SPEAK diagnostic contract (ADR-082/086/090/094/098/102/103/106/108/109/110/111/112/113/114/115)
 
