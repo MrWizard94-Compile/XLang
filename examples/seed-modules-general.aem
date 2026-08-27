@@ -1,0 +1,42 @@
+aether.seed-modules/v1
+entry src/main.ae
+packages 1
+package math
+units 6
+unit lib/left.ae lib 72
+unit lib/merge.ae lib 197
+unit lib/right.ae lib 74
+unit lib/unreachable.ae lib 66
+unit math::lib/add.ae lib 71
+unit src/main.ae main 187
+source
+world left
+
+export weave increment [n: Whole] -> Whole:
+  yield sum n 1
+world merge
+
+import unit "lib/left.ae" as left
+import unit "lib/right.ae" as right
+export weave combine [n: Whole] -> Whole:
+  bind raised <- call left.increment n
+  yield call right.double raised
+world right
+
+export weave double [n: Whole] -> Whole:
+  yield product n 2
+world unused
+
+export weave ignored [n: Whole] -> Whole:
+  yield 0
+world math_add
+
+export weave bump [n: Whole] -> Whole:
+  yield sum n 1
+world app
+
+import unit "lib/merge.ae" as merge
+import unit "lib/add.ae" from package math as add
+weave main [] -> Whole:
+  bind value <- call merge.combine 41
+  yield call add.bump value

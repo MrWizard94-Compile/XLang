@@ -47,7 +47,7 @@ same time:
 
 | Order | Program | Immediate bounded outcome | Admission gate |
 |---:|---|---|---|
-| 1 | BARP product independence | Broaden exact seed-SPEAK witnesses and separately design seed-native multi-file elaboration. | Seed rebuild, direct forge packet/origin proof, valid-source identity, priority negatives, full dual-compare. |
+| 1 | BARP product independence | Broaden exact seed-SPEAK witnesses while preserving GSM-001's closed seed-native multi-module catalog authority and bounds. | Seed rebuild, direct forge packet/origin proof, valid-source identity, priority negatives, GSM catalog identity, full dual-compare. |
 | 2 | Language and library depth | Specify only one controlled data/generic/effect ergonomics slice at a time. | Grammar, seed, verifier, VM, authoring, corpus, compatibility, and performance/limit evidence. |
 | 3 | Daily-project experience | Improve documentation, project/workspace/package ergonomics, LSP behavior, test reporting, and reproducible examples. | Offline-first end-to-end project proof plus negative path/jail and no-silent-write tests. |
 | 4 | F-REGISTRY next vertical | Select a resolver, trust, or standards-compliance gap only after a scoped ADR and updated registry threat analysis. | Explicit operator action, no compile-time auto-fetch, reproducible cache verification, hostile trust/input corpus. |
@@ -126,9 +126,11 @@ SPEAK pilot is deliberately bounded; it has no full diagnostic parity claim.
     semantic legality remain with the full compiler.
 12. Select one broader `AE-SEED-011` or `AE-SEED-013` shape only after
    documenting its false-positive boundary and valid-source corpus.
-13. Design seed-native multi-file elaboration as a separate forge ABI decision;
-   host elaboration plus seed emission remains the product contract until that
-   design is proven.
+13. **Completed in GSM-001 / ADR-131 (full gate passed 2026-08-27):** the closed
+   `compile_modules [borrow catalog: Text] -> Bytes` ABI gives the seed bounded
+   normal-form M11/M22 graph elaboration after host manifest/lock/path framing.
+   Preserve its no-filesystem/no-resolver/direct-authority/resource-bound
+   contract; do not generalize it by accretion.
 14. Never remove the dual-compare oracle or convert a seed line-state witness
    into an unbounded parser/type checker by accretion.
 

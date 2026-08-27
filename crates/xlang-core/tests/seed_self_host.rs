@@ -425,12 +425,20 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
     );
     assert!(product_diagnostic_abi(), "ADR-055: product diagnostic ABI");
     assert!(
-        host_elaborates_modules_seed_emits(),
-        "ADR-056: host elaborates modules; seed emits"
+        !host_elaborates_modules_seed_emits(),
+        "GSM-001: product module builds do not invoke the host elaborator"
     );
     assert!(
-        !seed_native_multi_module_elaboration(),
-        "ADR-056 honesty: no seed-native multi-module elaboration"
+        seed_native_multi_module_elaboration(),
+        "GSM-001: the seed owns bounded general M11/M22 graph elaboration"
+    );
+    assert!(
+        aether_core::product_multi_file_forge_seed_catalog_path(),
+        "GSM-001: multi-source products frame catalogs for seed elaboration"
+    );
+    assert!(
+        !aether_core::product_multi_file_forge_host_path(),
+        "GSM-001: the historical host multi-file product route is inactive"
     );
     assert!(
         structural_edit_product_base_gate(),
@@ -2996,7 +3004,7 @@ fn barp_adr072_product_seed_error_packet_abi() {
 #[test]
 fn barp_adr075_multi_source_envelope_product_forge() {
     assert!(product_multi_source_forge_envelope());
-    assert!(!seed_native_multi_module_elaboration());
+    assert!(seed_native_multi_module_elaboration());
     assert!(aether_core::product_multi_source_unit_surface_api());
     assert!(aether_core::product_multi_source_unit_digests_api());
     let lib = "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n";
@@ -3028,8 +3036,8 @@ fn barp_adr075_multi_source_envelope_product_forge() {
 fn barp_adr128_seed_native_whole_library_bundle_matches_bootstrap_and_rejects_out_of_profile() {
     assert!(seed_native_whole_library_bundle_profile());
     assert!(
-        !seed_native_multi_module_elaboration(),
-        "ADR-128 must not overstate general M11/M22 seed authority"
+        seed_native_multi_module_elaboration(),
+        "GSM-001 now owns general bounded M11/M22 graph elaboration independently of ADR-128"
     );
     assert!(
         !aether_core::product_seed_bundle_invokes_host_elaborator(),
@@ -3250,8 +3258,8 @@ fn barp_adr128_seed_native_whole_library_bundle_matches_bootstrap_and_rejects_ou
 fn barp_adr129_seed_native_three_unit_chain_matches_bootstrap_and_rejects_out_of_profile() {
     assert!(seed_native_whole_library_chain_bundle_profile());
     assert!(
-        !seed_native_multi_module_elaboration(),
-        "ADR-129 must not overstate general M11/M22 seed authority"
+        seed_native_multi_module_elaboration(),
+        "GSM-001 now owns general bounded M11/M22 graph elaboration independently of ADR-129"
     );
     assert!(
         !aether_core::product_seed_bundle_invokes_host_elaborator(),
@@ -3462,8 +3470,8 @@ fn barp_adr129_seed_native_three_unit_chain_matches_bootstrap_and_rejects_out_of
 fn barp_adr130_seed_native_four_unit_fanin_matches_bootstrap_and_rejects_out_of_profile() {
     assert!(seed_native_whole_library_fanin_bundle_profile());
     assert!(
-        !seed_native_multi_module_elaboration(),
-        "ADR-130 must not overstate general M11/M22 seed authority"
+        seed_native_multi_module_elaboration(),
+        "GSM-001 now owns general bounded M11/M22 graph elaboration independently of ADR-130"
     );
     assert!(
         !aether_core::product_seed_bundle_invokes_host_elaborator(),

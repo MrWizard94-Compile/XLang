@@ -1,16 +1,18 @@
 //! M11a language modules: import unit / export weave / project build.
 //!
-//! Multi-module programs are **host-elaborated** into one single-world Aether
-//! program (ADR-015 / M11a), then **seed-emitted** on the product path (M11b /
-//! ADR-056). Seed does **not** natively elaborate multi-file graphs (no multi-file
-//! forge ABI). Bootstrap dual-compare is test/oracle only (ADR-045).
+//! General product multi-module programs use the bounded GSM-001 catalog ABI:
+//! the host frames caller-selected, manifest-authorized opaque source Text and
+//! the verified Aether-written seed resolves imports, elaborates the graph, and
+//! emits AETH. The retained Rust elaborator is a bootstrap/reference oracle for
+//! dual-compare and recovery analysis, never the default product route.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::project::{
-    resolve_unit_path, validate_unit_path, ProjectDocument, ProjectError, ProjectUnitRole,
+    parse_project_document, resolve_unit_path, validate_unit_path, ProjectDocument, ProjectError,
+    ProjectUnit, ProjectUnitRole, PROJECT_SCHEMA_VERSION,
 };
 use crate::{
     compile_product_bytecode, run_bytecode, run_bytecode_with_grants, verify_bytecode,
@@ -433,7 +435,6 @@ fn load_foreign_package_unit(
     package_name: &str,
     unit_path: &str,
 ) -> Result<ParsedModule, ProjectError> {
-    use crate::project::{parse_project_document, PROJECT_SCHEMA_VERSION};
     let project_file = package_root.join("aether.project.json");
     let json = fs::read_to_string(&project_file).map_err(|error| {
         module_error(
@@ -688,20 +689,13 @@ fn rename_weaves_in_body(body: &str, renames: &BTreeMap<String, String>) -> Stri
 
 /// Elaborate the main unit's import cone into one single-file Aether source.
 ///
-/// Host authority (ADR-056). Product emission of the result uses seed only
-/// ([`crate::compile_product_bytecode`]); dual-compare remains test/oracle.
+/// This retained Rust elaborator is a bootstrap/reference oracle for
+/// dual-compare tests and recovery analysis. Product project and workspace
+/// builds use the seed-owned general module catalog instead.
 pub fn elaborate_project_modules(
     project_root: &Path,
     document: &ProjectDocument,
 ) -> Result<String, ProjectError> {
-    debug_assert!(
-        crate::host_elaborates_modules_seed_emits(),
-        "ADR-056: host elaborates; seed emits"
-    );
-    debug_assert!(
-        !crate::seed_native_multi_module_elaboration(),
-        "ADR-056 honesty: seed does not elaborate multi-module natively"
-    );
     elaborate_project_modules_with_packages(
         project_root,
         document,
@@ -1213,6 +1207,662 @@ fn take_seed_bundle_scalars(
     Ok(payload)
 }
 
+/// General seed-owned module-catalog schema (GSM-001).
+///
+/// The catalog carries a closed, explicitly selected set of source units as
+/// scalar-indexed opaque Text. The host validates only framing, manifest-derived
+/// identities, roles, locks, and path confinement; the seed compile_modules
+/// forge entry owns all Aether import parsing, graph resolution, mangling, and
+/// elaboration.
+pub const SEED_MODULES_SCHEMA: &str = "aether.seed-modules/v1";
+
+/// Maximum semantic source units admitted by one general seed module catalog.
+///
+/// This is a graph-size resource limit, not a fixed topology: every acyclic
+/// M11/M22 graph within the catalog limits is eligible.
+pub const SEED_MODULES_MAX_UNITS: usize = 256;
+
+/// Maximum M22 package names authorized in one catalog.
+pub const SEED_MODULES_MAX_PACKAGES: usize = 64;
+
+/// Maximum scalar payload for one source unit.
+pub const SEED_MODULES_MAX_UNIT_SCALARS: usize = 16_384;
+
+/// Maximum aggregate source scalar payload for one catalog.
+pub const SEED_MODULES_MAX_TOTAL_SCALARS: usize = 196_608;
+
+/// Maximum complete scalar wire payload, including deterministic metadata.
+///
+/// The Aether invocation ABI accepts at most 1,000,000 UTF-8 bytes of Text.
+/// A Unicode scalar occupies at most four UTF-8 bytes, so this scalar cap is
+/// intentionally no larger than one quarter of that hard runtime limit.
+pub const SEED_MODULES_MAX_WIRE_SCALARS: usize = 250_000;
+
+const _: () = assert!(SEED_MODULES_MAX_WIRE_SCALARS <= crate::MAX_TEXT_BYTES / 4);
+
+/// Maximum scalar length of a manifest-derived catalog identity.
+pub const SEED_MODULES_MAX_KEY_SCALARS: usize = 256;
+
+/// One source unit carried by a SeedModuleCatalog.
+///
+/// key is either a project-relative unit path or the M22 identity
+/// package::project-relative-unit-path. The source remains opaque to this Rust
+/// framing layer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeedModuleUnit {
+    pub key: String,
+    pub role: ProjectUnitRole,
+    pub source: String,
+}
+
+/// A deterministic, scalar-indexed, closed module catalog.
+///
+/// This is a framing value for authoring, project loading, and independent
+/// tests. Product compilation deliberately forwards its original text directly
+/// to the verified seed compile_modules weave rather than decoding or
+/// elaborating it in Rust.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeedModuleCatalog {
+    pub entry_key: String,
+    pub allowed_packages: Vec<String>,
+    pub units: Vec<SeedModuleUnit>,
+}
+
+/// Encode a deterministic general seed module catalog without inspecting
+/// Aether source syntax.
+///
+/// Metadata uses LF-only ASCII lines, followed by one concatenated source
+/// payload. Scalar counts make source boundaries unambiguous even when sources
+/// contain their own newlines or non-ASCII Text.
+pub fn encode_seed_module_catalog(
+    entry_key: &str,
+    allowed_packages: &[String],
+    units: &[SeedModuleUnit],
+) -> Result<String, ProjectError> {
+    let mut canonical_packages = allowed_packages.to_vec();
+    canonical_packages.sort_unstable();
+    let catalog = SeedModuleCatalog {
+        entry_key: entry_key.to_owned(),
+        allowed_packages: canonical_packages,
+        units: units.to_vec(),
+    };
+    validate_seed_module_catalog(&catalog)?;
+
+    let mut output = String::new();
+    output.push_str(SEED_MODULES_SCHEMA);
+    output.push('\n');
+    output.push_str("entry ");
+    output.push_str(&catalog.entry_key);
+    output.push('\n');
+    output.push_str("packages ");
+    output.push_str(&catalog.allowed_packages.len().to_string());
+    output.push('\n');
+    for package in &catalog.allowed_packages {
+        output.push_str("package ");
+        output.push_str(package);
+        output.push('\n');
+    }
+    output.push_str("units ");
+    output.push_str(&catalog.units.len().to_string());
+    output.push('\n');
+    for unit in &catalog.units {
+        output.push_str("unit ");
+        output.push_str(&unit.key);
+        output.push(' ');
+        output.push_str(seed_module_role_name(unit.role));
+        output.push(' ');
+        output.push_str(&unit.source.chars().count().to_string());
+        output.push('\n');
+    }
+    output.push_str("source\n");
+    for unit in &catalog.units {
+        output.push_str(&unit.source);
+    }
+
+    if output.chars().count() > SEED_MODULES_MAX_WIRE_SCALARS {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed module catalog exceeds the {}-scalar wire limit",
+                SEED_MODULES_MAX_WIRE_SCALARS
+            ),
+        ));
+    }
+    Ok(output)
+}
+
+/// Decode a general seed module catalog for deterministic tooling and
+/// independent reference tests.
+///
+/// Product compilation does not call this function: it passes original catalog
+/// Text directly to the seed compile_modules entry.
+pub fn decode_seed_module_catalog(bundle: &str) -> Result<SeedModuleCatalog, ProjectError> {
+    if bundle.chars().count() > SEED_MODULES_MAX_WIRE_SCALARS {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed module catalog exceeds the {}-scalar wire limit",
+                SEED_MODULES_MAX_WIRE_SCALARS
+            ),
+        ));
+    }
+
+    let mut cursor = 0_usize;
+    let magic = take_seed_module_line(bundle, &mut cursor)?;
+    if magic != SEED_MODULES_SCHEMA {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!("unsupported seed module schema {magic:?}"),
+        ));
+    }
+    let entry_key = take_seed_module_line(bundle, &mut cursor)?
+        .strip_prefix("entry ")
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            module_error(
+                "AE-MOD-001",
+                "seed module catalog requires entry plus unit identity",
+            )
+        })?
+        .to_owned();
+    let package_count = parse_seed_module_count(
+        take_seed_module_line(bundle, &mut cursor)?
+            .strip_prefix("packages ")
+            .ok_or_else(|| {
+                module_error("AE-MOD-001", "seed module catalog requires package count")
+            })?,
+        "package count",
+    )?;
+    if package_count > SEED_MODULES_MAX_PACKAGES {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed module catalog exceeds the {}-package limit",
+                SEED_MODULES_MAX_PACKAGES
+            ),
+        ));
+    }
+    let mut allowed_packages = Vec::with_capacity(package_count);
+    for _ in 0..package_count {
+        let package = take_seed_module_line(bundle, &mut cursor)?
+            .strip_prefix("package ")
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                module_error(
+                    "AE-MOD-001",
+                    "seed module catalog expected a package identity",
+                )
+            })?
+            .to_owned();
+        allowed_packages.push(package);
+    }
+    let unit_count = parse_seed_module_count(
+        take_seed_module_line(bundle, &mut cursor)?
+            .strip_prefix("units ")
+            .ok_or_else(|| module_error("AE-MOD-001", "seed module catalog requires unit count"))?,
+        "unit count",
+    )?;
+    if unit_count == 0 || unit_count > SEED_MODULES_MAX_UNITS {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed module catalog unit count must be in 1..={}",
+                SEED_MODULES_MAX_UNITS
+            ),
+        ));
+    }
+
+    let mut metadata = Vec::with_capacity(unit_count);
+    for _ in 0..unit_count {
+        let header = take_seed_module_line(bundle, &mut cursor)?;
+        metadata.push(parse_seed_module_unit_header(header)?);
+    }
+    if take_seed_module_line(bundle, &mut cursor)? != "source" {
+        return Err(module_error(
+            "AE-MOD-001",
+            "seed module catalog requires one source payload marker",
+        ));
+    }
+
+    let mut units = Vec::with_capacity(unit_count);
+    for (key, role, scalar_count) in metadata {
+        let source = take_seed_module_payload(bundle, &mut cursor, scalar_count)?;
+        units.push(SeedModuleUnit { key, role, source });
+    }
+    if cursor != bundle.len() {
+        return Err(module_error(
+            "AE-MOD-001",
+            "seed module catalog has trailing payload outside declared scalar counts",
+        ));
+    }
+
+    let catalog = SeedModuleCatalog {
+        entry_key,
+        allowed_packages,
+        units,
+    };
+    validate_seed_module_catalog(&catalog)?;
+    Ok(catalog)
+}
+
+/// Validate catalog framing metadata without inspecting Aether source syntax.
+pub fn validate_seed_module_catalog(catalog: &SeedModuleCatalog) -> Result<(), ProjectError> {
+    validate_seed_module_key(&catalog.entry_key)?;
+    if catalog.entry_key.contains("::") {
+        return Err(module_error(
+            "AE-MOD-006",
+            "seed module catalog entry must be a local project unit",
+        ));
+    }
+    if catalog.allowed_packages.len() > SEED_MODULES_MAX_PACKAGES {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed module catalog exceeds the {}-package limit",
+                SEED_MODULES_MAX_PACKAGES
+            ),
+        ));
+    }
+    let mut package_names = BTreeSet::new();
+    for package in &catalog.allowed_packages {
+        if !is_seed_module_package_name(package) {
+            return Err(module_error(
+                "AE-MOD-001",
+                format!("seed module catalog package {package:?} is invalid"),
+            ));
+        }
+        if !package_names.insert(package.as_str()) {
+            return Err(module_error(
+                "AE-MOD-005",
+                format!("seed module catalog repeats allowed package {package}"),
+            ));
+        }
+    }
+    if catalog.units.is_empty() || catalog.units.len() > SEED_MODULES_MAX_UNITS {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed module catalog unit count must be in 1..={}",
+                SEED_MODULES_MAX_UNITS
+            ),
+        ));
+    }
+
+    let mut seen_keys = BTreeSet::new();
+    let mut total_scalars = 0_usize;
+    let mut entry_role = None;
+    for unit in &catalog.units {
+        validate_seed_module_key(&unit.key)?;
+        if !seen_keys.insert(unit.key.as_str()) {
+            return Err(module_error(
+                "AE-MOD-005",
+                format!("seed module catalog repeats unit identity {}", unit.key),
+            ));
+        }
+        if let Some((package, _)) = unit.key.split_once("::") {
+            if !package_names.contains(package) {
+                return Err(module_error(
+                    "AE-MOD-002",
+                    format!(
+                        "seed module unit {} names unallowed package {package}",
+                        unit.key
+                    ),
+                ));
+            }
+            if unit.role != ProjectUnitRole::Lib {
+                return Err(module_error(
+                    "AE-MOD-006",
+                    format!("seed module foreign unit {} must have role lib", unit.key),
+                ));
+            }
+        }
+        let scalar_count = unit.source.chars().count();
+        if scalar_count == 0 || scalar_count > SEED_MODULES_MAX_UNIT_SCALARS {
+            return Err(module_error(
+                "AE-MOD-001",
+                format!(
+                    "seed module unit {} must contain 1..={} source scalars",
+                    unit.key, SEED_MODULES_MAX_UNIT_SCALARS
+                ),
+            ));
+        }
+        total_scalars = total_scalars.checked_add(scalar_count).ok_or_else(|| {
+            module_error(
+                "AE-MOD-001",
+                "seed module catalog aggregate scalar count overflow",
+            )
+        })?;
+        if unit.key == catalog.entry_key {
+            entry_role = Some(unit.role);
+        }
+    }
+    if total_scalars > SEED_MODULES_MAX_TOTAL_SCALARS {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed module catalog exceeds the {}-scalar aggregate source limit",
+                SEED_MODULES_MAX_TOTAL_SCALARS
+            ),
+        ));
+    }
+    match entry_role {
+        Some(ProjectUnitRole::Main | ProjectUnitRole::Test) => Ok(()),
+        Some(ProjectUnitRole::Lib) => Err(module_error(
+            "AE-MOD-006",
+            format!(
+                "seed module entry {} must have role main or test",
+                catalog.entry_key
+            ),
+        )),
+        None => Err(module_error(
+            "AE-MOD-002",
+            format!(
+                "seed module entry {} is not present in the catalog",
+                catalog.entry_key
+            ),
+        )),
+    }
+}
+
+/// Frame one project or M22 workspace entry for the general seed module ABI.
+///
+/// This is deliberately a manifest-and-filesystem boundary, not an Aether
+/// source elaborator. It validates caller-selected project identities, path
+/// confinement, UTF-8, source-size limits, and direct workspace authority;
+/// the verified seed owns import parsing, dependency resolution, namespace
+/// rewriting, cycle detection, and source compilation.
+pub fn encode_project_seed_module_catalog(
+    project_root: &Path,
+    document: &ProjectDocument,
+    entry_path: &str,
+    package_roots: &BTreeMap<String, PathBuf>,
+    allowed_packages: &BTreeSet<String>,
+) -> Result<String, ProjectError> {
+    let entry = document
+        .units
+        .iter()
+        .find(|unit| unit.path == entry_path)
+        .ok_or_else(|| {
+            module_error(
+                "AE-MOD-002",
+                format!("entry unit {entry_path} is not a project unit"),
+            )
+        })?;
+    if entry.role != ProjectUnitRole::Main && entry.role != ProjectUnitRole::Test {
+        return Err(module_error(
+            "AE-MOD-006",
+            format!("entry unit {entry_path} must have role main or test"),
+        ));
+    }
+    if allowed_packages.len() > SEED_MODULES_MAX_PACKAGES {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!(
+                "seed module catalog exceeds the {}-package limit",
+                SEED_MODULES_MAX_PACKAGES
+            ),
+        ));
+    }
+
+    let mut units = Vec::with_capacity(document.units.len());
+    for unit in &document.units {
+        units.push(read_seed_module_catalog_unit(
+            project_root,
+            &unit.path,
+            unit,
+            None,
+        )?);
+    }
+
+    for package_name in allowed_packages {
+        if !is_seed_module_package_name(package_name) {
+            return Err(module_error(
+                "AE-MOD-001",
+                format!("workspace package {package_name:?} is not a valid catalog identity"),
+            ));
+        }
+        let package_root = package_roots.get(package_name).ok_or_else(|| {
+            module_error(
+                "AE-MOD-002",
+                format!("workspace package {package_name} is not available"),
+            )
+        })?;
+        let foreign_project = read_seed_module_project_document(package_root, package_name)?;
+        for unit in foreign_project
+            .units
+            .iter()
+            .filter(|unit| unit.role == ProjectUnitRole::Lib)
+        {
+            let key = format!("{package_name}::{}", unit.path);
+            units.push(read_seed_module_catalog_unit(
+                package_root,
+                &key,
+                unit,
+                Some(package_name),
+            )?);
+        }
+    }
+
+    // The wire format is deterministic independently of manifest ordering.
+    // This does not inspect or transform source payloads.
+    units.sort_by(|left, right| left.key.cmp(&right.key));
+    let packages: Vec<String> = allowed_packages.iter().cloned().collect();
+    encode_seed_module_catalog(entry_path, &packages, &units)
+}
+
+fn read_seed_module_project_document(
+    package_root: &Path,
+    package_name: &str,
+) -> Result<ProjectDocument, ProjectError> {
+    let canonical_root = package_root.canonicalize().map_err(|error| {
+        module_error(
+            "AE-MOD-002",
+            format!("workspace package {package_name} root is unavailable: {error}"),
+        )
+    })?;
+    let project_file = canonical_root.join("aether.project.json");
+    let bytes = fs::read(&project_file).map_err(|error| {
+        module_error(
+            "AE-MOD-002",
+            format!("workspace package {package_name} missing aether.project.json: {error}"),
+        )
+    })?;
+    let text = String::from_utf8(bytes).map_err(|_| {
+        module_error(
+            "AE-MOD-002",
+            format!("workspace package {package_name} manifest is not valid UTF-8"),
+        )
+    })?;
+    let document = parse_project_document(&text)?;
+    if document.schema != PROJECT_SCHEMA_VERSION {
+        return Err(module_error(
+            "AE-MOD-002",
+            format!("workspace package {package_name} has unsupported project schema"),
+        ));
+    }
+    Ok(document)
+}
+
+fn read_seed_module_catalog_unit(
+    project_root: &Path,
+    key: &str,
+    unit: &ProjectUnit,
+    package_name: Option<&str>,
+) -> Result<SeedModuleUnit, ProjectError> {
+    let resolved = resolve_unit_path(project_root, &unit.path)?;
+    let bytes = fs::read(&resolved).map_err(|error| {
+        let location = match package_name {
+            Some(package) => format!("workspace package {package} unit {}", unit.path),
+            None => format!("unit {}", unit.path),
+        };
+        module_error(
+            "AE-PROJECT-002",
+            format!("could not read {location}: {error}"),
+        )
+    })?;
+    let source = String::from_utf8(bytes).map_err(|_| {
+        let location = match package_name {
+            Some(package) => format!("workspace package {package} unit {}", unit.path),
+            None => format!("unit {}", unit.path),
+        };
+        module_error("AE-PROJECT-004", format!("{location} is not valid UTF-8"))
+    })?;
+    Ok(SeedModuleUnit {
+        key: key.to_owned(),
+        role: unit.role,
+        source,
+    })
+}
+
+fn seed_module_role_name(role: ProjectUnitRole) -> &'static str {
+    match role {
+        ProjectUnitRole::Main => "main",
+        ProjectUnitRole::Lib => "lib",
+        ProjectUnitRole::Test => "test",
+    }
+}
+
+fn parse_seed_module_role(value: &str) -> Result<ProjectUnitRole, ProjectError> {
+    match value {
+        "main" => Ok(ProjectUnitRole::Main),
+        "lib" => Ok(ProjectUnitRole::Lib),
+        "test" => Ok(ProjectUnitRole::Test),
+        _ => Err(module_error(
+            "AE-MOD-001",
+            format!("seed module unit role {value:?} is invalid"),
+        )),
+    }
+}
+
+fn parse_seed_module_count(value: &str, label: &str) -> Result<usize, ProjectError> {
+    if value.is_empty() || value.len() > 7 || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(module_error(
+            "AE-MOD-001",
+            format!("seed module {label} must be one to seven ASCII digits"),
+        ));
+    }
+    value.parse::<usize>().map_err(|_| {
+        module_error(
+            "AE-MOD-001",
+            format!("seed module {label} is not representable"),
+        )
+    })
+}
+
+fn parse_seed_module_unit_header(
+    header: &str,
+) -> Result<(String, ProjectUnitRole, usize), ProjectError> {
+    let rest = header
+        .strip_prefix("unit ")
+        .ok_or_else(|| module_error("AE-MOD-001", "seed module catalog expected a unit header"))?;
+    let fields: Vec<&str> = rest.split(' ').collect();
+    if fields.len() != 3 || fields.iter().any(|field| field.is_empty()) {
+        return Err(module_error(
+            "AE-MOD-001",
+            "seed module unit header requires identity, role, and scalar count",
+        ));
+    }
+    let role = parse_seed_module_role(fields[1])?;
+    let scalar_count = parse_seed_module_count(fields[2], "unit scalar count")?;
+    Ok((fields[0].to_owned(), role, scalar_count))
+}
+
+fn take_seed_module_line<'a>(bundle: &'a str, cursor: &mut usize) -> Result<&'a str, ProjectError> {
+    let remaining = bundle.get(*cursor..).ok_or_else(|| {
+        module_error(
+            "AE-MOD-001",
+            "seed module catalog cursor is not on a UTF-8 boundary",
+        )
+    })?;
+    let line_end = remaining.find('\n').ok_or_else(|| {
+        module_error(
+            "AE-MOD-001",
+            "seed module catalog metadata line must end with LF",
+        )
+    })?;
+    let line = &remaining[..line_end];
+    *cursor = cursor
+        .checked_add(line_end + 1)
+        .ok_or_else(|| module_error("AE-MOD-001", "seed module catalog cursor overflow"))?;
+    Ok(line)
+}
+
+fn take_seed_module_payload(
+    bundle: &str,
+    cursor: &mut usize,
+    scalar_count: usize,
+) -> Result<String, ProjectError> {
+    let remaining = bundle.get(*cursor..).ok_or_else(|| {
+        module_error(
+            "AE-MOD-001",
+            "seed module catalog payload cursor is not on a UTF-8 boundary",
+        )
+    })?;
+    let mut payload_end = 0_usize;
+    let mut observed = 0_usize;
+    for (offset, scalar) in remaining.char_indices() {
+        if observed == scalar_count {
+            break;
+        }
+        payload_end = offset + scalar.len_utf8();
+        observed += 1;
+    }
+    if observed != scalar_count {
+        return Err(module_error(
+            "AE-MOD-001",
+            "seed module unit payload is shorter than its scalar count",
+        ));
+    }
+    let payload = remaining[..payload_end].to_owned();
+    *cursor = cursor
+        .checked_add(payload_end)
+        .ok_or_else(|| module_error("AE-MOD-001", "seed module catalog payload cursor overflow"))?;
+    Ok(payload)
+}
+
+fn validate_seed_module_key(key: &str) -> Result<(), ProjectError> {
+    if key.chars().count() > SEED_MODULES_MAX_KEY_SCALARS {
+        return Err(module_error(
+            "AE-MOD-002",
+            format!(
+                "seed module unit identity exceeds the {}-scalar limit",
+                SEED_MODULES_MAX_KEY_SCALARS
+            ),
+        ));
+    }
+    if let Some((package, path)) = key.split_once("::") {
+        if package.is_empty()
+            || path.is_empty()
+            || path.contains("::")
+            || !is_seed_module_package_name(package)
+        {
+            return Err(module_error(
+                "AE-MOD-002",
+                format!("seed module unit identity {key:?} is invalid"),
+            ));
+        }
+        validate_unit_path(path).map_err(|error| {
+            module_error(
+                "AE-MOD-002",
+                format!("seed module foreign unit {key}: {}", error.message),
+            )
+        })
+    } else {
+        validate_unit_path(key).map_err(|error| {
+            module_error(
+                "AE-MOD-002",
+                format!("seed module local unit {key}: {}", error.message),
+            )
+        })
+    }
+}
+
+fn is_seed_module_package_name(value: &str) -> bool {
+    let mut characters = value.chars();
+    matches!(characters.next(), Some(first) if first.is_ascii_alphabetic())
+        && characters.all(|character| character.is_ascii_alphanumeric() || character == '_')
+}
+
 /// Encode units as a multi-source forge envelope (JSON Text).
 pub fn encode_multi_source_envelope(units: &[(String, String)]) -> Result<String, ProjectError> {
     debug_assert!(
@@ -1284,8 +1934,11 @@ pub fn decode_multi_source_envelope(text: &str) -> Result<Vec<(String, String)>,
     Ok(out)
 }
 
-/// ADR-075 host multi-file product forge: in-memory units (no project file), host
-/// elaborate + seed emit. Cross-package imports are not supported on this path.
+/// GSM-001 product forge for in-memory local units (no project file).
+///
+/// The host frames caller-supplied unit identities and opaque source Text; the
+/// seed resolves and elaborates the graph. Cross-package imports are rejected
+/// here because this API has no explicit package authority set.
 pub fn compile_product_multi_unit(
     units: &[(String, String, ProjectUnitRole)],
     entry_path: &str,
@@ -1294,11 +1947,19 @@ pub fn compile_product_multi_unit(
         crate::product_multi_source_forge_envelope(),
         "ADR-075: multi-unit product forge"
     );
-    let elaborated = elaborate_in_memory_units(units, entry_path)?;
-    crate::compile_product_bytecode(&elaborated).map_err(|error| {
+    let catalog_units: Vec<SeedModuleUnit> = units
+        .iter()
+        .map(|(key, source, role)| SeedModuleUnit {
+            key: key.clone(),
+            role: *role,
+            source: source.clone(),
+        })
+        .collect();
+    let catalog = encode_seed_module_catalog(entry_path, &[], &catalog_units)?;
+    crate::compile_product_seed_modules(&catalog).map_err(|error| {
         module_error(
             "AE-SEED-001",
-            format!("product multi-unit seed emit failed: {error}"),
+            format!("product seed module compile failed: {error}"),
         )
     })
 }
@@ -1596,10 +2257,11 @@ fn elaborate_modules_map(
     Ok(elaborated)
 }
 
-/// Multi-module project build → verified AETH bytes (M11b).
+/// Multi-module project build → verified AETH bytes (M11/M22 GSM-001).
 ///
-/// Host elaborates the import DAG, then **seed product emit only** (ADR-047:
-/// no bootstrap parse/emit). Dual-compare is test/oracle (ADR-045).
+/// The host frames the manifest-selected source catalog; the seed owns import
+/// parsing, graph resolution, namespace elaboration, and AETH emission. The
+/// bootstrap elaborator is reference/oracle only (ADR-045).
 pub fn compile_project_modules(
     project_root: &Path,
     document: &ProjectDocument,
@@ -1650,8 +2312,9 @@ pub fn compile_project_entry(
 
 /// Compile a selectable entry with workspace package roots.
 ///
-/// Product path: host elaboration + [`compile_product_bytecode`] only (ADR-047).
-/// No bootstrap dual-compare gate (ADR-045); no bootstrap AST parse.
+/// Product path: manifest/path/UTF-8 framing plus the verified seed-owned
+/// module catalog compiler. No bootstrap dual-compare gate and no Rust Aether
+/// source parse or elaboration occur on this route.
 pub fn compile_project_entry_with_packages(
     project_root: &Path,
     document: &ProjectDocument,
@@ -1659,7 +2322,7 @@ pub fn compile_project_entry_with_packages(
     package_roots: &BTreeMap<String, PathBuf>,
     allowed_packages: &BTreeSet<String>,
 ) -> Result<Vec<u8>, ProjectError> {
-    let source = elaborate_project_entry_with_packages(
+    let catalog = encode_project_seed_module_catalog(
         project_root,
         document,
         entry_path,
@@ -1674,10 +2337,10 @@ pub fn compile_project_entry_with_packages(
         !crate::product_multi_module_invokes_bootstrap(),
         "ADR-047: product multi-module path must not invoke bootstrap"
     );
-    compile_product_bytecode(&source).map_err(|error| {
+    crate::compile_product_seed_modules(&catalog).map_err(|error| {
         module_error(
             "AE-PROJECT-004",
-            format!("module project seed compile failed: {error}"),
+            format!("seed module project compile failed: {error}"),
         )
     })
 }
@@ -1780,7 +2443,7 @@ impl ProjectTestReport {
 #[must_use]
 pub fn multi_module_authority_note() -> String {
     format!(
-        "{LANGUAGE_NAME} {LANGUAGE_VERSION} multi-module project build elaborates the import graph then seed-emits (M11b; no bootstrap on product path, ADR-047; dual-compare is test/oracle only)"
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} multi-module project build frames a bounded source catalog; the verified seed resolves and elaborates the import graph, then emits AETH (GSM-001; no bootstrap on product path; dual-compare is test/oracle only)"
     )
 }
 
@@ -1789,6 +2452,7 @@ mod tests {
     use super::*;
     use crate::project::{parse_project_document, sha256_hex, ProjectUnitRole};
     use crate::run_bytecode;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -1915,6 +2579,205 @@ mod tests {
     }
 
     #[test]
+    fn project_catalog_framing_reads_manifest_units_without_parsing_source() {
+        let root = temp_dir();
+        fs::create_dir_all(root.join("lib")).expect("library directory");
+        fs::create_dir_all(root.join("src")).expect("source directory");
+        fs::write(root.join("lib/raw.ae"), "not Aether source: 🙂\n").expect("library source");
+        fs::write(root.join("src/main.ae"), "also not Aether source: é\n").expect("entry source");
+        let document = parse_project_document(
+            r#"{
+  "schema": "aether.project/v1",
+  "name": "opaque_catalog",
+  "version": "0.1.0",
+  "units": [
+    { "path": "src/main.ae", "role": "main" },
+    { "path": "lib/raw.ae", "role": "lib" }
+  ]
+}"#,
+        )
+        .expect("project manifest");
+
+        let catalog = encode_project_seed_module_catalog(
+            &root,
+            &document,
+            "src/main.ae",
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+        )
+        .expect("manifest/path/UTF-8 framing must remain source-opaque");
+        let decoded = decode_seed_module_catalog(&catalog).expect("catalog round trip");
+        assert_eq!(decoded.entry_key, "src/main.ae");
+        assert!(decoded.allowed_packages.is_empty());
+        assert_eq!(
+            decoded
+                .units
+                .iter()
+                .map(|unit| unit.key.as_str())
+                .collect::<Vec<_>>(),
+            ["lib/raw.ae", "src/main.ae"]
+        );
+        assert_eq!(decoded.units[0].source, "not Aether source: 🙂\n");
+        assert_eq!(decoded.units[1].source, "also not Aether source: é\n");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn seed_catalog_elaborates_an_irregular_transitive_graph_byte_identically() {
+        let base = "world base\n\nexport weave increment [n: Whole] -> Whole:\n  yield sum n 1\n";
+        let scale =
+            "world scale\n\nexport weave triple [n: Whole] -> Whole:\n  yield product n 3\n";
+        let combine = "world combine\n\nimport unit \"lib/base.ae\" as base\nimport unit \"lib/scale.ae\" as scale\n\nexport weave compose [n: Whole] -> Whole:\n  bind raised <- call base.increment n\n  yield call scale.triple raised\n";
+        let relay = "world relay\n\nimport unit \"lib/combine.ae\" as combine\n\nexport weave result [n: Whole] -> Whole:\n  yield call combine.compose n\n";
+        let entry = "world app\n\nimport unit \"lib/relay.ae\" as relay\n\nweave main [] -> Whole:\n  yield call relay.result 13\n";
+        let unused = "world unused\n\nexport weave ignored [n: Whole] -> Whole:\n  yield n\n";
+        let units = vec![
+            SeedModuleUnit {
+                key: "src/main.ae".to_owned(),
+                role: ProjectUnitRole::Main,
+                source: entry.to_owned(),
+            },
+            SeedModuleUnit {
+                key: "lib/unused.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: unused.to_owned(),
+            },
+            SeedModuleUnit {
+                key: "lib/relay.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: relay.to_owned(),
+            },
+            SeedModuleUnit {
+                key: "lib/scale.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: scale.to_owned(),
+            },
+            SeedModuleUnit {
+                key: "lib/combine.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: combine.to_owned(),
+            },
+            SeedModuleUnit {
+                key: "lib/base.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: base.to_owned(),
+            },
+        ];
+        let catalog = encode_seed_module_catalog("src/main.ae", &[], &units)
+            .expect("frame non-profile graph");
+        let product = crate::compile_product_seed_modules(&catalog)
+            .expect("checked-in seed elaborates general catalog");
+        assert_eq!(run_bytecode(&product).expect("product runs").exit_code, 42);
+
+        let reference_units: Vec<(String, String, ProjectUnitRole)> = units
+            .iter()
+            .map(|unit| (unit.key.clone(), unit.source.clone(), unit.role))
+            .collect();
+        let elaborated = elaborate_in_memory_units(&reference_units, "src/main.ae")
+            .expect("reference elaborates irregular graph");
+        let bootstrap = crate::compile_to_bytecode(&elaborated)
+            .expect("reference bootstrap compiles")
+            .bytecode;
+        assert_eq!(
+            product, bootstrap,
+            "general seed graph must match bootstrap for non-fixed transitive topology"
+        );
+    }
+
+    #[test]
+    fn project_seed_catalog_elaborates_direct_m22_dependency_byte_identically() {
+        let root = temp_dir();
+        let consumer_root = root.join("consumer");
+        let math_root = root.join("math");
+        fs::create_dir_all(consumer_root.join("src")).expect("consumer directory");
+        fs::create_dir_all(math_root.join("lib")).expect("math library directory");
+        fs::create_dir_all(math_root.join("src")).expect("math source directory");
+
+        let math = "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n";
+        let math_main = "world math_package\n\nweave main [] -> Whole:\n  yield 0\n";
+        let consumer = "world consumer\n\nimport unit \"lib/math.ae\" from package math as math\n\nweave main [] -> Whole:\n  yield call math.double 21\n";
+        fs::write(math_root.join("lib/math.ae"), math).expect("math library source");
+        fs::write(math_root.join("src/main.ae"), math_main).expect("math main source");
+        fs::write(consumer_root.join("src/main.ae"), consumer).expect("consumer source");
+
+        let foreign_manifest = r#"{
+  "schema": "aether.project/v1",
+  "name": "math_project",
+  "version": "0.1.0",
+  "units": [
+    { "path": "src/main.ae", "role": "main" },
+    { "path": "lib/math.ae", "role": "lib" }
+  ]
+}"#;
+        fs::write(math_root.join("aether.project.json"), foreign_manifest).expect("math manifest");
+        let consumer_document = parse_project_document(
+            r#"{
+  "schema": "aether.project/v1",
+  "name": "consumer_project",
+  "version": "0.1.0",
+  "units": [{ "path": "src/main.ae", "role": "main" }]
+}"#,
+        )
+        .expect("consumer manifest");
+
+        let mut roots = BTreeMap::new();
+        roots.insert("math".to_owned(), math_root.clone());
+        let allowed = BTreeSet::from(["math".to_owned()]);
+        let catalog = encode_project_seed_module_catalog(
+            &consumer_root,
+            &consumer_document,
+            "src/main.ae",
+            &roots,
+            &allowed,
+        )
+        .expect("direct dependency catalog");
+        let decoded = decode_seed_module_catalog(&catalog).expect("catalog decodes");
+        assert_eq!(decoded.allowed_packages, ["math"]);
+        assert!(decoded
+            .units
+            .iter()
+            .any(|unit| unit.key == "math::lib/math.ae"));
+        assert!(!decoded
+            .units
+            .iter()
+            .any(|unit| unit.key == "math::src/main.ae"));
+
+        let product = compile_project_entry_with_packages(
+            &consumer_root,
+            &consumer_document,
+            "src/main.ae",
+            &roots,
+            &allowed,
+        )
+        .expect("M22 product build");
+        assert_eq!(run_bytecode(&product).expect("product runs").exit_code, 42);
+        let reference = elaborate_project_entry_with_packages(
+            &consumer_root,
+            &consumer_document,
+            "src/main.ae",
+            &roots,
+            &allowed,
+        )
+        .expect("M22 reference elaboration");
+        let bootstrap = crate::compile_to_bytecode(&reference)
+            .expect("M22 reference bootstrap")
+            .bytecode;
+        assert_eq!(product, bootstrap, "M22 seed catalog must match bootstrap");
+
+        let unapproved = compile_project_entry_with_packages(
+            &consumer_root,
+            &consumer_document,
+            "src/main.ae",
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+        )
+        .expect_err("seed must reject a package import lacking direct authority");
+        assert_eq!(unapproved.code, "AE-PROJECT-004");
+        assert!(unapproved.message.contains("AE-SEED-017"), "{unapproved}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn rejects_import_cycle_and_lib_main() {
         let root = temp_dir();
         fs::create_dir_all(root.join("lib")).unwrap();
@@ -1946,6 +2809,10 @@ mod tests {
         let document = parse_project_document(json).unwrap();
         let err = elaborate_project_modules(&root, &document).unwrap_err();
         assert_eq!(err.code, "AE-MOD-004");
+        let err = compile_project_modules(&root, &document)
+            .expect_err("seed catalog product route must reject an import cycle");
+        assert_eq!(err.code, "AE-PROJECT-004");
+        assert!(err.message.contains("AE-SEED-017"), "{err}");
 
         let err = parse_module_source(
             "lib/bad.ae",
@@ -2127,5 +2994,313 @@ mod tests {
         .expect_err("fan-in framing must cap path-bearing untrusted bundle text");
         assert_eq!(oversize.code, "AE-MOD-001");
         assert!(oversize.message.contains("wire limit"));
+    }
+
+    #[test]
+    fn seed_module_catalog_framing_is_scalar_exact_closed_and_source_opaque() {
+        let units = vec![
+            SeedModuleUnit {
+                key: "lib/math.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: "not Aether: 🙂\n".to_owned(),
+            },
+            SeedModuleUnit {
+                key: "util::whole.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: "also opaque: é".to_owned(),
+            },
+            SeedModuleUnit {
+                key: "src/main.ae".to_owned(),
+                role: ProjectUnitRole::Main,
+                source: "entry opaque: ö".to_owned(),
+            },
+        ];
+        let bundle = encode_seed_module_catalog("src/main.ae", &["util".to_owned()], &units)
+            .expect("catalog framing must not parse opaque Aether source");
+        assert!(bundle.starts_with(
+            "aether.seed-modules/v1\nentry src/main.ae\npackages 1\npackage util\nunits 3\n"
+        ));
+        assert!(bundle.contains("unit lib/math.ae lib 14\n"));
+        assert!(bundle.contains("unit util::whole.ae lib 14\n"));
+        assert!(bundle.contains("unit src/main.ae main 15\nsource\n"));
+        let decoded =
+            decode_seed_module_catalog(&bundle).expect("Unicode scalar catalog must round-trip");
+        assert_eq!(decoded.entry_key, "src/main.ae");
+        assert_eq!(decoded.allowed_packages, ["util"]);
+        assert_eq!(decoded.units, units);
+
+        let wrong_scalar_count =
+            bundle.replacen("unit lib/math.ae lib 14\n", "unit lib/math.ae lib 15\n", 1);
+        let error = decode_seed_module_catalog(&wrong_scalar_count)
+            .expect_err("a source scalar count cannot consume the next catalog payload");
+        assert_eq!(error.code, "AE-MOD-001");
+
+        let foreign_entry =
+            encode_seed_module_catalog("util::whole.ae", &["util".to_owned()], &units)
+                .expect_err("catalog entry must remain local to the selected project");
+        assert_eq!(foreign_entry.code, "AE-MOD-006");
+
+        let unallowed_foreign = encode_seed_module_catalog("src/main.ae", &[], &units)
+            .expect_err("foreign source identity requires an explicit allowed package");
+        assert_eq!(unallowed_foreign.code, "AE-MOD-002");
+
+        let duplicate = encode_seed_module_catalog(
+            "src/main.ae",
+            &["util".to_owned()],
+            &[
+                units[0].clone(),
+                units[0].clone(),
+                SeedModuleUnit {
+                    key: "src/main.ae".to_owned(),
+                    role: ProjectUnitRole::Main,
+                    source: "entry".to_owned(),
+                },
+            ],
+        )
+        .expect_err("catalog must reject duplicate source identities");
+        assert_eq!(duplicate.code, "AE-MOD-005");
+    }
+
+    #[test]
+    fn seed_catalog_validator_accepts_inclusive_unit_and_aggregate_scalar_limits() {
+        let seed_source = fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../seed/aether_seed.ae"),
+        )
+        .expect("read seed source");
+        let compiler = crate::compile_to_bytecode(&seed_source)
+            .expect("bootstrap-compiles seed catalog scalar-limit validator")
+            .bytecode;
+
+        let maximum_source = "🙂".repeat(SEED_MODULES_MAX_UNIT_SCALARS);
+        let mut units = Vec::new();
+        for index in 0..(SEED_MODULES_MAX_TOTAL_SCALARS / SEED_MODULES_MAX_UNIT_SCALARS) {
+            let (key, role) = if index == 0 {
+                ("src/main.ae".to_owned(), ProjectUnitRole::Main)
+            } else {
+                (format!("lib/unit-{index}.ae"), ProjectUnitRole::Lib)
+            };
+            units.push(SeedModuleUnit {
+                key,
+                role,
+                source: maximum_source.clone(),
+            });
+        }
+        assert_eq!(
+            units.len() * SEED_MODULES_MAX_UNIT_SCALARS,
+            SEED_MODULES_MAX_TOTAL_SCALARS,
+            "test fixture must occupy the documented aggregate boundary exactly"
+        );
+        let catalog = encode_seed_module_catalog("src/main.ae", &[], &units)
+            .expect("host framing accepts documented inclusive scalar limits");
+        assert!(
+            catalog.len() <= crate::MAX_TEXT_BYTES,
+            "the worst-case UTF-8 catalog must fit the Aether Text invocation limit"
+        );
+        let validation = crate::invoke_bytecode(
+            &compiler,
+            "modules_catalog_valid",
+            &[crate::InvocationValue::Text(catalog)],
+        )
+        .expect("seed catalog boundary validator invokes");
+        assert_eq!(
+            validation.value,
+            crate::InvocationValue::Truth(true),
+            "seed must accept exactly the public per-unit and aggregate scalar limits; stdout: {}",
+            validation.stdout
+        );
+
+        let oversized_source = "🙂".repeat(SEED_MODULES_MAX_UNIT_SCALARS + 1);
+        let oversized_catalog = format!(
+            "{SEED_MODULES_SCHEMA}\nentry src/main.ae\npackages 0\nunits 1\nunit src/main.ae main {}\nsource\n{oversized_source}",
+            SEED_MODULES_MAX_UNIT_SCALARS + 1
+        );
+        let oversized_validation = crate::invoke_bytecode(
+            &compiler,
+            "modules_catalog_valid",
+            &[crate::InvocationValue::Text(oversized_catalog)],
+        )
+        .expect("seed oversized catalog validator invokes");
+        assert_eq!(
+            oversized_validation.value,
+            crate::InvocationValue::Truth(false),
+            "seed must reject one scalar past the public per-unit limit; stdout: {}",
+            oversized_validation.stdout
+        );
+    }
+
+    #[test]
+    fn bootstrap_seed_module_catalog_validator_accepts_closed_local_catalog() {
+        let seed_source = fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../seed/aether_seed.ae"),
+        )
+        .expect("read seed source");
+        let compiler = crate::compile_to_bytecode(&seed_source)
+            .expect("bootstrap-compiles seed catalog validator")
+            .bytecode;
+        let units = vec![
+            SeedModuleUnit {
+                key: "lib/math.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n"
+                    .to_owned(),
+            },
+            SeedModuleUnit {
+                key: "src/main.ae".to_owned(),
+                role: ProjectUnitRole::Main,
+                source: "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield call math.double 21\n"
+                    .to_owned(),
+            },
+        ];
+        let catalog = encode_seed_module_catalog("src/main.ae", &[], &units)
+            .expect("frame closed local catalog");
+        let validation = crate::invoke_bytecode(
+            &compiler,
+            "modules_catalog_valid",
+            &[crate::InvocationValue::Text(catalog)],
+        )
+        .expect("seed catalog validator invokes");
+        assert_eq!(
+            validation.value,
+            crate::InvocationValue::Truth(true),
+            "seed catalog validator stdout: {}",
+            validation.stdout
+        );
+    }
+
+    #[test]
+    fn bootstrap_seed_module_graph_orders_closed_local_catalog() {
+        let seed_source = fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../seed/aether_seed.ae"),
+        )
+        .expect("read seed source");
+        let compiler = crate::compile_to_bytecode(&seed_source)
+            .expect("bootstrap-compiles seed graph elaborator")
+            .bytecode;
+        let units = vec![
+            SeedModuleUnit {
+                key: "lib/math.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n"
+                    .to_owned(),
+            },
+            SeedModuleUnit {
+                key: "src/main.ae".to_owned(),
+                role: ProjectUnitRole::Main,
+                source: "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield call math.double 21\n"
+                    .to_owned(),
+            },
+        ];
+        let catalog = encode_seed_module_catalog("src/main.ae", &[], &units)
+            .expect("frame closed local catalog");
+        let graph = crate::invoke_bytecode(
+            &compiler,
+            "modules_graph_order",
+            &[crate::InvocationValue::Text(catalog)],
+        )
+        .expect("seed graph elaborator invokes");
+        assert_eq!(
+            graph.value,
+            crate::InvocationValue::Text("|lib/math.ae|src/main.ae|".to_owned()),
+            "seed graph elaborator stdout: {}",
+            graph.stdout
+        );
+    }
+
+    #[test]
+    fn bootstrap_seed_module_import_counter_is_bounded_for_local_import() {
+        let seed_source = fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../seed/aether_seed.ae"),
+        )
+        .expect("read seed source");
+        let compiler = crate::compile_to_bytecode(&seed_source)
+            .expect("bootstrap-compiles seed import counter")
+            .bytecode;
+        let entry = "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield call math.double 21\n";
+        let imports = crate::invoke_bytecode(
+            &compiler,
+            "modules_import_count",
+            &[crate::InvocationValue::Text(entry.to_owned())],
+        )
+        .expect("seed import counter invokes");
+        assert_eq!(imports.value, crate::InvocationValue::Whole(1));
+    }
+
+    #[test]
+    fn bootstrap_seed_compile_modules_elaborates_general_local_catalog() {
+        let seed_source = fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../seed/aether_seed.ae"),
+        )
+        .expect("read seed source");
+        let compiler = crate::compile_to_bytecode(&seed_source)
+            .expect("bootstrap-compiles seed with general module ABI")
+            .bytecode;
+        let library =
+            "world math\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n";
+        let entry = "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield call math.double 21\n";
+        let units = vec![
+            SeedModuleUnit {
+                key: "lib/math.ae".to_owned(),
+                role: ProjectUnitRole::Lib,
+                source: library.to_owned(),
+            },
+            SeedModuleUnit {
+                key: "src/main.ae".to_owned(),
+                role: ProjectUnitRole::Main,
+                source: entry.to_owned(),
+            },
+        ];
+        let catalog = encode_seed_module_catalog("src/main.ae", &[], &units)
+            .expect("frame closed local catalog");
+        let catalog_valid = crate::invoke_bytecode(
+            &compiler,
+            "modules_catalog_valid",
+            &[crate::InvocationValue::Text(catalog.clone())],
+        )
+        .expect("seed catalog framing validator invokes");
+        assert_eq!(
+            catalog_valid.value,
+            crate::InvocationValue::Truth(true),
+            "catalog preflight stdout: {}",
+            catalog_valid.stdout
+        );
+        let forged = crate::forge_modules_bytecode(&compiler, &catalog)
+            .expect("seed compile_modules accepts general local graph");
+        let seed_stdout = forged.stdout.clone();
+        let crate::InvocationValue::Bytes(bytecode) = forged.value else {
+            panic!("compile_modules must yield Bytes; seed stdout: {seed_stdout}");
+        };
+        crate::verify_bytecode(&bytecode).unwrap_or_else(|error| {
+            panic!("seed module artifact verifies: {error}; seed stdout: {seed_stdout}")
+        });
+        assert_eq!(
+            crate::run_bytecode(&bytecode)
+                .expect("seed module artifact runs")
+                .exit_code,
+            42
+        );
+
+        let expected = elaborate_in_memory_units(
+            &[
+                (
+                    "lib/math.ae".to_owned(),
+                    library.to_owned(),
+                    ProjectUnitRole::Lib,
+                ),
+                (
+                    "src/main.ae".to_owned(),
+                    entry.to_owned(),
+                    ProjectUnitRole::Main,
+                ),
+            ],
+            "src/main.ae",
+        )
+        .expect("reference elaboration");
+        let bootstrap = crate::compile_to_bytecode(&expected)
+            .expect("reference bootstrap")
+            .bytecode;
+        assert_eq!(
+            bytecode, bootstrap,
+            "general seed module elaboration must reproduce the established M11 artifact"
+        );
     }
 }

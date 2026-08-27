@@ -8,6 +8,7 @@ capabilities to artifacts.
 
     aether forge <compiler-artifact> <source-file> --output <artifact-file>
     aether forge-bundle <compiler-artifact> <bundle-file> --output <artifact-file>
+    aether forge-modules <compiler-artifact> <catalog-file> --output <artifact-file>
 
 All paths are local filesystem paths. The command does not call model or network
 services, a shell, or another compiler.
@@ -68,17 +69,38 @@ Product compilation embeds the checked-in seed artifact and uses this forge ABI
 through `compile_with_seed`. Seed self-host proofs require multi-generation
 byte identity under forge. See [SEED_PROFILE.md](SEED_PROFILE.md).
 
-## Multi-source product path (ADR-075/078/082/086)
+## General seed-native module catalog (GSM-001 / ADR-131)
 
-Product multi-file compilation uses the host multi-unit path:
+`aether forge-modules` is a closed named ABI, not an extension of ordinary
+`forge`. The verified compiler must expose:
 
-1. Detect `aether.multi-source/v1` envelope (or project/workspace elaborate).  
-2. Host-elaborate import graph into one single-world program.  
-3. Seed-forge that single Text via the standard `compile` weave above.  
+```aether
+weave compile_modules [borrow catalog: Text] -> Bytes:
+```
 
-Seed does **not** natively parse multi-source envelopes
-(`seed_native_multi_module_elaboration() == false`). A future seed-native
-multi-file ABI would require a new forge weave signature and Seed Profile claim.
+The catalog schema is `aether.seed-modules/v1`: deterministic scalar-framed
+metadata followed by opaque source payloads. The host does not parse the source
+payload, discover imports, resolve graph edges, inspect exports, mangle names,
+or rewrite calls. It verifies the supplied compiler and returned AETH exactly as
+for ordinary forge.
+
+For project/workspace and multi-source product compilation, the host uses the
+existing manifest/lock/path-jail authority only to select source files and
+direct package roots, then encodes a closed catalog. The verified seed owns
+M11/M22 import parsing, package-edge authorization, cycle detection, role and
+export checks, deterministic name mangling, qualified-call rewrite, source
+assembly, and AETH compilation. The retained Rust elaborator is a
+bootstrap/reference oracle only; it is not a normal product input.
+
+The protocol has hard limits of 256 candidate units, 64 package authorities,
+16,384 Unicode scalars per unit, 196,608 aggregate source scalars, 250,000
+wire scalars, 256-scalar identities, and a 66,000-step seed graph guard. The
+wire cap is deliberately at most one quarter of the existing 1,000,000-byte
+Aether Text invocation limit, so a worst-case four-byte Unicode scalar catalog
+is still invocable. Failures return the coarse seed-SPEAK `AE-SEED-017` packet.
+Full bootstrap diagnostic parity is not claimed. See [ADR-131](../historical%20docs/ADR-131-gsm-general-seed-module-catalog.md),
+[GSM design](DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md), and
+[GSM threat model](THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md).
 
 ## Bounded seed-native source-bundle paths (ADR-128/129/130 / SBP-001/002/003)
 
@@ -102,10 +124,9 @@ edges; v3 has three fixed edges, two of which form the merge fan-in. Neither is
 an arbitrary module graph. Profile failure SPEAKs `AE-SEED-016` and returns no
 runnable artifact.
 
-The profile does not alter the general M11/M22 multi-source rule above:
-`seed_native_multi_module_elaboration() == false` remains true, and ordinary
-projects, workspaces, raw imports, and `aether.multi-source/v1` use the
-host-elaborated route. See [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
+The bundle profiles remain deliberately fixed despite GSM-001's general bounded
+catalog path. They remain useful independent transport/API proofs and do not
+widen source or guest authority. See [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
 [ADR-129](../historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md),
 [ADR-130](../historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md),
 [SBP-002](../historical%20docs/DESIGN-SBP-002-SEED-NATIVE-TRANSITIVE-CHAIN-PROFILE.md),

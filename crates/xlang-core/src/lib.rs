@@ -50,20 +50,24 @@ pub use modules::{
     compile_product_multi_source_envelope, compile_product_multi_unit, compile_project_entry,
     compile_project_entry_with_packages, compile_project_modules,
     compile_project_modules_with_packages, decode_multi_source_envelope, decode_seed_bundle,
-    decode_seed_bundle_chain, decode_seed_bundle_fanin, elaborate_in_memory_units,
-    elaborate_project_entry, elaborate_project_entry_with_packages, elaborate_project_modules,
-    elaborate_project_modules_with_packages, encode_multi_source_envelope, encode_seed_bundle,
-    encode_seed_bundle_chain, encode_seed_bundle_fanin, mangle_weave, multi_module_authority_note,
-    product_multi_source_unit_digests_api, product_multi_source_unit_surface,
-    product_multi_source_unit_surface_api, run_project_tests, run_project_tests_with_grants,
-    source_requires_project_modules, validate_lib_module_source, MultiSourceEnvelopeSurface,
-    MultiSourceUnitSurface, ProjectTestReport, ProjectTestResult, SeedBundle,
+    decode_seed_bundle_chain, decode_seed_bundle_fanin, decode_seed_module_catalog,
+    elaborate_in_memory_units, elaborate_project_entry, elaborate_project_entry_with_packages,
+    elaborate_project_modules, elaborate_project_modules_with_packages,
+    encode_multi_source_envelope, encode_project_seed_module_catalog, encode_seed_bundle,
+    encode_seed_bundle_chain, encode_seed_bundle_fanin, encode_seed_module_catalog, mangle_weave,
+    multi_module_authority_note, product_multi_source_unit_digests_api,
+    product_multi_source_unit_surface, product_multi_source_unit_surface_api, run_project_tests,
+    run_project_tests_with_grants, source_requires_project_modules, validate_lib_module_source,
+    validate_seed_module_catalog, MultiSourceEnvelopeSurface, MultiSourceUnitSurface,
+    ProjectTestReport, ProjectTestResult, SeedBundle, SeedModuleCatalog, SeedModuleUnit,
     MULTI_SOURCE_ENVELOPE_SCHEMA, SEED_BUNDLE_CHAIN_MAX_TOTAL_SCALARS, SEED_BUNDLE_CHAIN_MAX_UNITS,
     SEED_BUNDLE_CHAIN_MAX_WIRE_SCALARS, SEED_BUNDLE_CHAIN_SCHEMA,
     SEED_BUNDLE_FANIN_MAX_TOTAL_SCALARS, SEED_BUNDLE_FANIN_MAX_UNITS,
     SEED_BUNDLE_FANIN_MAX_WIRE_SCALARS, SEED_BUNDLE_FANIN_SCHEMA, SEED_BUNDLE_MAX_TOTAL_SCALARS,
     SEED_BUNDLE_MAX_UNITS, SEED_BUNDLE_MAX_UNIT_SCALARS, SEED_BUNDLE_MAX_WIRE_SCALARS,
-    SEED_BUNDLE_SCHEMA,
+    SEED_BUNDLE_SCHEMA, SEED_MODULES_MAX_KEY_SCALARS, SEED_MODULES_MAX_PACKAGES,
+    SEED_MODULES_MAX_TOTAL_SCALARS, SEED_MODULES_MAX_UNITS, SEED_MODULES_MAX_UNIT_SCALARS,
+    SEED_MODULES_MAX_WIRE_SCALARS, SEED_MODULES_SCHEMA,
 };
 pub use native::{
     f_native_authorized, lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir,
@@ -2776,13 +2780,14 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 /// `AE-SEED-*` codes (ADR-046–055). Prefer [`product_diagnostics`] for structured
 /// product diagnostic collection without bytecode.
 ///
-/// **ADR-078:** multi-source forge envelopes (`aether.multi-source/v1`) are
-/// accepted on the product path via host elaborate + seed emit (not seed-native
-/// multi-file parse). **ADR-128:** the separate bounded
-/// `aether.seed-bundle/v1` profile goes directly to seed `compile_bundle`; it
-/// does not broaden the host-elaborated M11/M22 contract. Seed SPEAK stdout is
-/// scanned for `AETHER_SEED_ERROR` packets when forge returns (diagnostic merge);
-/// seed-binary diagnostic conformance remains residual.
+/// **GSM-001 / ADR-131:** multi-source envelopes, project/workspace builds, and
+/// explicit `aether.seed-modules/v1` records are host-framed into closed opaque
+/// catalogs, then seed-elaborated through `compile_modules`. Rust does not
+/// parse imports or assemble source on that product route. **ADR-128:** the
+/// separate bounded `aether.seed-bundle/v1` profile goes directly to seed
+/// `compile_bundle`. Seed SPEAK stdout is scanned for `AETHER_SEED_ERROR`
+/// packets when forge returns (diagnostic merge); seed-binary diagnostic
+/// conformance remains residual.
 pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> {
     debug_assert!(
         seed_interprets_m23_comptime_calls_natively(),
@@ -2798,7 +2803,14 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
     if looks_like_seed_bundle(source) {
         return compile_product_seed_bundle(source);
     }
-    // ADR-078: product multi-source envelope → host multi-unit forge.
+    // GSM-001: a scalar-indexed general module catalog reaches the dedicated
+    // seed ABI before raw-source preflights, because its opaque payload
+    // intentionally contains M11/M22 import surface.
+    if looks_like_seed_module_catalog(source) {
+        return compile_product_seed_modules(source);
+    }
+    // ADR-078/GSM-001: product multi-source envelope → host-framed catalog →
+    // seed-native graph forge.
     if product_multi_source_forge_envelope() && looks_like_multi_source_envelope(source) {
         return modules::compile_product_multi_source_envelope(source).map_err(|error| {
             CompilerError::new(
@@ -2860,9 +2872,9 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
 ///
 /// The v1 one-edge, v2 transitive-chain, and v3 two-leaf fan-in bundle schemas
 /// reach the verified seed `compile_bundle` weave unchanged. They are
-/// intentionally separate from general M11/M22 host elaboration; callers
-/// needing an arbitrary module graph continue to use the established project
-/// or multi-source route.
+/// intentionally separate from general M11/M22 catalog elaboration; callers
+/// needing a bounded arbitrary graph use the established project, workspace,
+/// multi-source, or explicit GSM-001 catalog route.
 pub fn compile_product_seed_bundle(bundle: &str) -> Result<Vec<u8>, CompilerError> {
     debug_assert!(
         seed_native_whole_library_bundle_profile(),
@@ -2883,10 +2895,20 @@ pub fn compile_product_seed_bundle(bundle: &str) -> Result<Vec<u8>, CompilerErro
     forge_product_seed_entry("compile_bundle", bundle)
 }
 
+/// GSM-001 product route for general bounded M11/M22 module catalogs.
+///
+/// The caller-selected catalog remains opaque to the host after framing. The
+/// verified Aether-written seed parses all source imports, resolves the graph,
+/// performs namespace elaboration, and returns verified AETH bytes.
+pub fn compile_product_seed_modules(catalog: &str) -> Result<Vec<u8>, CompilerError> {
+    forge_product_seed_entry("compile_modules", catalog)
+}
+
 fn forge_product_seed_entry(weave_name: &str, input: &str) -> Result<Vec<u8>, CompilerError> {
     let forged = match weave_name {
         "compile" => forge_bytecode(SEED_COMPILER_ARTIFACT, input),
         "compile_bundle" => forge_bundle_bytecode(SEED_COMPILER_ARTIFACT, input),
+        "compile_modules" => forge_modules_bytecode(SEED_COMPILER_ARTIFACT, input),
         _ => unreachable!("only closed seed forge entries are callable"),
     }
     .map_err(|error| {
@@ -2950,6 +2972,10 @@ fn looks_like_seed_bundle(source: &str) -> bool {
     source.starts_with(modules::SEED_BUNDLE_SCHEMA)
         || source.starts_with(modules::SEED_BUNDLE_CHAIN_SCHEMA)
         || source.starts_with(modules::SEED_BUNDLE_FANIN_SCHEMA)
+}
+
+fn looks_like_seed_module_catalog(source: &str) -> bool {
+    source.starts_with(modules::SEED_MODULES_SCHEMA)
 }
 
 /// BARP ADR-055: structured **product** diagnostic collection (seed path).
@@ -3256,8 +3282,9 @@ fn seed_reject_reserved_task_future_surface(source: &str) -> Option<String> {
     None
 }
 
-/// BARP ADR-055/056: single-file product path rejects raw multi-module surface.
-/// Multi-module product path is host elaborate + seed emit (`aether project build`).
+/// Unframed single-file product input rejects raw M11/M22 imports. Use a project,
+/// workspace, multi-source envelope, or explicit GSM-001 catalog so the host can
+/// frame selected source and the seed can own graph elaboration.
 fn seed_reject_raw_import_unit(source: &str) -> Option<String> {
     for (line_index, line) in source.lines().enumerate() {
         let trimmed = line.trim_start();
@@ -3265,7 +3292,7 @@ fn seed_reject_raw_import_unit(source: &str) -> Option<String> {
             return Some(format_seed_product_error(
                 "AE-SEED-012",
                 &format!(
-                    "line {}: raw import unit is multi-module surface — use `aether project build` (host elaborate + seed emit; seed does not elaborate multi-file natively)",
+                    "line {}: raw import unit requires a closed module catalog — use `aether project build`, `aether workspace build`, or `aether forge-modules`; the seed elaborates catalog-framed multi-module graphs",
                     line_index + 1
                 ),
             ));
@@ -3588,17 +3615,19 @@ pub const fn product_diagnostic_abi() -> bool {
     true
 }
 
-/// BARP ADR-056: multi-module product path is host elaborate + seed emit.
-/// Seed-native multi-file elaboration is **not** available (no multi-file forge ABI).
+/// Historical BARP ADR-056 tracker: the default product multi-module route no
+/// longer uses host elaboration. Rust retains an elaborator only as a
+/// bootstrap/reference oracle for dual-compare and recovery analysis.
 #[must_use]
 pub const fn host_elaborates_modules_seed_emits() -> bool {
-    true
+    false
 }
 
-/// BARP ADR-056 honesty: seed does **not** natively elaborate multi-module graphs.
+/// GSM-001: the verified seed natively elaborates every closed M11/M22 catalog
+/// within the published resource and capability bounds.
 #[must_use]
 pub const fn seed_native_multi_module_elaboration() -> bool {
-    false
+    true
 }
 
 /// ADR-128: the seed natively elaborates the deliberately bounded SBP-001
@@ -3669,15 +3698,15 @@ pub const fn product_seed_error_speak_format() -> bool {
     true
 }
 
-/// BARP ADR-075/078: multi-source forge envelope + in-memory multi-unit product forge
-/// (host elaborate + seed emit). Seed-native multi-file elaboration remains false.
+/// ADR-075/078 plus GSM-001: multi-source envelopes and in-memory multi-unit
+/// products are host-framed then seed-elaborated through the catalog ABI.
 #[must_use]
 pub const fn product_multi_source_forge_envelope() -> bool {
     true
 }
 
-/// BARP ADR-078: product `compile_product_bytecode` auto-detects multi-source
-/// envelopes and forges via host multi-unit path.
+/// ADR-078/GSM-001: product `compile_product_bytecode` auto-detects multi-source
+/// envelopes and frames them for seed-native graph elaboration.
 #[must_use]
 pub const fn product_compile_accepts_multi_source_envelope() -> bool {
     true
@@ -3697,10 +3726,16 @@ pub const fn seed_speak_error_protocol_stable() -> bool {
     true
 }
 
-/// BARP ADR-082 honesty: product multi-file forge is host elaborate + seed emit;
-/// seed does **not** natively parse multi-source envelopes.
+/// Historical ADR-082 tracker: the old host-elaborate product path is no longer
+/// active; GSM-001 catalog framing reaches seed-native multi-source elaboration.
 #[must_use]
 pub const fn product_multi_file_forge_host_path() -> bool {
+    false
+}
+
+/// GSM-001: product multi-source catalogs are elaborated by the verified seed.
+#[must_use]
+pub const fn product_multi_file_forge_seed_catalog_path() -> bool {
     true
 }
 
@@ -5681,6 +5716,19 @@ pub fn forge_bundle_bytecode(
     bundle: &str,
 ) -> Result<InvocationOutput, BytecodeError> {
     forge_bytecode_entry(compiler, "compile_bundle", "bundle", bundle)
+}
+
+/// Invokes the GSM-001 general seed-module compiler ABI.
+///
+/// The compiler artifact must expose compile_modules with one borrowed Text
+/// catalog parameter and Bytes result. The host treats the catalog as opaque
+/// Text and does not parse source imports, resolve its graph, mangle symbols,
+/// or elaborate units.
+pub fn forge_modules_bytecode(
+    compiler: &[u8],
+    catalog: &str,
+) -> Result<InvocationOutput, BytecodeError> {
+    forge_bytecode_entry(compiler, "compile_modules", "catalog", catalog)
 }
 
 fn forge_bytecode_entry(
@@ -18808,6 +18856,29 @@ mod tests {
         let missing_error = forge_bundle_bytecode(&missing, "aether.seed-bundle/v1\n")
             .expect_err("bundle forge must require the explicitly named entry");
         assert!(missing_error.message.contains("compile_bundle"));
+    }
+
+    #[test]
+    fn forge_modules_rejects_a_compiler_weave_without_the_required_borrowed_text_abi() {
+        let source = "world forge\n\nweave compile_modules [catalog: Text] -> Bytes:\n  bind artifact <- bytes \"\"\n  yield move artifact\n\nweave main [] -> Whole:\n  yield 0\n";
+        let compiler = compile_to_bytecode(source)
+            .expect("invalid module ABI fixture should compile as general Aether")
+            .bytecode;
+        let error = forge_modules_bytecode(&compiler, "aether.seed-modules/v1\n")
+            .expect_err("module forge must reject an owned Text compiler parameter");
+        assert!(
+            error.message.contains("[borrow catalog: Text] -> Bytes"),
+            "expected module ABI error, got {error}"
+        );
+
+        let missing = compile_to_bytecode(
+            "world forge\n\nweave compile [borrow source: Text] -> Bytes:\n  bind artifact <- bytes \"\"\n  yield move artifact\n\nweave main [] -> Whole:\n  yield 0\n",
+        )
+        .expect("ordinary compiler fixture should compile")
+        .bytecode;
+        let missing_error = forge_modules_bytecode(&missing, "aether.seed-modules/v1\n")
+            .expect_err("module forge must require the explicitly named entry");
+        assert!(missing_error.message.contains("compile_modules"));
     }
 
     #[test]

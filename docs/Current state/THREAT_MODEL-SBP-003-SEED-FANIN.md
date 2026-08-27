@@ -12,9 +12,10 @@ SBP-003 adds only `aether.seed-bundle/v3`: two independent pure `Whole` leaf
 libraries, one exact two-import merge library, and one main entry in fixed wire
 order. The existing verified seed `compile_bundle` parses that closed shape and
 compiles one generated single-world program. This does not expand or replace
-SBP-001/SBP-002. It does not establish general seed-native M11/M22, so ordinary
-projects, workspaces, raw imports, packages, and `aether.multi-source/v1`
-remain on their established host-elaborated route.
+SBP-001/SBP-002. It remains a fixed fan-in profile; GSM-001 separately provides
+bounded catalog-framed general M11/M22 graph elaboration for ordinary projects,
+workspaces, packages, and `aether.multi-source/v1` without widening this
+profile's capability boundary.
 
 The product compile path and `forge-bundle` read one explicit local file, pass
 opaque Text to the verified seed, and verify returned AETH before write or run.
@@ -29,7 +30,7 @@ No path contained in the bundle is opened by guest code.
 | `compile_bundle` artifact | Verified AETH and exact borrowed-Text/Bytes ABI before invocation. |
 | Generated single-world source | Created only after all profile checks and three qualified-call rewrites pass. |
 | Returned artifact Bytes | Independently AETH-verified before product return, CLI write, or VM execution. |
-| General M11/M22 route | Deliberately separate, preserving its existing host-elaboration boundary. |
+| General M11/M22 route | Deliberately separate GSM-001 catalog protocol with its own bounded seed-native authority and threat model. |
 
 ## Threats and controls
 
@@ -42,7 +43,7 @@ No path contained in the bundle is opened by guest code.
 | Merge binds wrong/private helper or hides an alias collision | Fixed leaf order, exact two imports, distinct safe aliases, one export each, and exact two-target call rewriting reject any other target. | Wrong import/order, alias collision, and private-call negative corpus. |
 | Text, resource, effect, or nursery source bypasses lexical rewriting | ASCII/LF constraint plus closed pure-Whole guard rejects Text quotes, resources, effects, nursery/task, record, shape, host, and foreign forms. | Hostile source-profile tests. |
 | Malicious compiler output bypasses ABI/artifact verification | Forge verifies the compiler ABI before invocation and AETH before exposing output to the CLI or VM. | Forge ABI and verifier regression suites. |
-| v3 is overstated as general seed-native modules | Current contracts retain the false general tracker and name one exact four-unit profile only. | ADR-130, validation matrix, core tracker test. |
+| v3 is overstated as the GSM-001 general protocol | Current contracts name one exact four-unit profile and distinguish GSM-001's separate bounded catalog authority. | ADR-130, validation matrix, core tracker test. |
 | Seed code gains ambient authority | `compile_bundle` receives only borrowed Text; no grant, callback, filesystem, shell, network, model, cache, registry, or native capability is installed. | Forge Contract and grant-free invocation tests. |
 
 ## Residual risk and non-goals

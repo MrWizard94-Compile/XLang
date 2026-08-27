@@ -48,7 +48,7 @@ raw-source evaluator (with no bootstrap materialization bridge).
 - The seed self-hosts, and the documented dual-compare corpus (shipped examples
   on the seed path, M2–M8 fixtures, M15 chaining, M19a release, M19b
   nursery+resource, M19d multi-weave arenas, M21 foreign-pilot, M23 pure
-  comptime helpers, modules via elaboration, etc.) produces bytecode
+  comptime helpers, GSM-001 catalog-framed modules, etc.) produces bytecode
   **byte-identical** to the Rust bootstrap where claimed in tests.
 
 Language surface **0.11** includes M2 resources, M4 `Error[Whole]`, M5 comptime,
@@ -64,28 +64,37 @@ RTP-001 ASCII Text runtime fast path; 0.35 adds PKG-001 optional local workspace
 locks; 0.36 adds `task weave`, `checkpoint`, AETH v12, and authoring v8; and
 0.37 adds M25 transparent local source-package pack, verify, publish, cache
 install, and cache verification without changing source, AETH, seed, VM, or
-guest authority.
+guest authority. Post-0.37 GSM-001 moves ordinary bounded M11/M22 graph
+elaboration onto the seed product path: the host frames manifest-authorized
+opaque source text, while the verified seed resolves imports, validates the
+graph, rewrites module boundaries, and emits AETH. It adds no guest capability,
+resolver, network, or AETH change.
 M19e adds no registry, network authority, guest cancellation API, or host
 capability. See
 [docs/AETHER_0.11.md](docs/Current%20state/AETHER_0.11.md),
 [docs/AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md), and [docs/SEED_PROFILE.md](docs/Current%20state/SEED_PROFILE.md).
 
-ADR-128/129/130 add separate, bounded seed-native source-bundle profiles under
-the same `compile_bundle [borrow bundle: Text] -> Bytes` ABI. v1 carries one
-pure Whole library and one entry; v2 carries one foundation library, one bridge
-library, and one entry in an exact transitive chain; v3 carries two independent
-pure Whole leaves, one merge library, and one entry in an exact two-leaf fan-in.
-The verified seed owns framing, import matching, name mangling, and call
-rewriting; the product route does not call the host module elaborator. This is
-**not** general seed-native M11/M22: ordinary project/workspace module graphs
-remain host-elaborated then seed-emitted. Use
-`aether compile examples\seed-bundle-fanin.aeb --output <artifact.aeth>` or
-`aether forge-bundle <compiler.aeth> <bundle.aeb> --output <artifact.aeth>`.
+ADR-128/129/130 retain separate, bounded seed-native source-bundle profiles
+under the same `compile_bundle [borrow bundle: Text] -> Bytes` ABI. v1 carries
+one pure Whole library and one entry; v2 carries one foundation library, one
+bridge library, and one entry in an exact transitive chain; v3 carries two
+independent pure Whole leaves, one merge library, and one entry in an exact
+two-leaf fan-in. GSM-001 is the general bounded M11/M22 companion ABI:
+`compile_modules [borrow catalog: Text] -> Bytes`. It carries a closed,
+scalar-framed catalog of up to 256 source units and 64 direct package
+authorities; the seed owns graph resolution, cycle/export/alias checks,
+mangling, and qualified-call rewriting. The host retains only manifest/lock,
+path-jail, UTF-8, and direct-dependency framing authority. Use
+`aether compile examples\seed-modules-general.aem --output <artifact.aeth>` or
+`aether forge-modules <compiler.aeth> <catalog.aem> --output <artifact.aeth>`.
 See [ADR-128](docs/historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
 [ADR-129](docs/historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md),
 [ADR-130](docs/historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md),
-[the SBP validation matrix](docs/Current%20state/SBP-VALIDATION-MATRIX.md), and
-[the SBP-003 threat model](docs/Current%20state/THREAT_MODEL-SBP-003-SEED-FANIN.md).
+[ADR-131](docs/historical%20docs/ADR-131-gsm-general-seed-module-catalog.md),
+[the GSM design](docs/Current%20state/DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md),
+[validation matrix](docs/Current%20state/GSM-VALIDATION-MATRIX.md), and
+[threat model](docs/Current%20state/THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md),
+and [delivery report](docs/historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md).
 
 BARP's bounded direct-seed diagnostic pilot now SPEAKs
 AE-SEED-003/004/005/006/007/010/011/012/013/014/015. Its task-checkpoint portion

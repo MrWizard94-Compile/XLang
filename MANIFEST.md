@@ -13,10 +13,12 @@ for the documented seed surface. Rust bootstrap remains recovery/oracle AST
 (`--bootstrap`, dual-compare, full `aether.ast/v8`) for
 including multi-weave arenas / resourceful total spawn callees
 (`examples/spawn-arena.ae`), M19e task frames, and the M21 foreign weave pilot.
-Multi-module and workspace build elaborate then seed-compile. ADR-128/129/130
-add separate exact v1 two-unit, v2 three-unit transitive, and v3 four-unit
-two-leaf fan-in source-bundle profiles that seed-elaborate internally; none
-changes the general M11/M22 host-elaboration contract.
+GSM-001 makes the default bounded M11/M22 project/workspace path catalog-framed
+by the host and seed-elaborated: the host enforces manifest/lock/path/UTF-8 and
+direct-package authority, while the seed parses imports, resolves the graph,
+rewrites module boundaries, and emits AETH. ADR-128/129/130 retain separate
+exact v1 two-unit, v2 three-unit transitive, and v3 four-unit two-leaf fan-in
+source-bundle profiles alongside that general bounded catalog path.
 For M23 source, the bootstrap validates the restricted pure call; the seed
 interprets raw `comptime bind <- call` under the D2a body subset and emits
 `COMPTIME_WHOLE` without a materialization rewrite. The product artifact is
@@ -305,12 +307,15 @@ profile, path mangle, imports, and qualified calls before assembling one source
 for its existing `compile` weave. The production route transports opaque bundle
 Text and does not call a host decoder or M11 elaborator. It has no language,
 AETH, VM, guest-capability, project-schema, resolver, package, or network
-expansion. General M11/M22 remains host elaborate + seed emit; see
+expansion. General bounded M11/M22 instead uses GSM-001 catalog framing plus
+seed graph elaboration; the fixed profiles remain independently supported; see
 [ADR-128](docs/historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
 [ADR-129](docs/historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md),
 [ADR-130](docs/historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md),
+[ADR-131](docs/historical%20docs/ADR-131-gsm-general-seed-module-catalog.md),
 [SBP-003](docs/historical%20docs/DESIGN-SBP-003-SEED-NATIVE-FANIN-PROFILE.md), and
-[the v3 threat model](docs/Current%20state/THREAT_MODEL-SBP-003-SEED-FANIN.md).
+[the GSM threat model](docs/Current%20state/THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md),
+with [GSM delivery evidence](docs/historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md).
 
 RTP-001 (package 0.34) is an implementation-only VM change. Runtime `Text`
 stores cached ASCII provenance; ASCII `measure`, `glyph`, `cut`, and `seek` use
@@ -462,18 +467,18 @@ operation vocabulary, and compatibility policy are in
 | **Seed (default)** | Default CLI `compile` (incl. seed rebuild ADR-067) / `check` / `format` / `structure` / `project format` + LSP diagnostics/format/symbols/hover/definition — product seed path (ADR-064–066) |
 | **Seed product API** | `compile_with_seed` / `product_diagnostics` / `product_surface_symbols` — never bootstrap |
 | **Structural product edits** | Top-level weave + weave-body statements + nested choose/while body lists + primitive records without bootstrap base AST (ADR-065/068/069/071) |
-| **Multi-module** | Host elaborate + seed emit (ADR-056); seed-native multi-file = false |
-| **SBP seed bundles** | v1 exact two-unit library -> entry, v2 exact three-unit foundation -> bridge -> entry, and v3 exact four-unit left leaf + right leaf -> merge -> entry profiles, framed bounded Text sent directly to seed `compile_bundle`; no host elaborator and no general module claim (ADR-128/129/130) |
+| **Multi-module** | GSM-001: host frames manifest-authorized, bounded opaque source catalog; seed parses/resolves/mangles/rewrites the reachable M11/M22 graph and emits AETH; Rust elaboration is recovery/reference oracle only (ADR-131) |
+| **SBP seed bundles** | v1 exact two-unit library -> entry, v2 exact three-unit foundation -> bridge -> entry, and v3 exact four-unit left leaf + right leaf -> merge -> entry profiles, framed bounded Text sent directly to seed `compile_bundle`; preserved separate APIs (ADR-128/129/130) |
 | **Bootstrap (recovery/oracle)** | `compile --bootstrap` dual-compare oracle; `check|format|structure --bootstrap` AST recovery; full `aether.ast/v8`; dual-compare tests/gate |
 | **Product seed-error packets** | SPEAK protocol + forge SPEAK merge (ADR-082–094/098/102/103/106); seed pilot 003/004/005/006/007/012/014/015, bounded lexical 003/007 plus canonical reserved-task prefixes 014 and exact task-checkpoint 015 detection; full matrix residual |
-| **Multi-source forge** | Product multi-file host path + unit digests (ADR-075–086/094/098); seed-native residual |
+| **Multi-source forge** | `aether.multi-source/v1`, project/workspace, and direct GSM catalog inputs frame closed source candidates then invoke seed `compile_modules`; unit digests remain host inspection metadata, not product elaboration authority (ADR-075–086/094/098, ADR-131) |
 | **F-NATIVE M35c–j** | AETH→C/object/LLVM/exe + probe + `--native-exe --target` closed target matrix; host dual-run, cross link-only (ADR-073–099) |
 | **F-REGISTRY M24b–i** | HMAC/Ed25519/HTTPS/rotation/policy/certs + date-checked X.509-lite CA store; `verify-cache` validates the store; no auto-fetch (ADR-074–100) |
 | **M25 local packages** | `pkg pack|verify|publish|install|verify-cache` — explicit local locked-source bundle/cache lifecycle; no resolver, network, or guest authority (ADR-107) |
 | **Task model** | ADR-081 design; surface/inventory (ADR-085/093/097); reserved 014; checkpoint required 015 (ADR-101) |
 | **F-NATIVE M35a/b** | `compile --native-c` — verified AETH → ISO C pure Whole + locals/arithmetic (ADR-059/062); VM remains default |
 | **F-REGISTRY M24a** | `registry pin-local` / `verify-cache` — offline digest pins only (ADR-060); no network |
-| **Forge** | Host ABI only: `compile [borrow source: Text] -> Bytes`; SBP-001/SBP-002/SBP-003 additionally require `compile_bundle [borrow bundle: Text] -> Bytes` |
+| **Forge** | `compile [borrow source: Text] -> Bytes`; SBP-001/SBP-002/SBP-003 `compile_bundle [borrow bundle: Text] -> Bytes`; GSM-001 `compile_modules [borrow catalog: Text] -> Bytes` |
 
 The seed artifact is checked in at `seed/aether_seed.aeth` and embedded as
 `SEED_COMPILER_ARTIFACT` for offline deterministic product builds.

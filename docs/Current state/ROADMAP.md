@@ -19,6 +19,7 @@ it is not a current status source or authorization.
 | Compiler authority | Seed-hosted default compile/check/format/structure; Rust bootstrap is recovery, full AST, and dual-compare oracle. |
 | Language/runtime | Typed Whole/Truth/Text/Bytes, records, bounded resources/effects/layout/nurseries/tasks, and pure bounded comptime. |
 | Projects and tooling | Offline projects/workspaces/modules, structural authoring v8, LSP, test reports, formatting, and local release/package verification. |
+| Module authority | GSM-001 host-framed, seed-native bounded M11/M22 graph elaboration; Rust elaboration is recovery/reference oracle only. |
 | Packages | Locked local source packages and cross-package imports; no implicit resolver, network fetch, or guest authority. |
 | Host/system boundary | Explicit grant-backed I/O, Whole-only foreign pilot, verifier-first VM, and optional verified-AETH native pilots. |
 | Evidence | Deterministic artifacts, verifier/hostile-artifact tests, seed/bootstrap corpus identity, and release consumer verification. |
@@ -97,32 +98,37 @@ it is not a current status source or authorization.
 13. **BARP ADR-128 — release verified.** The
    bounded `aether.seed-bundle/v1` profile sends exactly one pure Whole library
    and one entry directly to seed `compile_bundle`; the seed owns the frame and
-   one-edge elaboration. It does not make general M11/M22 seed-native. See
+   one-edge elaboration. It remains a fixed profile alongside GSM-001. See
    [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md).
 14. **BARP ADR-129 — release verified.** The
     bounded `aether.seed-bundle/v2` profile sends exactly one foundation library,
     bridge library, and entry directly to seed `compile_bundle`; the seed owns
-    both fixed import edges. It does not make general M11/M22 seed-native. See
+    both fixed import edges. It remains a fixed profile alongside GSM-001. See
     [ADR-129](../historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md).
 15. **BARP ADR-130 — release verified.** The bounded
     `aether.seed-bundle/v3` profile sends exactly two pure Whole leaf libraries,
     one merge library, and one entry directly to seed `compile_bundle`; the seed
-    owns the three fixed import edges of the two-leaf fan-in. It does not make
-    general M11/M22 seed-native. See
+    owns the three fixed import edges of the two-leaf fan-in. It remains a fixed
+    profile alongside GSM-001. See
     [ADR-130](../historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md).
-16. **BARP next design selection (current).** Choose exactly one broader
-    AE-SEED-011 or AE-SEED-013 shape with an explicit
-    false-positive boundary, or separately design a new bounded seed-native
-    profile. Do not infer general parser/type-checker or graph-resolver authority
-    from SBP-001/SBP-002/SBP-003.
-17. **Mainstream language/library vertical.** Select one controlled generic,
+16. **BARP ADR-131 / GSM-001 — full gate passed 2026-08-27.** A
+    closed scalar-framed catalog gives the seed bounded general M11/M22
+    acyclic graph authority while the host retains only manifest/lock/path/UTF-8
+    and direct-package framing. Complete the full proof set and retain the
+    no-filesystem/no-resolver/no-full-diagnostic-parity boundary. See
+    [ADR-131](../historical%20docs/ADR-131-gsm-general-seed-module-catalog.md).
+17. **BARP next design selection (after GSM-001).** Choose exactly one broader
+    AE-SEED-011 or AE-SEED-013 shape with an explicit false-positive boundary.
+    Any change to GSM bounds, module normal form, package authority, or
+    diagnostics requires a separate design, threat-model delta, and evidence.
+18. **Mainstream language/library vertical.** Select one controlled generic,
     data-model, effect, or standard-library ergonomics increment only after its
     grammar, seed, verifier, VM, authoring, compatibility, and limit design are
     written and accepted.
-18. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
+19. **Daily-project maturity.** Add repeatable examples, compatibility/upgrade
     fixtures, and offline project workflows before expanding surface area merely
     for feature count.
-19. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
+20. **Authorized law-fork verticals.** F-NATIVE M35k+ and F-REGISTRY beyond
    M24i are available for a next scoped ADR, threat-model update, validation
    matrix, and release proof. Neither is an automatic expansion of current
    authority.
@@ -134,11 +140,11 @@ Current direct seed-SPEAK packets cover a deliberately bounded subset of
 AE-SEED-003/004/005/006/007/010/011/012/013/014/015. ADR-128 separately proves
 one exact two-unit source-bundle profile, ADR-129 adds an exact foundation ->
 bridge -> entry profile, and ADR-130 adds an exact left leaf + right leaf ->
-merge -> entry fan-in profile; none is general seed-native multi-file
-elaboration. The residual is not a missing feature claim: full seed diagnostic
-conformance and general seed-native module graphs remain unproven. The product
-multi-file contract remains host elaboration plus seed emission outside the
-explicit bundle ABI.
+merge -> entry fan-in profile. ADR-131 / GSM-001 adds the default bounded
+general M11/M22 catalog path: the host frames manifest-authorized closed source
+while the seed resolves the graph. The remaining residual is full seed
+diagnostic conformance, dynamic/unbounded graph discovery, additional package
+authority, and any language-surface expansion; none is inferred from GSM-001.
 
 ## Law-fork boundary
 

@@ -12,10 +12,10 @@ SBP-002 adds only `aether.seed-bundle/v2`: one scalar-framed foundation
 library, bridge library, and main entry in exact dependency order. The existing
 verified seed `compile_bundle [borrow bundle: Text] -> Bytes` parses that
 specific shape and compiles a generated one-world program. This document does
-not expand or replace SBP-001's v1 threat model. It does not claim general
-seed-native M11/M22: the public general tracker remains false and ordinary
-projects, workspaces, raw imports, and `aether.multi-source/v1` remain on their
-established host-elaborated route.
+not expand or replace SBP-001's v1 threat model. It remains a fixed three-unit
+profile. GSM-001 separately owns bounded catalog-framed M11/M22 graph
+elaboration for ordinary projects, workspaces, and `aether.multi-source/v1`;
+this profile does not widen that general protocol.
 
 The product compile path and `forge-bundle` read one explicit local file, pass
 opaque Text to the verified seed, and verify returned AETH before write or run.
@@ -30,7 +30,7 @@ No path within the bundle is opened by guest code.
 | `compile_bundle` artifact | Verified AETH and exact borrowed-Text/Bytes ABI before invocation. |
 | Generated single-world source | Created only after all fixed-profile checks and call rewrites pass. |
 | Returned artifact Bytes | Independently AETH-verified before product return, CLI write, or VM execution. |
-| General M11/M22 route | Deliberately separate, preserving its existing host-elaboration boundary. |
+| General M11/M22 route | Deliberately separate GSM-001 catalog protocol with its own bounded seed-native authority and threat model. |
 
 ## Threats and controls
 
@@ -43,7 +43,7 @@ No path within the bundle is opened by guest code.
 | A bridge targets a private, wrong, or transposed dependency | Exact wire order, exact import path/alias parsing, one exported helper per library, and qualified-call rewriting reject any other target. | SBP-013, SBP-014. |
 | Text, resource, effect, or nursery syntax confuses lexical rewriting or imports authority | The narrow source profile rejects its unsafe lexical forms before assembly; unsupported input fails instead of receiving generalized parser treatment. | SBP-014, source-profile negatives. |
 | A malicious compiler output bypasses verification or abuses a mismatched ABI | Forge verifies compiler ABI before invocation and verifies returned AETH before exposing Bytes to the CLI. | SBP-001, SBP-008, named-forge tests. |
-| v2 is represented as general seed-native modules | Current contracts retain the false general tracker and name exactly one three-unit chain profile. | SBP-015, ADR-129, current contracts. |
+| v2 is represented as the GSM-001 general protocol | Current contracts name exactly one three-unit chain profile and distinguish GSM-001's separate bounded catalog authority. | SBP-015, ADR-129, current contracts. |
 | Seed code gains ambient authority | `compile_bundle` receives only borrowed Text; no grant, callback, filesystem, shell, network, model, cache, registry, or native capability is installed. | SBP-010, Forge Contract. |
 
 ## Residual risk and non-goals

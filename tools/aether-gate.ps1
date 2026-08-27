@@ -6,8 +6,8 @@
   Runs pack verify (when found), fmt, workspace Clippy with warnings denied,
   tests, example dual-compare, host-pilot run, project verification, and the
   M25 local package pack/verify/publish/install lifecycle. It also proves the
-  closed ADR-128/129/130 seed-bundle profiles through both product and external
-  named-forge routes.
+  closed ADR-128/129/130 seed-bundle profiles and the general GSM-001
+  seed-module catalog through both product and external named-forge routes.
   -Mode full also rebuilds seed via bootstrap + forge and checks hash identity.
   -Mode release adds a release build, a version-derived local package, consumer
   verification, and a negative package-integrity check.
@@ -249,6 +249,36 @@ foreach ($bundleFixture in $bundleFixtures) {
     }
     Write-Host "  $($bundleFixture.Name): product ≡ named forge, program exit $($bundleFixture.ExpectedExit) OK"
 }
+
+# --- General seed-native M11/M22 catalog ---
+# GSM-001 is intentionally not a fixed bundle topology. The checked-in fixture
+# carries a six-unit candidate catalog with local fan-in, one direct M22 import,
+# and an unreachable lib. The host forwards it as opaque Text to compile_modules;
+# the seed resolves the reachable graph and emits the verified artifact.
+Write-Step "general seed-native module catalog (GSM-001 product + named forge)"
+$modulesFixture = Join-Path $examplesDir "seed-modules-general.aem"
+if (-not (Test-Path -LiteralPath $modulesFixture -PathType Leaf)) {
+    Fail "missing GSM-001 seed module catalog fixture: $modulesFixture"
+}
+$modulesProduct = Join-Path $outDir "seed-modules-general.product.aeth"
+$modulesForged = Join-Path $outDir "seed-modules-general.forged.aeth"
+cargo run -q -p aether-cli -- compile $modulesFixture --output $modulesProduct
+if ($LASTEXITCODE -ne 0) { Fail "GSM-001 product compile failed" }
+$modulesRunLog = Join-Path $outDir "seed-modules-general.run.txt"
+cargo run -q -p aether-cli -- run $modulesProduct *>&1 | Tee-Object -FilePath $modulesRunLog | Out-Host
+if ($LASTEXITCODE -ne 0) { Fail "GSM-001 product run failed" }
+$modulesRunText = Get-Content -LiteralPath $modulesRunLog -Raw
+if ($modulesRunText -notmatch "exited with 85\b") {
+    Fail "GSM-001 seed module catalog expected program exit 85"
+}
+cargo run -q -p aether-cli -- forge-modules $bundleCompiler $modulesFixture --output $modulesForged
+if ($LASTEXITCODE -ne 0) { Fail "GSM-001 named module forge failed" }
+$modulesProductHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $modulesProduct).Hash
+$modulesForgedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $modulesForged).Hash
+if ($modulesProductHash -ne $modulesForgedHash) {
+    Fail "GSM-001 product≠named-forge: product=$modulesProductHash forge=$modulesForgedHash"
+}
+Write-Host "  GSM-001 six-unit local+M22 catalog: product ≡ named forge, program exit 85 OK"
 
 # --- Project verify (single-unit + multi-unit) ---
 Write-Step "project verify examples/project"

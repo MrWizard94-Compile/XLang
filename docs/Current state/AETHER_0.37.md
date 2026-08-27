@@ -1,6 +1,7 @@
 # Aether 0.37 Toolchain Contract (M25 local package publication)
 
 **Status:** Current workspace package contract
+**Updated:** 2026-08-27 — GSM-001 / ADR-131 post-contract product-path authority reduction
 **Language surface:** Aether **0.11**, unchanged
 **Artifact output:** AETH **v11** for non-task source and **v12** for valid M19e task-frame source, unchanged
 **Authoring:** `aether.ast/v8`, `aether.edit/v8`, `aether.diagnostic/v8`, unchanged
@@ -34,10 +35,14 @@ add separately versioned, bounded seed-native source-bundle profiles under
 library plus one entry; v2 parses one foundation library, one bridge library,
 and one entry in an exact transitive chain; and v3 parses two pure Whole leaves,
 one merge library, and one entry in an exact two-leaf fan-in. All emit
-established M11-compatible artifacts without host source elaboration. They are
-not general seed-native M11/M22 and do not change M25, language syntax, AETH,
-verifier, VM, project schema, or guest capabilities. See [the SBP validation
-matrix](SBP-VALIDATION-MATRIX.md) and [the SBP-003 threat model](THREAT_MODEL-SBP-003-SEED-FANIN.md).
+established M11-compatible artifacts without host source elaboration. They
+remain distinct fixed APIs. Post-0.37 GSM-001 / ADR-131 separately adds the
+bounded general `aether.seed-modules/v1` catalog route for ordinary M11/M22
+project/workspace graphs; it changes neither M25's package protocol nor
+language syntax, AETH, verifier, VM, project schema, or guest capabilities.
+See [the SBP validation matrix](SBP-VALIDATION-MATRIX.md),
+[GSM matrix](GSM-VALIDATION-MATRIX.md), and
+[GSM threat model](THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md).
 
 ## What changed
 
@@ -127,8 +132,9 @@ publication never replaces a conflicting cached identity.
 | Existing Aether source | Unchanged; package operations do not compile or reinterpret guest source. |
 | AETH v4–v12 inputs | Unchanged verifier/VM compatibility behavior. |
 | Existing project/workspace files | Unchanged schemas and commands; package use remains an explicit workspace step. |
-| Seed artifact | M25 itself has no seed interface or bytecode surface; the current checked-in seed also includes separately documented BARP diagnostic pilots. |
-| ADR-128/129/130 source bundles | Separate bounded v1 library -> entry, v2 foundation -> bridge -> entry, and v3 left leaf + right leaf -> merge -> entry `compile_bundle` profiles only; general projects/workspaces stay host-elaborated and seed-native multi-module remains false. |
+| Seed artifact | M25 itself has no seed interface or bytecode surface; the current checked-in seed also includes separately documented BARP diagnostic pilots and post-0.37 GSM-001 `compile_modules`. |
+| ADR-128/129/130 source bundles | Separate bounded v1 library -> entry, v2 foundation -> bridge -> entry, and v3 left leaf + right leaf -> merge -> entry `compile_bundle` profiles. GSM-001 separately provides bounded general catalog-framed M11/M22 project/workspace elaboration. |
+| GSM-001 | Post-0.37 `aether.seed-modules/v1` closed catalog / `compile_modules` ABI; host frames manifest-authorized bytes and direct package authority, seed resolves graph; no M25 schema, resolver, network, or guest-capability expansion. |
 | F-REGISTRY | Separate law-fork functionality; M25 performs no fetch, URL handling, signature trust, or resolver action. |
 
 ## Explicit non-goals

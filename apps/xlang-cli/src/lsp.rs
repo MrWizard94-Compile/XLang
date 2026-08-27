@@ -312,7 +312,7 @@ pub fn collect_diagnostics(text: &str) -> Vec<Value> {
             "severity": 3,
             "source": "aether",
             "code": "AE-SEED-012",
-            "message": "import unit: multi-module product path is `aether project build` (host elaborate + seed emit; ADR-056). Single-file product/LSP cannot elaborate imports.",
+            "message": "import unit: single-file product/LSP input requires a closed catalog. Use `aether project build` or `aether workspace build`; GSM-001 frames selected source and the seed elaborates the graph.",
         })];
     }
     // ADR-058: product diagnostics primary (seed path AE-SEED codes).

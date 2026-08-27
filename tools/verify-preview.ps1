@@ -5,7 +5,7 @@
 .DESCRIPTION
   Validates exact package membership and SHA-256SUMS, the release metadata and
   CLI version, then exercises the shipped v11/v12, host, bounded seed-bundle,
-  project, workspace, authoring, M25 local-package, and path-confinement
+  GSM-001 seed-module catalog, project, workspace, authoring, M25 local-package, and path-confinement
   surfaces without a source checkout.
 
 .PARAMETER PackageRoot
@@ -214,6 +214,7 @@ function Assert-RequiredPackageFiles([string]$Root, [string]$Version) {
         "examples/seed-bundle-whole.aeb",
         "examples/seed-bundle-chain.aeb",
         "examples/seed-bundle-fanin.aeb",
+        "examples/seed-modules-general.aem",
         "examples/project/aether.project.json",
         "examples/workspace/aether.workspace.json",
         "examples/package-publish/source/aether.project.json",
@@ -222,6 +223,9 @@ function Assert-RequiredPackageFiles([string]$Root, [string]$Version) {
         "docs/Current state/CHANGELOG-0.37.md",
         "docs/Current state/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md",
         "docs/Current state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md",
+        "docs/Current state/DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md",
+        "docs/Current state/GSM-VALIDATION-MATRIX.md",
+        "docs/Current state/THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md",
         "docs/Current state/SBP-VALIDATION-MATRIX.md",
         "docs/Current state/THREAT_MODEL-SBP-002-SEED-CHAIN.md",
         "docs/Current state/THREAT_MODEL-SBP-003-SEED-FANIN.md"
@@ -293,6 +297,38 @@ function Invoke-SeedBundleExample([string]$Executable, [string]$Root, [string]$W
     }
 }
 
+function Invoke-SeedModulesExample([string]$Executable, [string]$Root, [string]$WorkRoot, [string]$CatalogRelativePath, [int]$ExpectedProgramExit, [string]$Version) {
+    $catalogPath = Get-ConfinedPackagePath $Root $CatalogRelativePath "seed-module catalog path"
+    $seedPath = Get-ConfinedPackagePath $Root "seed/aether_seed.aeth" "seed compiler path"
+    $stem = [System.IO.Path]::GetFileNameWithoutExtension($catalogPath)
+    $productArtifact = Join-Path $WorkRoot "$stem.product.aeth"
+    $forgedArtifact = Join-Path $WorkRoot "$stem.forged.aeth"
+
+    & $Executable compile $catalogPath --output $productArtifact | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Fail "product GSM-001 compile failed for $CatalogRelativePath"
+    }
+    $runOutput = & $Executable run $productArtifact 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        Fail "product GSM-001 run failed for $CatalogRelativePath"
+    }
+    $expectedLine = "Aether $Version exited with $ExpectedProgramExit"
+    if (-not $runOutput.Contains($expectedLine)) {
+        Fail "$CatalogRelativePath expected '$expectedLine'"
+    }
+
+    & $Executable forge-modules $seedPath $catalogPath --output $forgedArtifact | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Fail "named GSM-001 forge failed for $CatalogRelativePath"
+    }
+    $productHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $productArtifact).Hash
+    $forgedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $forgedArtifact).Hash
+    if ($productHash -ne $forgedHash) {
+        Fail "$CatalogRelativePath product≠named-forge: product=$productHash forge=$forgedHash"
+    }
+    Write-Host "  $CatalogRelativePath product ≡ named forge, program exit $ExpectedProgramExit OK"
+}
+
 $Package = Resolve-PackageRoot
 Set-Location $Package
 Write-Host "Package root: $Package"
@@ -339,6 +375,9 @@ try {
     Invoke-SeedBundleExample $Executable $Package $workRoot "examples/seed-bundle-chain.aeb" 84 ([string]$release.packageVersion)
     Invoke-SeedBundleExample $Executable $Package $workRoot "examples/seed-bundle-fanin.aeb" 84 ([string]$release.packageVersion)
     Write-Host "  v1 one-edge, v2 transitive-chain, and v3 fan-in product/named-forge identity OK"
+
+    Write-Host "=== GSM-001 general seed-module catalog ===" -ForegroundColor Cyan
+    Invoke-SeedModulesExample $Executable $Package $workRoot "examples/seed-modules-general.aem" 85 ([string]$release.packageVersion)
 
     Write-Host "=== v12 active-frame cancellation ===" -ForegroundColor Cyan
     [void](Invoke-Example $Executable $Package $workRoot "examples/active-cancel.ae" 9 ([string]$release.packageVersion))

@@ -15,8 +15,8 @@ The package also ships three closed seed-native source-bundle profiles through
 `compile_bundle [borrow bundle: Text] -> Bytes`: v1 is one pure Whole library
 plus one entry; v2 is one foundation library plus one bridge library plus one
 entry; and v3 is two pure Whole leaves plus one merge library plus one entry.
-They are not general module resolution; normal project/workspace graphs remain
-host-elaborated then seed-emitted.
+They remain fixed bundle APIs. GSM-001 separately provides bounded general
+catalog-framed M11/M22 project/workspace resolution through the seed.
 
 ## Quick start
 
@@ -63,6 +63,24 @@ Both artifacts are verified before write. The program reports exit 84, and the
 two artifacts must have identical SHA-256 values. Bundle paths are source
 identity only; no bundle-internal path is opened by the guest compiler.
 
+## General seed-module catalog example
+
+GSM-001 demonstrates the ordinary bounded M11/M22 route with an irregular
+six-unit catalog: local fan-in, one direct M22 package import, and one
+unreachable candidate library. The host transports the caller-selected catalog
+as opaque Text; the seed resolves the graph and emits verified AETH:
+
+```powershell
+.\aether.exe compile .\examples\seed-modules-general.aem --output .\seed-modules-general.aeth
+.\aether.exe run .\seed-modules-general.aeth
+.\aether.exe forge-modules .\seed\aether_seed.aeth .\examples\seed-modules-general.aem --output .\seed-modules-general-forged.aeth
+```
+
+The program reports exit 85. Both artifacts must have identical SHA-256 values
+and are verified before write. The catalog has fixed scalar/resource limits and
+does not grant the seed filesystem discovery, a resolver, network, or any guest
+capability.
+
 ## Verify this preview
 
 ```powershell
@@ -70,8 +88,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\verify-preview.ps1
 ```
 
 The verifier checks SHA-256SUMS and release metadata, starts the executable,
-validates seed/VM and project/workspace behavior, all bounded bundle product
-and named-forge routes, and exercises pack, verify, idempotent publish, cache
+validates seed/VM and project/workspace behavior, bounded bundle and GSM-001
+product/named-forge routes, and exercises pack, verify, idempotent publish, cache
 verification, both install paths, and installed project verification in a
 temporary local directory.
 
@@ -98,6 +116,10 @@ file authority; host I/O remains operator-granted.
 - [M25 threat model](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md)
 - [SBP validation matrix](docs/Current%20state/SBP-VALIDATION-MATRIX.md)
 - [SBP-003 fan-in ADR](docs/historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md)
+- [GSM-001 design](docs/Current%20state/DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md)
+- [GSM-001 matrix](docs/Current%20state/GSM-VALIDATION-MATRIX.md)
+- [GSM-001 threat model](docs/Current%20state/THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md)
+- [GSM-001 delivery report](docs/historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md)
 - [SBP-003 threat model](docs/Current%20state/THREAT_MODEL-SBP-003-SEED-FANIN.md)
 - [Release notes](docs/Current%20state/RELEASE_NOTES-0.37-LOCAL-PACKAGES.md)
 

@@ -12,7 +12,7 @@ use aether_core::{
     apply_edit_cli_trusts_product_accept, apply_structural_edit, canonical_ast,
     compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
     compile_workspace_package, encode_x509_lite_pem, fetch_signed_package, forge_bundle_bytecode,
-    forge_bytecode, format_project, format_source, format_source_product,
+    forge_bytecode, forge_modules_bytecode, format_project, format_source, format_source_product,
     install_certified_signing_key, install_package_bundle, install_package_from_cache,
     install_trust_key, install_trust_root, issue_x509_lite_certificate, lower_verified_aeth_to_c,
     lower_verified_aeth_to_llvm_ir, lower_verified_aeth_to_llvm_object,
@@ -43,10 +43,10 @@ fn usage() {
         "M25 offline local packages:\n  aether pkg pack <aether.project.json> --output <bundle-dir>\n  aether pkg verify <bundle-dir>\n  aether pkg publish <bundle-dir> --cache <cache-dir>\n  aether pkg install <bundle-dir> --output <package-dir>\n  aether pkg install --cache <cache-dir> --name <name> --version <version> --output <package-dir>\n  aether pkg verify-cache <cache-dir>\nBundles contain verified Aether source only; cache and install paths stay local and are never network-resolved."
     );
     eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c|--native-exe [--target <triple>]]\n  aether native probe\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether registry issue-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry store-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry verify-x509-lite-store <cache-root>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether forge-bundle <compiler-artifact> <bundle-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources, and recognizes the bounded ADR-128 aether.seed-bundle/v1 profile without host module elaboration.\nforge-bundle invokes only compile_bundle [borrow bundle: Text] -> Bytes on a caller-selected verified compiler artifact.\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build elaborates import unit / export weave graphs then seed-compiles (M11b; dual-compare is test/oracle only).\nproject test elaborates each role:test unit as entry (M11b dual-compare), pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build elaborates one package main cone with M22 import unit from package (depends_on only), seed dual-compare; locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-exe --target <triple> for the closed F-NATIVE M35j matrix; host targets retain dual-run and cross targets are link-only.\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b+; issue-x509-lite is M24h; store-x509-lite / verify-x509-lite-store are M24i (not full RFC 5280)."
+        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c|--native-exe [--target <triple>]]\n  aether native probe\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether registry issue-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry store-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry verify-x509-lite-store <cache-root>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether forge-bundle <compiler-artifact> <bundle-file> --output <artifact-file>\n  aether forge-modules <compiler-artifact> <catalog-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources and recognizes the bounded ADR-128/129/130 seed-bundle profiles plus GSM-001 aether.seed-modules/v1 catalogs.\nforge-bundle invokes only compile_bundle [borrow bundle: Text] -> Bytes; forge-modules invokes only compile_modules [borrow catalog: Text] -> Bytes, each on a caller-selected verified compiler artifact.\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build frames its manifest-selected source catalog; the seed resolves import unit / export weave graphs and emits AETH (GSM-001; dual-compare is test/oracle only).\nproject test frames each role:test entry catalog, pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build frames one package main catalog with M22 import unit from package (depends_on only); the seed resolves the graph and locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-exe --target <triple> for the closed F-NATIVE M35j matrix; host targets retain dual-run and cross targets are link-only.\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b+; issue-x509-lite is M24h; store-x509-lite / verify-x509-lite-store are M24i (not full RFC 5280)."
     );
     eprintln!(
-        "Bounded seed-bundle profiles: ADR-128 v1 accepts one pure Whole library -> entry; ADR-129 v2 accepts foundation -> bridge -> entry; ADR-130 v3 accepts left leaf + right leaf -> two-import merge -> entry. All remain separate from general M11/M22 host elaboration."
+        "Bounded seed-bundle profiles: ADR-128 v1 accepts one pure Whole library -> entry; ADR-129 v2 accepts foundation -> bridge -> entry; ADR-130 v3 accepts left leaf + right leaf -> two-import merge -> entry. GSM-001 is the separate general bounded seed-native M11/M22 catalog path."
     );
 }
 
@@ -577,6 +577,35 @@ fn forge_bundle(
     Ok(())
 }
 
+/// Invoke the GSM-001 general seed-module forge ABI on one caller-selected catalog file.
+///
+/// The core verifies both the supplied compiler and returned artifact. This CLI
+/// layer reads only explicit paths and forwards the catalog as opaque Text; it
+/// does not parse Aether source, resolve imports, or rewrite unit contents.
+fn forge_modules(
+    compiler_path: &Path,
+    catalog_path: &Path,
+    output_path: &Path,
+) -> Result<(), String> {
+    let compiler = read_artifact(compiler_path)?;
+    let catalog = read_source(catalog_path)?;
+    let output = forge_modules_bytecode(&compiler, &catalog).map_err(|error| error.to_string())?;
+    if !output.stdout.is_empty() {
+        eprint!("{}", output.stdout);
+    }
+    let InvocationValue::Bytes(artifact) = output.value else {
+        return Err("the compile_modules weave must yield Bytes".to_owned());
+    };
+    write_artifact(output_path, artifact)?;
+    println!(
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} forged seed module catalog {} with {} to {}",
+        catalog_path.display(),
+        compiler_path.display(),
+        output_path.display()
+    );
+    Ok(())
+}
+
 fn execute_artifact(artifact_path: &Path, grants: HostGrantConfig) -> Result<(), String> {
     let artifact = read_artifact(artifact_path)?;
     let pure = grants.read_roots.is_empty()
@@ -984,7 +1013,7 @@ fn project_build(project_path: &Path, output_path: &Path) -> Result<(), String> 
     write_artifact(output_path, bytecode)?;
     println!("{}", multi_module_authority_note());
     println!(
-        "{LANGUAGE_NAME} {LANGUAGE_VERSION} project {}@{} built {} (seed multi-module via elaboration)",
+        "{LANGUAGE_NAME} {LANGUAGE_VERSION} project {}@{} built {} (GSM-001 seed-native multi-module)",
         document.name,
         document.version,
         output_path.display()
@@ -1942,6 +1971,26 @@ fn run() -> Result<(), String> {
             }
             forge_bundle(Path::new(&compiler), Path::new(&bundle), Path::new(&output))
         }
+        "forge-modules" => {
+            let compiler = next_argument(&mut arguments, "compiler artifact")?;
+            let catalog = next_argument(&mut arguments, "catalog file")?;
+            let output_flag = next_argument(&mut arguments, "--output flag")?;
+            if output_flag != "--output" {
+                return Err("forge-modules requires --output <artifact-file>".to_owned());
+            }
+            let output = next_argument(&mut arguments, "artifact output file")?;
+            if arguments.next().is_some() {
+                return Err(
+                    "forge-modules accepts one compiler artifact, one catalog file, and one Aether artifact output file"
+                        .to_owned(),
+                );
+            }
+            forge_modules(
+                Path::new(&compiler),
+                Path::new(&catalog),
+                Path::new(&output),
+            )
+        }
         "run" => {
             let artifact = next_argument(&mut arguments, "artifact file")?;
             let grants = parse_run_grants(&mut arguments)?;
@@ -2322,6 +2371,36 @@ mod tests {
         let generated = fs::read(&output_path).expect("bundle forge artifact should be readable");
         assert_eq!(generated, target);
         verify_bytecode(&generated).expect("bundle forge output must verify");
+    }
+
+    #[test]
+    fn forge_modules_invokes_compile_modules_and_writes_only_a_verified_artifact() {
+        let temporary = TemporaryDirectory::create();
+        let target = compile_to_bytecode(
+            "world target\n\nweave main [] -> Whole:\n  speak \"built by module forge\"\n  yield 0\n",
+        )
+        .expect("target source should compile")
+        .bytecode;
+        let compiler_source = format!(
+            "world forge\n\nweave compile_modules [borrow catalog: Text] -> Bytes:\n  bind target <- bytes \"{}\"\n  yield move target\n\nweave main [] -> Whole:\n  yield 0\n",
+            hex_encode(&target)
+        );
+        let compiler = compile_to_bytecode(&compiler_source)
+            .expect("module compiler fixture should compile")
+            .bytecode;
+        let compiler_path = temporary.path.join("compiler.aeth");
+        let catalog_path = temporary.path.join("input.aem");
+        let output_path = temporary.path.join("output.aeth");
+        fs::write(&compiler_path, compiler).expect("compiler artifact should be written");
+        fs::write(&catalog_path, "aether.seed-modules/v1\n")
+            .expect("catalog input should be written");
+
+        forge_modules(&compiler_path, &catalog_path, &output_path)
+            .expect("module forge should write the compiler result");
+
+        let generated = fs::read(&output_path).expect("module forge artifact should be readable");
+        assert_eq!(generated, target);
+        verify_bytecode(&generated).expect("module forge output must verify");
     }
 
     #[test]

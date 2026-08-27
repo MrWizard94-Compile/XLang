@@ -1,7 +1,7 @@
 # Aether Seed Profile
 
 Status: normative seed-emission profile for package **0.37.0** (canonical 0.11
-surface plus documented later bounded semantics), 2026-08-21.
+surface plus documented later bounded semantics), updated 2026-08-27.
 
 This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
 It covers the documented canonical Aether 0.11 source surface and the later
@@ -25,12 +25,13 @@ without bootstrap AST rewrite (default format remains full bootstrap canonical;
 ADR-053/054). `structure --product` emits `aether.product-structure/v1` without
 bootstrap AST (ADR-054). Project verify validates lib units via product seed
 probes (ADR-052). Host-facing product diagnostics are [`product_diagnostics`]
-with `AE-SEED-001`–`012` (ADR-055); raw `import unit` is `AE-SEED-012` — general
-multi-module product path is host elaborate + seed emit (ADR-056; seed does not
-elaborate multi-file natively). The separate ADR-128/129/130
-`aether.seed-bundle/v1`, `/v2`, and `/v3` profiles send bounded two-unit, exact
-three-unit transitive, and exact four-unit two-leaf-fan-in Text directly to seed
-`compile_bundle`; they do not change the general false multi-module tracker. LSP
+with `AE-SEED-001`–`012` (ADR-055); raw single-file `import unit` remains
+`AE-SEED-012`, while GSM-001 `aether.seed-modules/v1` catalog input reaches the
+seed `compile_modules` weave. The seed owns bounded general M11/M22 graph
+elaboration for catalog-framed project/workspace/multi-source products; Rust
+elaboration is bootstrap/reference oracle only. The separate ADR-128/129/130
+`aether.seed-bundle/v1`, `/v2`, and `/v3` profiles remain fixed narrow bundle
+APIs. LSP
 diagnostics are product-primary (ADR-058); hover/definition
 are product-surface (ADR-066). **ADR-064–069:** default CLI check/format/structure/
  project format, LSP format, product structural weave/statement/record ops, and seed
@@ -144,8 +145,20 @@ The profile does not silently expand that language surface.
     foundation -> bridge -> main bundle, or one exact four-unit left leaf + right
     leaf -> merge -> main fan-in bundle, with scalar framing and no host module
     elaborator. The documented canonical bundles match established M11 bootstrap
-    elaboration artifacts byte-for-byte. This does **not** claim seed-native
-    general M11/M22: `seed_native_multi_module_elaboration()` remains false.
+    elaboration artifacts byte-for-byte. These fixed profiles remain separate
+    from the general catalog protocol below.
+20. Exposes GSM-001 `weave compile_modules [borrow catalog: Text] -> Bytes:`.
+    It validates a closed scalar-framed `aether.seed-modules/v1` catalog, parses
+    M11/M22 normal-form imports, resolves a bounded acyclic graph, enforces
+    direct package authority, roles, worlds, exports, aliases, and qualified
+    calls, then applies deterministic mangling/rewrite before invoking the
+    existing seed compile weave. The host forwards opaque catalog Text and does
+    not parse imports or elaborate source. The route accepts at most 256 units,
+    64 package authorities, 16,384 source scalars per unit, 196,608 aggregate
+    source scalars, and 250,000 wire scalars; the final wire cap is Unicode-safe
+    for Aether's 1,000,000-byte Text invocation limit. Graph traversal has a
+    66,000-step guard. Failure emits coarse `AE-SEED-017`; full bootstrap
+    diagnostic parity is not claimed.
 
 Evidence lives in `crates/xlang-core/tests/seed_self_host.rs` and the checked-in
 artifact `seed/aether_seed.aeth`.
@@ -166,11 +179,19 @@ for the prior seed surface.
 M25 in package 0.37 is host-only local package tooling. It changes no source
 form, AETH byte, seed input, seed artifact, or seed-emission proof obligation.
 
+GSM-001 is a post-0.37 seed-profile authority reduction. It changes neither the
+language, AETH, VM, grants, package resolver, nor network boundary. It adds the
+closed catalog input and `compile_modules` named forge weave inside the seed
+artifact, while product project/workspace framing remains host-local and
+manifest-authorized. See [ADR-131](../historical%20docs/ADR-131-gsm-general-seed-module-catalog.md),
+[GSM design](DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md), and
+[GSM threat model](THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md).
+
 ADR-128/129/130 add bounded source-bundle profiles inside the seed artifact
 without changing the package language or AETH contract. They are intentionally a
 second named forge weave, not relaxed raw-source parsing: ordinary source with
 `import unit` still fails `AE-SEED-012`, while framed v1/v2/v3 input reaches
-`compile_bundle`. v1 accepts exactly one pure Whole library then named entry,
+`compile_bundle` and GSM-001 framed catalog input reaches `compile_modules`. v1 accepts exactly one pure Whole library then named entry,
 each no more than 16,384 scalars, 32,768 payload scalars total, and 33,280 wire
 scalars. v2 accepts exactly foundation -> bridge -> named entry, each no more
 than 16,384 scalars, 49,152 payload scalars total, and 49,920 wire scalars. v3

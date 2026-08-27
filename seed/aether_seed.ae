@@ -6535,6 +6535,2256 @@ weave bundle_fanin_elaborate [borrow bundle: Text] -> Text:
     revise output <- "!"
   yield move output
 
+weave modules_trim_start [borrow value: Text] -> Text:
+  bind mutable output <- ""
+  bind mutable length <- measure borrow value
+  bind mutable cursor <- 0
+  bind mutable start <- 0
+  bind mutable code <- 0
+  bind mutable done <- dim
+  while less cursor length:
+    choose done:
+      revise cursor <- length
+    otherwise:
+      revise code <- glyph borrow value cursor
+      choose same code 32:
+        revise cursor <- sum cursor 1
+      otherwise:
+        choose same code 9:
+          revise cursor <- sum cursor 1
+        otherwise:
+          choose same code 13:
+            revise cursor <- sum cursor 1
+          otherwise:
+            revise code <- code
+            revise start <- cursor
+            revise done <- bright
+            revise cursor <- length
+    choose done:
+      revise output <- cut borrow value start length
+    otherwise:
+      revise output <- borrow output
+  yield move output
+
+weave modules_trim_end [borrow value: Text] -> Text:
+  bind mutable output <- ""
+  bind mutable length <- measure borrow value
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  bind mutable last <- 0
+  bind mutable saw <- dim
+  while less cursor length:
+    revise code <- glyph borrow value cursor
+    choose same code 32:
+      revise last <- last
+    otherwise:
+      choose same code 9:
+        revise last <- last
+      otherwise:
+        choose same code 10:
+          revise last <- last
+        otherwise:
+          choose same code 13:
+            revise last <- last
+          otherwise:
+            revise last <- sum cursor 1
+            revise saw <- bright
+    revise cursor <- sum cursor 1
+  choose saw:
+    revise output <- cut borrow value 0 last
+  otherwise:
+    revise output <- ""
+  yield move output
+
+weave modules_replace_all [borrow value: Text, borrow from: Text, borrow to: Text] -> Text:
+  bind mutable output <- ""
+  bind mutable length <- measure borrow value
+  bind mutable from_length <- measure borrow from
+  bind mutable cursor <- 0
+  bind mutable found <- -1
+  bind mutable prefix <- ""
+  bind mutable valid <- bright
+  choose same from_length 0:
+    revise valid <- dim
+  otherwise:
+    revise valid <- valid
+  while less cursor length:
+    choose valid:
+      revise found <- seek borrow value borrow from cursor
+      choose same found -1:
+        revise prefix <- cut borrow value cursor length
+        revise output <- join borrow output borrow prefix
+        revise cursor <- length
+      otherwise:
+        revise prefix <- cut borrow value cursor found
+        revise output <- join borrow output borrow prefix
+        revise output <- join borrow output borrow to
+        revise cursor <- sum found from_length
+    otherwise:
+      revise cursor <- length
+  choose valid:
+    revise output <- borrow output
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_set_contains [borrow values: Text, borrow value: Text] -> Truth:
+  bind mutable pattern <- "|"
+  bind mutable found <- -1
+  bind mutable result <- dim
+  revise pattern <- join borrow pattern borrow value
+  revise pattern <- join borrow pattern "|"
+  revise found <- seek borrow values borrow pattern 0
+  choose same found -1:
+    revise result <- dim
+  otherwise:
+    revise result <- bright
+  yield result
+
+weave modules_set_add [borrow values: Text, borrow value: Text] -> Text:
+  bind mutable output <- ""
+  bind mutable pattern <- "|"
+  bind mutable length <- measure borrow values
+  bind mutable present <- call modules_set_contains borrow values borrow value
+  choose present:
+    revise output <- borrow values
+  otherwise:
+    choose same length 0:
+      revise output <- "|"
+    otherwise:
+      revise output <- borrow values
+    revise output <- join borrow output borrow value
+    revise output <- join borrow output "|"
+  yield move output
+
+weave modules_set_remove [borrow values: Text, borrow value: Text] -> Text:
+  bind mutable pattern <- "|"
+  bind mutable output <- ""
+  bind mutable output_length <- 0
+  revise pattern <- join borrow pattern borrow value
+  revise pattern <- join borrow pattern "|"
+  revise output <- call modules_replace_all borrow values borrow pattern "|"
+  revise output_length <- measure borrow output
+  choose same output_length 1:
+    choose same borrow output "|":
+      revise output <- ""
+    otherwise:
+      revise output <- borrow output
+  otherwise:
+    revise output <- borrow output
+  yield move output
+
+weave modules_set_last [borrow values: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable length <- measure borrow values
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  bind mutable previous_delimiter <- -1
+  bind mutable last_delimiter <- -1
+  bind mutable start <- 0
+  bind mutable expected_last <- 0
+  while less cursor length:
+    revise code <- glyph borrow values cursor
+    choose same code 124:
+      revise previous_delimiter <- last_delimiter
+      revise last_delimiter <- cursor
+    otherwise:
+      revise code <- code
+    revise cursor <- sum cursor 1
+  choose less -1 previous_delimiter:
+    revise start <- sum previous_delimiter 1
+    revise expected_last <- difference length 1
+    choose same last_delimiter expected_last:
+      revise output <- cut borrow values start last_delimiter
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_set_count [borrow values: Text] -> Whole:
+  bind mutable count <- 0
+  bind mutable length <- measure borrow values
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  while less cursor length:
+    revise code <- glyph borrow values cursor
+    choose same code 124:
+      revise count <- sum count 1
+    otherwise:
+      revise code <- code
+    revise cursor <- sum cursor 1
+  choose less 0 count:
+    revise count <- difference count 1
+  otherwise:
+    revise count <- 0
+  yield count
+
+weave modules_set_nth [borrow values: Text, index: Whole] -> Text:
+  bind mutable output <- "!"
+  bind mutable length <- measure borrow values
+  bind mutable cursor <- 0
+  bind mutable start <- 0
+  bind mutable current <- 0
+  bind mutable code <- 0
+  bind mutable found <- dim
+  while less cursor length:
+    revise code <- glyph borrow values cursor
+    choose same code 124:
+      choose less 0 cursor:
+        choose same current index:
+          choose found:
+            revise found <- found
+          otherwise:
+            revise output <- cut borrow values start cursor
+            revise found <- bright
+        otherwise:
+          revise current <- current
+        revise current <- sum current 1
+      otherwise:
+        revise start <- sum cursor 1
+      revise start <- sum cursor 1
+    otherwise:
+      revise code <- code
+    revise cursor <- sum cursor 1
+  yield move output
+
+weave modules_lower_ascii_character [borrow value: Text] -> Text:
+  bind mutable output <- borrow value
+  bind mutable code <- glyph borrow value 0
+  choose same code 65:
+    revise output <- "a"
+  otherwise:
+    choose same code 66:
+      revise output <- "b"
+    otherwise:
+      choose same code 67:
+        revise output <- "c"
+      otherwise:
+        choose same code 68:
+          revise output <- "d"
+        otherwise:
+          choose same code 69:
+            revise output <- "e"
+          otherwise:
+            choose same code 70:
+              revise output <- "f"
+            otherwise:
+              choose same code 71:
+                revise output <- "g"
+              otherwise:
+                choose same code 72:
+                  revise output <- "h"
+                otherwise:
+                  choose same code 73:
+                    revise output <- "i"
+                  otherwise:
+                    choose same code 74:
+                      revise output <- "j"
+                    otherwise:
+                      choose same code 75:
+                        revise output <- "k"
+                      otherwise:
+                        choose same code 76:
+                          revise output <- "l"
+                        otherwise:
+                          choose same code 77:
+                            revise output <- "m"
+                          otherwise:
+                            choose same code 78:
+                              revise output <- "n"
+                            otherwise:
+                              choose same code 79:
+                                revise output <- "o"
+                              otherwise:
+                                choose same code 80:
+                                  revise output <- "p"
+                                otherwise:
+                                  choose same code 81:
+                                    revise output <- "q"
+                                  otherwise:
+                                    choose same code 82:
+                                      revise output <- "r"
+                                    otherwise:
+                                      choose same code 83:
+                                        revise output <- "s"
+                                      otherwise:
+                                        choose same code 84:
+                                          revise output <- "t"
+                                        otherwise:
+                                          choose same code 85:
+                                            revise output <- "u"
+                                          otherwise:
+                                            choose same code 86:
+                                              revise output <- "v"
+                                            otherwise:
+                                              choose same code 87:
+                                                revise output <- "w"
+                                              otherwise:
+                                                choose same code 88:
+                                                  revise output <- "x"
+                                                otherwise:
+                                                  choose same code 89:
+                                                    revise output <- "y"
+                                                  otherwise:
+                                                    choose same code 90:
+                                                      revise output <- "z"
+                                                    otherwise:
+                                                      revise output <- borrow value
+  yield move output
+
+weave modules_mangle [borrow key: Text, borrow name: Text] -> Text:
+  bind mutable output <- "m_"
+  bind mutable length <- measure borrow key
+  bind mutable stem_end <- difference length 3
+  bind mutable cursor <- 0
+  bind mutable next <- 0
+  bind mutable code <- 0
+  bind mutable character <- ""
+  bind mutable lowered <- ""
+  while less cursor stem_end:
+    revise next <- sum cursor 1
+    revise code <- glyph borrow key cursor
+    choose same code 47:
+      revise output <- join borrow output "_"
+    otherwise:
+      choose same code 58:
+        revise output <- join borrow output "_"
+      otherwise:
+        choose same code 46:
+          revise output <- join borrow output "_"
+        otherwise:
+          revise character <- cut borrow key cursor next
+          revise lowered <- call modules_lower_ascii_character borrow character
+          revise output <- join borrow output borrow lowered
+    revise cursor <- next
+  revise output <- join borrow output "_"
+  revise output <- join borrow output borrow name
+  yield move output
+
+weave modules_safe_package [borrow value: Text] -> Truth:
+  bind mutable result <- bright
+  bind mutable length <- measure borrow value
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  choose same length 0:
+    revise result <- dim
+  otherwise:
+    revise result <- result
+  while less cursor length:
+    revise code <- glyph borrow value cursor
+    choose same cursor 0:
+      choose less code 65:
+        revise result <- dim
+      otherwise:
+        choose less code 91:
+          revise result <- result
+        otherwise:
+          choose less code 97:
+            revise result <- dim
+          otherwise:
+            choose less code 123:
+              revise result <- result
+            otherwise:
+              revise result <- dim
+    otherwise:
+      choose same code 95:
+        revise result <- result
+      otherwise:
+        choose less code 48:
+          revise result <- dim
+        otherwise:
+          choose less code 58:
+            revise result <- result
+          otherwise:
+            choose less code 65:
+              revise result <- dim
+            otherwise:
+              choose less code 91:
+                revise result <- result
+              otherwise:
+                choose less code 97:
+                  revise result <- dim
+                otherwise:
+                  choose less code 123:
+                    revise result <- result
+                  otherwise:
+                    revise result <- dim
+    revise cursor <- sum cursor 1
+  yield result
+
+weave modules_safe_path [borrow value: Text] -> Truth:
+  bind mutable result <- bright
+  bind mutable length <- measure borrow value
+  bind mutable stem_end <- 0
+  bind mutable suffix <- ""
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  bind mutable first <- 0
+  bind mutable doubled <- -1
+  bind mutable escaped <- -1
+  choose less length 4:
+    revise result <- dim
+  otherwise:
+    revise stem_end <- difference length 3
+    revise suffix <- cut borrow value stem_end length
+    choose same borrow suffix ".ae":
+      revise result <- result
+    otherwise:
+      revise result <- dim
+  choose result:
+    revise first <- glyph borrow value 0
+    choose same first 47:
+      revise result <- dim
+    otherwise:
+      revise result <- result
+    revise doubled <- seek borrow value "//" 0
+    choose same doubled -1:
+      revise result <- result
+    otherwise:
+      revise result <- dim
+    revise escaped <- seek borrow value "../" 0
+    choose same escaped -1:
+      revise result <- result
+    otherwise:
+      revise result <- dim
+    revise escaped <- seek borrow value "/../" 0
+    choose same escaped -1:
+      revise result <- result
+    otherwise:
+      revise result <- dim
+    revise escaped <- seek borrow value "./" 0
+    choose same escaped 0:
+      revise result <- dim
+    otherwise:
+      revise result <- result
+    revise escaped <- seek borrow value "/./" 0
+    choose same escaped -1:
+      revise result <- result
+    otherwise:
+      revise result <- dim
+  otherwise:
+    revise result <- result
+  while less cursor length:
+    revise code <- glyph borrow value cursor
+    choose same code 47:
+      revise result <- result
+    otherwise:
+      choose same code 45:
+        revise result <- result
+      otherwise:
+        choose same code 46:
+          revise result <- result
+        otherwise:
+          choose same code 95:
+            revise result <- result
+          otherwise:
+            choose less code 48:
+              revise result <- dim
+            otherwise:
+              choose less code 58:
+                revise result <- result
+              otherwise:
+                choose less code 65:
+                  revise result <- dim
+                otherwise:
+                  choose less code 91:
+                    revise result <- result
+                  otherwise:
+                    choose less code 97:
+                      revise result <- dim
+                    otherwise:
+                      choose less code 123:
+                        revise result <- result
+                      otherwise:
+                        revise result <- dim
+    revise cursor <- sum cursor 1
+  yield result
+
+weave modules_safe_key [borrow value: Text] -> Truth:
+  bind mutable result <- dim
+  bind mutable separator <- seek borrow value "::" 0
+  bind mutable repeated <- -1
+  bind mutable length <- measure borrow value
+  bind mutable package <- ""
+  bind mutable path <- ""
+  bind mutable after_separator <- 0
+  bind mutable package_valid <- dim
+  bind mutable path_valid <- dim
+  choose same separator -1:
+    revise result <- call modules_safe_path borrow value
+  otherwise:
+    revise after_separator <- sum separator 2
+    revise repeated <- seek borrow value "::" after_separator
+    choose same repeated -1:
+      revise package <- cut borrow value 0 separator
+      revise path <- cut borrow value after_separator length
+      revise package_valid <- call modules_safe_package borrow package
+      revise path_valid <- call modules_safe_path borrow path
+      choose package_valid:
+        choose path_valid:
+          revise result <- bright
+        otherwise:
+          revise result <- dim
+      otherwise:
+        revise result <- dim
+    otherwise:
+      revise result <- dim
+  yield result
+
+weave modules_decimal [borrow value: Text] -> Truth:
+  bind mutable result <- bright
+  bind mutable length <- measure borrow value
+  bind mutable cursor <- 0
+  bind mutable code <- 0
+  choose same length 0:
+    revise result <- dim
+  otherwise:
+    choose less length 7:
+      revise result <- result
+    otherwise:
+      revise result <- dim
+  while less cursor length:
+    revise code <- glyph borrow value cursor
+    choose less code 48:
+      revise result <- dim
+    otherwise:
+      choose less code 58:
+        revise result <- result
+      otherwise:
+        revise result <- dim
+    revise cursor <- sum cursor 1
+  yield result
+
+weave modules_line_after [borrow value: Text, start: Whole] -> Whole:
+  bind mutable output <- -1
+  bind mutable line_end <- seek borrow value "\n" start
+  choose same line_end -1:
+    revise output <- -1
+  otherwise:
+    revise output <- sum line_end 1
+  yield output
+
+weave modules_line [borrow value: Text, start: Whole] -> Text:
+  bind mutable output <- "!"
+  bind mutable line_end <- seek borrow value "\n" start
+  choose same line_end -1:
+    revise output <- "!"
+  otherwise:
+    revise output <- cut borrow value start line_end
+  yield move output
+
+weave modules_catalog_entry [borrow catalog: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable magic_end <- seek borrow catalog "\n" 0
+  bind mutable entry_start <- 0
+  bind mutable entry_line <- ""
+  bind mutable prefix <- "entry "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable entry_length <- 0
+  bind mutable prefix_at <- -1
+  choose same magic_end -1:
+    revise output <- "!"
+  otherwise:
+    revise entry_start <- sum magic_end 1
+    revise entry_line <- call modules_line borrow catalog entry_start
+    revise entry_length <- measure borrow entry_line
+    choose same borrow entry_line "!":
+      revise output <- "!"
+    otherwise:
+      revise prefix_at <- seek borrow entry_line borrow prefix 0
+      choose same prefix_at 0:
+        choose less prefix_length entry_length:
+          revise output <- cut borrow entry_line prefix_length entry_length
+        otherwise:
+          revise output <- "!"
+      otherwise:
+        revise output <- "!"
+  yield move output
+
+weave modules_catalog_package_count [borrow catalog: Text] -> Whole:
+  bind mutable output <- -1
+  bind mutable magic_end <- seek borrow catalog "\n" 0
+  bind mutable entry_start <- 0
+  bind mutable packages_start <- 0
+  bind mutable line <- ""
+  bind mutable prefix <- "packages "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable line_length <- 0
+  bind mutable count_text <- ""
+  bind mutable valid <- dim
+  bind mutable prefix_at <- -1
+  choose same magic_end -1:
+    revise output <- -1
+  otherwise:
+    revise entry_start <- sum magic_end 1
+    revise packages_start <- call modules_line_after borrow catalog entry_start
+    choose same packages_start -1:
+      revise output <- -1
+    otherwise:
+      revise line <- call modules_line borrow catalog packages_start
+      revise line_length <- measure borrow line
+      choose same borrow line "!":
+        revise valid <- dim
+      otherwise:
+        revise prefix_at <- seek borrow line borrow prefix 0
+        choose same prefix_at 0:
+          choose less prefix_length line_length:
+            revise count_text <- cut borrow line prefix_length line_length
+            revise valid <- call modules_decimal borrow count_text
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      choose valid:
+        revise output <- number borrow count_text
+        choose less 64 output:
+          revise output <- -1
+        otherwise:
+          revise output <- output
+      otherwise:
+        revise output <- -1
+  yield output
+
+weave modules_catalog_packages_start [borrow catalog: Text] -> Whole:
+  bind mutable output <- -1
+  bind mutable magic_end <- seek borrow catalog "\n" 0
+  bind mutable entry_start <- 0
+  bind mutable packages_start <- 0
+  choose same magic_end -1:
+    revise output <- -1
+  otherwise:
+    revise entry_start <- sum magic_end 1
+    revise packages_start <- call modules_line_after borrow catalog entry_start
+    choose same packages_start -1:
+      revise output <- -1
+    otherwise:
+      revise output <- call modules_line_after borrow catalog packages_start
+  yield output
+
+weave modules_catalog_units_line_start [borrow catalog: Text] -> Whole:
+  bind mutable output <- -1
+  bind mutable cursor <- call modules_catalog_packages_start borrow catalog
+  bind mutable count <- call modules_catalog_package_count borrow catalog
+  bind mutable index <- 0
+  choose less -1 cursor:
+    choose less -1 count:
+      while less index count:
+        revise cursor <- call modules_line_after borrow catalog cursor
+        revise index <- sum index 1
+      revise output <- cursor
+    otherwise:
+      revise output <- -1
+  otherwise:
+    revise output <- -1
+  yield output
+
+weave modules_catalog_unit_count [borrow catalog: Text] -> Whole:
+  bind mutable output <- -1
+  bind mutable units_start <- call modules_catalog_units_line_start borrow catalog
+  bind mutable line <- ""
+  bind mutable prefix <- "units "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable line_length <- 0
+  bind mutable count_text <- ""
+  bind mutable valid <- dim
+  bind mutable prefix_at <- -1
+  choose less -1 units_start:
+    revise line <- call modules_line borrow catalog units_start
+    revise line_length <- measure borrow line
+    choose same borrow line "!":
+      revise valid <- dim
+    otherwise:
+      revise prefix_at <- seek borrow line borrow prefix 0
+      choose same prefix_at 0:
+        choose less prefix_length line_length:
+          revise count_text <- cut borrow line prefix_length line_length
+          revise valid <- call modules_decimal borrow count_text
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    choose valid:
+      revise output <- number borrow count_text
+      choose less 256 output:
+        revise output <- -1
+      otherwise:
+        revise output <- output
+    otherwise:
+      revise output <- -1
+  otherwise:
+    revise output <- -1
+  yield output
+
+weave modules_catalog_headers_start [borrow catalog: Text] -> Whole:
+  bind mutable output <- -1
+  bind mutable units_start <- call modules_catalog_units_line_start borrow catalog
+  choose less -1 units_start:
+    revise output <- call modules_line_after borrow catalog units_start
+  otherwise:
+    revise output <- -1
+  yield output
+
+weave modules_catalog_payload_start [borrow catalog: Text] -> Whole:
+  bind mutable output <- -1
+  bind mutable cursor <- call modules_catalog_headers_start borrow catalog
+  bind mutable count <- call modules_catalog_unit_count borrow catalog
+  bind mutable index <- 0
+  bind mutable marker <- ""
+  choose less -1 cursor:
+    choose less -1 count:
+      while less index count:
+        revise cursor <- call modules_line_after borrow catalog cursor
+        revise index <- sum index 1
+      choose less -1 cursor:
+        revise marker <- call modules_line borrow catalog cursor
+        choose same borrow marker "source":
+          revise output <- call modules_line_after borrow catalog cursor
+        otherwise:
+          revise output <- -1
+      otherwise:
+        revise output <- -1
+    otherwise:
+      revise output <- -1
+  otherwise:
+    revise output <- -1
+  yield output
+
+weave modules_header_key [borrow header: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable prefix <- "unit "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable header_length <- measure borrow header
+  bind mutable first_space <- -1
+  bind mutable prefix_at <- -1
+  revise prefix_at <- seek borrow header borrow prefix 0
+  choose same prefix_at 0:
+    revise first_space <- seek borrow header " " prefix_length
+    choose less prefix_length first_space:
+      revise output <- cut borrow header prefix_length first_space
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_header_role [borrow header: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable prefix <- "unit "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable first_space <- -1
+  bind mutable second_space <- -1
+  bind mutable role_start <- 0
+  bind mutable prefix_at <- -1
+  revise prefix_at <- seek borrow header borrow prefix 0
+  choose same prefix_at 0:
+    revise first_space <- seek borrow header " " prefix_length
+    choose less prefix_length first_space:
+      revise role_start <- sum first_space 1
+      revise second_space <- seek borrow header " " role_start
+      choose less role_start second_space:
+        revise output <- cut borrow header role_start second_space
+      otherwise:
+        revise output <- "!"
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_header_count [borrow header: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable prefix <- "unit "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable header_length <- measure borrow header
+  bind mutable first_space <- -1
+  bind mutable second_space <- -1
+  bind mutable count_start <- 0
+  bind mutable prefix_at <- -1
+  revise prefix_at <- seek borrow header borrow prefix 0
+  choose same prefix_at 0:
+    revise first_space <- seek borrow header " " prefix_length
+    choose less prefix_length first_space:
+      revise count_start <- sum first_space 1
+      revise second_space <- seek borrow header " " count_start
+      choose less count_start second_space:
+        revise count_start <- sum second_space 1
+        choose less count_start header_length:
+          revise output <- cut borrow header count_start header_length
+        otherwise:
+          revise output <- "!"
+      otherwise:
+        revise output <- "!"
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_key_package [borrow key: Text] -> Text:
+  bind mutable output <- ""
+  bind mutable separator <- seek borrow key "::" 0
+  choose same separator -1:
+    revise output <- ""
+  otherwise:
+    revise output <- cut borrow key 0 separator
+  yield move output
+
+weave modules_catalog_has_package [borrow catalog: Text, borrow package: Text] -> Truth:
+  bind mutable result <- dim
+  bind mutable cursor <- call modules_catalog_packages_start borrow catalog
+  bind mutable count <- call modules_catalog_package_count borrow catalog
+  bind mutable index <- 0
+  bind mutable line <- ""
+  bind mutable name <- ""
+  bind mutable line_length <- 0
+  choose less -1 cursor:
+    choose less -1 count:
+      while less index count:
+        revise line <- call modules_line borrow catalog cursor
+        revise line_length <- measure borrow line
+        revise name <- cut borrow line 8 line_length
+        choose same borrow name borrow package:
+          revise result <- bright
+        otherwise:
+          revise result <- result
+        revise cursor <- call modules_line_after borrow catalog cursor
+        revise index <- sum index 1
+    otherwise:
+      revise result <- dim
+  otherwise:
+    revise result <- dim
+  yield result
+
+weave modules_catalog_role [borrow catalog: Text, borrow key: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable cursor <- call modules_catalog_headers_start borrow catalog
+  bind mutable count <- call modules_catalog_unit_count borrow catalog
+  bind mutable index <- 0
+  bind mutable header <- ""
+  bind mutable header_key <- ""
+  choose less -1 cursor:
+    choose less -1 count:
+      while less index count:
+        revise header <- call modules_line borrow catalog cursor
+        revise header_key <- call modules_header_key borrow header
+        choose same borrow header_key borrow key:
+          revise output <- call modules_header_role borrow header
+        otherwise:
+          revise output <- borrow output
+        revise cursor <- call modules_line_after borrow catalog cursor
+        revise index <- sum index 1
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_catalog_source [borrow catalog: Text, borrow key: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable cursor <- call modules_catalog_headers_start borrow catalog
+  bind mutable payload <- call modules_catalog_payload_start borrow catalog
+  bind mutable offset <- payload
+  bind mutable count <- call modules_catalog_unit_count borrow catalog
+  bind mutable index <- 0
+  bind mutable header <- ""
+  bind mutable header_key <- ""
+  bind mutable count_text <- ""
+  bind mutable scalar_count <- 0
+  bind mutable end <- 0
+  choose less -1 cursor:
+    choose less -1 payload:
+      choose less -1 count:
+        while less index count:
+          revise header <- call modules_line borrow catalog cursor
+          revise header_key <- call modules_header_key borrow header
+          revise count_text <- call modules_header_count borrow header
+          revise scalar_count <- number borrow count_text
+          revise end <- sum offset scalar_count
+          choose same borrow header_key borrow key:
+            revise output <- cut borrow catalog offset end
+          otherwise:
+            revise output <- borrow output
+          revise offset <- end
+          revise cursor <- call modules_line_after borrow catalog cursor
+          revise index <- sum index 1
+      otherwise:
+        revise output <- "!"
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_role_valid [borrow role: Text] -> Truth:
+  bind mutable result <- dim
+  choose same borrow role "main":
+    revise result <- bright
+  otherwise:
+    choose same borrow role "lib":
+      revise result <- bright
+    otherwise:
+      choose same borrow role "test":
+        revise result <- bright
+      otherwise:
+        revise result <- dim
+  yield result
+
+weave modules_catalog_valid [borrow catalog: Text] -> Truth:
+  bind mutable valid <- bright
+  bind mutable length <- measure borrow catalog
+  bind mutable magic_end <- seek borrow catalog "\n" 0
+  bind mutable magic <- ""
+  bind mutable entry <- ""
+  bind mutable entry_valid <- dim
+  bind mutable package_count <- call modules_catalog_package_count borrow catalog
+  bind mutable package_cursor <- call modules_catalog_packages_start borrow catalog
+  bind mutable package_index <- 0
+  bind mutable package_line <- ""
+  bind mutable package_name <- ""
+  bind mutable package_line_length <- 0
+  bind mutable package_prefix <- "package "
+  bind mutable package_prefix_length <- measure borrow package_prefix
+  bind mutable package_prefix_at <- -1
+  bind mutable package_names <- ""
+  bind mutable package_valid <- dim
+  bind mutable package_duplicate <- dim
+  bind mutable unit_count <- call modules_catalog_unit_count borrow catalog
+  bind mutable header_cursor <- call modules_catalog_headers_start borrow catalog
+  bind mutable unit_index <- 0
+  bind mutable header <- ""
+  bind mutable key <- ""
+  bind mutable role <- ""
+  bind mutable count_text <- ""
+  bind mutable key_valid <- dim
+  bind mutable role_valid <- dim
+  bind mutable count_valid <- dim
+  bind mutable scalar_count <- 0
+  bind mutable total_scalars <- 0
+  bind mutable expected_end <- 0
+  bind mutable payload_start <- call modules_catalog_payload_start borrow catalog
+  bind mutable keys <- ""
+  bind mutable duplicate <- dim
+  bind mutable package <- ""
+  bind mutable allowed <- dim
+  bind mutable entry_present <- dim
+  bind mutable entry_role_ok <- dim
+  choose less 250000 length:
+    revise valid <- dim
+  otherwise:
+    revise valid <- valid
+  choose same magic_end -1:
+    revise valid <- dim
+  otherwise:
+    revise magic <- cut borrow catalog 0 magic_end
+    choose same borrow magic "aether.seed-modules/v1":
+      revise valid <- valid
+    otherwise:
+      revise valid <- dim
+  revise entry <- call modules_catalog_entry borrow catalog
+  choose same borrow entry "!":
+    revise entry_valid <- dim
+    revise valid <- dim
+  otherwise:
+    revise entry_valid <- call modules_safe_key borrow entry
+    choose entry_valid:
+      revise package <- call modules_key_package borrow entry
+      choose same borrow package "":
+        revise valid <- valid
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+  choose less -1 package_count:
+    choose less package_count 65:
+      revise valid <- valid
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose less -1 package_cursor:
+    revise valid <- valid
+  otherwise:
+    revise valid <- dim
+  while less package_index package_count:
+    revise package_line <- call modules_line borrow catalog package_cursor
+    revise package_line_length <- measure borrow package_line
+    revise package_prefix_at <- seek borrow package_line borrow package_prefix 0
+    choose same package_prefix_at 0:
+      choose less package_prefix_length package_line_length:
+        revise package_name <- cut borrow package_line package_prefix_length package_line_length
+        revise package_valid <- call modules_safe_package borrow package_name
+        revise package_duplicate <- call modules_set_contains borrow package_names borrow package_name
+        choose package_valid:
+          choose package_duplicate:
+            revise valid <- dim
+          otherwise:
+            revise package_names <- call modules_set_add borrow package_names borrow package_name
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+    revise package_cursor <- call modules_line_after borrow catalog package_cursor
+    revise package_index <- sum package_index 1
+  choose less 0 unit_count:
+    choose less unit_count 257:
+      revise valid <- valid
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose less -1 header_cursor:
+    revise valid <- valid
+  otherwise:
+    revise valid <- dim
+  while less unit_index unit_count:
+    revise header <- call modules_line borrow catalog header_cursor
+    revise key <- call modules_header_key borrow header
+    revise role <- call modules_header_role borrow header
+    revise count_text <- call modules_header_count borrow header
+    revise key_valid <- call modules_safe_key borrow key
+    revise role_valid <- call modules_role_valid borrow role
+    revise count_valid <- call modules_decimal borrow count_text
+    choose key_valid:
+      revise duplicate <- call modules_set_contains borrow keys borrow key
+      choose duplicate:
+        revise valid <- dim
+      otherwise:
+        revise keys <- call modules_set_add borrow keys borrow key
+    otherwise:
+      revise valid <- dim
+    choose role_valid:
+      revise valid <- valid
+    otherwise:
+      revise valid <- dim
+    choose count_valid:
+      revise scalar_count <- number borrow count_text
+      choose less 0 scalar_count:
+        choose less scalar_count 16385:
+          revise total_scalars <- sum total_scalars scalar_count
+          choose less total_scalars 196609:
+            revise valid <- valid
+          otherwise:
+            revise valid <- dim
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+    revise package <- call modules_key_package borrow key
+    choose same borrow package "":
+      revise valid <- valid
+    otherwise:
+      revise allowed <- call modules_set_contains borrow package_names borrow package
+      choose allowed:
+        choose same borrow role "lib":
+          revise valid <- valid
+        otherwise:
+          revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    choose same borrow key borrow entry:
+      revise entry_present <- bright
+      choose same borrow role "main":
+        revise entry_role_ok <- bright
+      otherwise:
+        choose same borrow role "test":
+          revise entry_role_ok <- bright
+        otherwise:
+          revise entry_role_ok <- dim
+    otherwise:
+      revise key <- borrow key
+    revise header_cursor <- call modules_line_after borrow catalog header_cursor
+    revise unit_index <- sum unit_index 1
+  choose less -1 payload_start:
+    revise expected_end <- sum payload_start total_scalars
+    choose same expected_end length:
+      revise valid <- valid
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  choose entry_present:
+    choose entry_role_ok:
+      revise valid <- valid
+    otherwise:
+      revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  yield valid
+
+weave modules_normalize [borrow source: Text] -> Text:
+  bind mutable output <- ""
+  bind mutable length <- measure borrow source
+  bind mutable cursor <- 0
+  bind mutable line_end <- -1
+  bind mutable next <- 0
+  bind mutable line <- ""
+  bind mutable line_length <- 0
+  bind mutable last <- 0
+  bind mutable code <- 0
+  bind mutable wrote <- dim
+  while less cursor length:
+    revise line_end <- seek borrow source "\n" cursor
+    choose same line_end -1:
+      revise line_end <- length
+      revise next <- length
+    otherwise:
+      revise next <- sum line_end 1
+    revise line <- cut borrow source cursor line_end
+    revise line_length <- measure borrow line
+    choose less 0 line_length:
+      revise last <- difference line_length 1
+      revise code <- glyph borrow line last
+      choose same code 13:
+        revise line <- cut borrow line 0 last
+      otherwise:
+        revise line <- borrow line
+    otherwise:
+      revise line <- borrow line
+    revise line_length <- measure borrow line
+    choose less 0 line_length:
+      choose wrote:
+        revise output <- join borrow output "\n"
+      otherwise:
+        revise output <- borrow output
+      revise output <- join borrow output borrow line
+      revise wrote <- bright
+    otherwise:
+      revise output <- borrow output
+    revise cursor <- next
+  yield move output
+
+weave modules_safe_alias [borrow value: Text] -> Truth:
+  bind mutable result <- call bundle_safe_identifier borrow value
+  choose result:
+    choose same borrow value "main":
+      revise result <- dim
+    otherwise:
+      choose same borrow value "world":
+        revise result <- dim
+      otherwise:
+        choose same borrow value "call":
+          revise result <- dim
+        otherwise:
+          revise result <- bright
+  otherwise:
+    revise result <- dim
+  yield result
+
+weave modules_import_target_line [borrow line: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable prefix <- "import unit "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable line_length <- measure borrow line
+  bind mutable prefix_at <- seek borrow line borrow prefix 0
+  bind mutable opening_quote <- -1
+  bind mutable closing_quote <- -1
+  bind mutable path_start <- 0
+  bind mutable path <- ""
+  bind mutable path_valid <- dim
+  bind mutable tail_start <- 0
+  bind mutable tail <- ""
+  bind mutable tail_length <- 0
+  bind mutable direct_prefix <- "as "
+  bind mutable foreign_prefix <- "from package "
+  bind mutable direct_at <- -1
+  bind mutable foreign_at <- -1
+  bind mutable alias <- ""
+  bind mutable alias_valid <- dim
+  bind mutable foreign_rest <- ""
+  bind mutable foreign_rest_length <- 0
+  bind mutable as_at <- -1
+  bind mutable package <- ""
+  bind mutable package_valid <- dim
+  bind mutable alias_start <- 0
+  choose same prefix_at 0:
+    revise opening_quote <- seek borrow line "\"" prefix_length
+    choose same opening_quote prefix_length:
+      revise path_start <- sum opening_quote 1
+      revise closing_quote <- seek borrow line "\"" path_start
+      choose less path_start closing_quote:
+        revise path <- cut borrow line path_start closing_quote
+        revise path_valid <- call modules_safe_path borrow path
+        revise tail_start <- sum closing_quote 1
+        revise tail <- cut borrow line tail_start line_length
+        revise tail <- call modules_trim_start borrow tail
+        revise tail_length <- measure borrow tail
+        revise direct_at <- seek borrow tail borrow direct_prefix 0
+        revise foreign_at <- seek borrow tail borrow foreign_prefix 0
+        choose path_valid:
+          choose same direct_at 0:
+            revise alias_start <- measure borrow direct_prefix
+            revise alias <- cut borrow tail alias_start tail_length
+            revise alias <- call modules_trim_end borrow alias
+            revise alias_valid <- call modules_safe_alias borrow alias
+            choose alias_valid:
+              revise output <- borrow path
+            otherwise:
+              revise output <- "!"
+          otherwise:
+            choose same foreign_at 0:
+              revise alias_start <- measure borrow foreign_prefix
+              revise foreign_rest <- cut borrow tail alias_start tail_length
+              revise foreign_rest_length <- measure borrow foreign_rest
+              revise as_at <- seek borrow foreign_rest " as " 0
+              choose less 0 as_at:
+                revise package <- cut borrow foreign_rest 0 as_at
+                revise package <- call modules_trim_end borrow package
+                revise alias_start <- sum as_at 4
+                revise alias <- cut borrow foreign_rest alias_start foreign_rest_length
+                revise alias <- call modules_trim_end borrow alias
+                revise package_valid <- call modules_safe_package borrow package
+                revise alias_valid <- call modules_safe_alias borrow alias
+                choose package_valid:
+                  choose alias_valid:
+                    revise output <- join borrow package "::"
+                    revise output <- join borrow output borrow path
+                  otherwise:
+                    revise output <- "!"
+                otherwise:
+                  revise output <- "!"
+              otherwise:
+                revise output <- "!"
+            otherwise:
+              revise output <- "!"
+        otherwise:
+          revise output <- "!"
+      otherwise:
+        revise output <- "!"
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_import_alias_line [borrow line: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable target <- call modules_import_target_line borrow line
+  bind mutable prefix <- "import unit "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable line_length <- measure borrow line
+  bind mutable opening_quote <- -1
+  bind mutable closing_quote <- -1
+  bind mutable tail_start <- 0
+  bind mutable tail <- ""
+  bind mutable tail_length <- 0
+  bind mutable direct_prefix <- "as "
+  bind mutable foreign_prefix <- "from package "
+  bind mutable direct_at <- -1
+  bind mutable foreign_at <- -1
+  bind mutable alias_start <- 0
+  bind mutable foreign_rest <- ""
+  bind mutable foreign_rest_length <- 0
+  bind mutable as_at <- -1
+  bind mutable alias <- ""
+  choose same borrow target "!":
+    revise output <- "!"
+  otherwise:
+    revise opening_quote <- seek borrow line "\"" prefix_length
+    revise tail_start <- sum opening_quote 1
+    revise closing_quote <- seek borrow line "\"" tail_start
+    revise tail_start <- sum closing_quote 1
+    revise tail <- cut borrow line tail_start line_length
+    revise tail <- call modules_trim_start borrow tail
+    revise tail_length <- measure borrow tail
+    revise direct_at <- seek borrow tail borrow direct_prefix 0
+    revise foreign_at <- seek borrow tail borrow foreign_prefix 0
+    choose same direct_at 0:
+      revise alias_start <- measure borrow direct_prefix
+      revise alias <- cut borrow tail alias_start tail_length
+      revise output <- call modules_trim_end borrow alias
+    otherwise:
+      choose same foreign_at 0:
+        revise alias_start <- measure borrow foreign_prefix
+        revise foreign_rest <- cut borrow tail alias_start tail_length
+        revise foreign_rest_length <- measure borrow foreign_rest
+        revise as_at <- seek borrow foreign_rest " as " 0
+        revise alias_start <- sum as_at 4
+        revise alias <- cut borrow foreign_rest alias_start foreign_rest_length
+        revise output <- call modules_trim_end borrow alias
+      otherwise:
+        revise output <- "!"
+  yield move output
+
+weave modules_import_count [borrow source: Text] -> Whole:
+  bind mutable output <- 0
+  bind mutable normalized <- call modules_normalize borrow source
+  bind mutable length <- measure borrow normalized
+  bind mutable world_name <- call modules_world borrow source
+  bind mutable first_end <- seek borrow normalized "\n" 0
+  bind mutable cursor <- 0
+  bind mutable line_end <- -1
+  bind mutable next <- 0
+  bind mutable line <- ""
+  bind mutable trimmed <- ""
+  bind mutable import_prefix <- "import unit "
+  bind mutable prefix_at <- -1
+  bind mutable target <- ""
+  choose same borrow world_name "!":
+    revise output <- -1
+  otherwise:
+    choose same first_end -1:
+      revise cursor <- length
+    otherwise:
+      revise cursor <- sum first_end 1
+    while less cursor length:
+      revise line_end <- seek borrow normalized "\n" cursor
+      choose same line_end -1:
+        revise line_end <- length
+        revise next <- length
+      otherwise:
+        revise next <- sum line_end 1
+      revise line <- cut borrow normalized cursor line_end
+      revise trimmed <- call modules_trim_start borrow line
+      revise prefix_at <- seek borrow trimmed borrow import_prefix 0
+      choose same prefix_at 0:
+        choose same borrow line borrow trimmed:
+          revise target <- call modules_import_target_line borrow line
+          choose same borrow target "!":
+            revise output <- -1
+            revise cursor <- length
+          otherwise:
+            revise output <- sum output 1
+            revise cursor <- next
+        otherwise:
+          revise output <- -1
+          revise cursor <- length
+      otherwise:
+        revise cursor <- length
+  yield output
+
+weave modules_import_target_at [borrow source: Text, wanted: Whole] -> Text:
+  bind mutable output <- "!"
+  bind mutable count <- call modules_import_count borrow source
+  bind mutable normalized <- call modules_normalize borrow source
+  bind mutable length <- measure borrow normalized
+  bind mutable first_end <- seek borrow normalized "\n" 0
+  bind mutable cursor <- 0
+  bind mutable line_end <- -1
+  bind mutable next <- 0
+  bind mutable line <- ""
+  bind mutable index <- 0
+  bind mutable target <- ""
+  choose less -1 count:
+    choose less wanted count:
+      choose same first_end -1:
+        revise cursor <- length
+      otherwise:
+        revise cursor <- sum first_end 1
+      while less cursor length:
+        revise line_end <- seek borrow normalized "\n" cursor
+        choose same line_end -1:
+          revise line_end <- length
+          revise next <- length
+        otherwise:
+          revise next <- sum line_end 1
+        revise line <- cut borrow normalized cursor line_end
+        choose same index wanted:
+          revise target <- call modules_import_target_line borrow line
+          revise output <- borrow target
+          revise cursor <- length
+        otherwise:
+          revise index <- sum index 1
+          revise cursor <- next
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_import_alias_at [borrow source: Text, wanted: Whole] -> Text:
+  bind mutable output <- "!"
+  bind mutable count <- call modules_import_count borrow source
+  bind mutable normalized <- call modules_normalize borrow source
+  bind mutable length <- measure borrow normalized
+  bind mutable first_end <- seek borrow normalized "\n" 0
+  bind mutable cursor <- 0
+  bind mutable line_end <- -1
+  bind mutable next <- 0
+  bind mutable line <- ""
+  bind mutable index <- 0
+  bind mutable alias <- ""
+  choose less -1 count:
+    choose less wanted count:
+      choose same first_end -1:
+        revise cursor <- length
+      otherwise:
+        revise cursor <- sum first_end 1
+      while less cursor length:
+        revise line_end <- seek borrow normalized "\n" cursor
+        choose same line_end -1:
+          revise line_end <- length
+          revise next <- length
+        otherwise:
+          revise next <- sum line_end 1
+        revise line <- cut borrow normalized cursor line_end
+        choose same index wanted:
+          revise alias <- call modules_import_alias_line borrow line
+          revise output <- borrow alias
+          revise cursor <- length
+        otherwise:
+          revise index <- sum index 1
+          revise cursor <- next
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_body [borrow source: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable count <- call modules_import_count borrow source
+  bind mutable normalized <- call modules_normalize borrow source
+  bind mutable length <- measure borrow normalized
+  bind mutable first_end <- seek borrow normalized "\n" 0
+  bind mutable cursor <- 0
+  bind mutable index <- 0
+  choose less -1 count:
+    choose same first_end -1:
+      revise cursor <- length
+    otherwise:
+      revise cursor <- sum first_end 1
+    while less index count:
+      revise cursor <- call modules_line_after borrow normalized cursor
+      revise index <- sum index 1
+    choose less cursor length:
+      revise output <- cut borrow normalized cursor length
+      revise output <- join borrow output "\n"
+    otherwise:
+      revise output <- ""
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_world [borrow source: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable normalized <- call modules_normalize borrow source
+  bind mutable length <- measure borrow normalized
+  bind mutable first_end <- seek borrow normalized "\n" 0
+  bind mutable first_line <- ""
+  bind mutable trimmed <- ""
+  bind mutable prefix <- "world "
+  bind mutable prefix_length <- measure borrow prefix
+  bind mutable prefix_at <- -1
+  bind mutable world_name <- ""
+  bind mutable trimmed_length <- 0
+  bind mutable world_valid <- dim
+  choose same first_end -1:
+    revise first_end <- length
+  otherwise:
+    revise first_end <- first_end
+  choose less 0 length:
+    revise first_line <- cut borrow normalized 0 first_end
+    revise trimmed <- call modules_trim_start borrow first_line
+    revise prefix_at <- seek borrow trimmed borrow prefix 0
+    choose same prefix_at 0:
+      revise trimmed_length <- measure borrow trimmed
+      revise world_name <- cut borrow trimmed prefix_length trimmed_length
+      revise world_name <- call modules_trim_end borrow world_name
+      revise world_valid <- call bundle_safe_identifier borrow world_name
+      choose world_valid:
+        revise output <- borrow world_name
+      otherwise:
+        revise output <- "!"
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_line_starts_space [borrow line: Text] -> Truth:
+  bind mutable result <- dim
+  bind mutable length <- measure borrow line
+  bind mutable code <- 0
+  choose less 0 length:
+    revise code <- glyph borrow line 0
+    choose same code 32:
+      revise result <- bright
+    otherwise:
+      revise result <- dim
+  otherwise:
+    revise result <- dim
+  yield result
+
+weave modules_weave_name [borrow tail: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable opening <- seek borrow tail "[" 0
+  bind mutable name <- ""
+  bind mutable name_valid <- dim
+  choose less 0 opening:
+    revise name <- cut borrow tail 0 opening
+    revise name <- call modules_trim_end borrow name
+    revise name_valid <- call bundle_safe_identifier borrow name
+    choose name_valid:
+      revise output <- borrow name
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_decl_count [borrow source: Text] -> Whole:
+  bind mutable output <- 0
+  bind mutable body <- call modules_body borrow source
+  bind mutable length <- measure borrow body
+  bind mutable cursor <- 0
+  bind mutable line_end <- -1
+  bind mutable next <- 0
+  bind mutable line <- ""
+  bind mutable content <- ""
+  bind mutable content_length <- 0
+  bind mutable starts_space <- dim
+  bind mutable export_prefix <- "export weave "
+  bind mutable weave_prefix <- "weave "
+  bind mutable export_length <- measure borrow export_prefix
+  bind mutable weave_length <- measure borrow weave_prefix
+  bind mutable export_at <- -1
+  bind mutable weave_at <- -1
+  bind mutable tail <- ""
+  bind mutable name <- ""
+  bind mutable valid <- bright
+  choose same borrow body "!":
+    revise valid <- dim
+  otherwise:
+    revise valid <- valid
+  while less cursor length:
+    revise line_end <- seek borrow body "\n" cursor
+    choose same line_end -1:
+      revise line_end <- length
+      revise next <- length
+    otherwise:
+      revise next <- sum line_end 1
+    revise line <- cut borrow body cursor line_end
+    revise starts_space <- call modules_line_starts_space borrow line
+    choose starts_space:
+      revise valid <- valid
+    otherwise:
+      revise content <- call modules_trim_start borrow line
+      revise content_length <- measure borrow content
+      revise export_at <- seek borrow content borrow export_prefix 0
+      revise weave_at <- seek borrow content borrow weave_prefix 0
+      choose same export_at 0:
+        revise tail <- cut borrow content export_length content_length
+        revise name <- call modules_weave_name borrow tail
+        choose same borrow name "!":
+          revise valid <- dim
+        otherwise:
+          revise output <- sum output 1
+      otherwise:
+        choose same weave_at 0:
+          revise tail <- cut borrow content weave_length content_length
+          revise name <- call modules_weave_name borrow tail
+          choose same borrow name "!":
+            revise valid <- dim
+          otherwise:
+            revise output <- sum output 1
+        otherwise:
+          revise valid <- valid
+    revise cursor <- next
+  choose valid:
+    revise output <- output
+  otherwise:
+    revise output <- -1
+  yield output
+
+weave modules_decl_name_at [borrow source: Text, wanted: Whole] -> Text:
+  bind mutable output <- "!"
+  bind mutable count <- call modules_decl_count borrow source
+  bind mutable body <- call modules_body borrow source
+  bind mutable length <- measure borrow body
+  bind mutable cursor <- 0
+  bind mutable line_end <- -1
+  bind mutable next <- 0
+  bind mutable line <- ""
+  bind mutable content <- ""
+  bind mutable content_length <- 0
+  bind mutable starts_space <- dim
+  bind mutable export_prefix <- "export weave "
+  bind mutable weave_prefix <- "weave "
+  bind mutable export_length <- measure borrow export_prefix
+  bind mutable weave_length <- measure borrow weave_prefix
+  bind mutable export_at <- -1
+  bind mutable weave_at <- -1
+  bind mutable tail <- ""
+  bind mutable name <- ""
+  bind mutable index <- 0
+  choose less -1 count:
+    choose less wanted count:
+      while less cursor length:
+        revise line_end <- seek borrow body "\n" cursor
+        choose same line_end -1:
+          revise line_end <- length
+          revise next <- length
+        otherwise:
+          revise next <- sum line_end 1
+        revise line <- cut borrow body cursor line_end
+        revise starts_space <- call modules_line_starts_space borrow line
+        choose starts_space:
+          revise cursor <- next
+        otherwise:
+          revise content <- call modules_trim_start borrow line
+          revise content_length <- measure borrow content
+          revise export_at <- seek borrow content borrow export_prefix 0
+          revise weave_at <- seek borrow content borrow weave_prefix 0
+          choose same export_at 0:
+            revise tail <- cut borrow content export_length content_length
+            revise name <- call modules_weave_name borrow tail
+            choose same index wanted:
+              revise output <- borrow name
+              revise cursor <- length
+            otherwise:
+              revise index <- sum index 1
+              revise cursor <- next
+          otherwise:
+            choose same weave_at 0:
+              revise tail <- cut borrow content weave_length content_length
+              revise name <- call modules_weave_name borrow tail
+              choose same index wanted:
+                revise output <- borrow name
+                revise cursor <- length
+              otherwise:
+                revise index <- sum index 1
+                revise cursor <- next
+            otherwise:
+              revise cursor <- next
+    otherwise:
+      revise output <- "!"
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_decl_exported_at [borrow source: Text, wanted: Whole] -> Truth:
+  bind mutable output <- dim
+  bind mutable count <- call modules_decl_count borrow source
+  bind mutable body <- call modules_body borrow source
+  bind mutable length <- measure borrow body
+  bind mutable cursor <- 0
+  bind mutable line_end <- -1
+  bind mutable next <- 0
+  bind mutable line <- ""
+  bind mutable content <- ""
+  bind mutable starts_space <- dim
+  bind mutable export_prefix <- "export weave "
+  bind mutable weave_prefix <- "weave "
+  bind mutable export_length <- measure borrow export_prefix
+  bind mutable weave_length <- measure borrow weave_prefix
+  bind mutable export_at <- -1
+  bind mutable weave_at <- -1
+  bind mutable index <- 0
+  choose less -1 count:
+    choose less wanted count:
+      while less cursor length:
+        revise line_end <- seek borrow body "\n" cursor
+        choose same line_end -1:
+          revise line_end <- length
+          revise next <- length
+        otherwise:
+          revise next <- sum line_end 1
+        revise line <- cut borrow body cursor line_end
+        revise starts_space <- call modules_line_starts_space borrow line
+        choose starts_space:
+          revise cursor <- next
+        otherwise:
+          revise content <- call modules_trim_start borrow line
+          revise export_at <- seek borrow content borrow export_prefix 0
+          revise weave_at <- seek borrow content borrow weave_prefix 0
+          choose same export_at 0:
+            choose same index wanted:
+              revise output <- bright
+              revise cursor <- length
+            otherwise:
+              revise index <- sum index 1
+              revise cursor <- next
+          otherwise:
+            choose same weave_at 0:
+              choose same index wanted:
+                revise output <- dim
+                revise cursor <- length
+              otherwise:
+                revise index <- sum index 1
+                revise cursor <- next
+            otherwise:
+              revise cursor <- next
+    otherwise:
+      revise output <- dim
+  otherwise:
+    revise output <- dim
+  yield output
+
+weave modules_has_decl [borrow source: Text, borrow wanted: Text] -> Truth:
+  bind mutable result <- dim
+  bind mutable count <- call modules_decl_count borrow source
+  bind mutable index <- 0
+  bind mutable name <- ""
+  choose less -1 count:
+    while less index count:
+      revise name <- call modules_decl_name_at borrow source index
+      choose same borrow name borrow wanted:
+        revise result <- bright
+      otherwise:
+        revise result <- result
+      revise index <- sum index 1
+  otherwise:
+    revise result <- dim
+  yield result
+
+weave modules_lib_forbidden [borrow source: Text] -> Truth:
+  bind mutable result <- dim
+  bind mutable body <- call modules_body borrow source
+  bind mutable length <- measure borrow body
+  bind mutable cursor <- 0
+  bind mutable line_end <- -1
+  bind mutable next <- 0
+  bind mutable line <- ""
+  bind mutable content <- ""
+  bind mutable starts_space <- dim
+  bind mutable record_at <- -1
+  bind mutable shape_at <- -1
+  bind mutable host_at <- -1
+  while less cursor length:
+    revise line_end <- seek borrow body "\n" cursor
+    choose same line_end -1:
+      revise line_end <- length
+      revise next <- length
+    otherwise:
+      revise next <- sum line_end 1
+    revise line <- cut borrow body cursor line_end
+    revise starts_space <- call modules_line_starts_space borrow line
+    choose starts_space:
+      revise result <- result
+    otherwise:
+      revise content <- call modules_trim_start borrow line
+      revise record_at <- seek borrow content "record " 0
+      revise shape_at <- seek borrow content "shape " 0
+      revise host_at <- seek borrow content "host " 0
+      choose same record_at 0:
+        revise result <- bright
+      otherwise:
+        choose same shape_at 0:
+          revise result <- bright
+        otherwise:
+          choose same host_at 0:
+            revise result <- bright
+          otherwise:
+            revise result <- result
+    revise cursor <- next
+  yield result
+
+weave modules_unit_valid [borrow source: Text, borrow role: Text] -> Truth:
+  bind mutable result <- bright
+  bind mutable world_name <- call modules_world borrow source
+  bind mutable imports <- call modules_import_count borrow source
+  bind mutable declarations <- call modules_decl_count borrow source
+  bind mutable index <- 0
+  bind mutable name <- ""
+  bind mutable names <- ""
+  bind mutable duplicate <- dim
+  bind mutable has_main <- dim
+  bind mutable forbidden <- dim
+  bind mutable role_valid <- call modules_role_valid borrow role
+  choose same borrow world_name "!":
+    revise result <- dim
+  otherwise:
+    revise result <- result
+  choose less -1 imports:
+    choose less 256 imports:
+      revise result <- dim
+    otherwise:
+      revise result <- result
+  otherwise:
+    revise result <- dim
+  choose less -1 declarations:
+    revise result <- result
+  otherwise:
+    revise result <- dim
+  choose role_valid:
+    revise result <- result
+  otherwise:
+    revise result <- dim
+  while less index declarations:
+    revise name <- call modules_decl_name_at borrow source index
+    revise duplicate <- call modules_set_contains borrow names borrow name
+    choose duplicate:
+      revise result <- dim
+    otherwise:
+      revise names <- call modules_set_add borrow names borrow name
+    choose same borrow name "main":
+      revise has_main <- bright
+    otherwise:
+      revise has_main <- has_main
+    revise index <- sum index 1
+  choose same borrow role "main":
+    choose has_main:
+      revise result <- result
+    otherwise:
+      revise result <- dim
+  otherwise:
+    choose same borrow role "test":
+      choose has_main:
+        revise result <- result
+      otherwise:
+        revise result <- dim
+    otherwise:
+      choose same borrow role "lib":
+        choose has_main:
+          revise result <- dim
+        otherwise:
+          revise forbidden <- call modules_lib_forbidden borrow source
+          choose forbidden:
+            revise result <- dim
+          otherwise:
+            revise result <- result
+      otherwise:
+        revise result <- dim
+  yield result
+
+weave modules_target_allowed [borrow catalog: Text, borrow key: Text] -> Truth:
+  bind mutable result <- dim
+  bind mutable package <- call modules_key_package borrow key
+  choose same borrow package "":
+    revise result <- bright
+  otherwise:
+    revise result <- call modules_catalog_has_package borrow catalog borrow package
+  yield result
+
+weave modules_rewrite_local_call [borrow value: Text, borrow from: Text, borrow to: Text] -> Text:
+  bind mutable output <- ""
+  bind mutable length <- measure borrow value
+  bind mutable from_length <- measure borrow from
+  bind mutable cursor <- 0
+  bind mutable found <- -1
+  bind mutable prefix <- ""
+  bind mutable call_prefix <- "call "
+  bind mutable call_length <- measure borrow call_prefix
+  bind mutable target_start <- 0
+  bind mutable target_end <- 0
+  bind mutable scan <- 0
+  bind mutable code <- 0
+  bind mutable ended <- dim
+  bind mutable target <- ""
+  bind mutable valid <- bright
+  choose same from_length 0:
+    revise valid <- dim
+  otherwise:
+    revise valid <- valid
+  while less cursor length:
+    choose valid:
+      revise found <- seek borrow value borrow call_prefix cursor
+      choose same found -1:
+        revise prefix <- cut borrow value cursor length
+        revise output <- join borrow output borrow prefix
+        revise cursor <- length
+      otherwise:
+        revise prefix <- cut borrow value cursor found
+        revise output <- join borrow output borrow prefix
+        revise target_start <- sum found call_length
+        revise target_end <- target_start
+        revise scan <- target_start
+        revise ended <- dim
+        while less scan length:
+          choose ended:
+            revise scan <- length
+          otherwise:
+            revise code <- glyph borrow value scan
+            choose same code 32:
+              revise target_end <- scan
+              revise ended <- bright
+              revise scan <- length
+            otherwise:
+              choose same code 10:
+                revise target_end <- scan
+                revise ended <- bright
+                revise scan <- length
+              otherwise:
+                choose same code 13:
+                  revise target_end <- scan
+                  revise ended <- bright
+                  revise scan <- length
+                otherwise:
+                  revise scan <- sum scan 1
+        choose ended:
+          revise target_end <- target_end
+        otherwise:
+          revise target_end <- length
+        choose same target_start target_end:
+          revise valid <- dim
+          revise cursor <- length
+        otherwise:
+          revise target <- cut borrow value target_start target_end
+          revise output <- join borrow output borrow call_prefix
+          choose same borrow target borrow from:
+            revise output <- join borrow output borrow to
+          otherwise:
+            revise output <- join borrow output borrow target
+          revise cursor <- target_end
+    otherwise:
+      revise cursor <- length
+  choose valid:
+    revise output <- borrow output
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_transform [borrow catalog: Text, borrow key: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable source <- call modules_catalog_source borrow catalog borrow key
+  bind mutable body <- ""
+  bind mutable declarations <- 0
+  bind mutable declaration_index <- 0
+  bind mutable name <- ""
+  bind mutable mangled <- ""
+  bind mutable declaration_pattern <- ""
+  bind mutable declaration_replacement <- ""
+  bind mutable imports <- 0
+  bind mutable import_index <- 0
+  bind mutable target <- ""
+  bind mutable alias <- ""
+  bind mutable aliases <- ""
+  bind mutable alias_duplicate <- dim
+  bind mutable target_allowed <- dim
+  bind mutable target_role <- ""
+  bind mutable target_source <- ""
+  bind mutable target_declarations <- 0
+  bind mutable target_index <- 0
+  bind mutable exported <- dim
+  bind mutable target_name <- ""
+  bind mutable target_mangled <- ""
+  bind mutable qualified <- ""
+  bind mutable call_pattern <- ""
+  bind mutable call_replacement <- ""
+  bind mutable unresolved <- ""
+  bind mutable unresolved_at <- -1
+  bind mutable valid <- bright
+  choose same borrow source "!":
+    revise valid <- dim
+  otherwise:
+    revise body <- call modules_body borrow source
+    choose same borrow body "!":
+      revise valid <- dim
+    otherwise:
+      revise declarations <- call modules_decl_count borrow source
+      revise imports <- call modules_import_count borrow source
+      choose less -1 declarations:
+        revise valid <- valid
+      otherwise:
+        revise valid <- dim
+      choose less -1 imports:
+        revise valid <- valid
+      otherwise:
+        revise valid <- dim
+  choose valid:
+    revise body <- call modules_replace_all borrow body "export weave " "weave "
+  otherwise:
+    revise body <- "!"
+  while less declaration_index declarations:
+    revise name <- call modules_decl_name_at borrow source declaration_index
+    choose same borrow name "main":
+      revise mangled <- "main"
+    otherwise:
+      revise mangled <- call modules_mangle borrow key borrow name
+    revise declaration_pattern <- "weave "
+    revise declaration_pattern <- join borrow declaration_pattern borrow name
+    revise declaration_pattern <- join borrow declaration_pattern " ["
+    revise declaration_replacement <- "weave "
+    revise declaration_replacement <- join borrow declaration_replacement borrow mangled
+    revise declaration_replacement <- join borrow declaration_replacement " ["
+    revise body <- call modules_replace_all borrow body borrow declaration_pattern borrow declaration_replacement
+    choose same borrow body "!":
+      revise valid <- dim
+    otherwise:
+      revise valid <- valid
+    revise declaration_index <- sum declaration_index 1
+  while less import_index imports:
+    revise target_declarations <- 0
+    revise target_source <- ""
+    revise target <- call modules_import_target_at borrow source import_index
+    revise alias <- call modules_import_alias_at borrow source import_index
+    revise alias_duplicate <- call modules_set_contains borrow aliases borrow alias
+    choose same borrow target "!":
+      revise valid <- dim
+    otherwise:
+      choose same borrow alias "!":
+        revise valid <- dim
+      otherwise:
+        choose alias_duplicate:
+          revise valid <- dim
+        otherwise:
+          revise aliases <- call modules_set_add borrow aliases borrow alias
+    revise target_allowed <- call modules_target_allowed borrow catalog borrow target
+    choose target_allowed:
+      revise target_role <- call modules_catalog_role borrow catalog borrow target
+      choose same borrow target_role "lib":
+        revise target_source <- call modules_catalog_source borrow catalog borrow target
+        choose same borrow target_source "!":
+          revise valid <- dim
+        otherwise:
+          revise target_declarations <- call modules_decl_count borrow target_source
+          choose less -1 target_declarations:
+            revise valid <- valid
+          otherwise:
+            revise valid <- dim
+      otherwise:
+        revise valid <- dim
+    otherwise:
+      revise valid <- dim
+    revise target_index <- 0
+    while less target_index target_declarations:
+      revise exported <- call modules_decl_exported_at borrow target_source target_index
+      choose exported:
+        revise target_name <- call modules_decl_name_at borrow target_source target_index
+        revise target_mangled <- call modules_mangle borrow target borrow target_name
+        revise qualified <- join borrow alias "."
+        revise qualified <- join borrow qualified borrow target_name
+        revise call_pattern <- "call "
+        revise call_pattern <- join borrow call_pattern borrow qualified
+        revise call_replacement <- "call "
+        revise call_replacement <- join borrow call_replacement borrow target_mangled
+        revise body <- call modules_replace_all borrow body borrow call_pattern borrow call_replacement
+        choose same borrow body "!":
+          revise valid <- dim
+        otherwise:
+          revise valid <- valid
+      otherwise:
+        revise valid <- valid
+      revise target_index <- sum target_index 1
+    revise unresolved <- "call "
+    revise unresolved <- join borrow unresolved borrow alias
+    revise unresolved <- join borrow unresolved "."
+    revise unresolved_at <- seek borrow body borrow unresolved 0
+    choose same unresolved_at -1:
+      revise valid <- valid
+    otherwise:
+      revise valid <- dim
+    revise import_index <- sum import_index 1
+  revise declaration_index <- 0
+  while less declaration_index declarations:
+    revise name <- call modules_decl_name_at borrow source declaration_index
+    choose same borrow name "main":
+      revise mangled <- "main"
+    otherwise:
+      revise mangled <- call modules_mangle borrow key borrow name
+    choose same borrow name borrow mangled:
+      revise body <- borrow body
+    otherwise:
+      revise body <- call modules_rewrite_local_call borrow body borrow name borrow mangled
+      choose same borrow body "!":
+        revise valid <- dim
+      otherwise:
+        revise valid <- valid
+    revise declaration_index <- sum declaration_index 1
+  choose valid:
+    revise output <- call modules_trim_end borrow body
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_graph_order [borrow catalog: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable valid <- call modules_catalog_valid borrow catalog
+  bind mutable entry <- call modules_catalog_entry borrow catalog
+  bind mutable stack <- ""
+  bind mutable stack_length <- 0
+  bind mutable visiting <- ""
+  bind mutable visited <- ""
+  bind mutable order <- ""
+  bind mutable processed <- ""
+  bind mutable active <- ""
+  bind mutable source <- ""
+  bind mutable role <- ""
+  bind mutable unit_valid <- dim
+  bind mutable imports <- 0
+  bind mutable import_index <- 0
+  bind mutable candidate <- ""
+  bind mutable selected <- ""
+  bind mutable selected_found <- dim
+  bind mutable edge <- ""
+  bind mutable edge_seen <- dim
+  bind mutable target_allowed <- dim
+  bind mutable target_role <- ""
+  bind mutable target_source <- ""
+  bind mutable target_valid <- dim
+  bind mutable visiting_hit <- dim
+  bind mutable visited_hit <- dim
+  bind mutable steps <- 0
+  bind mutable exhausted <- dim
+  choose valid:
+    revise stack <- call modules_set_add borrow stack borrow entry
+    revise visiting <- call modules_set_add borrow visiting borrow entry
+    revise stack_length <- call modules_set_count borrow stack
+  otherwise:
+    revise stack <- ""
+    revise stack_length <- 0
+  while less 0 stack_length:
+    revise steps <- sum steps 1
+    choose less 66000 steps:
+      revise exhausted <- bright
+    otherwise:
+      revise exhausted <- dim
+    choose exhausted:
+      revise valid <- dim
+      revise stack <- ""
+    otherwise:
+      revise active <- call modules_set_last borrow stack
+      revise source <- call modules_catalog_source borrow catalog borrow active
+      revise role <- call modules_catalog_role borrow catalog borrow active
+      revise unit_valid <- call modules_unit_valid borrow source borrow role
+      choose unit_valid:
+        revise imports <- call modules_import_count borrow source
+        choose less -1 imports:
+          revise valid <- valid
+        otherwise:
+          revise valid <- dim
+          revise imports <- 0
+      otherwise:
+        revise valid <- dim
+        revise imports <- 0
+      revise import_index <- 0
+      revise selected <- ""
+      revise selected_found <- dim
+      while less import_index imports:
+        revise candidate <- call modules_import_target_at borrow source import_index
+        choose selected_found:
+          revise selected_found <- selected_found
+        otherwise:
+          choose same borrow candidate "!":
+            revise valid <- dim
+          otherwise:
+            revise edge <- join borrow active ">"
+            revise edge <- join borrow edge borrow candidate
+            revise edge_seen <- call modules_set_contains borrow processed borrow edge
+            choose edge_seen:
+              revise edge_seen <- edge_seen
+            otherwise:
+              revise processed <- call modules_set_add borrow processed borrow edge
+              revise selected <- borrow candidate
+              revise selected_found <- bright
+        revise import_index <- sum import_index 1
+      choose selected_found:
+        revise target_allowed <- call modules_target_allowed borrow catalog borrow selected
+        revise target_role <- call modules_catalog_role borrow catalog borrow selected
+        revise target_source <- call modules_catalog_source borrow catalog borrow selected
+        revise target_valid <- call modules_unit_valid borrow target_source borrow target_role
+        choose target_allowed:
+          choose same borrow target_role "lib":
+            choose target_valid:
+              revise visiting_hit <- call modules_set_contains borrow visiting borrow selected
+              choose visiting_hit:
+                revise valid <- dim
+                revise stack <- ""
+              otherwise:
+                revise visited_hit <- call modules_set_contains borrow visited borrow selected
+                choose visited_hit:
+                  revise stack <- borrow stack
+                otherwise:
+                  revise stack <- call modules_set_add borrow stack borrow selected
+                  revise visiting <- call modules_set_add borrow visiting borrow selected
+            otherwise:
+              revise valid <- dim
+              revise stack <- ""
+          otherwise:
+            revise valid <- dim
+            revise stack <- ""
+        otherwise:
+          revise valid <- dim
+          revise stack <- ""
+      otherwise:
+        revise stack <- call modules_set_remove borrow stack borrow active
+        revise visiting <- call modules_set_remove borrow visiting borrow active
+        revise visited_hit <- call modules_set_contains borrow visited borrow active
+        choose visited_hit:
+          revise visited <- borrow visited
+        otherwise:
+          revise visited <- call modules_set_add borrow visited borrow active
+          revise order <- call modules_set_add borrow order borrow active
+      revise stack_length <- call modules_set_count borrow stack
+  choose valid:
+    revise output <- borrow order
+  otherwise:
+    revise output <- "!"
+  yield move output
+
+weave modules_worlds_unique [borrow catalog: Text, borrow order: Text] -> Truth:
+  bind mutable result <- bright
+  bind mutable count <- call modules_set_count borrow order
+  bind mutable index <- 0
+  bind mutable key <- ""
+  bind mutable source <- ""
+  bind mutable world_name <- ""
+  bind mutable worlds <- ""
+  bind mutable duplicate <- dim
+  while less index count:
+    revise key <- call modules_set_nth borrow order index
+    revise source <- call modules_catalog_source borrow catalog borrow key
+    revise world_name <- call modules_world borrow source
+    choose same borrow world_name "!":
+      revise result <- dim
+    otherwise:
+      revise duplicate <- call modules_set_contains borrow worlds borrow world_name
+      choose duplicate:
+        revise result <- dim
+      otherwise:
+        revise worlds <- call modules_set_add borrow worlds borrow world_name
+    revise index <- sum index 1
+  yield result
+
+weave modules_elaborate [borrow catalog: Text] -> Text:
+  bind mutable output <- "!"
+  bind mutable valid <- call modules_catalog_valid borrow catalog
+  bind mutable entry <- call modules_catalog_entry borrow catalog
+  bind mutable order <- ""
+  bind mutable worlds_unique <- dim
+  bind mutable entry_source <- ""
+  bind mutable entry_world <- ""
+  bind mutable combined <- ""
+  bind mutable count <- 0
+  bind mutable index <- 0
+  bind mutable key <- ""
+  bind mutable body <- ""
+  bind mutable body_length <- 0
+  choose valid:
+    revise order <- call modules_graph_order borrow catalog
+    choose same borrow order "!":
+      revise valid <- dim
+    otherwise:
+      revise worlds_unique <- call modules_worlds_unique borrow catalog borrow order
+      choose worlds_unique:
+        revise entry_source <- call modules_catalog_source borrow catalog borrow entry
+        revise entry_world <- call modules_world borrow entry_source
+        choose same borrow entry_world "!":
+          revise valid <- dim
+        otherwise:
+          revise combined <- "world "
+          revise combined <- join borrow combined borrow entry_world
+          revise combined <- join borrow combined "\n"
+      otherwise:
+        revise valid <- dim
+  otherwise:
+    revise valid <- dim
+  revise count <- call modules_set_count borrow order
+  while less index count:
+    revise key <- call modules_set_nth borrow order index
+    revise body <- call modules_transform borrow catalog borrow key
+    choose same borrow body "!":
+      revise valid <- dim
+    otherwise:
+      revise body_length <- measure borrow body
+      choose less 0 body_length:
+        revise combined <- join borrow combined "\n"
+        revise combined <- join borrow combined borrow body
+        revise combined <- join borrow combined "\n"
+      otherwise:
+        revise combined <- borrow combined
+    revise index <- sum index 1
+  choose valid:
+    revise output <- borrow combined
+  otherwise:
+    revise output <- "!"
+  yield move output
+
 weave compile_bundle [borrow bundle: Text] -> Bytes:
   bind mutable output <- bytes ""
   bind mutable elaborated <- "!"
@@ -6559,6 +8809,25 @@ weave compile_bundle [borrow bundle: Text] -> Bytes:
   bind mutable failed <- same first 33
   choose failed:
     speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-016\",\"message\":\"seed bundle profile rejected\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+  otherwise:
+    revise output <- call compile borrow elaborated
+  yield move output
+
+weave compile_modules [borrow catalog: Text] -> Bytes:
+  bind mutable output <- bytes ""
+  bind mutable catalog_valid <- call modules_catalog_valid borrow catalog
+  bind mutable elaborated <- "!"
+  choose catalog_valid:
+    revise elaborated <- call modules_elaborate borrow catalog
+  otherwise:
+    revise elaborated <- "!"
+  bind first <- glyph borrow elaborated 0
+  bind mutable failed <- same first 33
+  choose failed:
+    choose catalog_valid:
+      speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-017\",\"message\":\"seed module graph rejected\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+    otherwise:
+      speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-017\",\"message\":\"seed module catalog framing rejected\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
   otherwise:
     revise output <- call compile borrow elaborated
   yield move output

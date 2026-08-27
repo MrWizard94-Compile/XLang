@@ -14,6 +14,7 @@ flowchart LR
     SeedSrc["seed/aether_seed.ae"] -->|"compile (product ADR-067)"| SeedArtFile["seed/aether_seed.aeth"]
     Forge["aether forge"] -->|"verify + invoke"| SeedArt
     BundleForge["aether forge-bundle"] -->|"verify + invoke compile_bundle"| SeedArt
+    ModulesForge["aether forge-modules / project / workspace build"] -->|"closed catalog + invoke compile_modules"| SeedArt
     SeedArt --> Candidate["candidate AETH Bytes"]
     Candidate -->|"verify before write"| Forge
 ~~~
@@ -55,13 +56,27 @@ general seed-native module graph. See
 [ADR-130](../historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md)
 and [the SBP-003 threat model](THREAT_MODEL-SBP-003-SEED-FANIN.md).
 
+GSM-001 / ADR-131 is the default bounded M11/M22 multi-module route. The host
+uses caller-selected manifests, locks, path confinement, UTF-8 checks, and
+direct workspace dependency roots to frame a deterministic
+`aether.seed-modules/v1` catalog. It does not parse source imports or elaborate
+the graph. The verified seed `compile_modules` weave validates the closed
+catalog, resolves the reachable acyclic graph, validates module boundaries,
+mangle-rewrites, assembles, and emits AETH. The protocol permits up to 256
+candidate units and 64 direct package authorities under scalar and traversal
+limits, adds no filesystem or guest capability to the seed, and returns coarse
+`AE-SEED-017` diagnostics on rejection. Rust elaboration remains a
+bootstrap/reference oracle. See [ADR-131](../historical%20docs/ADR-131-gsm-general-seed-module-catalog.md),
+[GSM design](DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md), and
+[GSM threat model](THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md).
+
 Current product capabilities include verifier-first AETH v11/v12 emission,
 seed-hosted compilation, bounded resources/effects/nurseries, grant-mediated
 host I/O, the narrow foreign pilot, offline project/workspace tooling with
 optional local workspace locks, transparent local source-package publication,
 deterministic checkpointed task frames, and
-versioned structural authoring v8, and the ADR-128/129/130 bounded source-bundle
-profiles. M23 adds
+versioned structural authoring v8, ADR-128/129/130 bounded source-bundle
+profiles, and GSM-001 bounded general seed-native module graphs. M23 adds
 a deliberately narrow pure-Whole helper-call form at comptime; it does not add
 an AETH instruction or runtime authority. General effects, OS-thread parallelism, generic type parameters,
 C-header ingestion, arbitrary-node structural edits, a general or bundled
@@ -154,6 +169,13 @@ returning `Whole`, because all AETH artifacts remain independently verifiable
 and runnable. The fixed compile ABI makes self-hosting proofs inspectable
 without granting an artifact host capabilities.
 
+GSM-001 adds a second closed named forge ABI,
+`compile_modules [borrow catalog: Text] -> Bytes`. It has the same compiler and
+returned-artifact verification requirements as `compile`, but it accepts only a
+bounded scalar-framed catalog and leaves all source import parsing and graph
+work to the seed. `forge-modules` is explicit; it does not grant the seed any
+file or package-resolver authority.
+
 ## Seed-Hosted Product Compile Boundary
 
 The Aether-written seed is the **default product compiler** for its documented
@@ -212,7 +234,8 @@ For a locked workspace, project-manifest resolution canonicalizes the manifest
 and rejects a symlink leaving the canonical package root. Verification then
 checks the raw manifest digest and project name/version, requires the nested
 complete unit lock, and runs ordinary project verification. `workspace build`
-uses that whole-workspace preflight before it elaborates or writes an artifact.
+uses that whole-workspace preflight before it frames the GSM-001 catalog or
+writes an artifact.
 `project lock` and `workspace lock` calculate candidate manifests in memory and
 write only when the caller gives explicit `--write`; a workspace refresh does
 not silently mutate all nested project manifests.
@@ -232,8 +255,8 @@ capability is introduced.
 ## CLI Authority Boundary
 
 The CLI owns caller-selected local file I/O. `structure` writes only the
-semantic document to stdout. `compile`, `forge`, and `apply-edit` write only to
-their explicit output paths; `compile` and `forge` verify AETH before writing,
+semantic document to stdout. `compile`, `forge`, `forge-modules`, and `apply-edit` write only to
+their explicit output paths; `compile` and forge commands verify AETH before writing,
 and `apply-edit` seed-compiles before writing canonical source. No active
 desktop, WebView, model, or network integration exists. The retired workbench
 is recorded in [ADR-006](../historical%20docs/ADR-006-retire-aether-studio.md).

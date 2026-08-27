@@ -1,8 +1,8 @@
 # BARP-001: Bootstrap Authority Reduction Program
 
-**Status:** Active program — product-default toolchain (ADR-064–072; bounded increments through ADR-130); ADR-127–130 release verified; residual recovery bootstrap
-**Date:** 2026-08-26 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-127 and SBP-001/SBP-002/SBP-003)
-**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-130](../historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md)
+**Status:** Active program — product-default toolchain (ADR-064–072; bounded increments through ADR-131); ADR-127–130 release verified and GSM-001 / ADR-131 full/release gate verified; residual recovery bootstrap
+**Date:** 2026-08-27 (Phase 1–2 / ADR-044–072; bounded seed-SPEAK pilots through ADR-127, SBP-001/SBP-002/SBP-003, and GSM-001)
+**Decision:** [ADR-043](../historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[ADR-131](../historical%20docs/ADR-131-gsm-general-seed-module-catalog.md)
 **Rule IDs:** `CONST-DEP-001`, `RND-INVAR-001`, `DOC-ADR-001`, `TEST-BEHAVIOR-001`
 
 ---
@@ -34,7 +34,7 @@ Bootstrap remains **required** only for residual roles (ADR-065–071 reduced fu
 | `compile_product_bytecode` | **Phase 2:** seed forge + verify only; **Phase 3a/3b** `AE-SEED-*` preflights |
 | `compile_with_seed` | **ADR-051:** seed-only; empty placeholder `Program` (never bootstrap) |
 | ~~`lower_m23_comptime_calls_for_seed`~~ | **Removed in Phase 1** — seed interprets raw M23 `call` |
-| Module elaborate | Host-side graph; then **seed emit only** (ADR-045/047: no bootstrap dual-compare or AST) |
+| Module elaborate | GSM-001 host framing; then **seed graph elaboration and emit** (ADR-131; no bootstrap product graph/AST) |
 | Lib project verify | **Product seed probe** with synthetic main (ADR-052; was bootstrap) |
 | `apply-edit` | Bootstrap base parse AST; **product seed accept** (ADR-048); CLI product write gate |
 | CLI `check` | **Product default** (ADR-064); `--bootstrap` recovery AST diagnostics |
@@ -48,7 +48,7 @@ Bootstrap remains **required** only for residual roles (ADR-065–071 reduced fu
 | LSP format | **Product** LF+accept (ADR-064) |
 | LSP hover/definition | **Product-surface** local (ADR-066); import path text scan |
 | Product diagnostics API | [`product_diagnostics`] (ADR-055) |
-| Multi-module | Host elaborate + seed emit; general seed-native multi-file **false** (ADR-056). ADR-128/129/130 are separate exact v1 two-unit, v2 transitive-three-unit, and v3 two-leaf-fan-in-four-unit profiles, not general exceptions. |
+| Multi-module | GSM-001 host framing + seed graph elaboration for bounded general M11/M22 (ADR-131); Rust elaboration is recovery/reference oracle. ADR-128/129/130 remain separate exact v1 two-unit, v2 transitive-three-unit, and v3 two-leaf-fan-in-four-unit profiles. |
 
 **Primary product emission** is seed forge without bootstrap pre-gate or
 product dual-compare gate. Bootstrap remains dual-compare **oracle**, recovery
@@ -151,9 +151,12 @@ CLI apply-edit trusts core product accept (no second forge).
 `product_diagnostics` + `AE-SEED-012` raw import unit (host-facing structured
 product diagnostics; not full seed-internal error packets).
 
-### ADR-056 — Host elaborate + seed emit multi-module (**complete** 2026-08-10)
+### ADR-056 — Host elaborate + seed emit multi-module (**historical baseline** 2026-08-10)
 
-Contract + honesty trackers; seed-native multi-file elaboration remains false.
+ADR-056 established the original honest product boundary. GSM-001 / ADR-131
+supersedes it for the default bounded M11/M22 route: Rust retains the elaborator
+only as a bootstrap/reference oracle, while seed `compile_modules` owns catalog
+graph elaboration.
 
 ### ADR-128 — bounded seed-native Whole-library bundle (**release verified**)
 
@@ -163,9 +166,8 @@ entry source as bounded scalar-framed Text to seed
 paths, distinct worlds, one exact import, one exported pure Whole helper, and
 qualified calls; it applies the established M11 mangle and compiles the resulting
 single-world source. The product path supplies opaque Text and never invokes the
-host M11 elaborator. The profile is capability-closed and retains
-`seed_native_multi_module_elaboration() == false` for general projects,
-workspaces, and multi-source envelopes. See [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
+host M11 elaborator. The profile is capability-closed and remains a distinct
+fixed two-unit API alongside GSM-001's bounded general catalog route. See [ADR-128](../historical%20docs/ADR-128-barp-seed-native-whole-library-bundle-profile.md),
 [SBP-001](../historical%20docs/DESIGN-SBP-001-SEED-NATIVE-WHOLE-BUNDLE-PROFILE.md),
 and [the SBP matrix](SBP-VALIDATION-MATRIX.md).
 
@@ -178,9 +180,8 @@ The seed validates the three scalar-framed ASCII/LF units, safe paths, distinct
 worlds, exact imports, one export per library, and qualified calls before it
 applies M11-compatible mangling/rewrite and compiles one source. The product
 route still supplies opaque Text and never invokes the host M11 elaborator.
-The profile is capability-closed and keeps
-`seed_native_multi_module_elaboration() == false` for ordinary projects,
-workspaces, and envelopes. It is not an arbitrary three-unit graph. See
+The profile is capability-closed and remains a distinct fixed three-unit API
+alongside GSM-001; it is not an arbitrary three-unit graph. See
 [ADR-129](../historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md),
 [SBP-002](../historical%20docs/DESIGN-SBP-002-SEED-NATIVE-TRANSITIVE-CHAIN-PROFILE.md),
 and [the SBP-002 threat model](THREAT_MODEL-SBP-002-SEED-CHAIN.md).
@@ -196,11 +197,23 @@ paths; distinct worlds; the two ordered merge imports; one export per library;
 and only the two declared qualified helper calls before it applies M11-compatible
 mangling/rewrite and compiles one source. The product route still supplies opaque
 Text and never invokes the host M11 elaborator. The profile is capability-closed
-and keeps `seed_native_multi_module_elaboration() == false` for ordinary
-projects, workspaces, and envelopes. It is not an arbitrary four-unit graph. See
+and remains a distinct fixed four-unit API alongside GSM-001; it is not an
+arbitrary four-unit graph. See
 [ADR-130](../historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md),
 [SBP-003](../historical%20docs/DESIGN-SBP-003-SEED-NATIVE-FANIN-PROFILE.md), and
 [the SBP-003 threat model](THREAT_MODEL-SBP-003-SEED-FANIN.md).
+
+### ADR-131 — GSM-001 general seed module catalog (**implemented; full gate passed 2026-08-27**)
+
+The product host frames a bounded closed catalog from manifest-authorized local
+source and direct M22 package libraries. The Aether-written seed validates the
+catalog, parses imports, resolves arbitrary acyclic graph shapes within its
+bounds, enforces export/package/role rules, mangle-rewrites boundaries, and
+emits AETH through `compile_modules [borrow catalog: Text] -> Bytes`. No seed
+filesystem or guest capability is added; full diagnostic parity remains out of
+scope. See [ADR-131](../historical%20docs/ADR-131-gsm-general-seed-module-catalog.md),
+[GSM design](DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md), and
+[GSM matrix](GSM-VALIDATION-MATRIX.md).
 
 ### ADR-057 — Structural-edit product base gate (**complete** 2026-08-10)
 
@@ -244,7 +257,7 @@ Product project/workspace compile returns seed bytes via
 | Product project format | **`project format --product`** (ADR-054) |
 | Product structure | **`structure --product`** envelope (ADR-054) |
 | Product diagnostics API | **`product_diagnostics`** (ADR-055) |
-| Multi-module | Host elaborate + seed emit (ADR-056); general seed-native = false. SBP-001 is a distinct exact two-unit profile, SBP-002 an exact transitive-three-unit profile, and SBP-003 an exact four-unit two-leaf-fan-in profile (ADR-128/129/130). |
+| Multi-module | GSM-001 catalog framing + seed graph elaboration for bounded general M11/M22 (ADR-131); Rust elaboration is oracle/recovery only. SBP-001/002/003 remain distinct exact bundle APIs (ADR-128/129/130). |
 | LSP diagnostics / hover / def | **Product primary** (ADR-058/066) |
 | Structural top-level weaves | **Product path** (ADR-065/068 replace/insert/delete) |
 | Structural statements/records | **Product path** weave-body + primitive records (ADR-069) |

@@ -1,10 +1,10 @@
 # Aether / XLang — Comprehensive Project Progress Report
 
-**Date:** 2026-08-26
+**Date:** 2026-08-27
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** ADR-130 bounded seed-native two-leaf fan-in bundle — focused seed/product/bootstrap/forged artifact/hostile-input evidence, full release gate, 462-file package, isolated consumer, and unlisted-file tamper rejection PASS (2026-08-26)
+**Current delivery verification:** GSM-001 / ADR-131 general bounded seed-native M11/M22 catalog — implementation, focused core/CLI/seed proofs, public six-unit catalog fixture, and Aether Atlas showcase evidence; full gate passed 2026-08-27 ([delivery report](../historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md))
 **Constitution:** AGENTS Constitution 5.1.0
 
 ---
@@ -14,9 +14,9 @@
 Aether is a **local-first, seed-hosted product compiler** with verified AETH
 execution, dual-compare self-host proofs, and human-authorized **F-NATIVE** /
 **F-REGISTRY** pilots — now **0.37.0** package contract, with BARP having moved
-product authority off the Rust bootstrap for default toolchain paths. ADR-129
-proves a bounded transitive seed bundle profile; ADR-130 release-verifies the
-next fixed two-leaf fan-in profile; and M32a/M32b
+product authority off the Rust bootstrap for default toolchain paths. ADR-131
+extends that reduction to ordinary bounded M11/M22 graph elaboration through a
+closed catalog; ADR-128/129/130 remain independent fixed-profile evidence; and M32a/M32b
 provide a closed local verified-execution evidence and strict comparison surface.
 
 ---
@@ -35,7 +35,7 @@ provide a closed local verified-execution evidence and strict comparison surface
 
 ### 2.2 Product toolchain (BARP)
 
-Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–128):
+Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), ADR-043–131):
 
 | Capability | Authority |
 | --- | --- |
@@ -43,8 +43,8 @@ Bootstrap Authority Reduction Program ([DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTR
 | `check` / `format` / `structure` / project format | Product default; `--bootstrap` recovery |
 | LSP diagnostics / symbols / hover / definition / format | Product-primary |
 | Structural edits | Product weave/body/record paths |
-| Multi-module / multi-source | Host elaborate + seed emit + unit digests |
-| SBP-001/SBP-002/SBP-003 bounded bundles | Seed owns one exact framed library -> entry profile, one exact foundation -> bridge -> entry profile, and one exact left leaf + right leaf -> merge -> entry profile; no host elaborator on any route and no general multi-module claim |
+| Multi-module / multi-source | GSM-001: host frames manifest-authorized opaque source catalog; seed resolves bounded general M11/M22 graph and emits AETH; Rust elaboration is oracle/recovery only |
+| SBP-001/SBP-002/SBP-003 bounded bundles | Seed owns one exact framed library -> entry profile, one exact foundation -> bridge -> entry profile, and one exact left leaf + right leaf -> merge -> entry profile; preserved independent fixed APIs alongside GSM-001 |
 | Diagnostics | `AE-SEED-*` preflights + SPEAK packets; bounded seed pilot 003/004/005/006/007/010/011/012/013/014/015 |
 | Bootstrap residual | Dual-compare oracle, recovery flags, full `aether.ast/v8` |
 
@@ -74,7 +74,8 @@ Aether source (.ae)
     │
     ├─ product path (default)
     │     host preflights (AE-SEED-*)
-    │     multi-source? → host elaborate
+    │     multi-source/project/workspace? → host manifest/path/lock framing → closed GSM-001 catalog
+    │                                      → seed import parse + graph elaboration
     │     forge seed/aether_seed.aeth  → AETH bytes
     │     seed SPEAK merge on failure (pilot codes)
     │     verify_bytecode
@@ -118,22 +119,27 @@ The 0.36 package contract (M19e) remains the executable language baseline. M25
 now advances the toolchain package to 0.37 with a local package ecosystem step;
 BARP and M32 work remain **independence and infrastructure maturity**:
 
-### 5.1 BARP highlights (ADR-043 → 130; ADR-128/129/130 release verified)
+### 5.1 BARP highlights (ADR-043 → 131; ADR-128/129/130 release verified, GSM-001 full gate passed 2026-08-27)
 
 - Product-default CLI toolchain; bootstrap recovery only  
-- Multi-source envelope + multi-file host forge + unit digests  
+- GSM-001 catalog framing + seed-owned general bounded M11/M22 graph forge; Rust multi-file elaboration retained only as oracle/recovery
 - ADR-128 SBP-001 exact two-unit source bundle: verified seed `compile_bundle`
   owns frame parsing, one-edge elaboration, path mangling, and call rewrite;
-  general M11/M22 remains host elaborate + seed emit (release verified)
+  it remains a fixed API alongside GSM-001 (release verified)
 - ADR-129 SBP-002 exact three-unit foundation -> bridge -> entry bundle:
   the same verified seed ABI owns two fixed transitive import edges, rewrites
-  both qualified call boundaries, and remains separate from general M11/M22
+  both qualified call boundaries, and remains a fixed API alongside GSM-001
   (release verified, including package and isolated consumer proof)
 - ADR-130 SBP-003 exact four-unit left leaf + right leaf -> merge -> entry
   bundle: the same verified seed ABI owns three fixed edges, rewrites both
-  merge-qualified call boundaries, and remains separate from general M11/M22
+  merge-qualified call boundaries, and remains a fixed API alongside GSM-001
   (release verified: framing, product, bootstrap, named-forge, verifier, VM,
   hostile corpus, full release gate, package, isolated consumer, and tamper proof)
+- ADR-131 GSM-001: a 256-unit / 64-direct-package scalar-framed catalog is
+  host-framed under manifest/lock/path authority, while the seed validates,
+  resolves, checks, mangle-rewrites, and compiles arbitrary acyclic normal-form
+  M11/M22 graph topology within its declared bounds; product graph failure is
+  coarse AE-SEED-017 and full diagnostic parity is not claimed
 - SPEAK protocol `AETHER_SEED_ERROR:` + host packet ABI  
 - Seed SPEAK pilot: **AE-SEED-003/004/005/006/007/010/011/012/013/014/015**; 003/007 are bounded lexical checks, 014 scans canonical reserved-task prefixes, 015 requires an exact checkpoint in a canonical task body, 010 detects only a canonical ordinary-Whole Text-literal or exact Truth-literal yield, 011 detects canonical total-Whole direct-bind/root-yield/root-revise/root-speak target existence, delimiter-bounded root-handle target existence, literal-erroring-header root-forward target existence, and literal total-root-nursery immediate zero-argument, single-digit Whole, positive two-digit Whole, or exact-bright Truth spawn target existence across declared top-level weave headers (the handle form requires fixed `into` / `otherwise error into` delimiters that leave a destination suffix; the forward form requires `-> Whole raises Whole:`; the nursery forms require root `together:` plus immediate `spawn call target into destination`, `spawn call target digit into destination` with one ASCII decimal `digit`, `spawn call target digits into destination` with exactly two ASCII decimal characters and a nonzero first digit, or `spawn call target bright into destination`), and 013 detects only a canonical ordinary-Whole `choose same` / `choose less` / exact `choose bright:` / exact `choose dim:` / exact `choose not bright:` / exact `choose not dim:` nested yield (dual-compare rebuild)
 - ADR-125 additionally recognizes only the immediate exact-`dim` Truth child `spawn call target dim into destination`; full release, seed identity, and packaged consumer verification pass. Exact empty Text is separately ADR-126.
@@ -267,7 +273,7 @@ consumer verification.
 | Seed self-host | **High** | Byte-identical multi-generation |
 | Product vs bootstrap independence | **High** | Default product; residual oracle documented |
 | Diagnostics honesty | **Medium–High** | Host strong; seed SPEAK pilot expanding |
-| Multi-module | **Medium** | Host elaborate works; exact v1 two-unit, v2 transitive-three-unit, and v3 two-leaf-fan-in-four-unit profiles do not establish general seed-native modules |
+| Multi-module | **High (bounded)** | GSM-001 seed owns ordinary acyclic M11/M22 catalog graphs under hard source/package/traversal limits; no dynamic discovery, resolver, transitive authority, or full diagnostic-parity claim |
 | Native lower | **Medium** | Useful pilot; host-dependent |
 | Registry | **Medium** | Offline + signed + lite CA; not full PKI |
 | Task concurrency | **Medium** | M19e solid; no handles/timeouts/parallel |
@@ -286,7 +292,7 @@ consumer verification.
 - Full RFC 5280 X.509 DER  
 - Bundled hermetic cross-compile sysroot  
 - Claiming seed SPEAK complete for every AE-SEED code  
-- Claiming general seed-native multi-file forge
+- Claiming unbounded seed-native filesystem discovery, dynamic package resolution, or full multi-module diagnostic parity
 
 ---
 
@@ -294,7 +300,7 @@ consumer verification.
 
 Ordered for dependency honesty (`CONST-DEP-001`):
 
-1. **BARP:** select one broader `AE-SEED-011` or `AE-SEED-013` form with an explicit false-positive boundary, or a separately designed next bounded seed-native multi-file profile
+1. **BARP:** select one broader `AE-SEED-011` or `AE-SEED-013` form with an explicit false-positive boundary; preserve GSM-001 bounds and add graph cases only with an explicit security/validation delta
 2. **M32 evidence operation:** collect a human-declared pinned local baseline and candidate report under one M32b profile before any scoped performance-improvement claim
 3. **F-NATIVE M35k+:** optional bundled/hermetic tool path when operators need reproducibility
 4. **F-REGISTRY:** RFC 5280-shaped DER only if human re-authorizes beyond X.509-lite
@@ -328,6 +334,8 @@ pwsh -File tools\aether-gate.ps1 -Mode release
 | [ROADMAP.md](ROADMAP.md) | Track order + human backlog |
 | [SEED_PROFILE.md](SEED_PROFILE.md) | Seed emission honesty |
 | [FORGE_CONTRACT.md](FORGE_CONTRACT.md) | Host forge ABI |
+| [DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md](DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md) | Current general seed-native module authority boundary |
+| [GSM-VALIDATION-MATRIX.md](GSM-VALIDATION-MATRIX.md) | GSM-001 proof matrix |
 | [DESIGN-BARP-001](DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md) | BARP program |
 | [DELIVERY_REPORT-2026-08-11-M25-LOCAL-PACKAGE-PUBLICATION.md](../historical%20docs/DELIVERY_REPORT-2026-08-11-M25-LOCAL-PACKAGE-PUBLICATION.md) | M25 0.37 delivery / full and release evidence |
 | [DELIVERY_REPORT-2026-08-11-BARP-UNKNOWN-CALL-SPEAK.md](../historical%20docs/DELIVERY_REPORT-2026-08-11-BARP-UNKNOWN-CALL-SPEAK.md) | ADR-110 direct seed diagnostic delivery / current verification status |

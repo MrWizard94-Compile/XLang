@@ -12,10 +12,11 @@ SBP-001 adds the bounded `aether.seed-bundle/v1` source protocol and the named
 seed ABI `compile_bundle [borrow bundle: Text] -> Bytes`. It carries exactly
 one library and one entry unit in caller-selected Text. The verified seed
 parses the frame, checks the narrow source profile, mangle-rewrites the one
-import edge, and invokes its pre-existing `compile` weave. This is not general
-seed-native M11/M22 resolution: ordinary multi-unit projects and
-`aether.multi-source/v1` remain host-elaborated, and
-`seed_native_multi_module_elaboration() == false` remains true.
+import edge, and invokes its pre-existing `compile` weave. This remains a fixed
+profile rather than the general graph protocol. GSM-001 now separately owns
+bounded catalog-framed M11/M22 resolution for ordinary projects, workspaces,
+and `aether.multi-source/v1`; see
+[the GSM threat model](THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md).
 
 The host reads only an explicit local bundle path. On the production bundle
 route it transports opaque Text to the verified seed and verifies returned
@@ -44,7 +45,7 @@ module elaborator.
 | A malformed / private / unknown import call binds a different weave | One exported library helper, one exact import, safe alias, exact qualified helper target, and deterministic M11-compatible mangling. | `SBP-003`, `SBP-004`, `SBP-006`. |
 | Text or effect/resource/nursery syntax confuses lexical call rewriting or imports authority | The profile rejects Text literals after the import and rejects the bounded resource/effect/nursery keyword set before assembly. | `SBP-006` negative corpus. |
 | A malicious compiler artifact returns arbitrary Bytes or exploits an ABI mismatch | Forge verifies the compiler first, requires one borrowed Text parameter and Bytes result, then verifies output AETH before write. | `SBP-001`, `SBP-008`, forge ABI tests. |
-| Profile success is overstated as general seed-native modules | Public contract retains the false general tracker and documents SBP-001 as an exact two-unit profile only. | `SBP-002`, ADR-128, current architecture/Seed Profile. |
+| Profile success is overstated as GSM-001 general modules | Public contract documents SBP-001 as an exact two-unit profile and names GSM-001 as the separate bounded general catalog protocol. | `SBP-002`, ADR-128, current architecture/Seed Profile. |
 | Guest compiler acquires filesystem, shell, network, cache, callback, or grant authority | `compile_bundle` receives only borrowed Text; all I/O remains forge-owned after verification and no grants are installed for the compiler weave. | `SBP-010`, Forge Contract. |
 
 ## Residual risk and non-goals
