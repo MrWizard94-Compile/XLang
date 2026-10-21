@@ -294,6 +294,7 @@ bundled hermetic native toolchain.
   emitter/verifier/VM, forge API, seed path
 - `apps/xlang-cli` — `aether` CLI (seed compile by default)
 - `seed/` — Aether-written compiler source + checked-in artifact
+- `rust-toolchain.toml` — pins Rust **1.88.0** (workspace MSRV) plus clippy and rustfmt
 - `examples/` — programs proven behaviorally and, where claimed,
   seed-emitted byte-identical to bootstrap
 

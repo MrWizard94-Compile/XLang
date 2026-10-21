@@ -3018,23 +3018,20 @@ weave compile [borrow source: Text] -> Bytes:
                                 revise v1 <- fuse borrow v1 borrow v47
                               otherwise:
                                 revise v30 <- -1
-                                choose same borrow v22 "source":
-                                  revise v30 <- 0
-                                otherwise:
-                                  revise v61 <- 0
-                                  revise v63 <- extent borrow v67
-                                  while less v61 v63:
-                                    revise v64 <- octet borrow v67 v61
-                                    revise v61 <- sum v61 1
-                                    revise v28 <- sum v61 v64
-                                    revise v47 <- slice borrow v67 v61 v28
-                                    revise v43 <- decode borrow v47
-                                    revise v61 <- v28
-                                    revise v48 <- unpack16 borrow v67 v61
-                                    revise v61 <- sum v61 2
-                                    choose same borrow v43 borrow v22:
-                                      revise v30 <- v48
-                                      revise v61 <- v63
+                                revise v61 <- 0
+                                revise v63 <- extent borrow v67
+                                while less v61 v63:
+                                  revise v64 <- octet borrow v67 v61
+                                  revise v61 <- sum v61 1
+                                  revise v28 <- sum v61 v64
+                                  revise v47 <- slice borrow v67 v61 v28
+                                  revise v43 <- decode borrow v47
+                                  revise v61 <- v28
+                                  revise v48 <- unpack16 borrow v67 v61
+                                  revise v61 <- sum v61 2
+                                  choose same borrow v43 borrow v22:
+                                    revise v30 <- v48
+                                    revise v61 <- v63
                                 revise v44 <- product v30 3
                                 revise v48 <- octet borrow v76 v44
                                 revise v44 <- sum v44 1
@@ -3058,23 +3055,20 @@ weave compile [borrow source: Text] -> Bytes:
                                 revise v1 <- fuse borrow v1 borrow v47
                               otherwise:
                                 revise v30 <- -1
-                                choose same borrow v22 "source":
-                                  revise v30 <- 0
-                                otherwise:
-                                  revise v61 <- 0
-                                  revise v63 <- extent borrow v67
-                                  while less v61 v63:
-                                    revise v64 <- octet borrow v67 v61
-                                    revise v61 <- sum v61 1
-                                    revise v28 <- sum v61 v64
-                                    revise v47 <- slice borrow v67 v61 v28
-                                    revise v43 <- decode borrow v47
-                                    revise v61 <- v28
-                                    revise v48 <- unpack16 borrow v67 v61
-                                    revise v61 <- sum v61 2
-                                    choose same borrow v43 borrow v22:
-                                      revise v30 <- v48
-                                      revise v61 <- v63
+                                revise v61 <- 0
+                                revise v63 <- extent borrow v67
+                                while less v61 v63:
+                                  revise v64 <- octet borrow v67 v61
+                                  revise v61 <- sum v61 1
+                                  revise v28 <- sum v61 v64
+                                  revise v47 <- slice borrow v67 v61 v28
+                                  revise v43 <- decode borrow v47
+                                  revise v61 <- v28
+                                  revise v48 <- unpack16 borrow v67 v61
+                                  revise v61 <- sum v61 2
+                                  choose same borrow v43 borrow v22:
+                                    revise v30 <- v48
+                                    revise v61 <- v63
                                 revise v44 <- product v30 3
                                 revise v48 <- octet borrow v76 v44
                                 revise v44 <- sum v44 1
@@ -7677,7 +7671,9 @@ weave modules_safe_alias [borrow value: Text] -> Truth:
 
 weave modules_import_target_line [borrow line: Text] -> Text:
   bind mutable output <- "!"
-  bind mutable prefix <- "import unit "
+  bind mutable import_left <- "import "
+  bind mutable import_right <- "unit "
+  bind mutable prefix <- join borrow import_left borrow import_right
   bind mutable prefix_length <- measure borrow prefix
   bind mutable line_length <- measure borrow line
   bind mutable prefix_at <- seek borrow line borrow prefix 0
@@ -7764,7 +7760,9 @@ weave modules_import_target_line [borrow line: Text] -> Text:
 weave modules_import_alias_line [borrow line: Text] -> Text:
   bind mutable output <- "!"
   bind mutable target <- call modules_import_target_line borrow line
-  bind mutable prefix <- "import unit "
+  bind mutable import_left <- "import "
+  bind mutable import_right <- "unit "
+  bind mutable prefix <- join borrow import_left borrow import_right
   bind mutable prefix_length <- measure borrow prefix
   bind mutable line_length <- measure borrow line
   bind mutable opening_quote <- -1
@@ -7821,7 +7819,9 @@ weave modules_import_count [borrow source: Text] -> Whole:
   bind mutable next <- 0
   bind mutable line <- ""
   bind mutable trimmed <- ""
-  bind mutable import_prefix <- "import unit "
+  bind mutable import_left <- "import "
+  bind mutable import_right <- "unit "
+  bind mutable import_prefix <- join borrow import_left borrow import_right
   bind mutable prefix_at <- -1
   bind mutable target <- ""
   choose same borrow world_name "!":

@@ -313,6 +313,7 @@ seed graph elaboration; the fixed profiles remain independently supported; see
 [ADR-129](docs/historical%20docs/ADR-129-barp-seed-native-transitive-library-chain-profile.md),
 [ADR-130](docs/historical%20docs/ADR-130-barp-seed-native-fanin-bundle-profile.md),
 [ADR-131](docs/historical%20docs/ADR-131-gsm-general-seed-module-catalog.md),
+[ADR-132](docs/historical%20docs/ADR-132-gsm-self-host-import-needle.md),
 [SBP-003](docs/historical%20docs/DESIGN-SBP-003-SEED-NATIVE-FANIN-PROFILE.md), and
 [the GSM threat model](docs/Current%20state/THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md),
 with [GSM delivery evidence](docs/historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md).
