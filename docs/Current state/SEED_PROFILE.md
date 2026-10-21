@@ -1,7 +1,7 @@
 # Aether Seed Profile
 
 Status: normative seed-emission profile for package **0.37.0** (canonical 0.11
-surface plus documented later bounded semantics), updated 2026-08-27.
+surface plus documented later bounded semantics), updated 2026-10-21.
 
 This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
 It covers the documented canonical Aether 0.11 source surface and the later
@@ -18,8 +18,13 @@ Profile claim is not a claim of full bootstrap diagnostic parity for invalid inp
 `compile_with_seed` never invokes bootstrap (ADR-051; empty placeholder `Program`
 only); prefer `compile_product_bytecode` for emit-only. Product preflight codes
 `AE-SEED-001`–`011` (ADR-046/050/052) are host/product fail-closed helpers, not full
-seed diagnostic parity. CLI `aether check --product` validates the seed product
-path without bootstrap AST (default `check` remains full diagnostics).
+seed diagnostic parity. CLI default `aether check` and single-file `aether compile` emit seed
+bytecode only when the bootstrap validator also accepts that ordinary source
+(ADR-133). A rejection is the validator's source line and column, a stable host
+preflight, or an internal compiler error; raw `unpack16` text is not shown.
+`check --bootstrap` remains the AST dump. Framed catalogs, bundles, and
+multi-source envelopes stay seed-only. `compile_product_bytecode` remains the
+forge ABI and can still classify opaque failures as `AE-SEED-008`.
 `format --product` / `project format --product` LF-normalize and product-accept
 without bootstrap AST rewrite (default format remains full bootstrap canonical;
 ADR-053/054). `structure --product` emits `aether.product-structure/v1` without

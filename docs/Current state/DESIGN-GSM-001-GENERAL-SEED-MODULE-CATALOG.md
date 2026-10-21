@@ -1,6 +1,6 @@
 # GSM-001 — General Seed Module Catalog
 
-**Status:** Implemented; full gate passed 2026-08-27  
+**Status:** Implemented. Self-host import-needle correction recorded in [ADR-132](../historical%20docs/ADR-132-gsm-self-host-import-needle.md) (2026-10-21).  
 **Date:** 2026-08-27  
 **Decision:** [ADR-131](../historical%20docs/ADR-131-gsm-general-seed-module-catalog.md)  
 **Validation:** [GSM-001 matrix](GSM-VALIDATION-MATRIX.md)  

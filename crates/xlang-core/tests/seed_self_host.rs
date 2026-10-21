@@ -14,17 +14,17 @@ use aether_core::{
     product_path_forges_before_bootstrap_validate, product_path_requires_bootstrap_dual_compare,
     product_project_format_without_bootstrap, product_rejects_yield_in_truth_choose,
     product_seed_error_packet_abi, product_seed_error_speak_format,
-    product_seed_rebuild_without_bootstrap, product_structure_without_bootstrap,
-    product_surface_symbols, product_surface_symbols_without_bootstrap, run_bytecode,
-    seed_internal_error_packets, seed_interprets_m23_comptime_calls_natively,
-    seed_native_multi_module_elaboration, seed_native_whole_library_bundle_profile,
-    seed_native_whole_library_chain_bundle_profile, seed_native_whole_library_fanin_bundle_profile,
-    seed_product_diagnostics_phase3c, seed_product_diagnostics_subset,
-    seed_product_preflight_phase3b, structural_edit_accepts_via_product_seed,
-    structural_edit_product_base_gate, structural_edit_product_statement_and_record_ops,
-    structural_edit_product_top_level_weave_ops, structural_edit_product_weave_replace,
-    verify_bytecode, InvocationOutput, InvocationValue, ProjectUnitRole, SEED_COMPILER_ARTIFACT,
-    SEED_ERROR_PACKET_SCHEMA,
+    product_seed_rebuild_without_bootstrap, product_single_file_check_fail_closed,
+    product_structure_without_bootstrap, product_surface_symbols,
+    product_surface_symbols_without_bootstrap, run_bytecode, seed_internal_error_packets,
+    seed_interprets_m23_comptime_calls_natively, seed_native_multi_module_elaboration,
+    seed_native_whole_library_bundle_profile, seed_native_whole_library_chain_bundle_profile,
+    seed_native_whole_library_fanin_bundle_profile, seed_product_diagnostics_phase3c,
+    seed_product_diagnostics_subset, seed_product_preflight_phase3b,
+    structural_edit_accepts_via_product_seed, structural_edit_product_base_gate,
+    structural_edit_product_statement_and_record_ops, structural_edit_product_top_level_weave_ops,
+    structural_edit_product_weave_replace, verify_bytecode, InvocationOutput, InvocationValue,
+    ProjectUnitRole, SEED_COMPILER_ARTIFACT, SEED_ERROR_PACKET_SCHEMA,
 };
 
 const SEED_SOURCE: &str = include_str!("../../../seed/aether_seed.ae");
@@ -397,7 +397,11 @@ fn barp_phase2_product_bytecode_forges_without_bootstrap_prevalidate() {
     );
     assert!(
         product_cli_check_without_bootstrap(),
-        "ADR-051: product CLI check without bootstrap"
+        "ADR-051: product CLI check success does not emit with bootstrap"
+    );
+    assert!(
+        product_single_file_check_fail_closed(),
+        "ADR-133: single-file check fails closed against the bootstrap validator"
     );
     assert!(
         lib_module_validates_via_product_seed(),
