@@ -61,12 +61,16 @@ Package **0.37** adds M25 transparent local source-package pack, verify,
 publish, cache install, and cache verification with no language, AETH, seed,
 VM, or guest-capability change.
 Default CLI compilation uses the Aether-written seed compiler. Rust
-bootstrap remains for seed rebuild (`compile --bootstrap`), default `check`
-AST / format / structure / LSP, and proof dual-compare. Product acceptance
-Default CLI check/format/structure, product compile, and seed rebuild are seed path
-(ADR-064/067); bootstrap is recovery/oracle (`--bootstrap`, dual-compare, full
-`aether.ast/v8` — product owns top-level weave/record, weave-body statements, and
-nested choose/while body lists ADR-065/068/069/071). LSP hover/definition are product-surface (ADR-066). General bounded M11/M22 module graphs are catalog-framed by the host and seed-elaborated through GSM-001 (ADR-131); Rust elaboration is bootstrap/reference oracle only. Seed Profile self-host, all shipped seed-path examples,
+bootstrap remains for seed rebuild (`compile --bootstrap`), `check --bootstrap`
+AST recovery, format/structure recovery, and proof dual-compare. Product
+acceptance for default CLI check/format/structure, product compile, and seed
+rebuild is the seed path (ADR-064/067). ADR-133 adds a single-file rejection
+oracle: ordinary default check and compile still emit seed bytecode, and they
+reject any program the bootstrap validator rejects, with a source file, line,
+and column. Framed catalogs, bundles, and envelopes stay seed-only. Bootstrap
+is recovery/oracle (`--bootstrap`, dual-compare, full `aether.ast/v8` — product
+owns top-level weave/record, weave-body statements, and nested choose/while
+body lists ADR-065/068/069/071). LSP hover/definition are product-surface (ADR-066). General bounded M11/M22 module graphs are catalog-framed by the host and seed-elaborated through GSM-001 (ADR-131); Rust elaboration is bootstrap/reference oracle only. Seed Profile self-host, all shipped seed-path examples,
 the complete prior canonical surface (including records), the documented M2–M8
 corpora, the M19a release corpus, the M19b nursery-resource corpus, the M19d
 spawn-arena corpus, the M21 foreign-pilot corpus, and the M23/M19e documented
@@ -118,7 +122,7 @@ D2a body subset (`seed_interprets_m23_comptime_calls_natively`; ADR-043 Phase 1)
 | Human ordered backlog (2026-08-05) | [docs/BACKLOG-HUMAN-2026-08-05.md](docs/historical%20docs/BACKLOG-HUMAN-2026-08-05.md) |
 | M23 T-CT pure comptime calls | [docs/DESIGN-M23-COMPTIME-PURE-CALLS.md](docs/historical%20docs/DESIGN-M23-COMPTIME-PURE-CALLS.md), [docs/ADR-039-m23-comptime-pure-calls.md](docs/historical%20docs/ADR-039-m23-comptime-pure-calls.md), [docs/M23-VALIDATION-MATRIX.md](docs/Current%20state/M23-VALIDATION-MATRIX.md) |
 | M25 local package publication | [docs/AETHER_0.37.md](docs/Current%20state/AETHER_0.37.md), [docs/DESIGN-M25-LOCAL-PACKAGE-PUBLICATION.md](docs/historical%20docs/DESIGN-M25-LOCAL-PACKAGE-PUBLICATION.md), [docs/ADR-107-m25-local-package-publication.md](docs/historical%20docs/ADR-107-m25-local-package-publication.md), [docs/M25-VALIDATION-MATRIX.md](docs/Current%20state/M25-VALIDATION-MATRIX.md), [docs/THREAT_MODEL-0.37-LOCAL-PACKAGES.md](docs/Current%20state/THREAT_MODEL-0.37-LOCAL-PACKAGES.md), [docs/DELIVERY_REPORT-2026-08-11-M25-LOCAL-PACKAGE-PUBLICATION.md](docs/historical%20docs/DELIVERY_REPORT-2026-08-11-M25-LOCAL-PACKAGE-PUBLICATION.md) |
-| GSM-001 seed-native modules | [docs/DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md](docs/Current%20state/DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md), [docs/ADR-131-gsm-general-seed-module-catalog.md](docs/historical%20docs/ADR-131-gsm-general-seed-module-catalog.md), [docs/ADR-132-gsm-self-host-import-needle.md](docs/historical%20docs/ADR-132-gsm-self-host-import-needle.md), [docs/GSM-VALIDATION-MATRIX.md](docs/Current%20state/GSM-VALIDATION-MATRIX.md), [docs/THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md](docs/Current%20state/THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md), [delivery report](docs/historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md) |
+| GSM-001 seed-native modules | [docs/DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md](docs/Current%20state/DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md), [docs/ADR-131-gsm-general-seed-module-catalog.md](docs/historical%20docs/ADR-131-gsm-general-seed-module-catalog.md), [docs/ADR-132-gsm-self-host-import-needle.md](docs/historical%20docs/ADR-132-gsm-self-host-import-needle.md), [docs/ADR-133-honest-default-check.md](docs/historical%20docs/ADR-133-honest-default-check.md), [docs/GSM-VALIDATION-MATRIX.md](docs/Current%20state/GSM-VALIDATION-MATRIX.md), [docs/THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md](docs/Current%20state/THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md), [delivery report](docs/historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md) |
 | BARP bootstrap authority reduction | [docs/ADR-043-bootstrap-authority-reduction.md](docs/historical%20docs/ADR-043-bootstrap-authority-reduction.md)–[docs/ADR-131-gsm-general-seed-module-catalog.md](docs/historical%20docs/ADR-131-gsm-general-seed-module-catalog.md), [docs/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md](docs/Current%20state/DESIGN-BARP-001-BOOTSTRAP-AUTHORITY-REDUCTION.md), [docs/BARP-VALIDATION-MATRIX.md](docs/Current%20state/BARP-VALIDATION-MATRIX.md), [docs/GSM-VALIDATION-MATRIX.md](docs/Current%20state/GSM-VALIDATION-MATRIX.md), [docs/SBP-VALIDATION-MATRIX.md](docs/Current%20state/SBP-VALIDATION-MATRIX.md), [docs/THREAT_MODEL-SBP-001-SEED-BUNDLE.md](docs/Current%20state/THREAT_MODEL-SBP-001-SEED-BUNDLE.md), [docs/THREAT_MODEL-SBP-002-SEED-CHAIN.md](docs/Current%20state/THREAT_MODEL-SBP-002-SEED-CHAIN.md), [docs/THREAT_MODEL-SBP-003-SEED-FANIN.md](docs/Current%20state/THREAT_MODEL-SBP-003-SEED-FANIN.md), [SBP-003 delivery](docs/historical%20docs/DELIVERY_REPORT-2026-08-26-BARP-SEED-NATIVE-FANIN-BUNDLE-PROFILE.md), and [GSM-001 delivery](docs/historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md) — product-default toolchain; ADR-128/129/130 and GSM-001 release verified; residual full seed-SPEAK matrix only |
 | Full project audit baseline / active progress (2026-08-11) | [docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](docs/historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md), [docs/PROGRESS_REPORT-FULL-PROJECT.md](docs/Current%20state/PROGRESS_REPORT-FULL-PROJECT.md) |
 | Legacy intake | [docs/LEGACY.md](docs/historical%20docs/LEGACY.md) |
@@ -139,7 +143,7 @@ D2a body subset (`seed_interprets_m23_comptime_calls_natively`; ADR-043 Phase 1)
 
 ### Invariants (may tighten pack; never weaken CONST-\*)
 
-1. **Seed-hosted product compile** — CLI default compile uses the Aether-written seed; bootstrap is not the product compiler path.
+1. **Seed-hosted product compile** — CLI default compile uses the Aether-written seed; bootstrap is not the product compiler. Ordinary single-file check and compile also reject any program the bootstrap validator rejects (ADR-133).
 2. **Verify before run / write** — VM and forge only accept verified supported AETH v4–v12 (v12 for M19e task frames).
 3. **No ambient host capability leak** — default run installs only pure fixtures; grant-backed I/O (M14) requires explicit operator `--grant-*` roots/names and path jail; no shell/network; forge host owns I/O after verification.
 4. **Honest self-host claims** — dual-compare only where proven (including M19e/M23/SBP/GSM corpora as documented); M23 is seed-native only under its D2a body subset, SBP-001 only under its exact two-unit pure Whole profile, SBP-002 only under its exact foundation -> bridge -> entry profile, SBP-003 only under its exact left leaf + right leaf -> merge -> entry fan-in profile, and GSM-001 only under its closed scalar-framed catalog bounds and manifest-authorized direct-package policy; do not claim full diagnostic parity, seed filesystem discovery, dynamic/transitive package authority, or unbounded general module graphs.
