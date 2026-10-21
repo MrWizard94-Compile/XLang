@@ -297,6 +297,9 @@ bundled hermetic native toolchain.
 - `rust-toolchain.toml` — pins Rust **1.88.0** (workspace MSRV) plus clippy and rustfmt
 - `examples/` — programs proven behaviorally and, where claimed,
   seed-emitted byte-identical to bootstrap
+- Default `aether check` and single-file `aether compile` emit seed bytecode
+  and reject any ordinary program the bootstrap validator rejects
+  ([ADR-133](docs/historical%20docs/ADR-133-honest-default-check.md)).
 
 ## Command Line
 

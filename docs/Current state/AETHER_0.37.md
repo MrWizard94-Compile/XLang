@@ -44,6 +44,13 @@ See [the SBP validation matrix](SBP-VALIDATION-MATRIX.md),
 [GSM matrix](GSM-VALIDATION-MATRIX.md), and
 [GSM threat model](THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md).
 
+[ADR-133](../historical%20docs/ADR-133-honest-default-check.md) does not change
+M25, language syntax, AETH, the verifier, the VM, or guest capabilities.
+Ordinary single-file default `check` and `compile` still emit seed bytecode,
+and they reject a program the bootstrap validator rejects. The reported
+diagnostic names a source file, line, and column. Framed catalogs, bundles, and
+multi-source envelopes stay on the seed route.
+
 ## What changed
 
 Package 0.37 adds a closed, local-only lifecycle for publishing one locked

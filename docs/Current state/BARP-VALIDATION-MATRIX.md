@@ -138,7 +138,9 @@
 This matrix covers only the named seed-SPEAK pilot conditions. It does not claim
 seed-internal parser packets, full indentation diagnostics, complete legacy
 syntax classification, source spans, parser parity, or seed-native multi-file
-elaboration.
+elaboration. ADR-133 is a separate single-file acceptance oracle on default
+check and compile; it is not a new seed-SPEAK pilot and does not close this
+matrix.
 
 ---
 

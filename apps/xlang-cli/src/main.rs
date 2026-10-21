@@ -10,26 +10,27 @@ mod test_runner;
 
 use aether_core::{
     apply_edit_cli_trusts_product_accept, apply_structural_edit, canonical_ast,
-    compile_product_bytecode, compile_project_modules, compile_source, compile_to_bytecode,
-    compile_workspace_package, encode_x509_lite_pem, fetch_signed_package, forge_bundle_bytecode,
-    forge_bytecode, forge_modules_bytecode, format_project, format_source, format_source_product,
-    install_certified_signing_key, install_package_bundle, install_package_from_cache,
-    install_trust_key, install_trust_root, issue_x509_lite_certificate, lower_verified_aeth_to_c,
-    lower_verified_aeth_to_llvm_ir, lower_verified_aeth_to_llvm_object,
+    compile_product_bytecode, compile_product_checked, compile_project_modules, compile_source,
+    compile_to_bytecode, compile_workspace_package, encode_x509_lite_pem, fetch_signed_package,
+    forge_bundle_bytecode, forge_bytecode, forge_modules_bytecode, format_project, format_source,
+    format_source_product, install_certified_signing_key, install_package_bundle,
+    install_package_from_cache, install_trust_key, install_trust_root, issue_x509_lite_certificate,
+    lower_verified_aeth_to_c, lower_verified_aeth_to_llvm_ir, lower_verified_aeth_to_llvm_object,
     lower_verified_aeth_to_native_exe, lower_verified_aeth_to_native_exe_for_target,
     lower_verified_aeth_to_native_object, multi_module_authority_note, native_target_is_host,
     pack_project, parse_project_document, parse_workspace_document, pin_local_package,
     pin_local_package_signed, probe_native_toolchain, product_cli_check_without_bootstrap,
     product_default_cli_toolchain, product_format_without_bootstrap,
     product_project_format_without_bootstrap, product_seed_rebuild_without_bootstrap,
-    product_structure_json, product_structure_without_bootstrap, publish_package_bundle,
-    refresh_project_lock, refresh_workspace_lock, require_hermetic_native_toolchain,
-    revoke_trust_key, rotate_trust_key, run_bytecode, run_bytecode_with_grants,
-    run_project_tests_with_grants, serialize_project_document, serialize_workspace_document,
-    set_trust_key_validity, store_x509_lite_certificate, structural_document_json,
-    unit_artifact_file_name, verify_bytecode, verify_package_bundle, verify_package_cache,
-    verify_project, verify_registry_cache, verify_workspace, verify_x509_lite_store,
-    HostGrantConfig, InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
+    product_single_file_check_fail_closed, product_structure_json,
+    product_structure_without_bootstrap, publish_package_bundle, refresh_project_lock,
+    refresh_workspace_lock, require_hermetic_native_toolchain, revoke_trust_key, rotate_trust_key,
+    run_bytecode, run_bytecode_with_grants, run_project_tests_with_grants,
+    serialize_project_document, serialize_workspace_document, set_trust_key_validity,
+    store_x509_lite_certificate, structural_document_json, unit_artifact_file_name,
+    verify_bytecode, verify_package_bundle, verify_package_cache, verify_project,
+    verify_registry_cache, verify_workspace, verify_x509_lite_store, HostGrantConfig,
+    InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
 fn usage() {
@@ -70,20 +71,29 @@ fn read_source(path: &Path) -> Result<String, String> {
     fs::read_to_string(path).map_err(|error| format!("could not read {}: {error}", path.display()))
 }
 
+fn source_diagnostic(path: &Path, error: &impl std::fmt::Display) -> String {
+    format!("{}: {error}", path.display())
+}
+
 fn read_artifact(path: &Path) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|error| format!("could not read {}: {error}", path.display()))
 }
 
-/// ADR-064: default is product seed path. Pass `bootstrap = true` for recovery
+/// ADR-064: default success bytes come from the product seed path.
+/// ADR-133: that path also rejects any ordinary program the bootstrap validator
+/// rejects, and reports a source location. Pass `bootstrap = true` for recovery
 /// AST diagnostics (`aether check --bootstrap`).
 fn check(source_path: &Path, bootstrap: bool) -> Result<(), String> {
     let source = read_source(source_path)?;
     if !bootstrap {
         debug_assert!(
-            product_cli_check_without_bootstrap() && product_default_cli_toolchain(),
-            "ADR-064: default check is product seed path"
+            product_cli_check_without_bootstrap()
+                && product_default_cli_toolchain()
+                && product_single_file_check_fail_closed(),
+            "ADR-064/133: default check emits seed bytecode and fails closed"
         );
-        let bytecode = compile_product_bytecode(&source).map_err(|error| error.to_string())?;
+        let bytecode = compile_product_checked(&source)
+            .map_err(|error| source_diagnostic(source_path, &error))?;
         println!(
             "{LANGUAGE_NAME} {LANGUAGE_VERSION} check passed: {} byte(s) via seed path in {}",
             bytecode.len(),
@@ -92,7 +102,8 @@ fn check(source_path: &Path, bootstrap: bool) -> Result<(), String> {
         return Ok(());
     }
     // Recovery: full bootstrap diagnostics + canonical AST dump.
-    let program = compile_source(&source).map_err(|error| error.to_string())?;
+    let program =
+        compile_source(&source).map_err(|error| source_diagnostic(source_path, &error))?;
     println!(
         "{LANGUAGE_NAME} {LANGUAGE_VERSION} check passed: {} significant token(s) in {} (bootstrap recovery diagnostics)",
         program.significant_token_count(),
@@ -154,7 +165,7 @@ fn compile(
             product_seed_rebuild_without_bootstrap(),
             "ADR-067: product seed rebuild without --bootstrap"
         );
-        compile_product_bytecode(&source).map_err(|error| error.to_string())?
+        compile_product_checked(&source).map_err(|error| source_diagnostic(source_path, &error))?
     };
     if native_c {
         let c_source = lower_verified_aeth_to_c(&bytecode).map_err(|error| error.to_string())?;
@@ -2471,6 +2482,81 @@ mod tests {
         assert!(
             error.contains("AE-SEED-007"),
             "expected AE-SEED-007, got {error}"
+        );
+        assert!(
+            error.contains("legacy.ae"),
+            "expected the source path, got {error}"
+        );
+        assert!(
+            error.contains("line "),
+            "expected a source line, got {error}"
+        );
+    }
+
+    #[test]
+    fn product_check_rejects_junk_at_its_source_line() {
+        let temporary = TemporaryDirectory::create();
+        let source_path = temporary.path.join("junk.ae");
+        fs::write(
+            &source_path,
+            "world w\n\nweave main [] -> Whole:\n  yield 1\n  bad thing\n",
+        )
+        .expect("junk source should write");
+        let error = check(&source_path, false).expect_err("junk must fail default check");
+        assert!(error.contains("junk.ae"), "{error}");
+        assert!(error.contains("unknown Aether statement"), "{error}");
+        assert!(error.contains("line "), "{error}");
+        assert!(error.contains("column "), "{error}");
+        assert!(!error.to_ascii_lowercase().contains("unpack16"), "{error}");
+        assert!(!error.contains("check passed"), "{error}");
+    }
+
+    #[test]
+    fn product_check_rejects_unbound_name_without_vm_text() {
+        let temporary = TemporaryDirectory::create();
+        let source_path = temporary.path.join("unbound.ae");
+        fs::write(
+            &source_path,
+            "world w\n\nweave main [] -> Whole:\n  yield missing_name\n",
+        )
+        .expect("unbound source should write");
+        let error = check(&source_path, false).expect_err("unbound name must fail default check");
+        assert!(error.contains("unbound.ae"), "{error}");
+        assert!(error.contains("has not been bound"), "{error}");
+        assert!(error.contains("line "), "{error}");
+        assert!(error.contains("column "), "{error}");
+        assert!(!error.to_ascii_lowercase().contains("unpack16"), "{error}");
+        assert!(!error.contains("index is invalid"), "{error}");
+        assert!(!error.contains("AE-SEED-008"), "{error}");
+    }
+
+    #[test]
+    fn product_compile_rejects_junk_without_writing_an_artifact() {
+        let temporary = TemporaryDirectory::create();
+        let source_path = temporary.path.join("junk.ae");
+        let output_path = temporary.path.join("junk.aeth");
+        fs::write(
+            &source_path,
+            "world w\n\nweave main [] -> Whole:\n  yield 1\n  bad thing\n",
+        )
+        .expect("junk source should write");
+        let error = compile(
+            &source_path,
+            &output_path,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            None,
+        )
+        .expect_err("junk must fail default compile");
+        assert!(error.contains("junk.ae"), "{error}");
+        assert!(error.contains("unknown Aether statement"), "{error}");
+        assert!(
+            !output_path.exists(),
+            "compile must not write a rejected program"
         );
     }
 

@@ -2775,10 +2775,11 @@ pub fn compile_to_bytecode(source: &str) -> Result<CompileOutput, CompilerError>
 /// Product emission: seed forge + verify only (BARP Phase 2 / ADR-044).
 ///
 /// Does **not** bootstrap-parse or bootstrap-validate. Invalid Seed Profile
-/// inputs fail at seed forge or [`verify_bytecode`]. Full diagnostics remain
-/// bootstrap authority via CLI `check` (default). Product-path errors use bounded
-/// `AE-SEED-*` codes (ADR-046–055). Prefer [`product_diagnostics`] for structured
-/// product diagnostic collection without bytecode.
+/// inputs fail at seed forge or [`verify_bytecode`]. Product-path errors use
+/// bounded `AE-SEED-*` codes (ADR-046–055). Prefer [`product_diagnostics`] for
+/// the structured forge ABI. User-facing single-file check and compile use
+/// [`compile_product_checked`] (ADR-133), which still returns these bytes on
+/// success and also rejects programs the bootstrap validator rejects.
 ///
 /// **GSM-001 / ADR-131:** multi-source envelopes, project/workspace builds, and
 /// explicit `aether.seed-modules/v1` records are host-framed into closed opaque
@@ -2866,6 +2867,146 @@ pub fn compile_product_bytecode(source: &str) -> Result<Vec<u8>, CompilerError> 
         }
     }
     forge_product_seed_entry("compile", source)
+}
+
+/// ADR-133: user-facing single-file check and compile.
+///
+/// Success still returns seed bytecode from [`compile_product_bytecode`].
+/// Ordinary source is accepted only when [`compile_source`] also accepts it.
+/// A bootstrap rejection becomes the reported diagnostic, unless the seed
+/// already produced a stable host preflight (`AE-SEED-003`–`007`, `012`–`017`).
+/// Opaque forge failures (`AE-SEED-001`, `002`, `008`, and VM unpack text) are
+/// replaced by that diagnostic, or by an internal compiler error when the
+/// validator accepts and the seed does not. Framed catalogs, bundles, and
+/// multi-source envelopes stay on the seed route: the bootstrap validator does
+/// not understand those inputs.
+pub fn compile_product_checked(source: &str) -> Result<Vec<u8>, CompilerError> {
+    debug_assert!(
+        product_single_file_check_fail_closed(),
+        "ADR-133: single-file check is fail-closed against the bootstrap validator"
+    );
+    if framed_product_input(source) {
+        return compile_product_bytecode(source);
+    }
+    present_checked_result(
+        compile_product_bytecode(source),
+        compile_source(source),
+        source,
+    )
+}
+
+fn framed_product_input(source: &str) -> bool {
+    looks_like_seed_bundle(source)
+        || looks_like_seed_module_catalog(source)
+        || (product_multi_source_forge_envelope() && looks_like_multi_source_envelope(source))
+}
+
+fn present_checked_result(
+    seeded: Result<Vec<u8>, CompilerError>,
+    validated: Result<Program, CompilerError>,
+    source: &str,
+) -> Result<Vec<u8>, CompilerError> {
+    match (seeded, validated) {
+        (Ok(bytecode), Ok(_)) => Ok(bytecode),
+        (Err(seed_error), Err(bootstrap_error)) => Err(choose_checked_rejection(
+            seed_error,
+            bootstrap_error,
+            source,
+        )),
+        (Ok(_), Err(bootstrap_error)) => Err(locate_error(bootstrap_error, source)),
+        (Err(seed_error), Ok(_)) => Err(choose_seed_only_failure(seed_error, source)),
+    }
+}
+
+fn choose_checked_rejection(
+    seed_error: CompilerError,
+    bootstrap_error: CompilerError,
+    source: &str,
+) -> CompilerError {
+    if seed_error_is_stable_preflight(&seed_error) {
+        locate_error(seed_error, source)
+    } else {
+        locate_error(bootstrap_error, source)
+    }
+}
+
+fn choose_seed_only_failure(seed_error: CompilerError, source: &str) -> CompilerError {
+    if seed_error_is_stable_preflight(&seed_error) {
+        locate_error(seed_error, source)
+    } else {
+        internal_compiler_error(&seed_error, source)
+    }
+}
+
+fn seed_error_is_stable_preflight(error: &CompilerError) -> bool {
+    const CODES: [&str; 11] = [
+        "AE-SEED-003",
+        "AE-SEED-004",
+        "AE-SEED-005",
+        "AE-SEED-006",
+        "AE-SEED-007",
+        "AE-SEED-012",
+        "AE-SEED-013",
+        "AE-SEED-014",
+        "AE-SEED-015",
+        "AE-SEED-016",
+        "AE-SEED-017",
+    ];
+    CODES.iter().any(|code| error.message.contains(code)) && !seed_error_leaks_vm(&error.message)
+}
+
+fn seed_error_leaks_vm(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("unpack16")
+        || normalized.contains("unpack32")
+        || normalized.contains("index is invalid")
+        || normalized.contains("artifact error")
+        || normalized.contains("unreachable")
+        || normalized.contains("ae-seed-001")
+        || normalized.contains("ae-seed-002")
+        || normalized.contains("ae-seed-008")
+}
+
+fn internal_compiler_error(error: &CompilerError, source: &str) -> CompilerError {
+    let located = locate_error(error.clone(), source);
+    CompilerError::new(
+        located.span,
+        "internal compiler error: the product compiler failed on a program the bootstrap validator accepted",
+    )
+}
+
+fn locate_error(error: CompilerError, source: &str) -> CompilerError {
+    let line_count = source.lines().count().max(1);
+    let hinted = mentioned_line(&error.message).filter(|line| *line <= line_count);
+    let line = hinted.unwrap_or(error.span.line).clamp(1, line_count);
+    let column = if hinted.is_some() && line != error.span.line {
+        1
+    } else {
+        error.span.column.max(1)
+    };
+    if line == error.span.line && column == error.span.column {
+        error
+    } else {
+        CompilerError::new(Span::new(line, column), error.message)
+    }
+}
+
+fn mentioned_line(message: &str) -> Option<usize> {
+    let mut rest = message;
+    while let Some(index) = rest.find("line ") {
+        let after = &rest[index + "line ".len()..];
+        let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if let Ok(line) = digits.parse::<usize>() {
+            if line >= 1 {
+                return Some(line);
+            }
+        }
+        rest = &after[digits.len()..];
+        if rest.is_empty() {
+            break;
+        }
+    }
+    None
 }
 
 /// ADR-128/129/130 product route for bounded seed-native Whole-library source bundles.
@@ -3567,9 +3708,19 @@ pub const fn compile_with_seed_invokes_bootstrap() -> bool {
     false
 }
 
-/// BARP ADR-051: CLI `aether check --product` validates via product seed only.
+/// BARP ADR-051/064: default check does not emit with bootstrap and does not
+/// dump the bootstrap AST. ADR-133 adds a separate single-file rejection oracle
+/// in [`compile_product_checked`]; success bytes remain seed bytecode.
 #[must_use]
 pub const fn product_cli_check_without_bootstrap() -> bool {
+    true
+}
+
+/// ADR-133: ordinary single-file default check/compile reject any program
+/// [`compile_source`] rejects. Framed catalogs, bundles, and envelopes are
+/// outside this oracle.
+#[must_use]
+pub const fn product_single_file_check_fail_closed() -> bool {
     true
 }
 
@@ -21164,5 +21315,73 @@ weave main [] -> Whole:
         let mut output = String::with_capacity(bytes.len() * 2);
         write_hex_bytes(bytes, &mut output);
         output
+    }
+
+    fn empty_program() -> Program {
+        Program {
+            world: String::new(),
+            records: Vec::new(),
+            shapes: Vec::new(),
+            host_weaves: Vec::new(),
+            weaves: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn adr133_opaque_seed_failure_becomes_internal_compiler_error() {
+        let source = "world w\n\nweave main [] -> Whole:\n  yield 1\n";
+        let seed_error = CompilerError::new(
+            Span::synthetic(),
+            "AE-SEED-008: product seed path failed (unpack16 index is invalid). Full diagnostics: aether check <source>",
+        );
+        let error = present_checked_result(Err(seed_error), Ok(empty_program()), source)
+            .expect_err("opaque seed failure");
+        let text = error.to_string();
+        assert!(text.contains("internal compiler error"), "{text}");
+        assert!(!text.to_ascii_lowercase().contains("unpack16"), "{text}");
+        assert!(!text.contains("index is invalid"), "{text}");
+        assert!(!text.contains("AE-SEED-008"), "{text}");
+        assert!(text.contains("line "), "{text}");
+        assert!(text.contains("column "), "{text}");
+        assert!(error.span.line >= 1 && error.span.line <= 4, "{text}");
+    }
+
+    #[test]
+    fn adr133_stable_preflight_survives_a_bootstrap_rejection() {
+        let source = "weave main [] -> Whole:\n  yield 1\n";
+        let seed_error = CompilerError::new(
+            Span::synthetic(),
+            format_seed_product_error(
+                "AE-SEED-006",
+                "line 1: program requires a top-level world declaration",
+            ),
+        );
+        let bootstrap = CompilerError::new(
+            Span::new(1, 1),
+            "an Aether program needs a world and at least one weave",
+        );
+        let error = present_checked_result(Err(seed_error), Err(bootstrap), source)
+            .expect_err("missing world");
+        let text = error.to_string();
+        assert!(text.contains("AE-SEED-006"), "{text}");
+        assert!(text.contains("top-level world"), "{text}");
+        assert_eq!(error.span.line, 1);
+    }
+
+    #[test]
+    fn adr133_seed_acceptance_does_not_override_bootstrap_rejection() {
+        let source = "world w\n\nweave main [] -> Whole:\n  yield 1\n  bad thing\n";
+        let error = present_checked_result(
+            Ok(b"AETH".to_vec()),
+            Err(CompilerError::new(
+                Span::new(5, 3),
+                "unknown Aether statement; use comptime bind, bind, revise, speak, release, checkpoint, yield, raise, forward, choose, while, together, or handle",
+            )),
+            source,
+        )
+        .expect_err("junk statement");
+        assert!(error.to_string().contains("unknown Aether statement"));
+        assert_eq!(error.span.line, 5);
+        assert_eq!(error.span.column, 3);
     }
 }

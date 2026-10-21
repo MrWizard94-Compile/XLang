@@ -4,7 +4,7 @@
 **Baseline audit HEAD:** `12a2181` on `codex/xlang-local-first-studio`
 **Package contract:** **0.37.0** (language **0.11** + M19e AETH v12 + M25 local package publication)
 **Baseline audit:** [AUDIT_REPORT-2026-08-11-FULL-PROJECT.md](../historical%20docs/AUDIT_REPORT-2026-08-11-FULL-PROJECT.md) — **GREEN**
-**Current delivery verification:** GSM-001 / ADR-131 general bounded seed-native M11/M22 catalog — implementation, focused core/CLI/seed proofs, public six-unit catalog fixture, and Aether Atlas showcase evidence ([delivery report](../historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md)). ADR-132 (2026-10-21) corrects the self-host break: seed-resident `import unit ` literals, and the resolver treating every local named `source` as slot 0. Product rebuild is byte-identical again. The 2026-08-27 gate claim did not hold for that self-host step.
+**Current delivery verification:** GSM-001 / ADR-131 general bounded seed-native M11/M22 catalog — implementation, focused core/CLI/seed proofs, public six-unit catalog fixture, and Aether Atlas showcase evidence ([delivery report](../historical%20docs/DELIVERY_REPORT-2026-08-27-GSM-001-GENERAL-SEED-MODULE-CATALOG.md)). ADR-132 (2026-10-21) corrects the self-host break: seed-resident `import unit ` literals, and the resolver treating every local named `source` as slot 0. Product rebuild is byte-identical again. The 2026-08-27 gate claim did not hold for that self-host step. ADR-133 (2026-10-21) makes ordinary single-file default check and compile fail closed against the bootstrap validator; seed bytecode remains the artifact, and framed catalogs, bundles, and envelopes stay seed-only.
 **Constitution:** AGENTS Constitution 5.1.0
 
 ---

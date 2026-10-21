@@ -10,8 +10,13 @@ accepts Aether source, uses the **product seed path as default toolchain**
 (compile/check/format/structure/LSP; BARP ADR-064–069), and **emits deterministic
 AETH bytecode primarily through the Aether-written seed compiler** (forge ABI)
 for the documented seed surface. Rust bootstrap remains recovery/oracle AST
-(`--bootstrap`, dual-compare, full `aether.ast/v8`) for
-including multi-weave arenas / resourceful total spawn callees
+(`--bootstrap`, dual-compare, full `aether.ast/v8`). ADR-133 also uses that
+validator as a rejection oracle for ordinary single-file default check and
+compile: seed bytecode is still the artifact, and a rejected program is
+reported with a source file, line, and column. Framed catalogs, bundles, and
+multi-source envelopes stay seed-only. See
+[ADR-133](docs/historical%20docs/ADR-133-honest-default-check.md).
+Bootstrap recovery also covers multi-weave arenas / resourceful total spawn callees
 (`examples/spawn-arena.ae`), M19e task frames, and the M21 foreign weave pilot.
 GSM-001 makes the default bounded M11/M22 project/workspace path catalog-framed
 by the host and seed-elaborated: the host enforces manifest/lock/path/UTF-8 and
