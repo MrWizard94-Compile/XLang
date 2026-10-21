@@ -286,7 +286,7 @@ pub fn lower_verified_aeth_to_native_exe(
         let vm_exit = crate::run_bytecode(bytecode)
             .map_err(|error| NativeError::new("AE-NATIVE-001", error.to_string()))?
             .exit_code;
-        let run = std::process::Command::new(exe_path)
+        let run = command_for_linked_executable(exe_path)
             .output()
             .map_err(|error| {
                 NativeError::new("AE-NATIVE-004", format!("native exe run failed: {error}"))
@@ -308,6 +308,25 @@ pub fn lower_verified_aeth_to_native_exe(
         native_exit,
         exits_match,
     })
+}
+
+/// `Command::new` searches `PATH` when the program name has no directory
+/// separator. A relative output such as `x.bin` is then not the file the
+/// linker wrote, and the dual-run reports `AE-NATIVE-004` with
+/// "No such file or directory". Invoke the linked file by an absolute path
+/// on every host, including Windows.
+fn command_for_linked_executable(exe_path: &std::path::Path) -> std::process::Command {
+    std::process::Command::new(linked_executable_invoke_path(exe_path))
+}
+
+fn linked_executable_invoke_path(exe_path: &std::path::Path) -> std::path::PathBuf {
+    if exe_path.is_absolute() {
+        return exe_path.to_path_buf();
+    }
+    match std::env::current_dir() {
+        Ok(cwd) => cwd.join(exe_path),
+        Err(_) => std::path::Path::new(".").join(exe_path),
+    }
 }
 
 /// Report from M35h native executable link.
@@ -1017,7 +1036,7 @@ pub fn native_host_cc_dual_exec(source: &str) -> Result<NativeDualExecReport, Na
         ));
     }
 
-    let run = std::process::Command::new(&exe_path)
+    let run = command_for_linked_executable(&exe_path)
         .output()
         .map_err(|error| {
             NativeError::new(
@@ -1629,6 +1648,89 @@ weave main [] -> Whole:
             }
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn linked_executable_invoke_path_keeps_relative_names_off_path_search() {
+        let relative = std::path::Path::new("x.bin");
+        let invoke = linked_executable_invoke_path(relative);
+        assert!(invoke.is_absolute(), "{}", invoke.display());
+        assert_eq!(invoke.file_name(), Some(std::ffi::OsStr::new("x.bin")));
+        assert!(
+            invoke.components().count() > 1,
+            "a directory component keeps exec from searching PATH"
+        );
+        let absolute = std::env::temp_dir().join("x.bin");
+        assert_eq!(linked_executable_invoke_path(&absolute), absolute);
+        let nested = std::path::Path::new("out").join("x.bin");
+        let nested_invoke = linked_executable_invoke_path(&nested);
+        assert!(nested_invoke.is_absolute());
+        assert!(nested_invoke.ends_with(&nested));
+    }
+
+    #[test]
+    fn native_exe_dual_run_accepts_relative_and_absolute_output_paths() {
+        let source = "world pure\n\nweave main [] -> Whole:\n  yield 11\n";
+        let bytecode = compile_product_bytecode(source).expect("product");
+        let relative = std::path::PathBuf::from(format!(
+            "aether-m35h-rel-{}-{}.bin",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _remove_relative = RemoveOnDrop(relative.clone());
+        expect_host_dual_run_or_missing_compiler(
+            lower_verified_aeth_to_native_exe(&bytecode, &relative, true),
+            &relative,
+        );
+
+        let dir = std::env::temp_dir().join(format!(
+            "aether-m35h-abs-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("absolute temp");
+        let absolute = dir.join("x.bin");
+        expect_host_dual_run_or_missing_compiler(
+            lower_verified_aeth_to_native_exe(&bytecode, &absolute, true),
+            &absolute,
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    struct RemoveOnDrop(std::path::PathBuf);
+
+    impl Drop for RemoveOnDrop {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn expect_host_dual_run_or_missing_compiler(
+        result: Result<NativeExeReport, NativeError>,
+        output: &std::path::Path,
+    ) {
+        match result {
+            Ok(report) => {
+                assert!(output.is_file(), "linked {}", output.display());
+                assert_eq!(report.native_exit, Some(11));
+                assert_eq!(report.exits_match, Some(true));
+            }
+            Err(error) => {
+                assert_eq!(error.code, "AE-NATIVE-004");
+                assert!(
+                    error.message.contains("requires host cc")
+                        || error.message.contains("none found"),
+                    "a linked executable must run for relative and absolute outputs; got {}",
+                    error.message
+                );
+            }
+        }
     }
 
     #[test]

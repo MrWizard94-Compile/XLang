@@ -33,22 +33,87 @@ use aether_core::{
     InvocationValue, LANGUAGE_NAME, LANGUAGE_VERSION,
 };
 
-fn usage() {
-    eprintln!(
-        "M32a/M32b verified-execution benchmarks:\n  aether bench <all|welcome|arena-buffer|task-loop> [--warmup <0..=100>] [--iterations <1..=1000>] [--profile <lowercase-ascii-id>] [--report <file.json>]\n  aether bench compare <baseline-report.json> <candidate-report.json> [--report <file.json>]\n  aether bench --list\nBenchmark workloads are embedded, pure, and bounded; no caller source/artifact input or grants are accepted. --profile emits a comparison-ready v2 report; use a non-secret label describing the pinned local context. compare reads bounded v2 data only and never executes it."
-    );
-    eprintln!(
-        "M24f/g key setup:\n  aether registry trust-root <cache-root> --key-id <id> --seed-file <32-byte-path>\n  aether registry certify-ed25519-key <cache-root> --key-id <id> --seed-file <32-byte-path> --parent-key-id <id>\nThe supplied Ed25519 seed files remain local and must be exactly 32 bytes."
-    );
-    eprintln!(
-        "M25 offline local packages:\n  aether pkg pack <aether.project.json> --output <bundle-dir>\n  aether pkg verify <bundle-dir>\n  aether pkg publish <bundle-dir> --cache <cache-dir>\n  aether pkg install <bundle-dir> --output <package-dir>\n  aether pkg install --cache <cache-dir> --name <name> --version <version> --output <package-dir>\n  aether pkg verify-cache <cache-dir>\nBundles contain verified Aether source only; cache and install paths stay local and are never network-resolved."
-    );
-    eprintln!(
-        "Usage:\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c|--native-exe [--target <triple>]]\n  aether native probe\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether registry issue-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry store-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry verify-x509-lite-store <cache-root>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether forge-bundle <compiler-artifact> <bundle-file> --output <artifact-file>\n  aether forge-modules <compiler-artifact> <catalog-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources and recognizes the bounded ADR-128/129/130 seed-bundle profiles plus GSM-001 aether.seed-modules/v1 catalogs.\nforge-bundle invokes only compile_bundle [borrow bundle: Text] -> Bytes; forge-modules invokes only compile_modules [borrow catalog: Text] -> Bytes, each on a caller-selected verified compiler artifact.\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build frames its manifest-selected source catalog; the seed resolves import unit / export weave graphs and emits AETH (GSM-001; dual-compare is test/oracle only).\nproject test frames each role:test entry catalog, pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build frames one package main catalog with M22 import unit from package (depends_on only); the seed resolves the graph and locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-exe --target <triple> for the closed F-NATIVE M35j matrix; host targets retain dual-run and cross targets are link-only.\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b+; issue-x509-lite is M24h; store-x509-lite / verify-x509-lite-store are M24i (not full RFC 5280)."
-    );
-    eprintln!(
-        "Bounded seed-bundle profiles: ADR-128 v1 accepts one pure Whole library -> entry; ADR-129 v2 accepts foundation -> bridge -> entry; ADR-130 v3 accepts left leaf + right leaf -> two-import merge -> entry. GSM-001 is the separate general bounded seed-native M11/M22 catalog path."
-    );
+fn usage_text() -> String {
+    [
+        "M32a/M32b verified-execution benchmarks:\n  aether bench <all|welcome|arena-buffer|task-loop> [--warmup <0..=100>] [--iterations <1..=1000>] [--profile <lowercase-ascii-id>] [--report <file.json>]\n  aether bench compare <baseline-report.json> <candidate-report.json> [--report <file.json>]\n  aether bench --list\nBenchmark workloads are embedded, pure, and bounded; no caller source/artifact input or grants are accepted. --profile emits a comparison-ready v2 report; use a non-secret label describing the pinned local context. compare reads bounded v2 data only and never executes it.",
+        "M24f/g key setup:\n  aether registry trust-root <cache-root> --key-id <id> --seed-file <32-byte-path>\n  aether registry certify-ed25519-key <cache-root> --key-id <id> --seed-file <32-byte-path> --parent-key-id <id>\nThe supplied Ed25519 seed files remain local and must be exactly 32 bytes.",
+        "M25 offline local packages:\n  aether pkg pack <aether.project.json> --output <bundle-dir>\n  aether pkg verify <bundle-dir>\n  aether pkg publish <bundle-dir> --cache <cache-dir>\n  aether pkg install <bundle-dir> --output <package-dir>\n  aether pkg install --cache <cache-dir> --name <name> --version <version> --output <package-dir>\n  aether pkg verify-cache <cache-dir>\nBundles contain verified Aether source only; cache and install paths stay local and are never network-resolved.",
+        "Usage:\n  aether help [command]\n  aether <command> --help\n  aether check <source-file>\n  aether check --bootstrap <source-file>\n  aether structure <source-file>\n  aether structure --bootstrap <source-file>\n  aether apply-edit <source-file> <edit-file> --output <source-file>\n  aether format <source-file> [--output <source-file>]\n  aether format --bootstrap <source-file> [--output <source-file>]\n  aether project verify <project-file> [--output-dir <dir>]\n  aether project format <project-file> [--write] [--bootstrap]\n  aether project lock <project-file> [--write]\n  aether project build <project-file> --output <artifact-file>\n  aether project test <project-file>\n  aether workspace verify <workspace-file>\n  aether workspace lock <workspace-file> [--write]\n  aether workspace build <workspace-file> --package <name> --output <artifact-file>\n  aether compile <source-file> --output <artifact-file> [--bootstrap|--native-c|--native-exe [--target <triple>]]\n  aether native probe\n  aether registry verify-cache <cache-root>\n  aether registry pin-local <cache-root> --name <n> --version <v> --artifact <path>\n  aether registry trust-key <cache-root> --key-id <id> --key-file <path>\n  aether registry pin-local-signed <cache-root> --name <n> --version <v> --artifact <path> --key-id <id>\n  aether registry fetch-signed <cache-root> --name <n> --version <v> --url <url> --signature <hex> --key-id <id>\n  aether registry issue-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry store-x509-lite <cache-root> --issuer <id> --subject <id> --serial <s> --not-before <YYYY-MM-DD> --not-after <YYYY-MM-DD> [--output <pem>]\n  aether registry verify-x509-lite-store <cache-root>\n  aether forge <compiler-artifact> <source-file> --output <artifact-file>\n  aether forge-bundle <compiler-artifact> <bundle-file> --output <artifact-file>\n  aether forge-modules <compiler-artifact> <catalog-file> --output <artifact-file>\n  aether run <artifact-file> [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]...\n  aether test [path...] [--grant-read <dir>]... [--grant-write <dir>]... [--grant-env <NAME>]... [--grant-lib KEY=PATH]... [--report <file.json>] [--report-junit <file.xml>]\n  aether lsp\n  aether version\n\nADR-064: product seed path is default for check/format/structure/project format.\ncheck --bootstrap: full bootstrap AST diagnostics (recovery).\nformat --bootstrap: AST-canonical rewrite (recovery).\nstructure --bootstrap: aether.ast/v8 (recovery).\nDefault check/format/structure use seed product path only.\ncompile uses the Aether-written seed compiler by default for single-file sources and recognizes the bounded ADR-128/129/130 seed-bundle profiles plus GSM-001 aether.seed-modules/v1 catalogs.\nforge-bundle invokes only compile_bundle [borrow bundle: Text] -> Bytes; forge-modules invokes only compile_modules [borrow catalog: Text] -> Bytes, each on a caller-selected verified compiler artifact.\nM19e task source emits AETH v12; source without task frames retains AETH v11.\nDefault structure emits aether.product-structure/v1; --bootstrap emits aether.ast/v8.\napply-edit accepts aether.edit/v8 (including statement-level ops), bootstrap-canonical base parse, product seed accept in core before write (CLI does not re-forge).\nproject verify is offline: schema, nested path confinement, optional SHA-256 lock; module units validated for M11.\nproject lock derives a complete local unit lock after verification; --write is required to replace the project manifest.\nproject build frames its manifest-selected source catalog; the seed resolves import unit / export weave graphs and emits AETH (GSM-001; dual-compare is test/oracle only).\nproject test frames each role:test entry catalog, pure-runs; pass requires exit 0 (M17b); optional --grant-* (M17c); optional --report / --report-junit (M17d).\nproject format defaults to product unit format; --bootstrap uses AST-canonical format; --write overwrites unit paths.\nworkspace verify is offline multi-package integrity (aether.workspace/v1): path-jail package roots, acyclic depends_on, nested project verify (M18).\nworkspace lock pins every package's project identity and requires nested project locks; --write is required to replace the workspace manifest.\nworkspace build frames one package main catalog with M22 import unit from package (depends_on only); the seed resolves the graph and locked workspaces verify before artifact output.\naether test discovers *_test.ae under directories (or runs explicit .ae files), seed-compiles, pure-runs; pass requires exit 0 (M17); optional --grant-* (M17c); optional --report / --report-junit (M17d).\naether lsp [--project <aether.project.json>] is an offline stdio Language Server (product-primary diagnostics ADR-058; product-surface symbols/hover/definition ADR-063/066; product format ADR-064; project-aware import definition/hover; no product AETH emit; no silent disk writes).\naether run grants: M14 I/O roots/names and M21 --grant-lib KEY=PATH (explicit library file; no PATH search). Empty grants keep pure fixtures only.\nPass --bootstrap for recovery AST diagnostics / dual-compare oracle emit (product seed rebuild needs no --bootstrap; ADR-067).\nPass --native-exe --target <triple> for the closed F-NATIVE M35j matrix; host targets retain dual-run and cross targets are link-only.\nregistry pin-local/verify-cache are offline F-REGISTRY M24a; trust-key/pin-local-signed/fetch-signed are M24b+; issue-x509-lite is M24h; store-x509-lite / verify-x509-lite-store are M24i (not full RFC 5280).",
+        "Bounded seed-bundle profiles: ADR-128 v1 accepts one pure Whole library -> entry; ADR-129 v2 accepts foundation -> bridge -> entry; ADR-130 v3 accepts left leaf + right leaf -> two-import merge -> entry. GSM-001 is the separate general bounded seed-native M11/M22 catalog path.",
+    ]
+    .join("\n")
+}
+
+fn is_help_command(value: &str) -> bool {
+    matches!(value, "help" | "--help" | "-h")
+}
+
+fn is_help_flag(value: &str) -> bool {
+    matches!(value, "--help" | "-h")
+}
+
+/// Lines whose first command token is `command`. `forge` does not match
+/// `forge-bundle`.
+fn line_documents_command(line: &str, command: &str) -> bool {
+    let trimmed = line.trim();
+    let body = trimmed.strip_prefix("aether ").unwrap_or(trimmed);
+    let Some(rest) = body.strip_prefix(command) else {
+        return false;
+    };
+    rest.is_empty() || rest.starts_with([' ', ':'])
+}
+
+fn command_help(command: &str) -> Result<String, String> {
+    let usage = usage_text();
+    let lines: Vec<&str> = usage
+        .lines()
+        .filter(|line| line_documents_command(line, command))
+        .collect();
+    if lines.is_empty() {
+        return Err(format!("unknown command {command:?}"));
+    }
+    let mut text = lines.join("\n");
+    text.push_str("\nrun 'aether --help' for usage");
+    Ok(text)
+}
+
+fn help_response(args: &[OsString]) -> Result<Option<String>, String> {
+    if args.is_empty() {
+        return Ok(None);
+    }
+    let first = args[0].to_string_lossy();
+    if is_help_command(&first) {
+        return match args.len() {
+            1 => Ok(Some(usage_text())),
+            2 => {
+                let topic = args[1].to_string_lossy();
+                if is_help_command(&topic) || is_help_flag(&topic) {
+                    Ok(Some(usage_text()))
+                } else {
+                    Ok(Some(command_help(&topic)?))
+                }
+            }
+            _ => Err("help accepts an optional command name".to_owned()),
+        };
+    }
+    if args
+        .iter()
+        .skip(1)
+        .any(|arg| is_help_flag(&arg.to_string_lossy()))
+    {
+        return Ok(Some(command_help(&first)?));
+    }
+    Ok(None)
+}
+
+/// Ordinary failures stay on two lines. Test-suite results already printed
+/// their own report, so they stay a single line.
+fn cli_failure_text(error: &str) -> String {
+    if error.starts_with("test suite failed:") || error.starts_with("no test sources found") {
+        format!("{LANGUAGE_NAME} failed: {error}")
+    } else {
+        format!("{LANGUAGE_NAME} failed: {error}\nrun 'aether --help' for usage")
+    }
 }
 
 fn native_probe() -> Result<(), String> {
@@ -1473,8 +1538,16 @@ fn parse_compile_arguments(
 }
 
 fn run() -> Result<(), String> {
-    let mut arguments = env::args_os();
-    let _program = arguments.next();
+    dispatch(env::args_os().skip(1))
+}
+
+fn dispatch(arguments: impl IntoIterator<Item = OsString>) -> Result<(), String> {
+    let args: Vec<OsString> = arguments.into_iter().collect();
+    if let Some(response) = help_response(&args)? {
+        println!("{response}");
+        return Ok(());
+    }
+    let mut arguments = args.into_iter();
     let command = next_argument(&mut arguments, "command")?;
     match command.to_string_lossy().as_ref() {
         "check" => {
@@ -2224,14 +2297,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            // Test suite failures already printed a report; avoid dumping full usage.
-            if error.starts_with("test suite failed:") || error.starts_with("no test sources found")
-            {
-                eprintln!("{LANGUAGE_NAME} failed: {error}");
-            } else {
-                usage();
-                eprintln!("{LANGUAGE_NAME} failed: {error}");
-            }
+            eprintln!("{}", cli_failure_text(&error));
             ExitCode::FAILURE
         }
     }
@@ -2266,6 +2332,69 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[test]
+    fn cli_errors_are_short_and_help_remains_full() {
+        let failure = cli_failure_text("unknown command \"nope\"");
+        let failure_lines: Vec<&str> = failure.lines().collect();
+        assert!(
+            (2..=3).contains(&failure_lines.len()),
+            "errors stay within three lines:\n{failure}"
+        );
+        assert!(failure.contains("unknown command \"nope\""));
+        assert!(failure.contains("run 'aether --help' for usage"));
+        assert!(
+            !failure.contains("aether project verify"),
+            "errors must not dump usage:\n{failure}"
+        );
+
+        let suite = cli_failure_text("test suite failed: 1 passed; 1 failed");
+        assert_eq!(suite.lines().count(), 1);
+        assert!(!suite.contains("run 'aether --help'"));
+
+        let usage = usage_text();
+        assert!(usage.lines().count() > 40, "full usage stays available");
+        assert!(usage.contains("aether help [command]"));
+        assert!(usage.contains("aether check <source-file>"));
+        assert!(usage.contains("aether registry verify-cache"));
+
+        let check_help = command_help("check").expect("check help");
+        assert!(check_help.contains("aether check <source-file>"));
+        assert!(check_help.contains("aether check --bootstrap <source-file>"));
+        assert!(check_help.contains("run 'aether --help' for usage"));
+        assert!(!check_help.contains("aether registry"));
+        assert!(check_help.lines().count() <= 8, "{check_help}");
+
+        let forge_help = command_help("forge").expect("forge help");
+        assert!(forge_help.contains("aether forge "));
+        assert!(!forge_help.contains("forge-bundle"));
+        assert!(command_help("no-such-command").is_err());
+
+        for args in [
+            vec!["--help"],
+            vec!["-h"],
+            vec!["help"],
+            vec!["help", "--help"],
+            vec!["help", "compile"],
+            vec!["compile", "--help"],
+            vec!["compile", "file.ae", "-h"],
+        ] {
+            let owned: Vec<OsString> = args.into_iter().map(OsString::from).collect();
+            dispatch(owned).expect("help requests succeed");
+        }
+        let unknown = dispatch([OsString::from("nope"), OsString::from("--help")])
+            .expect_err("unknown command help");
+        let unknown_text = cli_failure_text(&unknown);
+        assert!(unknown_text.lines().count() <= 3, "{unknown_text}");
+        assert!(unknown_text.contains("unknown command"));
+        assert!(!unknown_text.contains("M32a"));
+
+        let missing = dispatch(Vec::<OsString>::new()).expect_err("missing command");
+        let missing_text = cli_failure_text(&missing);
+        assert!(missing_text.contains("missing command"));
+        assert!(missing_text.lines().count() <= 3, "{missing_text}");
+        assert!(!missing_text.contains("aether workspace"));
     }
 
     #[test]
