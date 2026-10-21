@@ -1,7 +1,7 @@
 # Aether Seed Profile
 
 Status: normative seed-emission profile for package **0.37.0** (canonical 0.11
-surface plus documented later bounded semantics), updated 2026-08-27.
+surface plus documented later bounded semantics), updated 2026-10-21.
 
 This document defines the **Seed Profile** implemented by `seed/aether_seed.ae`.
 It covers the documented canonical Aether 0.11 source surface and the later
