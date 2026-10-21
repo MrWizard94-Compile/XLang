@@ -168,6 +168,14 @@ Release / technical preview additionally requires `cargo build --release -p aeth
 SHA-256SUMS, forge contract verification, binary inspection/launch, and delivery
 report — see [MANIFEST.md](MANIFEST.md).
 
+GitHub Actions (`.github/workflows/ci.yml`) runs the same build, `fmt --check`,
+Clippy, and workspace tests on Linux and Windows for this branch, plus
+`tools/examples-smoke.py`, the seed self-host fixpoint test
+`seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant`, and
+`tools/aether-gate.ps1 -Mode full` under PowerShell (installed on Linux when
+absent). The workflow reads `rust-toolchain.toml` when that file exists and
+otherwise installs Rust 1.88.0.
+
 ### Overrides
 
 Use pack `templates/PROJECT-OVERRIDE.template.md` only with named human approval.
