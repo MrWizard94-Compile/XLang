@@ -297,6 +297,8 @@ bundled hermetic native toolchain.
 - `rust-toolchain.toml` — pins Rust **1.88.0** (workspace MSRV) plus clippy and rustfmt
 - `examples/` — programs proven behaviorally and, where claimed,
   seed-emitted byte-identical to bootstrap
+- `.github/workflows/ci.yml` — Linux and Windows build, format, Clippy, test,
+  and `tools/examples-smoke.py`. Windows also runs `tools/aether-gate.ps1 -Mode quick`.
 
 ## Command Line
 

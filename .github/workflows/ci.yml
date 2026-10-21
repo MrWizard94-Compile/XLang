@@ -1,0 +1,85 @@
+# Linux and Windows checks for codex/xlang-local-first-studio.
+# rust-toolchain.toml selects the compiler when that file is present.
+# Otherwise the job installs Rust 1.88.0, the workspace MSRV.
+name: CI
+
+on:
+  push:
+    branches:
+      - codex/xlang-local-first-studio
+  pull_request:
+    branches:
+      - codex/xlang-local-first-studio
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Keep checkout line endings as LF
+        shell: bash
+        run: git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust from rust-toolchain.toml
+        if: hashFiles('rust-toolchain.toml') != ''
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust 1.88.0
+        if: hashFiles('rust-toolchain.toml') == ''
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.88.0
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        id: build
+        run: cargo build --workspace
+
+      - name: Format check
+        id: fmt
+        if: always() && steps.build.outcome == 'success'
+        run: cargo fmt --all -- --check
+
+      - name: Examples smoke
+        id: smoke
+        if: always() && steps.build.outcome == 'success'
+        shell: bash
+        run: |
+          if command -v python3 >/dev/null 2>&1; then
+            python3 tools/examples-smoke.py
+          else
+            python tools/examples-smoke.py
+          fi
+
+      - name: Clippy
+        id: clippy
+        if: always() && steps.build.outcome == 'success'
+        run: cargo clippy --workspace --all-targets
+
+      - name: Test
+        id: test
+        if: always() && steps.build.outcome == 'success'
+        run: cargo test --workspace --no-fail-fast
+
+      - name: Windows gate
+        id: gate
+        if: always() && runner.os == 'Windows' && steps.build.outcome == 'success'
+        shell: pwsh
+        run: ./tools/aether-gate.ps1 -Mode quick
