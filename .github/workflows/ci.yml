@@ -1,6 +1,8 @@
 # Linux and Windows checks for codex/xlang-local-first-studio.
 # rust-toolchain.toml selects the compiler when that file is present.
 # Otherwise the job installs Rust 1.88.0, the workspace MSRV.
+# Both runners execute the seed self-host fixpoint and aether-gate -Mode full.
+# Linux installs PowerShell when pwsh is not already on PATH.
 name: CI
 
 on:
@@ -19,7 +21,7 @@ jobs:
   check:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -78,8 +80,30 @@ jobs:
         if: always() && steps.build.outcome == 'success'
         run: cargo test --workspace --no-fail-fast
 
-      - name: Windows gate
+      - name: Seed self-host fixpoint
+        id: seed-fixpoint
+        if: always() && steps.build.outcome == 'success'
+        run: cargo test -p aether-core --test seed_self_host seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant -- --exact
+
+      - name: Install PowerShell
+        id: pwsh
+        if: always() && runner.os == 'Linux' && steps.build.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v pwsh >/dev/null 2>&1; then
+            pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+            exit 0
+          fi
+          . /etc/os-release
+          wget -q "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/packages-microsoft-prod.deb" -O /tmp/packages-microsoft-prod.deb
+          sudo dpkg -i /tmp/packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y powershell
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+      - name: Full gate
         id: gate
-        if: always() && runner.os == 'Windows' && steps.build.outcome == 'success'
+        if: always() && steps.build.outcome == 'success'
         shell: pwsh
-        run: ./tools/aether-gate.ps1 -Mode quick
+        run: ./tools/aether-gate.ps1 -Mode full

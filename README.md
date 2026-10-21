@@ -298,7 +298,8 @@ bundled hermetic native toolchain.
 - `examples/` — programs proven behaviorally and, where claimed,
   seed-emitted byte-identical to bootstrap
 - `.github/workflows/ci.yml` — Linux and Windows build, format, Clippy, test,
-  and `tools/examples-smoke.py`. Windows also runs `tools/aether-gate.ps1 -Mode quick`.
+  `tools/examples-smoke.py`, the seed self-host fixpoint, and
+  `tools/aether-gate.ps1 -Mode full` (PowerShell on both runners).
 
 ## Command Line
 
