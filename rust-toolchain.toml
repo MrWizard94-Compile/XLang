@@ -1,0 +1,7 @@
+# Pin the workspace MSRV. Cargo.toml declares rust-version = "1.88", and
+# clippy::all = "deny" changes with the compiler. Channel 1.88.0 is the
+# release that matches that floor (rustc 1.88.0, 2025-06-23), so fmt, clippy,
+# and tests stay on one toolchain instead of whichever stable is installed.
+[toolchain]
+channel = "1.88.0"
+components = ["clippy", "rustfmt"]

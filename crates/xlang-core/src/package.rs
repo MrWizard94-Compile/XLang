@@ -683,7 +683,7 @@ fn audit_bundle_directory(
         if metadata.file_type().is_symlink() {
             return Err(PackageError::new(
                 "AE-PACKAGE-002",
-                format!("package path {} must not be a symlink", child_relative),
+                format!("package path {child_relative} must not be a symlink"),
             ));
         }
         if metadata.is_dir() {

@@ -523,8 +523,7 @@ fn closed_cone(
                 return Err(module_error(
                     "AE-MOD-002",
                     format!(
-                        "module {} imports {}, which is not listed in the project or workspace package graph",
-                        path, target_key
+                        "module {path} imports {target_key}, which is not listed in the project or workspace package graph"
                     ),
                 ));
             }
@@ -1323,8 +1322,7 @@ pub fn encode_seed_module_catalog(
         return Err(module_error(
             "AE-MOD-001",
             format!(
-                "seed module catalog exceeds the {}-scalar wire limit",
-                SEED_MODULES_MAX_WIRE_SCALARS
+                "seed module catalog exceeds the {SEED_MODULES_MAX_WIRE_SCALARS}-scalar wire limit"
             ),
         ));
     }
@@ -1341,8 +1339,7 @@ pub fn decode_seed_module_catalog(bundle: &str) -> Result<SeedModuleCatalog, Pro
         return Err(module_error(
             "AE-MOD-001",
             format!(
-                "seed module catalog exceeds the {}-scalar wire limit",
-                SEED_MODULES_MAX_WIRE_SCALARS
+                "seed module catalog exceeds the {SEED_MODULES_MAX_WIRE_SCALARS}-scalar wire limit"
             ),
         ));
     }
@@ -1376,10 +1373,7 @@ pub fn decode_seed_module_catalog(bundle: &str) -> Result<SeedModuleCatalog, Pro
     if package_count > SEED_MODULES_MAX_PACKAGES {
         return Err(module_error(
             "AE-MOD-001",
-            format!(
-                "seed module catalog exceeds the {}-package limit",
-                SEED_MODULES_MAX_PACKAGES
-            ),
+            format!("seed module catalog exceeds the {SEED_MODULES_MAX_PACKAGES}-package limit"),
         ));
     }
     let mut allowed_packages = Vec::with_capacity(package_count);
@@ -1405,10 +1399,7 @@ pub fn decode_seed_module_catalog(bundle: &str) -> Result<SeedModuleCatalog, Pro
     if unit_count == 0 || unit_count > SEED_MODULES_MAX_UNITS {
         return Err(module_error(
             "AE-MOD-001",
-            format!(
-                "seed module catalog unit count must be in 1..={}",
-                SEED_MODULES_MAX_UNITS
-            ),
+            format!("seed module catalog unit count must be in 1..={SEED_MODULES_MAX_UNITS}"),
         ));
     }
 
@@ -1457,10 +1448,7 @@ pub fn validate_seed_module_catalog(catalog: &SeedModuleCatalog) -> Result<(), P
     if catalog.allowed_packages.len() > SEED_MODULES_MAX_PACKAGES {
         return Err(module_error(
             "AE-MOD-001",
-            format!(
-                "seed module catalog exceeds the {}-package limit",
-                SEED_MODULES_MAX_PACKAGES
-            ),
+            format!("seed module catalog exceeds the {SEED_MODULES_MAX_PACKAGES}-package limit"),
         ));
     }
     let mut package_names = BTreeSet::new();
@@ -1481,10 +1469,7 @@ pub fn validate_seed_module_catalog(catalog: &SeedModuleCatalog) -> Result<(), P
     if catalog.units.is_empty() || catalog.units.len() > SEED_MODULES_MAX_UNITS {
         return Err(module_error(
             "AE-MOD-001",
-            format!(
-                "seed module catalog unit count must be in 1..={}",
-                SEED_MODULES_MAX_UNITS
-            ),
+            format!("seed module catalog unit count must be in 1..={SEED_MODULES_MAX_UNITS}"),
         ));
     }
 
@@ -1540,8 +1525,7 @@ pub fn validate_seed_module_catalog(catalog: &SeedModuleCatalog) -> Result<(), P
         return Err(module_error(
             "AE-MOD-001",
             format!(
-                "seed module catalog exceeds the {}-scalar aggregate source limit",
-                SEED_MODULES_MAX_TOTAL_SCALARS
+                "seed module catalog exceeds the {SEED_MODULES_MAX_TOTAL_SCALARS}-scalar aggregate source limit"
             ),
         ));
     }
@@ -1597,10 +1581,7 @@ pub fn encode_project_seed_module_catalog(
     if allowed_packages.len() > SEED_MODULES_MAX_PACKAGES {
         return Err(module_error(
             "AE-MOD-001",
-            format!(
-                "seed module catalog exceeds the {}-package limit",
-                SEED_MODULES_MAX_PACKAGES
-            ),
+            format!("seed module catalog exceeds the {SEED_MODULES_MAX_PACKAGES}-package limit"),
         ));
     }
 
@@ -1825,8 +1806,7 @@ fn validate_seed_module_key(key: &str) -> Result<(), ProjectError> {
         return Err(module_error(
             "AE-MOD-002",
             format!(
-                "seed module unit identity exceeds the {}-scalar limit",
-                SEED_MODULES_MAX_KEY_SCALARS
+                "seed module unit identity exceeds the {SEED_MODULES_MAX_KEY_SCALARS}-scalar limit"
             ),
         ));
     }

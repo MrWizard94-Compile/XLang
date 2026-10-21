@@ -1,8 +1,8 @@
 # GSM-001 Validation Matrix — General Seed Module Catalog
 
-**Status:** Implemented; full gate passed 2026-08-27  
-**Date:** 2026-08-27  
-**Decision:** [ADR-131](../historical%20docs/ADR-131-gsm-general-seed-module-catalog.md)  
+**Status:** Implemented. Self-host import-needle correction recorded in [ADR-132](../historical%20docs/ADR-132-gsm-self-host-import-needle.md) (2026-10-21).  
+**Date:** 2026-08-27; needle correction 2026-10-21  
+**Decision:** [ADR-131](../historical%20docs/ADR-131-gsm-general-seed-module-catalog.md), [ADR-132](../historical%20docs/ADR-132-gsm-self-host-import-needle.md)  
 **Design:** [GSM-001 design](DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md)  
 **Threat model:** [GSM-001 threat model](THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md)
 
@@ -32,6 +32,7 @@ independent oracle; it must not make that elaborator part of the product route.
 | GSM-VAL-014 | Public product compile and external named forge agree for a non-profile catalog. | "tools/aether-gate.ps1" GSM-001 section using "examples/seed-modules-general.aem". | Product and "forge-modules" SHA-256 values match; VM exits 85. |
 | GSM-VAL-015 | Product workspace graph handling survives a real six-package systems workload. | "showcases/aether-atlas/tools/verify.ps1". | Deterministic replay, package/lock evidence, policy audit, resource/task behavior, fault rejection, and M25 lifecycle all pass. |
 | GSM-VAL-016 | Seed source and checked-in compiler remain reproducible. | Full gate seed rebuild/forge identity plus seed self-host suite. | Bootstrap rebuilt, product rebuilt, forged, and checked-in seed artifact are byte-identical where required. |
+| GSM-VAL-016a | Seed-resident import needles are assembled at runtime, so self-host does not false-positive on GSM parsers. | "seed_source_keeps_import_unit_needle_out_of_its_own_text", "product_path_rebuilds_seed_compiler_byte_identically", and "seed_profile_compiler_rebuilds_itself_and_a_distinct_valid_variant" (ADR-132). | `seed/aether_seed.ae` contains no contiguous `import unit `; product rebuild matches the checked-in artifact. |
 | GSM-VAL-017 | No quality gate regresses. | "aether-gate.ps1 -Mode full", Constitution pack verify, rustfmt, Clippy warnings denied, workspace tests, documentation links. | All commands exit 0 with no warnings/errors. |
 
 ## Negative-boundary checklist

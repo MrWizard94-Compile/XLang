@@ -137,6 +137,9 @@ permitting unbounded parse, memory, or traversal work.
 - "aether compile" recognizes a GSM-001 catalog before ordinary raw-source
   preflights, because a valid catalog intentionally contains "import unit"
   source lines.
+- The seed's own `AE-SEED-012` scan seeks that same text across the whole
+  compiler source. Catalog parsers therefore join the prefix at runtime
+  (ADR-132) and do not store the contiguous needle in `seed/aether_seed.ae`.
 - "aether project build", project test, and "aether workspace build" use host
   framing plus that product seed route.
 - "aether forge-modules <compiler.aeth> <catalog.aem> --output <artifact.aeth>"

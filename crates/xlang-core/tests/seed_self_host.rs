@@ -3766,19 +3766,18 @@ fn barp_phase3b_product_path_rejects_missing_main_with_ae_seed_004() {
 #[test]
 fn barp_phase3b_product_path_rejects_empty_missing_world_and_legacy() {
     let empty = compile_product_bytecode("   \n\t\n").expect_err("empty must fail");
-    assert!(empty.to_string().contains("AE-SEED-005"), "got {}", empty);
+    assert!(empty.to_string().contains("AE-SEED-005"), "got {empty}");
 
     let no_world = compile_product_bytecode("weave main [] -> Whole:\n  yield 1\n")
         .expect_err("missing world must fail");
     assert!(
         no_world.to_string().contains("AE-SEED-006"),
-        "got {}",
-        no_world
+        "got {no_world}"
     );
 
     let legacy = compile_product_bytecode("world w\n\nfn main() -> Int { return 0; }\n")
         .expect_err("legacy syntax must fail");
-    assert!(legacy.to_string().contains("AE-SEED-007"), "got {}", legacy);
+    assert!(legacy.to_string().contains("AE-SEED-007"), "got {legacy}");
 
     // ADR-055/056: raw import unit fails closed with AE-SEED-012 (not AE-SEED-007).
     let import_unit = concat!(
@@ -3795,6 +3794,16 @@ fn barp_phase3b_product_path_rejects_empty_missing_world_and_legacy() {
     assert!(
         !import_err.to_string().contains("AE-SEED-007"),
         "import unit must not trip legacy preflight: {import_err}"
+    );
+}
+
+#[test]
+fn seed_source_keeps_import_unit_needle_out_of_its_own_text() {
+    // ADR-098/132: AE-SEED-012 seeks the contiguous needle across the whole
+    // buffer. A literal in the compiler source is a self-host false positive.
+    assert!(
+        !SEED_SOURCE.contains("import unit "),
+        "construct the import-unit needle at runtime; do not embed it in seed/aether_seed.ae"
     );
 }
 

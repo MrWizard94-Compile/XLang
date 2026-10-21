@@ -187,6 +187,12 @@ manifest-authorized. See [ADR-131](../historical%20docs/ADR-131-gsm-general-seed
 [GSM design](DESIGN-GSM-001-GENERAL-SEED-MODULE-CATALOG.md), and
 [GSM threat model](THREAT_MODEL-GSM-001-SEED-MODULE-CATALOG.md).
 
+The seed's `AE-SEED-012` scan seeks the contiguous text `import unit ` across
+the whole buffer (ADR-098). Catalog parsers that need that prefix join
+`"import "` and `"unit "` at runtime (ADR-132). A literal copy in
+`seed/aether_seed.ae` makes the seed reject its own source. The seed resolves
+the local name `source` from its local table; it is not fixed at slot 0.
+
 ADR-128/129/130 add bounded source-bundle profiles inside the seed artifact
 without changing the package language or AETH contract. They are intentionally a
 second named forge weave, not relaxed raw-source parsing: ordinary source with
