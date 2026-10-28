@@ -300,10 +300,7 @@ pub fn collect_diagnostics(text: &str) -> Vec<Value> {
         return Vec::new();
     }
     // Multi-module sources reject single-file compile by design; surface honesty.
-    if text
-        .lines()
-        .any(|line| line.trim_start().starts_with("import unit "))
-    {
+    if text.lines().any(|line| line.starts_with("import unit ")) {
         return vec![json!({
             "range": {
                 "start": { "line": 0, "character": 0 },
@@ -487,8 +484,9 @@ pub fn formatting_edits(text: &str) -> Value {
 pub fn parse_imports(source: &str) -> Vec<(String, String)> {
     let mut imports = Vec::new();
     for line in source.lines() {
-        let trimmed = line.trim_start();
-        let Some(rest) = trimmed.strip_prefix("import unit ") else {
+        // M11 imports are top-level declarations. Do not interpret an
+        // indented string literal or weave statement as an import symbol.
+        let Some(rest) = line.strip_prefix("import unit ") else {
             continue;
         };
         let rest = rest.trim();
@@ -975,6 +973,17 @@ mod tests {
         let diags = collect_diagnostics(modules);
         assert_eq!(diags[0]["code"], "AE-SEED-012");
         assert_eq!(diags[0]["severity"], 3);
+
+        let literal = concat!(
+            "world literal\n\n",
+            "weave main [] -> Whole:\n",
+            "  bind label <- \"import unit \\\"lib/math.ae\\\" as math\"\n",
+            "  yield measure borrow label\n",
+        );
+        assert!(
+            collect_diagnostics(literal).is_empty(),
+            "an indented Text literal is not an M11 declaration"
+        );
     }
 
     #[test]
@@ -1079,5 +1088,11 @@ mod tests {
         let source = "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield 0\n";
         let imports = parse_imports(source);
         assert_eq!(imports, vec![("math".to_owned(), "lib/math.ae".to_owned())]);
+
+        let literal = "world app\n\nweave main [] -> Whole:\n  bind text <- \"import unit \\\"lib/math.ae\\\" as math\"\n  yield measure borrow text\n";
+        assert!(
+            parse_imports(literal).is_empty(),
+            "an indented Text literal is not an import declaration"
+        );
     }
 }

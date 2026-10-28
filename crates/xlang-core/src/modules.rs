@@ -362,10 +362,12 @@ pub fn validate_lib_module_source(path: &str, source: &str) -> Result<(), Projec
 /// True when source uses M11 module surface that blocks single-file seed compile.
 #[must_use]
 pub fn source_requires_project_modules(source: &str) -> bool {
-    source.lines().any(|line| {
-        let t = line.trim_start();
-        t.starts_with("import unit ") || t.starts_with("export weave ")
-    })
+    // Module declarations are legal only at indentation zero. Keeping the
+    // lexical boundary here prevents a Text literal in a weave body from
+    // silently changing project verification/formatting mode.
+    source
+        .lines()
+        .any(|line| line.starts_with("import unit ") || line.starts_with("export weave "))
 }
 
 fn load_graph(
@@ -2463,6 +2465,22 @@ mod tests {
             std::env::temp_dir().join(format!("aether-modules-{}-{sequence}", std::process::id()));
         fs::create_dir_all(&path).expect("temp");
         path
+    }
+
+    #[test]
+    fn module_surface_detection_requires_top_level_declarations() {
+        assert!(source_requires_project_modules(
+            "world app\n\nimport unit \"lib/math.ae\" as math\n\nweave main [] -> Whole:\n  yield 0\n"
+        ));
+        assert!(source_requires_project_modules(
+            "world lib\n\nexport weave double [n: Whole] -> Whole:\n  yield product n 2\n"
+        ));
+        assert!(!source_requires_project_modules(
+            "world literal\n\nweave main [] -> Whole:\n  bind label <- \"import unit \\\"lib/math.ae\\\" as math\"\n  yield measure borrow label\n"
+        ));
+        assert!(!source_requires_project_modules(
+            "world literal\n\nweave main [] -> Whole:\n  bind label <- \"export weave helper\"\n  yield measure borrow label\n"
+        ));
     }
 
     #[test]

@@ -3796,6 +3796,22 @@ fn barp_phase3b_product_path_rejects_empty_missing_world_and_legacy() {
         !import_err.to_string().contains("AE-SEED-007"),
         "import unit must not trip legacy preflight: {import_err}"
     );
+
+    let literal = concat!(
+        "world literal\n\n",
+        "weave main [] -> Whole:\n",
+        "  bind label <- \"import unit \\\"lib.ae\\\" as lib\"\n",
+        "  yield measure borrow label\n",
+    );
+    let literal_bytecode = compile_product_bytecode(literal)
+        .expect("an indented Text literal must not become a raw import declaration");
+    assert_eq!(
+        run_bytecode(&literal_bytecode)
+            .expect("literal fixture must run")
+            .exit_code,
+        27,
+        "literal fixture must retain ordinary Text semantics"
+    );
 }
 
 #[test]
@@ -3808,6 +3824,34 @@ fn product_path_rebuilds_seed_compiler_byte_identically() {
         product.as_slice(),
         CHECKED_IN_SEED_ARTIFACT,
         "product seed rebuild must match the checked-in seed artifact"
+    );
+}
+
+#[test]
+fn seed_product_preserves_a_local_named_source_byte_identically() {
+    let source = concat!(
+        "world local_name\n\n",
+        "weave helper [input: Whole] -> Whole:\n",
+        "  bind mutable source <- 1\n",
+        "  revise source <- sum source input\n",
+        "  yield source\n\n",
+        "weave main [] -> Whole:\n",
+        "  yield call helper 41\n",
+    );
+    let bootstrap = compile_to_bytecode(source)
+        .expect("bootstrap must compile a local named source")
+        .bytecode;
+    let product =
+        compile_product_bytecode(source).expect("product seed must compile a local named source");
+    assert_eq!(
+        product, bootstrap,
+        "the product compiler must not leak its compile parameter into a guest local"
+    );
+    assert_eq!(
+        run_bytecode(&product)
+            .expect("local named source fixture must run")
+            .exit_code,
+        42
     );
 }
 

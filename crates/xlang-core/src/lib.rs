@@ -3287,8 +3287,12 @@ fn seed_reject_reserved_task_future_surface(source: &str) -> Option<String> {
 /// frame selected source and the seed can own graph elaboration.
 fn seed_reject_raw_import_unit(source: &str) -> Option<String> {
     for (line_index, line) in source.lines().enumerate() {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("import unit ") {
+        // M11 declarations are top-level only. Do not trim this check: valid
+        // Aether statements may contain the phrase `import unit` in an
+        // indented Text literal (the seed compiler itself does), and treating
+        // that payload as a declaration breaks product self-rebuild before
+        // the seed can compile it.
+        if line.starts_with("import unit ") {
             return Some(format_seed_product_error(
                 "AE-SEED-012",
                 &format!(

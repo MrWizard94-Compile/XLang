@@ -132,6 +132,7 @@ weave compile [borrow source: Text] -> Bytes:
   bind mutable v129 <- 0
   bind mutable v130 <- 0
   bind mutable v131 <- 0
+  bind mutable v132 <- -1
   bind mutable v133 <- 0
   revise v68 <- join borrow source "\n"
   revise v5 <- measure borrow v68
@@ -177,33 +178,34 @@ weave compile [borrow source: Text] -> Bytes:
   otherwise:
     revise v30 <- 0
   choose same v131 0:
-    revise v99 <- "import "
-    revise v102 <- "unit "
-    revise v99 <- join borrow v99 borrow v102
-    revise v21 <- seek borrow v68 borrow v99 0
-    choose less -1 v21:
+    revise v42 <- call raw_import_unit_present borrow v68
+    choose v42:
       speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-012\",\"message\":\"raw multi-module import needs project build\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
       revise v131 <- 1
     otherwise:
-      revise v21 <- seek borrow v68 "world " 0
+      revise v30 <- 0
+  otherwise:
+    revise v30 <- 0
+  choose same v131 0:
+    revise v21 <- seek borrow v68 "world " 0
+    choose same v21 -1:
+      speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-006\",\"message\":\"missing top-level world\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+      revise v131 <- 1
+    otherwise:
+      revise v21 <- seek borrow v68 "weave main " 0
+      revise v15 <- seek borrow v68 "task weave main " 0
       choose same v21 -1:
-        speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-006\",\"message\":\"missing top-level world\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
-        revise v131 <- 1
-      otherwise:
-        revise v21 <- seek borrow v68 "weave main " 0
-        revise v15 <- seek borrow v68 "task weave main " 0
-        choose same v21 -1:
-          choose same v15 -1:
-            revise v28 <- seek borrow v68 "weave " 0
-            choose less -1 v28:
-              speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-004\",\"message\":\"missing top-level main weave\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
-              revise v131 <- 1
-            otherwise:
-              revise v30 <- 0
+        choose same v15 -1:
+          revise v28 <- seek borrow v68 "weave " 0
+          choose less -1 v28:
+            speak "AETHER_SEED_ERROR:{\"schema\":\"aether.seed-error/v1\",\"code\":\"AE-SEED-004\",\"message\":\"missing top-level main weave\",\"line\":1,\"column\":1,\"origin\":\"seed-speak\"}"
+            revise v131 <- 1
           otherwise:
             revise v30 <- 0
         otherwise:
           revise v30 <- 0
+      otherwise:
+        revise v30 <- 0
   otherwise:
     revise v30 <- 0
   choose same v131 0:
@@ -1893,6 +1895,7 @@ weave compile [borrow source: Text] -> Bytes:
           revise v3 <- bytes ""
           revise v4 <- 0
           revise v67 <- bytes ""
+          revise v132 <- -1
           revise v103 <- bytes ""
           revise v76 <- bytes ""
           revise v57 <- bytes ""
@@ -1992,6 +1995,8 @@ weave compile [borrow source: Text] -> Bytes:
             revise v67 <- fuse borrow v67 borrow v47
             revise v47 <- pack16 v4
             revise v67 <- fuse borrow v67 borrow v47
+            choose same borrow v17 "source":
+              revise v132 <- v4
             revise v58 <- sum v58 1
             revise v4 <- sum v4 1
             revise v18 <- sum v21 1
@@ -2165,6 +2170,8 @@ weave compile [borrow source: Text] -> Bytes:
                   revise v67 <- fuse borrow v67 borrow v47
                   revise v47 <- pack16 v50
                   revise v67 <- fuse borrow v67 borrow v47
+                  choose same borrow v17 "source":
+                    revise v132 <- v50
                 revise v18 <- sum v14 3
                 revise v29 <- measure borrow v7
                 revise v19 <- cut borrow v7 v18 v29
@@ -3019,8 +3026,8 @@ weave compile [borrow source: Text] -> Bytes:
                               otherwise:
                                 revise v30 <- -1
                                 choose same borrow v22 "source":
-                                  revise v30 <- 0
-                                otherwise:
+                                  revise v30 <- v132
+                                choose same v30 -1:
                                   revise v61 <- 0
                                   revise v63 <- extent borrow v67
                                   while less v61 v63:
@@ -3059,8 +3066,8 @@ weave compile [borrow source: Text] -> Bytes:
                               otherwise:
                                 revise v30 <- -1
                                 choose same borrow v22 "source":
-                                  revise v30 <- 0
-                                otherwise:
+                                  revise v30 <- v132
+                                choose same v30 -1:
                                   revise v61 <- 0
                                   revise v63 <- extent borrow v67
                                   while less v61 v63:
@@ -8784,6 +8791,28 @@ weave modules_elaborate [borrow catalog: Text] -> Text:
   otherwise:
     revise output <- "!"
   yield move output
+
+weave raw_import_unit_present [borrow source: Text] -> Truth:
+  bind mutable result <- dim
+  bind mutable first_prefix <- "import unit "
+  bind mutable lf_prefix <- "\nimport unit "
+  bind mutable cr_prefix <- "\rimport unit "
+  bind mutable first_at <- seek borrow source borrow first_prefix 0
+  bind mutable lf_at <- -1
+  bind mutable cr_at <- -1
+  choose same first_at 0:
+    revise result <- bright
+  otherwise:
+    revise lf_at <- seek borrow source borrow lf_prefix 0
+    choose less -1 lf_at:
+      revise result <- bright
+    otherwise:
+      revise cr_at <- seek borrow source borrow cr_prefix 0
+      choose less -1 cr_at:
+        revise result <- bright
+      otherwise:
+        revise result <- dim
+  yield result
 
 weave compile_bundle [borrow bundle: Text] -> Bytes:
   bind mutable output <- bytes ""
